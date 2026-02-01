@@ -1,0 +1,234 @@
+name: Beast Mode Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run nightly tests at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      test_plan:
+        description: 'Test plan to run'
+        required: false
+        default: 'BeastMode-CI'
+        type: choice
+        options:
+          - BeastMode
+          - BeastMode-CI
+          - BeastMode-Nightly
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode_15.4.app/Contents/Developer
+  SCHEME: BeastMode
+  DESTINATION: 'platform=iOS Simulator,name=iPhone 15 Pro,OS=17.5'
+
+jobs:
+  # Unit and Integration Tests
+  test:
+    name: Run Tests
+    runs-on: macos-14
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Resolve packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -scheme "$SCHEME" \
+            -destination "$DESTINATION"
+
+      - name: Build for testing
+        run: |
+          xcodebuild build-for-testing \
+            -scheme "$SCHEME" \
+            -destination "$DESTINATION" \
+            -testPlan "${{ github.event.inputs.test_plan || 'BeastMode-CI' }}" \
+            -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Run tests
+        run: |
+          xcodebuild test-without-building \
+            -scheme "$SCHEME" \
+            -destination "$DESTINATION" \
+            -testPlan "${{ github.event.inputs.test_plan || 'BeastMode-CI' }}" \
+            -derivedDataPath DerivedData \
+            -resultBundlePath TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Generate coverage report
+        if: always()
+        run: |
+          xcrun xccov view --report --json TestResults.xcresult > coverage.json || true
+          python3 scripts/check_coverage.py coverage.json 80.0 || true
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: TestResults.xcresult
+          retention-days: 7
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage.json
+          retention-days: 7
+
+  # Nightly Tests (full suite with sanitizers)
+  nightly:
+    name: Nightly Full Test Suite
+    runs-on: macos-14
+    timeout-minutes: 60
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.test_plan == 'BeastMode-Nightly')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Resolve packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -scheme "$SCHEME" \
+            -destination "$DESTINATION"
+
+      - name: Build for testing
+        run: |
+          xcodebuild build-for-testing \
+            -scheme "$SCHEME" \
+            -destination "$DESTINATION" \
+            -testPlan "BeastMode-Nightly" \
+            -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Run nightly tests
+        run: |
+          xcodebuild test-without-building \
+            -scheme "$SCHEME" \
+            -destination "$DESTINATION" \
+            -testPlan "BeastMode-Nightly" \
+            -derivedDataPath DerivedData \
+            -resultBundlePath NightlyResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Generate coverage report
+        if: always()
+        run: |
+          xcrun xccov view --report --json NightlyResults.xcresult > nightly-coverage.json || true
+          python3 scripts/check_coverage.py nightly-coverage.json 90.0 || true
+
+      - name: Upload nightly results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nightly-results
+          path: NightlyResults.xcresult
+          retention-days: 14
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Nightly tests failed! Check the test results for details."
+
+  # Build verification
+  build:
+    name: Build Verification
+    runs-on: macos-14
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Build iOS
+        run: |
+          xcodebuild build \
+            -scheme "$SCHEME" \
+            -destination "$DESTINATION" \
+            -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Build Watch App
+        run: |
+          xcodebuild build \
+            -scheme "BeastModeWatch" \
+            -destination 'platform=watchOS Simulator,name=Apple Watch Series 9 (45mm),OS=10.5' \
+            -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=NO
+        continue-on-error: true
+
+  # Code quality checks
+  lint:
+    name: Code Quality
+    runs-on: macos-14
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: Run SwiftLint
+        run: swiftlint lint --reporter github-actions-logging
+        continue-on-error: true
+
+      - name: Check for TODO/FIXME
+        run: |
+          echo "Checking for TODO and FIXME comments..."
+          TODOS=$(grep -rn "TODO\|FIXME" --include="*.swift" BeastMode/ || true)
+          if [ -n "$TODOS" ]; then
+            echo "::warning::Found TODO/FIXME comments:"
+            echo "$TODOS"
+          fi

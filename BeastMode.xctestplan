@@ -1,0 +1,62 @@
+{
+  "configurations" : [
+    {
+      "id" : "A0B1C2D3-E4F5-6789-ABCD-EF0123456789",
+      "name" : "Configuration 1",
+      "options" : {
+        "codeCoverage" : true,
+        "codeCoverageTargets" : [
+          {
+            "containerPath" : "container:BeastMode.xcodeproj",
+            "identifier" : "BeastMode",
+            "name" : "BeastMode"
+          }
+        ],
+        "environmentVariableEntries" : [
+          {
+            "key" : "SQLITE_ENABLE_THREAD_ASSERTIONS",
+            "value" : "1"
+          }
+        ],
+        "language" : "en",
+        "mainThreadCheckerEnabled" : true,
+        "maximumTestExecutionTimeAllowance" : 60,
+        "region" : "US",
+        "targetForVariableExpansion" : {
+          "containerPath" : "container:BeastMode.xcodeproj",
+          "identifier" : "BeastMode",
+          "name" : "BeastMode"
+        },
+        "testExecutionOrdering" : "random",
+        "threadSanitizerEnabled" : false,
+        "undefinedBehaviorSanitizerEnabled" : false
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "codeCoverage" : true,
+    "codeCoverageTargets" : [
+      {
+        "containerPath" : "container:BeastMode.xcodeproj",
+        "identifier" : "BeastMode",
+        "name" : "BeastMode"
+      }
+    ],
+    "testExecutionOrdering" : "random",
+    "testRepetitionMode" : "none"
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "skippedTests" : [
+        "AnalyticsPerformanceTests"
+      ],
+      "target" : {
+        "containerPath" : "container:BeastMode.xcodeproj",
+        "identifier" : "BeastModeTests",
+        "name" : "BeastModeTests"
+      }
+    }
+  ],
+  "version" : 1
+}

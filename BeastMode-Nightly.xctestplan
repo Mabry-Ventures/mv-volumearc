@@ -1,0 +1,80 @@
+{
+  "configurations" : [
+    {
+      "id" : "C2D3E4F5-A6B7-8901-CDEF-012345678901",
+      "name" : "Nightly Full Configuration",
+      "options" : {
+        "addressSanitizerEnabled" : true,
+        "codeCoverage" : true,
+        "codeCoverageTargets" : [
+          {
+            "containerPath" : "container:BeastMode.xcodeproj",
+            "identifier" : "BeastMode",
+            "name" : "BeastMode"
+          }
+        ],
+        "commandLineArgumentEntries" : [
+
+        ],
+        "environmentVariableEntries" : [
+          {
+            "key" : "CI",
+            "value" : "true"
+          },
+          {
+            "key" : "NIGHTLY",
+            "value" : "true"
+          },
+          {
+            "key" : "SQLITE_ENABLE_THREAD_ASSERTIONS",
+            "value" : "1"
+          }
+        ],
+        "language" : "en",
+        "locationScenario" : {
+          "identifier" : "San Francisco, CA, USA"
+        },
+        "mainThreadCheckerEnabled" : true,
+        "maximumTestExecutionTimeAllowance" : 300,
+        "region" : "US",
+        "targetForVariableExpansion" : {
+          "containerPath" : "container:BeastMode.xcodeproj",
+          "identifier" : "BeastMode",
+          "name" : "BeastMode"
+        },
+        "testExecutionOrdering" : "random",
+        "testRepetitionMode" : "retryOnFailure",
+        "testTimeoutsEnabled" : true,
+        "threadSanitizerEnabled" : true,
+        "undefinedBehaviorSanitizerEnabled" : true
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "addressSanitizerEnabled" : true,
+    "codeCoverage" : true,
+    "codeCoverageTargets" : [
+      {
+        "containerPath" : "container:BeastMode.xcodeproj",
+        "identifier" : "BeastMode",
+        "name" : "BeastMode"
+      }
+    ],
+    "maximumTestExecutionTimeAllowance" : 300,
+    "testExecutionOrdering" : "random",
+    "testRepetitionMode" : "retryOnFailure",
+    "threadSanitizerEnabled" : true,
+    "undefinedBehaviorSanitizerEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:BeastMode.xcodeproj",
+        "identifier" : "BeastModeTests",
+        "name" : "BeastModeTests"
+      }
+    }
+  ],
+  "version" : 1
+}

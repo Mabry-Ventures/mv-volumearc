@@ -17,6 +17,8 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/simibac/ConfettiSwiftUI.git", from: "1.1.0"),
+        // Test dependencies
+        .package(url: "https://github.com/pointfreeco/swift-snapshot-testing.git", from: "1.15.0"),
     ],
     targets: [
         .target(
@@ -28,8 +30,14 @@ let package = Package(
         ),
         .testTarget(
             name: "BeastModeTests",
-            dependencies: ["BeastMode"],
-            path: "Tests/BeastModeTests"
+            dependencies: [
+                "BeastMode",
+                .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
+            ],
+            path: "Tests/BeastModeTests",
+            resources: [
+                .copy("Snapshots/__Snapshots__")
+            ]
         ),
     ]
 )

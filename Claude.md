@@ -6,7 +6,7 @@ This document provides context for Claude Code sessions working on the Beast Mod
 
 Beast Mode is a SwiftUI/SwiftData iOS fitness tracking app focused on strength training. The app emphasizes the emotional experience of hitting personal records (PRs) with celebrations, social sharing, gamification, AI-powered analytics, and custom workout planning.
 
-**Current Version**: 1.3 "Your Split"
+**Current Version**: 1.3.1 "Iron Clad"
 **Platform**: iOS 17+, macOS 14+, watchOS 10+
 **Architecture**: SwiftUI + SwiftData + MVVM
 
@@ -71,12 +71,112 @@ BeastModeWatch/                         # Apple Watch Extension (V1.3)
     └── TodayWorkoutComplication.swift  # Today's workout widget
 Tests/
 └── BeastModeTests/
-    ├── AnalyticsTests.swift            # Trend calculations, analytics tests (V1.2)
-    ├── PRDetectionTests.swift          # E1RM formula, PR detection edge cases
-    ├── RestTimerTests.swift            # Timer service, formatting tests
-    ├── StreakTests.swift               # Streak calculation, badge award tests
-    └── WorkoutPlanTests.swift          # Plan creation, sharing, import tests (V1.3)
+    ├── Core/
+    │   ├── Services/                       # Service unit tests (V1.3.1)
+    │   │   ├── AnalyticsServiceTests.swift      # Trend calculations, overview tests
+    │   │   ├── PlanSharingServiceTests.swift    # Export, import, validation tests
+    │   │   ├── PRDetectionServiceTests.swift    # E1RM, PR type detection tests
+    │   │   └── StreakServiceTests.swift         # Streak, badge award tests
+    │   └── Utilities/
+    │       └── UtilityTests.swift               # WeekCalculator, E1RM, ProgressiveOverload
+    ├── Integration/                        # Integration tests (V1.3.1)
+    │   └── WorkoutFlowIntegrationTests.swift    # End-to-end workout flows
+    ├── Performance/                        # Performance tests (V1.3.1)
+    │   └── AnalyticsPerformanceTests.swift      # Large dataset, batch, memory tests
+    ├── Snapshots/                          # Snapshot tests (V1.3.1)
+    │   ├── SnapshotTestCase.swift               # Base configuration, helpers
+    │   ├── Components/
+    │   │   ├── PRCelebrationSnapshotTests.swift     # PR badge, celebration snapshots
+    │   │   └── StreakBadgeSnapshotTests.swift       # Streak, badge, progress snapshots
+    │   └── __Snapshots__/                       # Reference images
+    └── Support/                            # Test infrastructure (V1.3.1)
+        ├── ModelContainerFactory.swift          # In-memory SwiftData containers
+        ├── Fixtures/
+        │   ├── PRFixtures.swift                 # PR test data, scenarios
+        │   ├── UserFixtures.swift               # User profiles, streaks
+        │   └── WorkoutFixtures.swift            # Workouts, plans, sets
+        └── Mocks/
+            ├── MockAICoachService.swift         # Configurable AI mock
+            ├── MockHealthKitService.swift       # HealthKit mock scenarios
+            └── Protocols/
+                └── ServiceProtocols.swift       # Protocol definitions for DI
 ```
+
+## Version 1.3.1 Features (Iron Clad)
+
+### Testing Infrastructure
+
+**Swift Testing Framework**
+- All tests use modern Swift Testing with `@Suite` and `@Test` macros
+- Parameterized tests via `arguments:` parameter for comprehensive coverage
+- Uses `#expect` macro for assertions instead of XCTAssert
+- `@MainActor` annotation for SwiftData tests
+
+**Test Infrastructure**
+- `ModelContainerFactory` creates isolated in-memory SwiftData containers
+- Factory methods: `makeContainer()`, `makePopulatedContainer()`, `makeAnalyticsContainer()`, `makeStreakContainer()`
+- All tests run with fresh database state for isolation
+
+**Test Fixtures**
+- `UserFixtures`: `standardUser`, `metricUser`, `newUser`, `customTimerUser`
+- `WorkoutFixtures`: `pplSplit()`, `makeWorkout()`, `benchWorkout()`, `generateWeekOfWorkouts()`
+- `PRFixtures`: `benchPressPRHistory()`, `squatPRHistory()`, `e1rmImprovementScenarios`
+- `StreakFixtures`: `newStreak()`, `activeStreak()`, `milestoneStreak()`
+
+**Mock Services**
+- `MockAICoachService`: Configurable responses, call tracking, error injection, delay simulation
+- `MockHealthKitService`: Weight trend scenarios (gaining, losing, maintaining, denied)
+- Protocol-based mocking via `ServiceProtocols.swift`
+
+**Test Suites**
+- `PRDetectionServiceTests`: First-time, E1RM, heaviest weight, rep records, edge cases
+- `StreakServiceTests`: Streak calculation, badge awards, weekly progress
+- `AnalyticsServiceTests`: Progress trends, volume trends, overview generation
+- `PlanSharingServiceTests`: Export, import, share codes, validation
+- `UtilityTests`: WeekCalculator, E1RMCalculator, ProgressiveOverloadCalculator
+
+### Integration Tests
+- `WorkoutFlowIntegrationTests`: Complete workout flow from plan to log to PR
+- Multi-week analytics building verification
+- PR detection across workout sessions
+- Streak continuation across days
+- Plan sharing export/import flow
+
+### Performance Tests
+- Analytics overview with 1000+ workouts (<2s threshold)
+- PR detection with extensive history (<500ms threshold)
+- Streak calculation with year of data (<500ms threshold)
+- Batch workout insertion performance
+- Exercise search with large library
+- Memory stability during large data processing
+- Concurrent analytics requests
+
+### Snapshot Tests
+- `SnapshotConfiguration` with device, color scheme, dynamic type variants
+- `SnapshotWrapper` for consistent test rendering
+- `PRCelebrationSnapshotTests`: PR badges, celebration modals
+- `StreakBadgeSnapshotTests`: Streak display, achievement badges, weekly progress
+- `SnapshotTestData` provides consistent test data
+
+### CI/CD Configuration
+
+**Xcode Test Plans**
+- `BeastMode.xctestplan`: Development testing with coverage
+- `BeastMode-CI.xctestplan`: CI testing (skips performance/snapshot tests)
+- `BeastMode-Nightly.xctestplan`: Full suite with sanitizers
+
+**GitHub Actions**
+- `.github/workflows/test.yml`: Automated testing on push/PR
+- Parallel build and test jobs
+- Code coverage reporting with 80% threshold
+- Nightly builds with full sanitizer suite
+- SwiftLint code quality checks
+
+**Coverage Script**
+- `scripts/check_coverage.py`: Parse Xcode coverage JSON
+- Reports overall, target, and file-level coverage
+- Highlights low-coverage files (<70%)
+- Tracks core service coverage separately
 
 ## Version 1.3 Features (Your Split)
 
@@ -226,6 +326,8 @@ struct WeightSuggestion {
 ```swift
 // Package.swift
 .package(url: "https://github.com/simibac/ConfettiSwiftUI.git", from: "1.1.0")
+// Test dependencies
+.package(url: "https://github.com/pointfreeco/swift-snapshot-testing.git", from: "1.15.0")
 ```
 
 ## URL Scheme
@@ -259,28 +361,87 @@ struct WeightSuggestion {
 
 ## Testing
 
-Unit tests cover:
-- E1RM calculation accuracy
-- PR detection for all 4 types + edge cases (zero weight/reps)
+### Test Framework (V1.3.1)
+Uses Swift Testing framework with `@Suite` and `@Test` macros:
+
+```swift
+@Suite("PR Detection Service")
+struct PRDetectionServiceTests {
+    @Test("Detects first-time PR for new exercise")
+    @MainActor
+    func detectsFirstTimePR() async throws {
+        let container = try ModelContainerFactory.makeContainer()
+        // ... test code
+        #expect(pr == .firstTime)
+    }
+
+    @Test("E1RM variations", arguments: [(225.0, 5, true), (200.0, 6, false)])
+    @MainActor
+    func e1rmVariations(weight: Double, reps: Int, shouldBePR: Bool) async throws {
+        // Parameterized test
+    }
+}
+```
+
+### Test Coverage Areas
+
+**Unit Tests** cover:
+- E1RM calculation accuracy (Brzycki formula)
+- PR detection for all 4 types + edge cases
 - Streak calculation (consecutive days, gaps, same-day)
 - Badge award logic (no duplicates, threshold checks)
 - Rest timer service (compound vs isolation detection)
-- Progress trend calculations (V1.2)
-- Volume trend calculations (V1.2)
-- Weight suggestion JSON decoding (V1.2)
-- Analytics overview categorization (V1.2)
-- WorkoutPlan creation and properties (V1.3)
-- PlanDay weekday names and sorting (V1.3)
-- PlanExercise prescription text formatting (V1.3)
-- ShareablePlan encoding/decoding (V1.3)
-- Plan import/export via PlanSharingService (V1.3)
-- Deep link URL generation and parsing (V1.3)
-- ComplicationData encoding/decoding (V1.3)
+- Progress/Volume trend calculations
+- WorkoutPlan creation and sharing
+- ShareablePlan encoding/decoding
+- Deep link URL generation and parsing
+
+**Integration Tests** cover:
+- Complete workout flow from plan to log to PR
+- Multi-week analytics building
+- PR detection across workout sessions
+- Streak continuation across days
+- Plan sharing export/import flow
+
+**Performance Tests** verify:
+- Large dataset processing (<2s for 1000 workouts)
+- PR history queries (<500ms)
+- Batch operations efficiency
+- Memory stability
+
+**Snapshot Tests** capture:
+- PR celebration badges and modals
+- Streak display and badge UI
+- Weekly progress indicators
+
+### Running Tests
+
+```bash
+# Run all tests
+xcodebuild test -scheme BeastMode -destination 'platform=iOS Simulator,name=iPhone 15 Pro'
+
+# Run with CI test plan
+xcodebuild test -scheme BeastMode -testPlan BeastMode-CI
+
+# Run nightly (with sanitizers)
+xcodebuild test -scheme BeastMode -testPlan BeastMode-Nightly
+
+# Check coverage
+python3 scripts/check_coverage.py coverage.json 80.0
+```
 
 ## Future Development
 
-From V1.3 spec, these areas may need attention:
-- Integration tests for HealthKit
+**Completed in V1.3.1:**
+- ✅ Comprehensive test infrastructure with Swift Testing
+- ✅ Mock services for isolated testing
+- ✅ Snapshot test infrastructure
+- ✅ Performance test suite
+- ✅ CI/CD with GitHub Actions
+- ✅ Xcode test plans
+
+**Still needs attention:**
+- Integration tests for HealthKit (requires device/simulator)
 - Claude API response parsing edge cases
 - Snapshot tests for analytics charts
 - UI tests for dashboard navigation

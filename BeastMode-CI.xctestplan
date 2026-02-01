@@ -1,0 +1,80 @@
+{
+  "configurations" : [
+    {
+      "id" : "B1C2D3E4-F5A6-7890-BCDE-F01234567890",
+      "name" : "CI Configuration",
+      "options" : {
+        "addressSanitizerEnabled" : false,
+        "codeCoverage" : true,
+        "codeCoverageTargets" : [
+          {
+            "containerPath" : "container:BeastMode.xcodeproj",
+            "identifier" : "BeastMode",
+            "name" : "BeastMode"
+          }
+        ],
+        "commandLineArgumentEntries" : [
+
+        ],
+        "environmentVariableEntries" : [
+          {
+            "key" : "CI",
+            "value" : "true"
+          },
+          {
+            "key" : "SQLITE_ENABLE_THREAD_ASSERTIONS",
+            "value" : "1"
+          }
+        ],
+        "language" : "en",
+        "locationScenario" : {
+          "identifier" : "San Francisco, CA, USA"
+        },
+        "mainThreadCheckerEnabled" : true,
+        "maximumTestExecutionTimeAllowance" : 120,
+        "region" : "US",
+        "targetForVariableExpansion" : {
+          "containerPath" : "container:BeastMode.xcodeproj",
+          "identifier" : "BeastMode",
+          "name" : "BeastMode"
+        },
+        "testExecutionOrdering" : "random",
+        "testRepetitionMode" : "retryOnFailure",
+        "testTimeoutsEnabled" : true,
+        "threadSanitizerEnabled" : false,
+        "undefinedBehaviorSanitizerEnabled" : false
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "codeCoverage" : true,
+    "codeCoverageTargets" : [
+      {
+        "containerPath" : "container:BeastMode.xcodeproj",
+        "identifier" : "BeastMode",
+        "name" : "BeastMode"
+      }
+    ],
+    "maximumTestExecutionTimeAllowance" : 120,
+    "testExecutionOrdering" : "random",
+    "testRepetitionMode" : "retryOnFailure"
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "skippedTests" : [
+        "AnalyticsPerformanceTests",
+        "DataImportExportPerformanceTests",
+        "UIResponsivenessPerformanceTests",
+        "PRCelebrationSnapshotTests",
+        "StreakBadgeSnapshotTests"
+      ],
+      "target" : {
+        "containerPath" : "container:BeastMode.xcodeproj",
+        "identifier" : "BeastModeTests",
+        "name" : "BeastModeTests"
+      }
+    }
+  ],
+  "version" : 1
+}
