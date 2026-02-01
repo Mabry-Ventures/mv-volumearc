@@ -111,6 +111,76 @@ actor MockAICoachService: AICoachServiceProtocol {
         )
     }
 
+    // MARK: - Additional Methods for Test Compatibility
+
+    /// Generate form check (alias for getFormCheck)
+    func generateFormCheck(for exercise: String, issue: String) async throws -> String {
+        let response = try await getFormCheck(for: exercise)
+        return response.cues.joined(separator: ". ") + " Common mistake: " + response.commonMistake
+    }
+
+    /// Generate weekly review (string version)
+    func generateWeeklyReview(workoutData: String) async throws -> String {
+        weeklyReviewCallCount += 1
+        lastWeeklyReviewData = workoutData
+
+        if let error = shouldThrowError {
+            throw error
+        }
+
+        if let review = weeklyReviewResponse {
+            return review.summary + "\n" + review.highlights.joined(separator: "\n")
+        }
+
+        return "Great week! You hit all your targets. Keep pushing!"
+    }
+
+    /// Suggest weight (simpler interface)
+    func suggestWeight(for exercise: String, recentSets: [SetPerformance]) async throws -> WeightSuggestion {
+        return try await suggestProgressiveOverload(
+            for: exercise,
+            recentPerformance: recentSets,
+            currentTrend: .increasing(percentage: 5.0)
+        )
+    }
+
+    // MARK: - Setters for Test Configuration
+
+    func setFormCheckResponse(_ response: String) {
+        formCheckResponse = FormCheckResponse(
+            cues: [response],
+            commonMistake: "",
+            motivation: ""
+        )
+    }
+
+    func setShouldThrowError(_ shouldThrow: Bool) {
+        if shouldThrow {
+            shouldThrowError = AIError.invalidResponse
+        } else {
+            shouldThrowError = nil
+        }
+    }
+
+    func setWeeklyReviewResponse(_ response: String) {
+        weeklyReviewResponse = WeeklyReview(
+            weekId: "test",
+            generatedAt: .now,
+            summary: response,
+            highlights: [],
+            areasForImprovement: [],
+            motivationalNote: ""
+        )
+    }
+
+    func setWeightSuggestionResponse(_ suggestion: WeightSuggestion) {
+        weightSuggestionResponse = suggestion
+    }
+
+    func setCallDelay(_ delay: TimeInterval) {
+        callDelay = .milliseconds(Int(delay * 1000))
+    }
+
     // MARK: - Test Helpers
 
     func reset() {

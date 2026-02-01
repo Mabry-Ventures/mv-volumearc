@@ -136,6 +136,60 @@ actor MockHealthKitService: HealthKitServiceProtocol {
     func setPlateauScenario() {
         setStableWeight(175, days: 45)
     }
+
+    // MARK: - Additional Methods for Test Compatibility
+
+    /// Simpler fetch without date range
+    func fetchBodyWeightHistory() async throws -> [BodyWeightEntry] {
+        bodyWeightFetchCount += 1
+
+        if let error = shouldThrowError {
+            throw error
+        }
+
+        return bodyWeightHistory
+    }
+
+    /// Set body weight trend directly from entries
+    func setBodyWeightTrend(_ entries: [BodyWeightEntry]) {
+        bodyWeightHistory = entries
+        latestBodyWeight = entries.max(by: { $0.date < $1.date })
+    }
+
+    /// Getter for tracking call count
+    var fetchHistoryCallCount: Int {
+        bodyWeightFetchCount
+    }
+
+    // MARK: - Static Factory Methods for Tests
+
+    static func losingWeight() async -> MockHealthKitService {
+        let service = MockHealthKitService()
+        await service.setWeightLossScenario()
+        return service
+    }
+
+    static func bulking() async -> MockHealthKitService {
+        let service = MockHealthKitService()
+        await service.setWeightGainScenario()
+        return service
+    }
+
+    static func maintaining() async -> MockHealthKitService {
+        let service = MockHealthKitService()
+        await service.setPlateauScenario()
+        return service
+    }
+
+    static func denied() async -> MockHealthKitService {
+        let service = MockHealthKitService()
+        await service.setAuthorized(false)
+        return service
+    }
+
+    static func noData() async -> MockHealthKitService {
+        return MockHealthKitService()
+    }
 }
 
 // MARK: - Mock HealthKit Errors
