@@ -97,9 +97,13 @@ struct PlanEditorView: View {
     private var basicInfoSection: some View {
         Section {
             TextField("Plan Name", text: $name)
+                .accessibilityLabel("Plan name")
+                .accessibilityHint("Enter a name for your workout plan")
 
             TextField("Description (optional)", text: $description, axis: .vertical)
                 .lineLimit(2...4)
+                .accessibilityLabel("Plan description")
+                .accessibilityHint("Optional description for your plan")
         } header: {
             Text("Basic Info")
         }
@@ -113,14 +117,21 @@ struct PlanEditorView: View {
                         .tag(g)
                 }
             }
+            .accessibilityLabel("Training goal")
+            .accessibilityValue(goal.rawValue)
 
             Picker("Difficulty", selection: $difficulty) {
                 ForEach(PlanDifficulty.allCases, id: \.self) { d in
                     Text(d.rawValue).tag(d)
                 }
             }
+            .accessibilityLabel("Difficulty level")
+            .accessibilityValue(difficulty.rawValue)
 
             Stepper("Duration: \(estimatedDuration) weeks", value: $estimatedDuration, in: 1...52)
+                .accessibilityLabel("Plan duration")
+                .accessibilityValue("\(estimatedDuration) weeks")
+                .accessibilityHint("Adjust the number of weeks for this plan")
         } header: {
             Text("Configuration")
         } footer: {
@@ -134,6 +145,9 @@ struct PlanEditorView: View {
                 .onChange(of: daysPerWeek) { _, newValue in
                     updateDaysForSchedule()
                 }
+                .accessibilityLabel("Training days per week")
+                .accessibilityValue("\(daysPerWeek) days")
+                .accessibilityHint("Adjust the number of training days per week")
         } header: {
             Text("Schedule")
         } footer: {
@@ -180,8 +194,13 @@ struct PlanEditorView: View {
                         Image(systemName: "chevron.right")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
                     }
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(day.weekdayName), \(day.name)")
+                .accessibilityValue(day.isRestDay ? "Rest day" : "\(day.exercises.count) exercises")
+                .accessibilityHint("Double tap to edit, swipe for options")
                 .swipeActions(edge: .trailing) {
                     Button {
                         toggleRestDay(at: index)
@@ -209,6 +228,8 @@ struct PlanEditorView: View {
                     Text("Delete Plan")
                 }
             }
+            .accessibilityLabel("Delete plan")
+            .accessibilityHint("Permanently delete this workout plan")
         } header: {
             Text("Danger Zone")
         }

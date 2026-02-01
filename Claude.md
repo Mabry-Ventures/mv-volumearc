@@ -6,7 +6,7 @@ This document provides context for Claude Code sessions working on the Beast Mod
 
 Beast Mode is a SwiftUI/SwiftData iOS fitness tracking app focused on strength training. The app emphasizes the emotional experience of hitting personal records (PRs) with celebrations, social sharing, gamification, AI-powered analytics, and custom workout planning.
 
-**Current Version**: 1.4.0 "Fortress"
+**Current Version**: 1.4.1 "Accessible Fortress"
 **Platform**: iOS 17+, macOS 14+, watchOS 10+
 **Architecture**: SwiftUI + SwiftData + MVVM
 
@@ -29,6 +29,8 @@ BeastMode/
 │   │   ├── Workout.swift           # Workout + WorkoutExercise models
 │   │   └── WorkoutPlan.swift       # Plan, PlanDay, PlanExercise models (V1.3)
 │   ├── AppConfiguration.swift      # Centralized config: App Groups, API, limits (V1.4)
+│   ├── Extensions/
+│   │   └── LocalizedStrings.swift      # Type-safe L10n helper for localization (V1.4.1)
 │   └── Services/
 │       ├── AICoachService.swift        # Claude API integration for AI coaching (V1.2)
 │       ├── AnalyticsService.swift      # Progressive overload analytics (V1.2)
@@ -72,6 +74,8 @@ BeastMode/
 │   │   └── SharePlanSheet.swift        # Share plan via file/link/code
 │   └── Workout/
 │       └── SetInputView.swift          # Set input with PR integration + accessibility
+├── Resources/
+│   └── Localizable.xcstrings          # String Catalog for localization (V1.4.1)
 └── UI/
     └── Components/                     # Reusable UI components
 BeastModeWatch/                         # Apple Watch Extension (V1.3)
@@ -184,11 +188,22 @@ Tests/
 - `BeastModeWatch.entitlements` for Watch extension
 - `NSFaceIDUsageDescription` in Info.plist
 
-### Accessibility Improvements
-- VoiceOver labels on weight/reps input fields
-- Accessibility hints on complete set button
-- Accessibility labels on completed state view
+### Accessibility Improvements (V1.4.1 Expansion)
+- **VoiceOver labels** on all interactive elements:
+  - Weight/reps input fields with value announcements
+  - Complete set button with context-aware hints
+  - Streak flame, stat boxes, progress indicators
+  - Badge cells with earned/locked status
+  - PR celebration content and action buttons
+  - Onboarding progress, feature rows, setup summary
+  - Plan editor fields, day rows with exercise counts
+  - Rest timer controls with time value announcements
+  - Analytics cards, legend items, trend rows
+- **Accessibility traits** for modals (`.isModal`)
+- **Dynamic Type support** with `.dynamicTypeSize(...)` limits on fixed fonts
 - `accessibilityElement(children: .combine)` for grouped content
+- `accessibilityHidden(true)` on decorative elements
+- Progress trend `accessibilityDescription` for screen reader context
 
 ### Performance Optimizations
 - Concurrent loading in AnalyticsDashboardView (async let)
@@ -199,6 +214,22 @@ Tests/
 - PR save failures now logged via Logger and CrashReporter
 - Production mode throws `AIError.noAPIKey` instead of mock data
 - CrashReporter uses optional URL with proper error handling
+
+### Localization Infrastructure (V1.4.1)
+- **String Catalog** (`Localizable.xcstrings`) with manual extraction
+  - English (en) as source language
+  - Key categories: app, common, workout, streak, badge, pr, analytics, settings, onboarding, biometric, units, time
+- **Type-safe helper** (`LocalizedStrings.swift`)
+  - `L10n` enum with nested namespaces
+  - Usage: `Text(L10n.Workout.completeSet)`
+  - Pluralization helpers: `L10n.workoutCount(_:)`, `L10n.dayCount(_:)`, `L10n.weekCount(_:)`
+- **Key strings defined for:**
+  - Common UI actions (cancel, save, done, delete, edit)
+  - Workout terminology (weight, reps, sets, complete set)
+  - Streak and badge text (day streak, new badge)
+  - PR celebration text (personal record, keep grinding, share)
+  - Analytics labels (workouts, total volume, progressing, plateau)
+  - Settings and onboarding flow
 
 ### Testing Infrastructure
 
@@ -584,6 +615,11 @@ python3 scripts/check_coverage.py coverage.json 80.0
 
 ## Future Development
 
+**Completed in V1.4.1:**
+- ✅ Full VoiceOver audit for all views
+- ✅ Dynamic Type support with size limits
+- ✅ Localization infrastructure (String Catalog + L10n helper)
+
 **Completed in V1.4.0:**
 - ✅ Comprehensive test infrastructure with Swift Testing
 - ✅ Mock services for isolated testing
@@ -614,6 +650,3 @@ python3 scripts/check_coverage.py coverage.json 80.0
 - Watch app independent workout logging
 - Widget configurability
 - Plan templates marketplace/community sharing
-- Full VoiceOver audit for remaining views
-- Dynamic Type support audit
-- Localization infrastructure

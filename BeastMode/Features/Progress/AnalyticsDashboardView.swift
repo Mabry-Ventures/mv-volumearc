@@ -235,6 +235,7 @@ struct SummaryCard: View {
 
             Text(value)
                 .font(.system(size: 28, weight: .bold, design: .rounded))
+                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
 
             Text(subtitle)
                 .font(.caption2)
@@ -246,6 +247,8 @@ struct SummaryCard: View {
             RoundedRectangle(cornerRadius: 16)
                 .fill(.ultraThinMaterial)
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title): \(value), \(subtitle)")
     }
 }
 
@@ -322,9 +325,12 @@ struct LegendItem: View {
             Circle()
                 .fill(color)
                 .frame(width: 8, height: 8)
+                .accessibilityHidden(true)
             Text("\(label) (\(count))")
                 .foregroundStyle(.secondary)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(count) exercises \(label.lowercased())")
     }
 }
 
@@ -381,18 +387,32 @@ struct ExerciseTrendRow: View {
             if analytics.dataPoints.count >= 2 {
                 MiniSparkline(dataPoints: analytics.dataPoints)
                     .frame(width: 60, height: 30)
+                    .accessibilityHidden(true)
             }
 
             // Trend badge
             Image(systemName: analytics.trend.icon)
                 .foregroundStyle(analytics.trend.color)
                 .font(.title3)
+                .accessibilityHidden(true)
         }
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(.ultraThinMaterial)
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(exerciseAccessibilityLabel)
+        .accessibilityHint("Double tap to view detailed analytics")
+    }
+
+    private var exerciseAccessibilityLabel: String {
+        var label = analytics.exerciseName
+        if let e1rm = analytics.estimatedOneRepMax {
+            label += ", estimated one rep max \(Int(e1rm)) pounds"
+        }
+        label += ", trend: \(analytics.trend.accessibilityDescription)"
+        return label
     }
 }
 

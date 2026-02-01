@@ -65,8 +65,12 @@ struct RestTimerSettingsView: View {
                         Image(systemName: "chevron.right")
                             .foregroundStyle(.secondary)
                             .font(.caption)
+                            .accessibilityHidden(true)
                     }
                 }
+                .accessibilityLabel("Per-exercise overrides")
+                .accessibilityValue("\(profile.exerciseRestTimers.count) custom timers")
+                .accessibilityHint("Double tap to manage custom rest times for specific exercises")
             } header: {
                 Text("Custom")
             } footer: {
@@ -134,6 +138,8 @@ struct TimerStepper: View {
                             .foregroundStyle(value <= range.lowerBound ? .gray : .blue)
                     }
                     .disabled(value <= range.lowerBound)
+                    .accessibilityLabel("Decrease")
+                    .accessibilityHint("Decrease rest time by \(Int(step)) seconds")
 
                     // Time display
                     Text(formatTime(value))
@@ -141,6 +147,8 @@ struct TimerStepper: View {
                         .monospacedDigit()
                         .frame(minWidth: 60)
                         .contentTransition(.numericText())
+                        .accessibilityHidden(true)
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
 
                     // Increase button
                     Button {
@@ -154,10 +162,15 @@ struct TimerStepper: View {
                             .foregroundStyle(value >= range.upperBound ? .gray : .blue)
                     }
                     .disabled(value >= range.upperBound)
+                    .accessibilityLabel("Increase")
+                    .accessibilityHint("Increase rest time by \(Int(step)) seconds")
                 }
             }
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(title) rest timer")
+        .accessibilityValue(formatTime(value))
     }
 
     private func formatTime(_ seconds: TimeInterval) -> String {
@@ -294,6 +307,10 @@ struct ExerciseOverrideRow: View {
                 isEditing.toggle()
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(exerciseName) custom rest timer")
+        .accessibilityValue(formatTime(duration))
+        .accessibilityHint(isEditing ? "Tap to close editor" : "Tap to edit rest time")
     }
 
     private func formatTime(_ seconds: TimeInterval) -> String {
@@ -353,8 +370,12 @@ struct AddExerciseOverrideView: View {
                     VStack(spacing: 16) {
                         Text(formatTime(duration))
                             .font(.system(size: 48, weight: .bold, design: .rounded))
+                            .accessibilityHidden(true)
+                            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
 
                         Slider(value: $duration, in: 30...300, step: 15)
+                            .accessibilityLabel("Rest duration")
+                            .accessibilityValue(formatTime(duration))
                     }
                     .padding(.vertical)
                 } header: {

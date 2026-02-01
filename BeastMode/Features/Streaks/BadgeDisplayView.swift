@@ -91,6 +91,10 @@ struct BadgeCell: View {
             .padding(.vertical, 8)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(badge.name) badge")
+        .accessibilityValue(isEarned ? "Earned" : "Locked")
+        .accessibilityHint("Double tap to view details")
         .sheet(isPresented: $showDetail) {
             BadgeDetailView(badge: badge, isEarned: isEarned, earnedDate: earnedDate)
                 .presentationDetents([.medium])
@@ -164,9 +168,13 @@ struct BadgeDetailView: View {
                 dismiss()
             }
             .buttonStyle(.borderedProminent)
+            .accessibilityLabel("Done")
+            .accessibilityHint("Dismiss badge details")
         }
         .padding()
         .padding(.top)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(badge.name) badge details")
     }
 }
 
@@ -229,11 +237,16 @@ struct BadgeEarnedPopup: View {
                                 .fill(.white)
                         )
                 }
+                .accessibilityLabel("Awesome")
+                .accessibilityHint("Dismiss celebration")
                 .padding(.top)
             }
             .padding(32)
             .scaleEffect(showContent ? 1 : 0.5)
             .opacity(showContent ? 1 : 0)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("New badge earned: \(badge.name)")
+            .accessibilityAddTraits(.isModal)
         }
         .onAppear {
             // Haptic
@@ -290,6 +303,8 @@ struct RecentBadgesView: View {
                                     .lineLimit(1)
                             }
                             .frame(width: 70)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("\(badge.name) badge, earned \(date.formatted(.dateTime.month().day()))")
                         }
                     }
                 }
@@ -299,6 +314,8 @@ struct RecentBadgesView: View {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(.ultraThinMaterial)
             )
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Recent badges, \(recentBadges.count) earned")
         }
     }
 }

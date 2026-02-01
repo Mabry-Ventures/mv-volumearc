@@ -24,6 +24,7 @@ struct StreakDisplayView: View {
 
                 Divider()
                     .frame(height: 60)
+                    .accessibilityHidden(true)
 
                 // Weekly progress
                 WeeklyProgressView(
@@ -34,6 +35,8 @@ struct StreakDisplayView: View {
                 Spacer()
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Streak summary")
     }
 
     private var isStreakActive: Bool {
@@ -86,6 +89,7 @@ struct StreakFlameView: View {
             Text("\(streak)")
                 .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundStyle(isActive ? .primary : .secondary)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
 
             Text("day streak")
                 .font(.caption)
@@ -96,6 +100,9 @@ struct StreakFlameView: View {
                 isAnimating = true
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(streak) day streak")
+        .accessibilityValue(isActive ? "Active" : "Inactive")
     }
 }
 
@@ -115,6 +122,7 @@ struct WeeklyProgressView: View {
                     Circle()
                         .fill(index < current ? Color.green : Color.gray.opacity(0.3))
                         .frame(width: 12, height: 12)
+                        .accessibilityHidden(true)
                 }
             }
 
@@ -122,6 +130,9 @@ struct WeeklyProgressView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Weekly progress")
+        .accessibilityValue("\(current) of \(goal) workouts completed this week")
     }
 }
 
@@ -215,6 +226,7 @@ struct StatBox: View {
 
             Text(value)
                 .font(.system(size: 28, weight: .bold, design: .rounded))
+                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
 
             VStack(spacing: 2) {
                 Text(title)
@@ -232,6 +244,8 @@ struct StatBox: View {
             RoundedRectangle(cornerRadius: 16)
                 .fill(color.opacity(0.1))
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title): \(value) \(subtitle)")
     }
 }
 

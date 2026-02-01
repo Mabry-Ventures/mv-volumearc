@@ -135,6 +135,9 @@ struct OnboardingProgressBar: View {
             }
         }
         .frame(height: 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Onboarding progress")
+        .accessibilityValue("\(Int(progress * 100)) percent complete")
     }
 }
 
@@ -184,6 +187,7 @@ struct WelcomeStepView: View {
                 Text("Beast Mode")
                     .font(.system(size: 42, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility1)
 
                 Text("Your personal strength training companion.\nTrack progress, hit PRs, and become the beast you were meant to be.")
                     .font(.body)
@@ -267,6 +271,7 @@ struct FeatureRow: View {
                     .font(.title2)
                     .foregroundStyle(Color(hex: "FF6B35"))
             }
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
@@ -285,6 +290,8 @@ struct FeatureRow: View {
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color.white.opacity(0.1))
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title): \(description)")
     }
 }
 
@@ -758,6 +765,9 @@ struct SetupSummaryRow: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color.white.opacity(0.1))
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(isEnabled ? "Enabled" : "Not enabled")
     }
 }
 
@@ -773,11 +783,13 @@ struct BenefitItem: View {
                 .font(.body)
                 .foregroundStyle(Color(hex: "FF6B35"))
                 .frame(width: 24)
+                .accessibilityHidden(true)
 
             Text(text)
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.8))
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -797,6 +809,9 @@ struct PermissionStatusBadge: View {
             Capsule()
                 .fill(status.isGranted ? Color.green.opacity(0.2) : Color.orange.opacity(0.2))
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Permission status")
+        .accessibilityValue(status.isGranted ? "Enabled" : "Not enabled")
     }
 }
 
@@ -820,6 +835,7 @@ struct OnboardingButton: View {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         .scaleEffect(0.8)
+                        .accessibilityHidden(true)
                 }
 
                 Text(title)
@@ -832,6 +848,8 @@ struct OnboardingButton: View {
             .cornerRadius(14)
         }
         .disabled(isLoading)
+        .accessibilityLabel(title)
+        .accessibilityHint(isLoading ? "Loading, please wait" : nil)
     }
 
     @ViewBuilder

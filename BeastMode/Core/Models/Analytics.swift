@@ -68,6 +68,15 @@ enum ProgressTrend: Equatable {
         case .insufficient: return "questionmark.circle.fill"
         }
     }
+
+    var accessibilityDescription: String {
+        switch self {
+        case .increasing(let pct): return "increasing \(String(format: "%.1f", pct)) percent"
+        case .plateau(let weeks): return "plateau for \(weeks) weeks"
+        case .decreasing(let pct): return "decreasing \(String(format: "%.1f", pct)) percent"
+        case .insufficient: return "insufficient data"
+        }
+    }
 }
 
 // MARK: - Volume Trend

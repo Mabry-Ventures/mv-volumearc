@@ -132,6 +132,8 @@ struct PRCelebrationView: View {
                                     )
                             )
                     }
+                    .accessibilityLabel("Keep Grinding")
+                    .accessibilityHint("Dismiss celebration and continue workout")
 
                     // Share button
                     Button {
@@ -153,8 +155,13 @@ struct PRCelebrationView: View {
                                     )
                             )
                     }
+                    .accessibilityLabel("Share")
+                    .accessibilityHint("Share your personal record")
                 }
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Personal record celebration for \(exerciseName). \(prType.title)")
+            .accessibilityAddTraits(.isModal)
             .padding(32)
             .background(
                 RoundedRectangle(cornerRadius: 32)
