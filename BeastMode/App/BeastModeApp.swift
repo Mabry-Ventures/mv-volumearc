@@ -11,6 +11,7 @@ struct BeastModeApp: App {
     @StateObject private var appState = AppState()
     @StateObject private var deepLinkHandler = DeepLinkHandler()
     @StateObject private var authenticationManager = AuthenticationManager()
+    @StateObject private var onboardingManager = OnboardingManager()
 
     init() {
         // Configure logging
@@ -29,21 +30,19 @@ struct BeastModeApp: App {
                     })
                 case .ready:
                     if let container = appState.modelContainer {
-                        ContentView()
-                            .environmentObject(deepLinkHandler)
-                            .environmentObject(authenticationManager)
-                            .onOpenURL { url in
-                                deepLinkHandler.handleURL(url)
-                            }
-                            .sheet(isPresented: $deepLinkHandler.showImportSheet) {
-                                if let url = deepLinkHandler.pendingImport {
-                                    DeepLinkImportView(url: url)
-                                        .onDisappear {
-                                            deepLinkHandler.clearPendingImport()
-                                        }
+                        // Show onboarding for new users, main app for returning users
+                        if onboardingManager.isOnboardingComplete {
+                            mainAppView(container: container)
+                        } else {
+                            OnboardingView()
+                                .environmentObject(authenticationManager)
+                                .environmentObject(onboardingManager)
+                                .onChange(of: onboardingManager.isOnboardingComplete) { _, isComplete in
+                                    if isComplete {
+                                        Logger.app.info("Onboarding completed, showing main app")
+                                    }
                                 }
-                            }
-                            .modelContainer(container)
+                        }
                     }
                 }
             }
@@ -51,6 +50,25 @@ struct BeastModeApp: App {
                 await appState.initialize()
             }
         }
+    }
+
+    @ViewBuilder
+    private func mainAppView(container: ModelContainer) -> some View {
+        ContentView()
+            .environmentObject(deepLinkHandler)
+            .environmentObject(authenticationManager)
+            .onOpenURL { url in
+                deepLinkHandler.handleURL(url)
+            }
+            .sheet(isPresented: $deepLinkHandler.showImportSheet) {
+                if let url = deepLinkHandler.pendingImport {
+                    DeepLinkImportView(url: url)
+                        .onDisappear {
+                            deepLinkHandler.clearPendingImport()
+                        }
+                }
+            }
+            .modelContainer(container)
     }
 }
 
