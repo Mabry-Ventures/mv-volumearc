@@ -211,6 +211,8 @@ struct PlanEditorView: View {
                         )
                     }
                     .tint(day.isRestDay ? .orange : .blue)
+                    .accessibilityLabel(day.isRestDay ? "Make training day" : "Make rest day")
+                    .accessibilityHint(day.isRestDay ? "Convert this rest day to a training day" : "Convert this training day to a rest day")
                 }
             }
         } header: {

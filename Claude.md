@@ -196,7 +196,7 @@ Tests/
   - Badge cells with earned/locked status
   - PR celebration content and action buttons
   - Onboarding progress, feature rows, setup summary
-  - Plan editor fields, day rows with exercise counts
+  - Plan editor fields, day rows with exercise counts, swipe actions
   - Rest timer controls with time value announcements
   - Analytics cards, legend items, trend rows
 - **Accessibility traits** for modals (`.isModal`)
@@ -230,6 +230,7 @@ Tests/
   - PR celebration text (personal record, keep grinding, share)
   - Analytics labels (workouts, total volume, progressing, plateau)
   - Settings and onboarding flow
+- **Note:** Infrastructure is foundational - views still use hardcoded strings that should be migrated to `L10n` entries for full localization support
 
 ### Testing Infrastructure
 
@@ -639,6 +640,7 @@ python3 scripts/check_coverage.py coverage.json 80.0
 - ✅ Proper error handling with logging
 
 **Still needs attention:**
+- Migrate hardcoded UI strings to L10n localization helper
 - Integration tests for HealthKit (requires device/simulator)
 - Claude API response parsing edge cases
 - Snapshot tests for analytics charts
