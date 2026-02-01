@@ -6,7 +6,7 @@ This document provides context for Claude Code sessions working on the Beast Mod
 
 Beast Mode is a SwiftUI/SwiftData iOS fitness tracking app focused on strength training. The app emphasizes the emotional experience of hitting personal records (PRs) with celebrations, social sharing, gamification, AI-powered analytics, and custom workout planning.
 
-**Current Version**: 1.3.1 "Iron Clad"
+**Current Version**: 1.4.0 "Fortress"
 **Platform**: iOS 17+, macOS 14+, watchOS 10+
 **Architecture**: SwiftUI + SwiftData + MVVM
 
@@ -15,23 +15,30 @@ Beast Mode is a SwiftUI/SwiftData iOS fitness tracking app focused on strength t
 ```
 BeastMode/
 ├── App/
-│   ├── BeastModeApp.swift          # Main entry point, SwiftData container, deep links
-│   └── ContentView.swift           # Tab navigation (5 tabs), main views
+│   ├── BeastModeApp.swift          # Main entry point, SwiftData container, deep links, app lock
+│   └── ContentView.swift           # Tab navigation (5 tabs), main views, sign-out UI
 ├── Core/
 │   ├── Models/
 │   │   ├── Analytics.swift         # Analytics models, trends, time ranges (V1.2)
 │   │   ├── Exercise.swift          # Exercise definitions, categories, types
 │   │   ├── PersonalRecord.swift    # PR model with PRType enum
+│   │   ├── SchemaMigration.swift   # SwiftData versioned schema & migration plan (V1.4)
 │   │   ├── SetLog.swift            # Individual set tracking
 │   │   ├── Streak.swift            # UserStreak model, Badge enum (15 badges)
 │   │   ├── UserProfile.swift       # User prefs, rest timer settings
 │   │   ├── Workout.swift           # Workout + WorkoutExercise models
 │   │   └── WorkoutPlan.swift       # Plan, PlanDay, PlanExercise models (V1.3)
+│   ├── AppConfiguration.swift      # Centralized config: App Groups, API, limits (V1.4)
 │   └── Services/
 │       ├── AICoachService.swift        # Claude API integration for AI coaching (V1.2)
 │       ├── AnalyticsService.swift      # Progressive overload analytics (V1.2)
+│       ├── AuthenticationManager.swift # Sign in with Apple + credential management (V1.4)
+│       ├── BiometricAuthService.swift  # Face ID/Touch ID authentication + app lock (V1.4)
 │       ├── ComplicationUpdateService.swift # Watch complication updates (V1.3)
+│       ├── CrashReporter.swift         # Error recording, breadcrumbs, persistence (V1.4)
 │       ├── HealthKitService.swift      # HealthKit body weight integration (V1.2)
+│       ├── KeychainService.swift       # Secure storage for API keys & credentials (V1.4)
+│       ├── NetworkMonitor.swift        # Connectivity monitoring + offline support (V1.4)
 │       ├── PlanSharingService.swift    # Plan export/import/sharing (V1.3)
 │       ├── PRDetectionService.swift    # PR detection with Brzycki E1RM formula
 │       ├── RestTimerService.swift      # Smart rest duration + timer manager
@@ -42,6 +49,9 @@ BeastMode/
 │   │   └── WeeklyReviewView.swift      # AI-powered weekly review UI (V1.2)
 │   ├── Celebrations/
 │   │   └── PRCelebrationView.swift     # Full-screen PR celebration + coordinator
+│   ├── Onboarding/                     # New user onboarding flow (V1.4)
+│   │   ├── OnboardingManager.swift     # Onboarding state & permission management
+│   │   └── OnboardingView.swift        # 7-step onboarding: welcome, features, permissions
 │   ├── Progress/
 │   │   ├── AnalyticsDashboardView.swift    # Main analytics dashboard (V1.2)
 │   │   ├── BodyWeightChartView.swift       # HealthKit weight chart (V1.2)
@@ -61,10 +71,12 @@ BeastMode/
 │   │   ├── PlanLibraryView.swift       # Browse and manage plans
 │   │   └── SharePlanSheet.swift        # Share plan via file/link/code
 │   └── Workout/
-│       └── SetInputView.swift          # Set input with PR integration
+│       └── SetInputView.swift          # Set input with PR integration + accessibility
 └── UI/
     └── Components/                     # Reusable UI components
 BeastModeWatch/                         # Apple Watch Extension (V1.3)
+├── BeastModeWatch.entitlements         # Watch entitlements (V1.4)
+├── WatchConfiguration.swift            # Watch-specific configuration (V1.4)
 └── Complications/
     ├── ComplicationDataProvider.swift  # Timeline provider, data manager
     ├── StreakComplication.swift        # Streak + weekly progress widgets
@@ -72,8 +84,13 @@ BeastModeWatch/                         # Apple Watch Extension (V1.3)
 Tests/
 └── BeastModeTests/
     ├── Core/
-    │   ├── Services/                       # Service unit tests (V1.3.1)
+    │   ├── Services/                       # Service unit tests (V1.3.1+)
     │   │   ├── AnalyticsServiceTests.swift      # Trend calculations, overview tests
+    │   │   ├── AuthenticationManagerTests.swift # Sign in with Apple tests (V1.4)
+    │   │   ├── BiometricAuthServiceTests.swift  # Face ID/Touch ID tests (V1.4)
+    │   │   ├── CrashReporterTests.swift         # Error recording tests (V1.4)
+    │   │   ├── KeychainServiceTests.swift       # Keychain storage tests (V1.4)
+    │   │   ├── NetworkMonitorTests.swift        # Connectivity tests (V1.4)
     │   │   ├── PlanSharingServiceTests.swift    # Export, import, validation tests
     │   │   ├── PRDetectionServiceTests.swift    # E1RM, PR type detection tests
     │   │   └── StreakServiceTests.swift         # Streak, badge award tests
@@ -102,7 +119,86 @@ Tests/
                 └── ServiceProtocols.swift       # Protocol definitions for DI
 ```
 
-## Version 1.3.1 Features (Iron Clad)
+## Version 1.4.0 Features (Fortress)
+
+### Biometric Authentication (Face ID/Touch ID)
+- `BiometricAuthService` handles Face ID, Touch ID, and Optic ID (Vision Pro)
+- `BiometricType` enum: `.none`, `.touchID`, `.faceID`, `.opticID`
+- `BiometricError` enum with comprehensive LAError mapping
+- App lock functionality with automatic re-lock after 30s in background
+- `AppLockView` for lock screen UI
+- `BiometricSettingsView` for settings integration
+- `BiometricStepView` in onboarding flow
+
+### Sign in with Apple
+- `AuthenticationManager` handles Apple ID authentication
+- Stores credentials securely in Keychain via `KeychainService`
+- `UserCredentials` struct for user info (userId, email, displayName)
+- `AuthenticationState` enum: `.unknown`, `.authenticated`, `.unauthenticated`
+- Sign-out functionality in ProfileView
+- Integration with onboarding flow
+
+### New User Onboarding
+- `OnboardingManager` manages 7-step flow
+- `OnboardingStep` enum: `.welcome`, `.features`, `.healthKit`, `.notifications`, `.biometric`, `.signIn`, `.complete`
+- Permission request handling for HealthKit, Notifications
+- Progress indicator with animated transitions
+- Skip option available on each step
+- `CompleteStepView` shows setup summary
+
+### Security Infrastructure
+- `KeychainService` for secure credential storage
+  - String, Data, and Codable storage
+  - API key management (removed environment variable fallback)
+  - Auth token storage
+  - `@unchecked Sendable` for actor compatibility
+- `CrashReporter` for error tracking
+  - Error recording with context and stack traces
+  - Breadcrumb trail for debugging
+  - Persists to documents directory
+  - Signal handlers for crash detection
+  - `ErrorHistoryView` for debug inspection
+
+### Network Monitoring
+- `NetworkMonitor` tracks connectivity via NWPathMonitor
+- `OfflineManager` queues operations for sync
+- `OfflineBanner` view modifier for UI feedback
+- Automatic retry when connection restored
+
+### Schema Migration Support
+- `SchemaV1` as first versioned schema
+- `BeastModeMigrationPlan` for future migrations
+- `ModelContainerFactory` for proper container initialization
+
+### App Configuration
+- `AppConfiguration` centralizes all constants
+  - App Group identifier: `group.com.beastmode.app`
+  - Team identifier (required for production)
+  - API configuration
+  - Feature flags
+  - Workout limits
+- `WatchConfiguration` for watchOS-specific settings
+
+### Entitlements
+- `BeastMode.entitlements` with HealthKit, Sign in with Apple, App Groups
+- `BeastModeWatch.entitlements` for Watch extension
+- `NSFaceIDUsageDescription` in Info.plist
+
+### Accessibility Improvements
+- VoiceOver labels on weight/reps input fields
+- Accessibility hints on complete set button
+- Accessibility labels on completed state view
+- `accessibilityElement(children: .combine)` for grouped content
+
+### Performance Optimizations
+- Concurrent loading in AnalyticsDashboardView (async let)
+- Timer cleanup in RestTimerManager (deinit)
+- Proper error handling with logging (replaced try?)
+
+### Error Handling Improvements
+- PR save failures now logged via Logger and CrashReporter
+- Production mode throws `AIError.noAPIKey` instead of mock data
+- CrashReporter uses optional URL with proper error handling
 
 ### Testing Infrastructure
 
@@ -321,6 +417,58 @@ struct WeightSuggestion {
 }
 ```
 
+## Key Types (V1.4)
+
+### BiometricType
+```swift
+enum BiometricType: String {
+    case none, touchID, faceID, opticID
+
+    var displayName: String  // "Face ID", "Touch ID", etc.
+    var iconName: String     // SF Symbol name
+}
+```
+
+### BiometricError
+```swift
+enum BiometricError: Error {
+    case notAvailable, notEnrolled, authenticationFailed
+    case userCancelled, systemCancelled, passcodeNotSet
+    case biometryLockout, invalidContext, unknown(Error)
+
+    var isRecoverable: Bool  // true for authenticationFailed, userCancelled
+}
+```
+
+### AuthenticationState
+```swift
+enum AuthenticationState: Equatable {
+    case unknown
+    case authenticated(userId: String)
+    case unauthenticated
+}
+```
+
+### OnboardingStep
+```swift
+enum OnboardingStep: Int, CaseIterable {
+    case welcome, features, healthKit, notifications
+    case biometric, signIn, complete
+
+    var title: String
+    var isPermissionStep: Bool
+}
+```
+
+### PermissionStatus
+```swift
+enum PermissionStatus {
+    case notDetermined, granted, denied, restricted
+
+    var isGranted: Bool
+}
+```
+
 ## Dependencies
 
 ```swift
@@ -340,9 +488,13 @@ struct WeightSuggestion {
 
 - `group.com.beastmode.app` - Used for Watch complication data sharing
 
-## Environment Variables
+## API Key Configuration
 
-- `ANTHROPIC_API_KEY` - Optional, enables Claude API for AI coaching features
+API keys are stored securely in the iOS Keychain via `KeychainService`:
+- **No environment variable fallback** - removed for security
+- In DEBUG mode, missing API key returns mock responses (clearly labeled)
+- In RELEASE mode, missing API key throws `AIError.noAPIKey`
+- Set API key programmatically: `KeychainService.shared.setAPIKey("your-key")`
 
 ## Common Patterns
 
@@ -432,13 +584,23 @@ python3 scripts/check_coverage.py coverage.json 80.0
 
 ## Future Development
 
-**Completed in V1.3.1:**
+**Completed in V1.4.0:**
 - ✅ Comprehensive test infrastructure with Swift Testing
 - ✅ Mock services for isolated testing
 - ✅ Snapshot test infrastructure
 - ✅ Performance test suite
 - ✅ CI/CD with GitHub Actions
 - ✅ Xcode test plans
+- ✅ Sign in with Apple authentication
+- ✅ Face ID/Touch ID biometric authentication
+- ✅ App lock functionality
+- ✅ New user onboarding flow
+- ✅ Secure Keychain storage for credentials
+- ✅ Crash reporting infrastructure
+- ✅ Network monitoring with offline support
+- ✅ SwiftData schema migration support
+- ✅ VoiceOver accessibility labels
+- ✅ Proper error handling with logging
 
 **Still needs attention:**
 - Integration tests for HealthKit (requires device/simulator)
@@ -452,3 +614,6 @@ python3 scripts/check_coverage.py coverage.json 80.0
 - Watch app independent workout logging
 - Widget configurability
 - Plan templates marketplace/community sharing
+- Full VoiceOver audit for remaining views
+- Dynamic Type support audit
+- Localization infrastructure
