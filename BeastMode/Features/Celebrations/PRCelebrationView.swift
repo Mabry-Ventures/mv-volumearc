@@ -118,7 +118,7 @@ struct PRCelebrationView: View {
                     Button {
                         onDismiss()
                     } label: {
-                        Text("Keep Grinding")
+                        Text(L10n.PR.keepGrinding)
                             .font(.headline)
                             .foregroundStyle(.white)
                             .padding(.horizontal, 24)
@@ -132,14 +132,14 @@ struct PRCelebrationView: View {
                                     )
                             )
                     }
-                    .accessibilityLabel("Keep Grinding")
-                    .accessibilityHint("Dismiss celebration and continue workout")
+                    .accessibilityLabel(L10n.PR.keepGrinding)
+                    .accessibilityHint(L10n.Accessibility.dismissCelebration)
 
                     // Share button
                     Button {
                         onShare()
                     } label: {
-                        Label("Share", systemImage: "square.and.arrow.up")
+                        Label(L10n.PR.share, systemImage: "square.and.arrow.up")
                             .font(.headline)
                             .foregroundStyle(.black)
                             .padding(.horizontal, 24)
@@ -155,7 +155,7 @@ struct PRCelebrationView: View {
                                     )
                             )
                     }
-                    .accessibilityLabel("Share")
+                    .accessibilityLabel(L10n.PR.share)
                     .accessibilityHint("Share your personal record")
                 }
             }

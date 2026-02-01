@@ -164,11 +164,11 @@ struct BadgeDetailView: View {
 
             Spacer()
 
-            Button("Done") {
+            Button(L10n.Common.done) {
                 dismiss()
             }
             .buttonStyle(.borderedProminent)
-            .accessibilityLabel("Done")
+            .accessibilityLabel(L10n.Common.done)
             .accessibilityHint("Dismiss badge details")
         }
         .padding()
@@ -194,7 +194,7 @@ struct BadgeEarnedPopup: View {
                 .onTapGesture { onDismiss() }
 
             VStack(spacing: 20) {
-                Text("NEW BADGE!")
+                Text(L10n.Badge.newBadge)
                     .font(.caption.weight(.black))
                     .foregroundStyle(.yellow)
                     .tracking(4)
@@ -227,7 +227,7 @@ struct BadgeEarnedPopup: View {
                 Button {
                     onDismiss()
                 } label: {
-                    Text("Awesome!")
+                    Text(L10n.Badge.awesome)
                         .font(.headline)
                         .foregroundStyle(.black)
                         .padding(.horizontal, 32)
@@ -237,8 +237,8 @@ struct BadgeEarnedPopup: View {
                                 .fill(.white)
                         )
                 }
-                .accessibilityLabel("Awesome")
-                .accessibilityHint("Dismiss celebration")
+                .accessibilityLabel(L10n.Badge.awesome)
+                .accessibilityHint(L10n.Accessibility.dismissCelebration)
                 .padding(.top)
             }
             .padding(32)
@@ -283,7 +283,7 @@ struct RecentBadgesView: View {
     var body: some View {
         if !recentBadges.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Recent Badges")
+                Text(L10n.Badge.recentBadges)
                     .font(.headline)
 
                 ScrollView(.horizontal, showsIndicators: false) {

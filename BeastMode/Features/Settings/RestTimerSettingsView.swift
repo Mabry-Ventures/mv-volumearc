@@ -15,8 +15,8 @@ struct RestTimerSettingsView: View {
             // Default timers section
             Section {
                 TimerStepper(
-                    title: "Compound Lifts",
-                    subtitle: "Squat, Bench, Deadlift, etc.",
+                    title: L10n.RestTimer.compoundLifts,
+                    subtitle: L10n.RestTimer.compoundDescription,
                     value: Binding(
                         get: { profile.restTimerCompound },
                         set: { profile.restTimerCompound = $0 }
@@ -26,8 +26,8 @@ struct RestTimerSettingsView: View {
                 )
 
                 TimerStepper(
-                    title: "Isolation Exercises",
-                    subtitle: "Curls, Extensions, Flyes",
+                    title: L10n.RestTimer.isolationExercises,
+                    subtitle: L10n.RestTimer.isolationDescription,
                     value: Binding(
                         get: { profile.restTimerIsolation },
                         set: { profile.restTimerIsolation = $0 }
@@ -37,8 +37,8 @@ struct RestTimerSettingsView: View {
                 )
 
                 TimerStepper(
-                    title: "Default",
-                    subtitle: "Everything else",
+                    title: L10n.RestTimer.defaultTimer,
+                    subtitle: L10n.RestTimer.everythingElse,
                     value: Binding(
                         get: { profile.restTimerDefault },
                         set: { profile.restTimerDefault = $0 }
@@ -47,7 +47,7 @@ struct RestTimerSettingsView: View {
                     step: 15
                 )
             } header: {
-                Text("Default Rest Times")
+                Text(L10n.RestTimer.defaultRestTimes)
             } footer: {
                 Text("Compound movements typically need longer rest for strength recovery.")
             }
@@ -58,7 +58,7 @@ struct RestTimerSettingsView: View {
                     showExerciseOverrides = true
                 } label: {
                     HStack {
-                        Label("Per-Exercise Overrides", systemImage: "slider.horizontal.3")
+                        Label(L10n.RestTimer.perExerciseOverrides, systemImage: "slider.horizontal.3")
                         Spacer()
                         Text("\(profile.exerciseRestTimers.count)")
                             .foregroundStyle(.secondary)
@@ -68,11 +68,11 @@ struct RestTimerSettingsView: View {
                             .accessibilityHidden(true)
                     }
                 }
-                .accessibilityLabel("Per-exercise overrides")
-                .accessibilityValue("\(profile.exerciseRestTimers.count) custom timers")
-                .accessibilityHint("Double tap to manage custom rest times for specific exercises")
+                .accessibilityLabel(L10n.RestTimer.perExerciseOverrides)
+                .accessibilityValue(L10n.RestTimer.customTimers)
+                .accessibilityHint(L10n.Accessibility.doubleTapToEdit)
             } header: {
-                Text("Custom")
+                Text(L10n.RestTimer.custom)
             } footer: {
                 Text("Set specific rest times for individual exercises.")
             }
@@ -83,20 +83,20 @@ struct RestTimerSettingsView: View {
                     get: { profile.restTimerSoundEnabled },
                     set: { profile.restTimerSoundEnabled = $0 }
                 )) {
-                    Label("Timer Sound", systemImage: "speaker.wave.2.fill")
+                    Label(L10n.RestTimer.timerSound, systemImage: "speaker.wave.2.fill")
                 }
 
                 Toggle(isOn: Binding(
                     get: { profile.restTimerVibrationEnabled },
                     set: { profile.restTimerVibrationEnabled = $0 }
                 )) {
-                    Label("Vibration", systemImage: "iphone.radiowaves.left.and.right")
+                    Label(L10n.RestTimer.vibration, systemImage: "iphone.radiowaves.left.and.right")
                 }
             } header: {
-                Text("Alerts")
+                Text(L10n.RestTimer.alerts)
             }
         }
-        .navigationTitle("Rest Timer")
+        .navigationTitle(L10n.RestTimer.title)
         .sheet(isPresented: $showExerciseOverrides) {
             ExerciseRestOverridesView(profile: profile)
         }
@@ -205,11 +205,11 @@ struct ExerciseRestOverridesView: View {
             List {
                 if sortedOverrides.isEmpty {
                     ContentUnavailableView {
-                        Label("No Custom Timers", systemImage: "timer")
+                        Label(L10n.RestTimer.noCustomTimers, systemImage: "timer")
                     } description: {
                         Text("Add custom rest times for specific exercises.")
                     } actions: {
-                        Button("Add Exercise") {
+                        Button(L10n.RestTimer.addCustomTimer) {
                             showAddExercise = true
                         }
                     }
@@ -232,11 +232,11 @@ struct ExerciseRestOverridesView: View {
                 }
             }
             .searchable(text: $searchText, prompt: "Search exercises")
-            .navigationTitle("Custom Rest Times")
+            .navigationTitle(L10n.RestTimer.customRestTimes)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Done") {
+                    Button(L10n.Common.done) {
                         dismiss()
                     }
                 }
@@ -345,10 +345,10 @@ struct AddExerciseOverrideView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Exercise Name", text: $exerciseName)
+                    TextField(L10n.RestTimer.exerciseName, text: $exerciseName)
                         .autocorrectionDisabled()
                 } header: {
-                    Text("Exercise")
+                    Text(L10n.RestTimer.exercise)
                 }
 
                 Section {
@@ -363,7 +363,7 @@ struct AddExerciseOverrideView: View {
                         }
                     }
                 } header: {
-                    Text("Quick Add")
+                    Text(L10n.RestTimer.quickAdd)
                 }
 
                 Section {
@@ -374,25 +374,25 @@ struct AddExerciseOverrideView: View {
                             .dynamicTypeSize(...DynamicTypeSize.accessibility1)
 
                         Slider(value: $duration, in: 30...300, step: 15)
-                            .accessibilityLabel("Rest duration")
+                            .accessibilityLabel(L10n.RestTimer.restDuration)
                             .accessibilityValue(formatTime(duration))
                     }
                     .padding(.vertical)
                 } header: {
-                    Text("Rest Duration")
+                    Text(L10n.RestTimer.restDuration)
                 }
             }
-            .navigationTitle("Add Custom Timer")
+            .navigationTitle(L10n.RestTimer.addCustomTimer)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") {
+                    Button(L10n.Common.cancel) {
                         dismiss()
                     }
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Add") {
+                    Button(L10n.Common.add) {
                         profile.setRestTimer(for: exerciseName, duration: duration)
                         dismiss()
                     }

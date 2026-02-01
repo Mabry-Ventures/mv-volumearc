@@ -91,7 +91,7 @@ struct StreakFlameView: View {
                 .foregroundStyle(isActive ? .primary : .secondary)
                 .dynamicTypeSize(...DynamicTypeSize.accessibility1)
 
-            Text("day streak")
+            Text(L10n.Streak.dayStreak)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -114,7 +114,7 @@ struct WeeklyProgressView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("This Week")
+            Text(L10n.Streak.thisWeek)
                 .font(.subheadline.weight(.semibold))
 
             HStack(spacing: 6) {
@@ -126,7 +126,7 @@ struct WeeklyProgressView: View {
                 }
             }
 
-            Text("\(current) of \(goal) workouts")
+            Text(L10n.Streak.workoutsOfGoal)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

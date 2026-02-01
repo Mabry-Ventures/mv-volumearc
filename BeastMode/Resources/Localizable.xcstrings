@@ -67,6 +67,28 @@
         }
       }
     },
+    "common.add" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add"
+          }
+        }
+      }
+    },
+    "common.skip_for_now" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skip for Now"
+          }
+        }
+      }
+    },
     "workout.title" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -122,6 +144,39 @@
         }
       }
     },
+    "workout.exercises" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "exercises"
+          }
+        }
+      }
+    },
+    "workout.rest_day" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rest Day"
+          }
+        }
+      }
+    },
+    "workout.training_day" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Training Day"
+          }
+        }
+      }
+    },
     "streak.day_streak" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -144,6 +199,17 @@
         }
       }
     },
+    "streak.workouts_of_goal" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "workouts"
+          }
+        }
+      }
+    },
     "badge.new_badge" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -162,6 +228,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Awesome!"
+          }
+        }
+      }
+    },
+    "badge.earned" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Earned"
+          }
+        }
+      }
+    },
+    "badge.locked" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Locked"
+          }
+        }
+      }
+    },
+    "badge.recent_badges" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recent Badges"
           }
         }
       }
@@ -254,6 +353,523 @@
         }
       }
     },
+    "analytics.plateaus" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plateaus"
+          }
+        }
+      }
+    },
+    "analytics.need_attention" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "need attention"
+          }
+        }
+      }
+    },
+    "analytics.exercise_trends" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exercise Trends"
+          }
+        }
+      }
+    },
+    "analytics.progress_breakdown" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Progress Breakdown"
+          }
+        }
+      }
+    },
+    "analytics.declining" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Declining"
+          }
+        }
+      }
+    },
+    "analytics.week_avg" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "/week avg"
+          }
+        }
+      }
+    },
+    "analytics.weight_times_reps" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weight × Reps"
+          }
+        }
+      }
+    },
+    "analytics.exercises_improving" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "exercises improving"
+          }
+        }
+      }
+    },
+    "plan.new_plan" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Plan"
+          }
+        }
+      }
+    },
+    "plan.edit_plan" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Plan"
+          }
+        }
+      }
+    },
+    "plan.plan_name" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plan Name"
+          }
+        }
+      }
+    },
+    "plan.description_optional" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Description (optional)"
+          }
+        }
+      }
+    },
+    "plan.basic_info" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Basic Info"
+          }
+        }
+      }
+    },
+    "plan.configuration" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configuration"
+          }
+        }
+      }
+    },
+    "plan.goal" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal"
+          }
+        }
+      }
+    },
+    "plan.difficulty" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Difficulty"
+          }
+        }
+      }
+    },
+    "plan.duration" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duration"
+          }
+        }
+      }
+    },
+    "plan.duration_weeks" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duration: %d weeks"
+          }
+        }
+      }
+    },
+    "plan.schedule" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schedule"
+          }
+        }
+      }
+    },
+    "plan.training_days" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Training Days"
+          }
+        }
+      }
+    },
+    "plan.training_days_per_week" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Training Days: %d per week"
+          }
+        }
+      }
+    },
+    "plan.weekly_schedule" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weekly Schedule"
+          }
+        }
+      }
+    },
+    "plan.danger_zone" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Danger Zone"
+          }
+        }
+      }
+    },
+    "plan.delete_plan" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete Plan"
+          }
+        }
+      }
+    },
+    "plan.make_training_day" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Make training day"
+          }
+        }
+      }
+    },
+    "plan.make_rest_day" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Make rest day"
+          }
+        }
+      }
+    },
+    "rest_timer.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rest Timer"
+          }
+        }
+      }
+    },
+    "rest_timer.default_rest_times" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default Rest Times"
+          }
+        }
+      }
+    },
+    "rest_timer.compound_lifts" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compound Lifts"
+          }
+        }
+      }
+    },
+    "rest_timer.compound_description" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Squat, Bench, Deadlift, etc."
+          }
+        }
+      }
+    },
+    "rest_timer.isolation_exercises" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Isolation Exercises"
+          }
+        }
+      }
+    },
+    "rest_timer.isolation_description" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Curls, Extensions, Flyes"
+          }
+        }
+      }
+    },
+    "rest_timer.default" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default"
+          }
+        }
+      }
+    },
+    "rest_timer.everything_else" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Everything else"
+          }
+        }
+      }
+    },
+    "rest_timer.custom" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom"
+          }
+        }
+      }
+    },
+    "rest_timer.per_exercise_overrides" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Per-Exercise Overrides"
+          }
+        }
+      }
+    },
+    "rest_timer.custom_timers" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "custom timers"
+          }
+        }
+      }
+    },
+    "rest_timer.alerts" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alerts"
+          }
+        }
+      }
+    },
+    "rest_timer.timer_sound" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Timer Sound"
+          }
+        }
+      }
+    },
+    "rest_timer.vibration" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vibration"
+          }
+        }
+      }
+    },
+    "rest_timer.no_custom_timers" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Custom Timers"
+          }
+        }
+      }
+    },
+    "rest_timer.add_custom_timer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Custom Timer"
+          }
+        }
+      }
+    },
+    "rest_timer.custom_rest_times" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom Rest Times"
+          }
+        }
+      }
+    },
+    "rest_timer.exercise_name" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exercise Name"
+          }
+        }
+      }
+    },
+    "rest_timer.exercise" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exercise"
+          }
+        }
+      }
+    },
+    "rest_timer.quick_add" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quick Add"
+          }
+        }
+      }
+    },
+    "rest_timer.rest_duration" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rest Duration"
+          }
+        }
+      }
+    },
     "settings.title" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -277,6 +893,17 @@
       }
     },
     "onboarding.welcome" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Welcome"
+          }
+        }
+      }
+    },
+    "onboarding.welcome_to" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -331,6 +958,314 @@
         }
       }
     },
+    "onboarding.powerful_features" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Powerful Features"
+          }
+        }
+      }
+    },
+    "onboarding.tagline" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your personal strength training companion.\nTrack progress, hit PRs, and become the beast you were meant to be."
+          }
+        }
+      }
+    },
+    "onboarding.progressive_overload" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Progressive Overload"
+          }
+        }
+      }
+    },
+    "onboarding.progressive_overload_desc" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Track your lifts and watch your strength grow over time"
+          }
+        }
+      }
+    },
+    "onboarding.personal_records" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Personal Records"
+          }
+        }
+      }
+    },
+    "onboarding.personal_records_desc" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Celebrate every PR with satisfying animations and badges"
+          }
+        }
+      }
+    },
+    "onboarding.ai_coach" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI Coach"
+          }
+        }
+      }
+    },
+    "onboarding.ai_coach_desc" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Get personalized weekly reviews and training insights"
+          }
+        }
+      }
+    },
+    "onboarding.streak_tracking" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Streak Tracking"
+          }
+        }
+      }
+    },
+    "onboarding.streak_tracking_desc" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stay motivated with workout streaks and consistency tracking"
+          }
+        }
+      }
+    },
+    "onboarding.watch_support" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Watch Support"
+          }
+        }
+      }
+    },
+    "onboarding.watch_support_desc" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quick logging and complications right on your wrist"
+          }
+        }
+      }
+    },
+    "onboarding.health_data" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Health Data"
+          }
+        }
+      }
+    },
+    "onboarding.health_data_desc" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beast Mode can read your body weight from Apple Health to track your progress alongside your lifts."
+          }
+        }
+      }
+    },
+    "onboarding.allow_health_access" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allow Health Access"
+          }
+        }
+      }
+    },
+    "onboarding.stay_on_track" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stay on Track"
+          }
+        }
+      }
+    },
+    "onboarding.notifications_desc" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Get reminders to log your workouts and celebrate your achievements."
+          }
+        }
+      }
+    },
+    "onboarding.enable_notifications" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable Notifications"
+          }
+        }
+      }
+    },
+    "onboarding.secure_your_data" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Secure Your Data"
+          }
+        }
+      }
+    },
+    "onboarding.biometric_desc" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use %@ to protect your workout data and keep your progress private."
+          }
+        }
+      }
+    },
+    "onboarding.sync_your_data" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync Your Data"
+          }
+        }
+      }
+    },
+    "onboarding.sign_in_desc" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in with Apple to sync your workouts across all your devices and never lose your progress."
+          }
+        }
+      }
+    },
+    "onboarding.continue_without_sign_in" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue without signing in"
+          }
+        }
+      }
+    },
+    "onboarding.youre_all_set" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You're All Set!"
+          }
+        }
+      }
+    },
+    "onboarding.ready_message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beast Mode is ready to help you track your gains and crush your goals."
+          }
+        }
+      }
+    },
+    "onboarding.cloud_sync" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cloud Sync"
+          }
+        }
+      }
+    },
+    "onboarding.enabled" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enabled"
+          }
+        }
+      }
+    },
+    "onboarding.not_enabled" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not Enabled"
+          }
+        }
+      }
+    },
     "biometric.face_id" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -349,6 +1284,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Touch ID"
+          }
+        }
+      }
+    },
+    "biometric.optic_id" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Optic ID"
+          }
+        }
+      }
+    },
+    "biometric.app_lock" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "App Lock"
           }
         }
       }
@@ -404,6 +1361,105 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "days"
+          }
+        }
+      }
+    },
+    "time.requesting" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Requesting..."
+          }
+        }
+      }
+    },
+    "time.enabling" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enabling..."
+          }
+        }
+      }
+    },
+    "accessibility.decrease" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Decrease"
+          }
+        }
+      }
+    },
+    "accessibility.increase" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Increase"
+          }
+        }
+      }
+    },
+    "accessibility.double_tap_to_edit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Double tap to edit"
+          }
+        }
+      }
+    },
+    "accessibility.swipe_for_options" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "swipe for options"
+          }
+        }
+      }
+    },
+    "accessibility.double_tap_to_view_details" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Double tap to view details"
+          }
+        }
+      }
+    },
+    "accessibility.dismiss_celebration" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dismiss celebration"
+          }
+        }
+      }
+    },
+    "accessibility.loading_please_wait" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading, please wait"
           }
         }
       }

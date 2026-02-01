@@ -53,17 +53,17 @@ struct PlanEditorView: View {
                     dangerZoneSection
                 }
             }
-            .navigationTitle(isEditing ? "Edit Plan" : "New Plan")
+            .navigationTitle(isEditing ? L10n.Plan.editPlan : L10n.Plan.newPlan)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") {
+                    Button(L10n.Common.cancel) {
                         dismiss()
                     }
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Save") {
+                    Button(L10n.Common.save) {
                         savePlan()
                     }
                     .fontWeight(.semibold)
@@ -76,11 +76,11 @@ struct PlanEditorView: View {
                 }
             }
             .confirmationDialog(
-                "Delete Plan",
+                L10n.Plan.deletePlan,
                 isPresented: $showDeleteConfirmation,
                 titleVisibility: .visible
             ) {
-                Button("Delete", role: .destructive) {
+                Button(L10n.Common.delete, role: .destructive) {
                     deletePlan()
                 }
             } message: {
@@ -96,44 +96,44 @@ struct PlanEditorView: View {
 
     private var basicInfoSection: some View {
         Section {
-            TextField("Plan Name", text: $name)
-                .accessibilityLabel("Plan name")
+            TextField(L10n.Plan.planName, text: $name)
+                .accessibilityLabel(L10n.Plan.planName)
                 .accessibilityHint("Enter a name for your workout plan")
 
-            TextField("Description (optional)", text: $description, axis: .vertical)
+            TextField(L10n.Plan.descriptionOptional, text: $description, axis: .vertical)
                 .lineLimit(2...4)
                 .accessibilityLabel("Plan description")
                 .accessibilityHint("Optional description for your plan")
         } header: {
-            Text("Basic Info")
+            Text(L10n.Plan.basicInfo)
         }
     }
 
     private var configurationSection: some View {
         Section {
-            Picker("Goal", selection: $goal) {
+            Picker(L10n.Plan.goal, selection: $goal) {
                 ForEach(PlanGoal.allCases, id: \.self) { g in
                     Label(g.rawValue, systemImage: g.icon)
                         .tag(g)
                 }
             }
-            .accessibilityLabel("Training goal")
+            .accessibilityLabel(L10n.Plan.goal)
             .accessibilityValue(goal.rawValue)
 
-            Picker("Difficulty", selection: $difficulty) {
+            Picker(L10n.Plan.difficulty, selection: $difficulty) {
                 ForEach(PlanDifficulty.allCases, id: \.self) { d in
                     Text(d.rawValue).tag(d)
                 }
             }
-            .accessibilityLabel("Difficulty level")
+            .accessibilityLabel(L10n.Plan.difficulty)
             .accessibilityValue(difficulty.rawValue)
 
-            Stepper("Duration: \(estimatedDuration) weeks", value: $estimatedDuration, in: 1...52)
-                .accessibilityLabel("Plan duration")
+            Stepper(L10n.Plan.durationWeeks, value: $estimatedDuration, in: 1...52)
+                .accessibilityLabel(L10n.Plan.duration)
                 .accessibilityValue("\(estimatedDuration) weeks")
                 .accessibilityHint("Adjust the number of weeks for this plan")
         } header: {
-            Text("Configuration")
+            Text(L10n.Plan.configuration)
         } footer: {
             Text(goal.description)
         }
@@ -141,15 +141,15 @@ struct PlanEditorView: View {
 
     private var scheduleSection: some View {
         Section {
-            Stepper("Training Days: \(daysPerWeek) per week", value: $daysPerWeek, in: 1...7)
+            Stepper(L10n.Plan.trainingDaysPerWeek, value: $daysPerWeek, in: 1...7)
                 .onChange(of: daysPerWeek) { _, newValue in
                     updateDaysForSchedule()
                 }
-                .accessibilityLabel("Training days per week")
+                .accessibilityLabel(L10n.Plan.trainingDays)
                 .accessibilityValue("\(daysPerWeek) days")
                 .accessibilityHint("Adjust the number of training days per week")
         } header: {
-            Text("Schedule")
+            Text(L10n.Plan.schedule)
         } footer: {
             Text("Tap a day below to configure its exercises")
         }
@@ -179,11 +179,11 @@ struct PlanEditorView: View {
                                 .foregroundStyle(.primary)
 
                             if day.isRestDay {
-                                Text("Rest Day")
+                                Text(L10n.Workout.restDay)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             } else {
-                                Text("\(day.exercises.count) exercises")
+                                Text(L10n.exerciseCount(day.exercises.count))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -199,8 +199,8 @@ struct PlanEditorView: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(day.weekdayName), \(day.name)")
-                .accessibilityValue(day.isRestDay ? "Rest day" : "\(day.exercises.count) exercises")
-                .accessibilityHint("Double tap to edit, swipe for options")
+                .accessibilityValue(day.isRestDay ? L10n.Workout.restDay : L10n.exerciseCount(day.exercises.count))
+                .accessibilityHint(L10n.Accessibility.swipeForOptions)
                 .swipeActions(edge: .trailing) {
                     Button {
                         toggleRestDay(at: index)
@@ -211,12 +211,12 @@ struct PlanEditorView: View {
                         )
                     }
                     .tint(day.isRestDay ? .orange : .blue)
-                    .accessibilityLabel(day.isRestDay ? "Make training day" : "Make rest day")
+                    .accessibilityLabel(day.isRestDay ? L10n.Plan.makeTrainingDay : L10n.Plan.makeRestDay)
                     .accessibilityHint(day.isRestDay ? "Convert this rest day to a training day" : "Convert this training day to a rest day")
                 }
             }
         } header: {
-            Text("Weekly Schedule")
+            Text(L10n.Plan.weeklySchedule)
         }
     }
 
@@ -227,13 +227,13 @@ struct PlanEditorView: View {
             } label: {
                 HStack {
                     Image(systemName: "trash")
-                    Text("Delete Plan")
+                    Text(L10n.Plan.deletePlan)
                 }
             }
-            .accessibilityLabel("Delete plan")
+            .accessibilityLabel(L10n.Plan.deletePlan)
             .accessibilityHint("Permanently delete this workout plan")
         } header: {
-            Text("Danger Zone")
+            Text(L10n.Plan.dangerZone)
         }
     }
 

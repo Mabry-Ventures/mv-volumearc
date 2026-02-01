@@ -58,7 +58,7 @@ struct AnalyticsDashboardView: View {
                 }
                 .padding(.vertical)
             }
-            .navigationTitle("Analytics")
+            .navigationTitle(L10n.Analytics.title)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
@@ -171,33 +171,33 @@ struct SummaryCardsView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
                 SummaryCard(
-                    title: "Workouts",
+                    title: L10n.Analytics.workouts,
                     value: "\(overview.totalWorkouts)",
-                    subtitle: "\(String(format: "%.1f", overview.averageWorkoutsPerWeek))/week avg",
+                    subtitle: L10n.Analytics.weekAvg,
                     icon: "figure.strengthtraining.traditional",
                     color: .blue
                 )
 
                 SummaryCard(
-                    title: "Total Volume",
+                    title: L10n.Analytics.totalVolume,
                     value: formatVolume(overview.totalVolume),
-                    subtitle: "Weight × Reps",
+                    subtitle: L10n.Analytics.weightTimesReps,
                     icon: "scalemass.fill",
                     color: .purple
                 )
 
                 SummaryCard(
-                    title: "Progressing",
+                    title: L10n.Analytics.progressing,
                     value: "\(overview.progressingExercises.count)",
-                    subtitle: "exercises improving",
+                    subtitle: L10n.Analytics.exercisesImproving,
                     icon: "arrow.up.right",
                     color: .green
                 )
 
                 SummaryCard(
-                    title: "Plateaus",
+                    title: L10n.Analytics.plateaus,
                     value: "\(overview.plateauExercises.count)",
-                    subtitle: "need attention",
+                    subtitle: L10n.Analytics.needAttention,
                     icon: "arrow.right",
                     color: .orange
                 )
@@ -259,7 +259,7 @@ struct ProgressBreakdownView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Progress Breakdown")
+            Text(L10n.Analytics.progressBreakdown)
                 .font(.headline)
 
             // Progress bar
@@ -295,9 +295,9 @@ struct ProgressBreakdownView: View {
 
             // Legend
             HStack(spacing: 16) {
-                LegendItem(color: .green, label: "Progressing", count: overview.progressingExercises.count)
-                LegendItem(color: .orange, label: "Plateau", count: overview.plateauExercises.count)
-                LegendItem(color: .red, label: "Declining", count: overview.decliningExercises.count)
+                LegendItem(color: .green, label: L10n.Analytics.progressing, count: overview.progressingExercises.count)
+                LegendItem(color: .orange, label: L10n.Analytics.plateau, count: overview.plateauExercises.count)
+                LegendItem(color: .red, label: L10n.Analytics.declining, count: overview.decliningExercises.count)
             }
             .font(.caption)
         }
@@ -342,7 +342,7 @@ struct ExerciseTrendsListView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Exercise Trends")
+            Text(L10n.Analytics.exerciseTrends)
                 .font(.headline)
                 .padding(.horizontal)
 

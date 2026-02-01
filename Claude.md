@@ -218,19 +218,30 @@ Tests/
 ### Localization Infrastructure (V1.4.1)
 - **String Catalog** (`Localizable.xcstrings`) with manual extraction
   - English (en) as source language
-  - Key categories: app, common, workout, streak, badge, pr, analytics, settings, onboarding, biometric, units, time
+  - ~100 localized strings across all feature areas
+  - Key categories: app, common, workout, streak, badge, pr, analytics, plan, rest_timer, onboarding, biometric, units, time, accessibility
 - **Type-safe helper** (`LocalizedStrings.swift`)
-  - `L10n` enum with nested namespaces
-  - Usage: `Text(L10n.Workout.completeSet)`
-  - Pluralization helpers: `L10n.workoutCount(_:)`, `L10n.dayCount(_:)`, `L10n.weekCount(_:)`
+  - `L10n` enum with nested namespaces for organized access
+  - Usage: `Text(L10n.Workout.completeSet)`, `Text(L10n.Plan.editPlan)`
+  - Pluralization helpers: `L10n.workoutCount(_:)`, `L10n.dayCount(_:)`, `L10n.weekCount(_:)`, `L10n.exerciseCount(_:)`
 - **Key strings defined for:**
-  - Common UI actions (cancel, save, done, delete, edit)
-  - Workout terminology (weight, reps, sets, complete set)
-  - Streak and badge text (day streak, new badge)
+  - Common UI actions (cancel, save, done, delete, edit, add, skip for now)
+  - Workout terminology (weight, reps, sets, complete set, rest day, training day)
+  - Streak and badge text (day streak, this week, new badge, awesome, recent badges)
   - PR celebration text (personal record, keep grinding, share)
-  - Analytics labels (workouts, total volume, progressing, plateau)
-  - Settings and onboarding flow
-- **Note:** Infrastructure is foundational - views still use hardcoded strings that should be migrated to `L10n` entries for full localization support
+  - Analytics labels (workouts, total volume, progressing, plateau, exercise trends, progress breakdown)
+  - Plan editor (new plan, edit plan, goal, difficulty, duration, schedule, danger zone)
+  - Rest timer settings (compound lifts, isolation exercises, default, alerts, custom timers)
+  - Full onboarding flow (welcome, features, permissions, completion)
+  - Accessibility hints (double tap to edit, swipe for options, dismiss celebration)
+- **Views migrated to L10n:**
+  - `StreakDisplayView` - day streak, weekly progress text
+  - `BadgeDisplayView` - new badge popup, awesome button, recent badges
+  - `PRCelebrationView` - keep grinding, share buttons
+  - `AnalyticsDashboardView` - all summary cards, legend, section headers
+  - `OnboardingView` - all step titles, descriptions, buttons, feature list
+  - `RestTimerSettingsView` - all section headers, labels, button text
+  - `PlanEditorView` - all form fields, section headers, accessibility labels
 
 ### Testing Infrastructure
 
@@ -620,6 +631,7 @@ python3 scripts/check_coverage.py coverage.json 80.0
 - ✅ Full VoiceOver audit for all views
 - ✅ Dynamic Type support with size limits
 - ✅ Localization infrastructure (String Catalog + L10n helper)
+- ✅ Migrated UI strings to L10n in all major views
 
 **Completed in V1.4.0:**
 - ✅ Comprehensive test infrastructure with Swift Testing
@@ -640,7 +652,6 @@ python3 scripts/check_coverage.py coverage.json 80.0
 - ✅ Proper error handling with logging
 
 **Still needs attention:**
-- Migrate hardcoded UI strings to L10n localization helper
 - Integration tests for HealthKit (requires device/simulator)
 - Claude API response parsing edge cases
 - Snapshot tests for analytics charts

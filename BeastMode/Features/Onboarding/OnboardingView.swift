@@ -28,7 +28,7 @@ struct OnboardingView: View {
                 if onboardingManager.currentStep != .complete {
                     HStack {
                         Spacer()
-                        Button("Skip") {
+                        Button(L10n.Onboarding.skip) {
                             onboardingManager.skipOnboarding()
                         }
                         .font(.subheadline)
@@ -180,16 +180,16 @@ struct WelcomeStepView: View {
             .onAppear { animateIcon = true }
 
             VStack(spacing: 16) {
-                Text("Welcome to")
+                Text(L10n.Onboarding.welcomeTo)
                     .font(.title2)
                     .foregroundStyle(.white.opacity(0.8))
 
-                Text("Beast Mode")
+                Text(L10n.App.name)
                     .font(.system(size: 42, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .dynamicTypeSize(...DynamicTypeSize.accessibility1)
 
-                Text("Your personal strength training companion.\nTrack progress, hit PRs, and become the beast you were meant to be.")
+                Text(L10n.Onboarding.tagline)
                     .font(.body)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white.opacity(0.7))
@@ -202,7 +202,7 @@ struct WelcomeStepView: View {
 
             Spacer()
 
-            OnboardingButton(title: "Get Started", action: onContinue)
+            OnboardingButton(title: L10n.Onboarding.getStarted, action: onContinue)
                 .padding(.horizontal, 40)
                 .padding(.bottom, 40)
         }
@@ -214,17 +214,19 @@ struct WelcomeStepView: View {
 struct FeaturesStepView: View {
     let onContinue: () -> Void
 
-    private let features: [(icon: String, title: String, description: String)] = [
-        ("chart.line.uptrend.xyaxis", "Progressive Overload", "Track your lifts and watch your strength grow over time"),
-        ("trophy.fill", "Personal Records", "Celebrate every PR with satisfying animations and badges"),
-        ("brain.head.profile", "AI Coach", "Get personalized weekly reviews and training insights"),
-        ("flame.fill", "Streak Tracking", "Stay motivated with workout streaks and consistency tracking"),
-        ("applewatch", "Watch Support", "Quick logging and complications right on your wrist")
-    ]
+    private var features: [(icon: String, title: String, description: String)] {
+        [
+            ("chart.line.uptrend.xyaxis", L10n.Onboarding.progressiveOverload, L10n.Onboarding.progressiveOverloadDesc),
+            ("trophy.fill", L10n.Onboarding.personalRecords, L10n.Onboarding.personalRecordsDesc),
+            ("brain.head.profile", L10n.Onboarding.aiCoach, L10n.Onboarding.aiCoachDesc),
+            ("flame.fill", L10n.Onboarding.streakTracking, L10n.Onboarding.streakTrackingDesc),
+            ("applewatch", L10n.Onboarding.watchSupport, L10n.Onboarding.watchSupportDesc)
+        ]
+    }
 
     var body: some View {
         VStack(spacing: 24) {
-            Text("Powerful Features")
+            Text(L10n.Onboarding.powerfulFeatures)
                 .font(.title.weight(.bold))
                 .foregroundStyle(.white)
                 .padding(.top, 32)
@@ -248,7 +250,7 @@ struct FeaturesStepView: View {
 
             Spacer()
 
-            OnboardingButton(title: "Continue", action: onContinue)
+            OnboardingButton(title: L10n.Onboarding.continueButton, action: onContinue)
                 .padding(.horizontal, 40)
                 .padding(.bottom, 40)
         }
@@ -319,11 +321,11 @@ struct HealthKitStepView: View {
             }
 
             VStack(spacing: 16) {
-                Text("Health Data")
+                Text(L10n.Onboarding.healthData)
                     .font(.title.weight(.bold))
                     .foregroundStyle(.white)
 
-                Text("Beast Mode can read your body weight from Apple Health to track your progress alongside your lifts.")
+                Text(L10n.Onboarding.healthDataDesc)
                     .font(.body)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white.opacity(0.7))
@@ -348,16 +350,16 @@ struct HealthKitStepView: View {
             VStack(spacing: 12) {
                 if status == .notDetermined {
                     OnboardingButton(
-                        title: isRequesting ? "Requesting..." : "Allow Health Access",
+                        title: isRequesting ? L10n.Time.requesting : L10n.Onboarding.allowHealthAccess,
                         isLoading: isRequesting,
                         action: onRequest
                     )
                 } else {
-                    OnboardingButton(title: "Continue", action: onContinue)
+                    OnboardingButton(title: L10n.Onboarding.continueButton, action: onContinue)
                 }
 
                 if status == .notDetermined {
-                    Button("Skip for Now") {
+                    Button(L10n.Common.skipForNow) {
                         onContinue()
                     }
                     .font(.subheadline)
@@ -394,11 +396,11 @@ struct NotificationStepView: View {
             }
 
             VStack(spacing: 16) {
-                Text("Stay on Track")
+                Text(L10n.Onboarding.stayOnTrack)
                     .font(.title.weight(.bold))
                     .foregroundStyle(.white)
 
-                Text("Get reminders to log your workouts and celebrate your achievements.")
+                Text(L10n.Onboarding.notificationsDesc)
                     .font(.body)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white.opacity(0.7))
@@ -423,16 +425,16 @@ struct NotificationStepView: View {
             VStack(spacing: 12) {
                 if status == .notDetermined {
                     OnboardingButton(
-                        title: isRequesting ? "Requesting..." : "Enable Notifications",
+                        title: isRequesting ? L10n.Time.requesting : L10n.Onboarding.enableNotifications,
                         isLoading: isRequesting,
                         action: onRequest
                     )
                 } else {
-                    OnboardingButton(title: "Continue", action: onContinue)
+                    OnboardingButton(title: L10n.Onboarding.continueButton, action: onContinue)
                 }
 
                 if status == .notDetermined {
-                    Button("Skip for Now") {
+                    Button(L10n.Common.skipForNow) {
                         onContinue()
                     }
                     .font(.subheadline)
@@ -470,11 +472,11 @@ struct BiometricStepView: View {
             }
 
             VStack(spacing: 16) {
-                Text("Secure Your Data")
+                Text(L10n.Onboarding.secureYourData)
                     .font(.title.weight(.bold))
                     .foregroundStyle(.white)
 
-                Text("Use \(biometricService.biometricType.displayName) to protect your workout data and keep your progress private.")
+                Text(L10n.Onboarding.biometricDesc)
                     .font(.body)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white.opacity(0.7))
@@ -514,20 +516,20 @@ struct BiometricStepView: View {
                         }
                         .font(.subheadline)
 
-                        OnboardingButton(title: "Continue", action: onContinue)
+                        OnboardingButton(title: L10n.Onboarding.continueButton, action: onContinue)
                     }
                 } else if biometricService.isEnabled {
-                    OnboardingButton(title: "Continue", action: onContinue)
+                    OnboardingButton(title: L10n.Onboarding.continueButton, action: onContinue)
                 } else {
                     OnboardingButton(
-                        title: biometricService.isAuthenticating ? "Enabling..." : "Enable \(biometricService.biometricType.displayName)",
+                        title: biometricService.isAuthenticating ? L10n.Time.enabling : "Enable \(biometricService.biometricType.displayName)",
                         isLoading: biometricService.isAuthenticating,
                         action: {
                             Task { await enableBiometrics() }
                         }
                     )
 
-                    Button("Skip for Now") {
+                    Button(L10n.Common.skipForNow) {
                         onContinue()
                     }
                     .font(.subheadline)
@@ -587,11 +589,11 @@ struct SignInStepView: View {
             }
 
             VStack(spacing: 16) {
-                Text("Sync Your Data")
+                Text(L10n.Onboarding.syncYourData)
                     .font(.title.weight(.bold))
                     .foregroundStyle(.white)
 
-                Text("Sign in with Apple to sync your workouts across all your devices and never lose your progress.")
+                Text(L10n.Onboarding.signInDesc)
                     .font(.body)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white.opacity(0.7))
@@ -636,7 +638,7 @@ struct SignInStepView: View {
                 }
 
                 OnboardingButton(
-                    title: authManager.isAuthenticated ? "Continue" : "Continue without signing in",
+                    title: authManager.isAuthenticated ? L10n.Onboarding.continueButton : L10n.Onboarding.continueWithoutSignIn,
                     style: authManager.isAuthenticated ? .primary : .secondary,
                     action: onContinue
                 )
@@ -682,11 +684,11 @@ struct CompleteStepView: View {
             .animation(.spring(response: 0.6, dampingFraction: 0.7), value: showCheckmark)
 
             VStack(spacing: 16) {
-                Text("You're All Set!")
+                Text(L10n.Onboarding.youreAllSet)
                     .font(.title.weight(.bold))
                     .foregroundStyle(.white)
 
-                Text("Beast Mode is ready to help you track your gains and crush your goals.")
+                Text(L10n.Onboarding.readyMessage)
                     .font(.body)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white.opacity(0.7))
@@ -725,7 +727,7 @@ struct CompleteStepView: View {
 
             Spacer()
 
-            OnboardingButton(title: "Start Training", action: onGetStarted)
+            OnboardingButton(title: L10n.Onboarding.startTraining, action: onGetStarted)
                 .padding(.horizontal, 40)
                 .padding(.bottom, 40)
                 .opacity(showButton ? 1 : 0)
@@ -799,7 +801,7 @@ struct PermissionStatusBadge: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: status.isGranted ? "checkmark.circle.fill" : "xmark.circle.fill")
-            Text(status.isGranted ? "Enabled" : "Not Enabled")
+            Text(status.isGranted ? L10n.Onboarding.enabled : L10n.Onboarding.notEnabled)
         }
         .font(.subheadline)
         .foregroundStyle(status.isGranted ? .green : .orange)
