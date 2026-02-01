@@ -67,7 +67,7 @@ struct BodyWeightChartView: View {
     private var headerView: some View {
         HStack {
             VStack(alignment: .leading) {
-                Text("Body Weight")
+                Text(L10n.Health.bodyWeight)
                     .font(.headline)
 
                 if let latest = filteredEntries.last {
@@ -88,10 +88,10 @@ struct BodyWeightChartView: View {
                 .font(.largeTitle)
                 .foregroundStyle(.secondary)
 
-            Text("No Weight Data")
+            Text(L10n.Health.noWeightData)
                 .font(.headline)
 
-            Text("Connect to Apple Health to see your weight history")
+            Text(L10n.Health.connectToHealth)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -223,7 +223,7 @@ struct BodyWeightCardView: View {
         Button(action: onTap) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Label("Body Weight", systemImage: "scalemass.fill")
+                    Label(L10n.Health.bodyWeight, systemImage: "scalemass.fill")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -235,7 +235,7 @@ struct BodyWeightCardView: View {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     } else {
-                        Text("No data")
+                        Text(L10n.Common.noData)
                             .font(.title2)
                             .foregroundStyle(.secondary)
                     }
@@ -291,9 +291,9 @@ struct BodyWeightSettingsView: View {
                     }
                 }
             } header: {
-                Text("Data Source")
+                Text(L10n.Health.dataSource)
             } footer: {
-                Text("Beast Mode reads your body weight from Apple Health to show alongside your strength progress.")
+                Text(L10n.Health.dataSourceDescription)
             }
 
             if let error {
@@ -303,7 +303,7 @@ struct BodyWeightSettingsView: View {
                 }
             }
         }
-        .navigationTitle("Body Weight")
+        .navigationTitle(L10n.Health.bodyWeight)
         .task {
             await checkAuthorization()
         }

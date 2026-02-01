@@ -117,7 +117,7 @@ struct SharePlanSheet: View {
 
     private var shareMethodPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Share Method")
+            Text(L10n.Sharing.shareMethod)
                 .font(.headline)
 
             HStack(spacing: 12) {
@@ -161,7 +161,7 @@ struct SharePlanSheet: View {
                 .font(.system(size: 50))
                 .foregroundStyle(.blue)
 
-            Text("Export your plan as a file that can be shared via AirDrop, Messages, or any file sharing app.")
+            Text(L10n.Sharing.exportDesc)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -176,7 +176,7 @@ struct SharePlanSheet: View {
                     } else {
                         Image(systemName: "square.and.arrow.up")
                     }
-                    Text("Export File")
+                    Text(L10n.Sharing.exportFile)
                 }
                 .font(.headline)
                 .foregroundStyle(.white)
@@ -202,7 +202,7 @@ struct SharePlanSheet: View {
                 .font(.system(size: 50))
                 .foregroundStyle(.green)
 
-            Text("Generate a link that opens directly in Beast Mode when tapped.")
+            Text(L10n.Sharing.generateLinkDesc)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -252,7 +252,7 @@ struct SharePlanSheet: View {
                         } else {
                             Image(systemName: "link.badge.plus")
                         }
-                        Text("Generate Link")
+                        Text(L10n.Sharing.generateLink)
                     }
                     .font(.headline)
                     .foregroundStyle(.white)
@@ -279,7 +279,7 @@ struct SharePlanSheet: View {
                 .font(.system(size: 50))
                 .foregroundStyle(.purple)
 
-            Text("Share a simple code that others can enter to import your plan.")
+            Text(L10n.Sharing.shareCodeDesc)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -317,7 +317,7 @@ struct SharePlanSheet: View {
                         } else {
                             Image(systemName: "number.square")
                         }
-                        Text("Generate Code")
+                        Text(L10n.Sharing.generateCode)
                     }
                     .font(.headline)
                     .foregroundStyle(.white)
@@ -331,7 +331,7 @@ struct SharePlanSheet: View {
                 .disabled(isGenerating)
             }
 
-            Text("Note: Share codes require internet access to import")
+            Text(L10n.Sharing.shareCodeNote)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -366,7 +366,7 @@ struct SharePlanSheet: View {
             HStack {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
-                Text("Copied to clipboard")
+                Text(L10n.Common.copiedToClipboard)
                     .font(.subheadline)
             }
             .padding()

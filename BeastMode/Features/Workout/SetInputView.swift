@@ -35,7 +35,7 @@ struct SetInputView: View {
         VStack(spacing: 16) {
             // Set number indicator
             HStack {
-                Text("Set \(set.setNumber)")
+                Text(L10n.Workout.setNumber(set.setNumber))
                     .font(.headline)
 
                 Spacer()
@@ -74,7 +74,7 @@ struct SetInputView: View {
                     } label: {
                         HStack {
                             Image(systemName: "checkmark.circle.fill")
-                            Text("Complete Set")
+                            Text(L10n.Workout.completeSet)
                         }
                         .font(.headline)
                         .frame(maxWidth: .infinity)
@@ -112,7 +112,7 @@ struct SetInputView: View {
         HStack(spacing: 16) {
             // Weight input
             VStack(alignment: .leading, spacing: 4) {
-                Text("Weight")
+                Text(L10n.Workout.weight)
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -143,7 +143,7 @@ struct SetInputView: View {
 
             // Reps input
             VStack(alignment: .leading, spacing: 4) {
-                Text("Reps")
+                Text(L10n.Workout.reps)
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -185,7 +185,7 @@ struct SetInputView: View {
     private var bodyweightInputs: some View {
         HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Reps")
+                Text(L10n.Workout.reps)
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -210,7 +210,7 @@ struct SetInputView: View {
 
     private var timedInputs: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Duration")
+            Text(L10n.Workout.duration)
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -224,7 +224,7 @@ struct SetInputView: View {
     private var distanceInputs: some View {
         HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Distance")
+                Text(L10n.Workout.distance)
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -250,7 +250,7 @@ struct SetInputView: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Duration")
+                Text(L10n.Workout.duration)
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -417,7 +417,7 @@ struct RPESelector: View {
 
     var body: some View {
         VStack(alignment: .center, spacing: 4) {
-            Text("RPE")
+            Text(L10n.Workout.rpe)
                 .font(.caption)
                 .foregroundStyle(.secondary)
 

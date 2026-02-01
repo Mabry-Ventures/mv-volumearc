@@ -180,7 +180,7 @@ struct StreakStatsView: View {
                     Image(systemName: "scalemass.fill")
                         .foregroundStyle(.purple)
 
-                    Text("Total Volume Lifted:")
+                    Text(L10n.Streak.totalVolumLifted)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 

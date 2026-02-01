@@ -63,7 +63,7 @@ struct DayEditorSheet: View {
                     }
                 }
         } header: {
-            Text("Day Info")
+            Text(L10n.Plan.dayInfo)
         }
     }
 
@@ -73,7 +73,7 @@ struct DayEditorSheet: View {
                 ContentUnavailableView {
                     Label("No Exercises", systemImage: "figure.strengthtraining.traditional")
                 } description: {
-                    Text("Add exercises to this training day")
+                    Text(L10n.Plan.addExercisesToDay)
                 } actions: {
                     Button("Add Exercise") {
                         showAddExercise = true
@@ -98,7 +98,7 @@ struct DayEditorSheet: View {
             }
         } header: {
             HStack {
-                Text("Exercises")
+                Text(L10n.Workout.exercises)
                 Spacer()
                 Text("\(day.exercises.count) total")
                     .font(.caption)
@@ -115,7 +115,7 @@ struct DayEditorSheet: View {
             ), axis: .vertical)
             .lineLimit(2...4)
         } header: {
-            Text("Notes")
+            Text(L10n.Common.notes)
         }
     }
 
@@ -146,7 +146,7 @@ struct ExerciseRowView: View {
                             .foregroundStyle(.primary)
 
                         if exercise.superset {
-                            Text("SS")
+                            Text(L10n.Plan.superset)
                                 .font(.caption2.weight(.bold))
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 6)
@@ -190,7 +190,7 @@ struct ExerciseEditorSheet: View {
                 // Exercise name (read-only)
                 Section {
                     HStack {
-                        Text("Exercise")
+                        Text(L10n.RestTimer.exercise)
                         Spacer()
                         Text(exercise.exerciseName)
                             .foregroundStyle(.secondary)
@@ -202,7 +202,7 @@ struct ExerciseEditorSheet: View {
                     Stepper("Sets: \(exercise.targetSets)", value: $exercise.targetSets, in: 1...10)
 
                     HStack {
-                        Text("Rep Range")
+                        Text(L10n.Plan.repRange)
                         Spacer()
 
                         Picker("Min", selection: $exercise.targetRepsMin) {
@@ -229,7 +229,7 @@ struct ExerciseEditorSheet: View {
                         }
                     }
                 } header: {
-                    Text("Prescription")
+                    Text(L10n.Plan.prescription)
                 }
 
                 // Intensity
@@ -242,7 +242,7 @@ struct ExerciseEditorSheet: View {
                     if let rpe = exercise.targetRPE {
                         VStack(alignment: .leading) {
                             HStack {
-                                Text("Target RPE")
+                                Text(L10n.Plan.targetRpe)
                                 Spacer()
                                 Text("\(Int(rpe))")
                                     .font(.headline)
@@ -263,9 +263,9 @@ struct ExerciseEditorSheet: View {
                         }
                     }
                 } header: {
-                    Text("Intensity")
+                    Text(L10n.Plan.intensity)
                 } footer: {
-                    Text("RPE (Rate of Perceived Exertion) helps guide intensity without specific weights")
+                    Text(L10n.Plan.rpeDescription)
                 }
 
                 // Rest
@@ -280,7 +280,7 @@ struct ExerciseEditorSheet: View {
                         Text("5 min").tag(300)
                     }
                 } header: {
-                    Text("Rest Between Sets")
+                    Text(L10n.Plan.restBetweenSets)
                 }
 
                 // Advanced
@@ -293,9 +293,9 @@ struct ExerciseEditorSheet: View {
                     ), axis: .vertical)
                     .lineLimit(2...4)
                 } header: {
-                    Text("Advanced")
+                    Text(L10n.Common.advanced)
                 } footer: {
-                    Text("Superset exercises have minimal rest before the next exercise")
+                    Text(L10n.Plan.supersetDescription)
                 }
             }
             .navigationTitle("Edit Exercise")

@@ -339,7 +339,7 @@ struct ErrorHistoryView: View {
                     ContentUnavailableView(
                         "No Errors",
                         systemImage: "checkmark.circle.fill",
-                        description: Text("No errors have been recorded")
+                        description: Text(L10n.Debug.noErrorsRecorded)
                     )
                 } else {
                     ForEach(errors.indices, id: \.self) { index in

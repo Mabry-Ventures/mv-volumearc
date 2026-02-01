@@ -76,7 +76,7 @@ struct ImportPlanSheet: View {
         VStack(spacing: 24) {
             // Method picker
             VStack(alignment: .leading, spacing: 8) {
-                Text("Import From")
+                Text(L10n.Sharing.importFrom)
                     .font(.headline)
 
                 HStack(spacing: 12) {
@@ -114,10 +114,10 @@ struct ImportPlanSheet: View {
                 .font(.system(size: 60))
                 .foregroundStyle(.blue)
 
-            Text("Import a .beastplan file")
+            Text(L10n.Sharing.importFile)
                 .font(.headline)
 
-            Text("Select a plan file from your device, Files app, or received via AirDrop")
+            Text(L10n.Sharing.selectPlanFile)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -149,10 +149,10 @@ struct ImportPlanSheet: View {
                 .font(.system(size: 60))
                 .foregroundStyle(.purple)
 
-            Text("Enter Share Code")
+            Text(L10n.Sharing.enterShareCode)
                 .font(.headline)
 
-            Text("Enter the 8-character code shared with you")
+            Text(L10n.Sharing.enterCodeDesc)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -181,7 +181,7 @@ struct ImportPlanSheet: View {
                         ProgressView()
                             .tint(.white)
                     }
-                    Text("Import Plan")
+                    Text(L10n.Sharing.importPlan)
                 }
                 .font(.headline)
                 .frame(maxWidth: .infinity)
@@ -211,7 +211,7 @@ struct ImportPlanSheet: View {
                     .font(.system(size: 50))
                     .foregroundStyle(.green)
 
-                Text("Plan Found!")
+                Text(L10n.Sharing.planFound)
                     .font(.title2.weight(.bold))
             }
 
@@ -230,7 +230,7 @@ struct ImportPlanSheet: View {
 
                 HStack(spacing: 20) {
                     VStack(alignment: .leading) {
-                        Text("Days/Week")
+                        Text(L10n.Plan.daysPerWeek)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Text("\(plan.daysPerWeek)")
@@ -238,7 +238,7 @@ struct ImportPlanSheet: View {
                     }
 
                     VStack(alignment: .leading) {
-                        Text("Difficulty")
+                        Text(L10n.Plan.difficulty)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Text(plan.difficulty)
@@ -246,7 +246,7 @@ struct ImportPlanSheet: View {
                     }
 
                     VStack(alignment: .leading) {
-                        Text("Goal")
+                        Text(L10n.Plan.goal)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Text(plan.goal)
@@ -258,7 +258,7 @@ struct ImportPlanSheet: View {
 
                 // Days preview
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Weekly Schedule")
+                    Text(L10n.Plan.weeklySchedule)
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -287,7 +287,7 @@ struct ImportPlanSheet: View {
                     Divider()
 
                     HStack {
-                        Text("Created by")
+                        Text(L10n.Sharing.createdBy)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Text(author)
@@ -312,7 +312,7 @@ struct ImportPlanSheet: View {
                         ProgressView()
                             .tint(.white)
                     }
-                    Text("Import This Plan")
+                    Text(L10n.Sharing.importThisPlan)
                 }
                 .font(.headline)
                 .frame(maxWidth: .infinity)
@@ -342,7 +342,7 @@ struct ImportPlanSheet: View {
                 .font(.system(size: 80))
                 .foregroundStyle(.green)
 
-            Text("Plan Imported!")
+            Text(L10n.Sharing.planImported)
                 .font(.title.weight(.bold))
 
             Text("\"\(plan.name)\" has been added to your library")
@@ -357,7 +357,7 @@ struct ImportPlanSheet: View {
                     // TODO: Navigate to plan editor
                     dismiss()
                 } label: {
-                    Text("View Plan")
+                    Text(L10n.Plan.viewPlan)
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -539,7 +539,7 @@ struct DeepLinkImportView: View {
                             .font(.largeTitle)
                             .foregroundStyle(.orange)
 
-                        Text("Couldn't Load Plan")
+                        Text(L10n.Sharing.couldntLoadPlan)
                             .font(.headline)
 
                         Text(error.localizedDescription)
@@ -561,7 +561,7 @@ struct DeepLinkImportView: View {
                             .font(.system(size: 80))
                             .foregroundStyle(.green)
 
-                        Text("Plan Imported!")
+                        Text(L10n.Sharing.planImported)
                             .font(.title.weight(.bold))
 
                         Text("\"\(plan.name)\" is ready to use")

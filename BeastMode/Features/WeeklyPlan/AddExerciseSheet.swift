@@ -146,7 +146,7 @@ struct AddExerciseSheet: View {
 
                             if exercise.isCompound {
                                 Text("•")
-                                Text("Compound")
+                                Text(L10n.Workout.compound)
                             }
                         }
                         .font(.caption)
@@ -181,7 +181,7 @@ struct AddExerciseSheet: View {
                     targetRepsMax = 20
                 }
             } header: {
-                Text("Quick Presets")
+                Text(L10n.Plan.quickPresets)
             }
 
             // Custom configuration
@@ -189,7 +189,7 @@ struct AddExerciseSheet: View {
                 Stepper("Sets: \(targetSets)", value: $targetSets, in: 1...10)
 
                 HStack {
-                    Text("Rep Range")
+                    Text(L10n.Plan.repRange)
                     Spacer()
 
                     Picker("Min", selection: $targetRepsMin) {
@@ -216,15 +216,15 @@ struct AddExerciseSheet: View {
                     }
                 }
             } header: {
-                Text("Custom")
+                Text(L10n.RestTimer.custom)
             } footer: {
-                Text("You can further customize after adding")
+                Text(L10n.Plan.customizeAfterAdding)
             }
 
             // Preview
             Section {
                 HStack {
-                    Text("Prescription")
+                    Text(L10n.Plan.prescription)
                     Spacer()
                     Text("\(targetSets) × \(targetRepsMin == targetRepsMax ? "\(targetRepsMin)" : "\(targetRepsMin)-\(targetRepsMax)")")
                         .font(.headline)
@@ -297,7 +297,7 @@ struct ExerciseSelectRow: View {
                         .foregroundStyle(.primary)
 
                     if exercise.isCompound {
-                        Text("Compound")
+                        Text(L10n.Workout.compound)
                             .font(.caption)
                             .foregroundStyle(.orange)
                     }

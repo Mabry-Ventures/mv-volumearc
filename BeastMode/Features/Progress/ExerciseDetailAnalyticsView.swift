@@ -262,12 +262,12 @@ struct VolumeTrendCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Weekly Volume")
+            Text(L10n.Analytics.weeklyVolume)
                 .font(.headline)
 
             HStack(alignment: .bottom, spacing: 16) {
                 VStack(alignment: .leading) {
-                    Text("This Week")
+                    Text(L10n.Streak.thisWeek)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text("\(Int(trend.currentWeekVolume)) lbs")
@@ -289,7 +289,7 @@ struct VolumeTrendCard: View {
                 Spacer()
 
                 VStack(alignment: .trailing) {
-                    Text("Average")
+                    Text(L10n.Analytics.average)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text("\(Int(trend.averageVolume)) lbs")
@@ -312,7 +312,7 @@ struct RecentSetsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Recent Sets")
+            Text(L10n.Analytics.recentSets)
                 .font(.headline)
 
             ForEach(Array(dataPoints.suffix(5).reversed().enumerated()), id: \.element.id) { index, point in
@@ -327,7 +327,7 @@ struct RecentSetsSection: View {
 
                     Spacer()
 
-                    Text("E1RM: \(Int(point.estimatedOneRepMax))")
+                    Text(L10n.Analytics.e1rm(Int(point.estimatedOneRepMax)))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -358,7 +358,7 @@ struct WeightSuggestionCard: View {
             HStack {
                 Image(systemName: "sparkles")
                     .foregroundStyle(.yellow)
-                Text("AI Suggestion")
+                Text(L10n.AICoach.aiSuggestion)
                     .font(.headline)
                 Spacer()
 
@@ -393,7 +393,7 @@ struct WeightSuggestionCard: View {
             // Suggested weight/reps
             HStack(spacing: 20) {
                 VStack(alignment: .leading) {
-                    Text("Next Session")
+                    Text(L10n.AICoach.nextSession)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text("\(Int(suggestion.suggestedWeight)) lbs × \(suggestion.suggestedReps)")

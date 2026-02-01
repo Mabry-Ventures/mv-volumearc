@@ -365,12 +365,12 @@ struct OfflineBanner: View {
             Image(systemName: "wifi.slash")
                 .font(.subheadline)
 
-            Text("You're offline")
+            Text(L10n.Network.youreOffline)
                 .font(.subheadline.weight(.medium))
 
             Spacer()
 
-            Text("Changes will sync when connected")
+            Text(L10n.Network.willSyncWhenConnected)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

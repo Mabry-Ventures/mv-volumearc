@@ -330,14 +330,14 @@ struct AppLoadingView: View {
                 )
                 .symbolEffect(.pulse, options: .repeating)
 
-            Text("Beast Mode")
+            Text(L10n.App.name)
                 .font(.largeTitle.weight(.bold))
 
             ProgressView()
                 .progressViewStyle(.circular)
                 .tint(Color(hex: "FF6B35"))
 
-            Text("Loading your training data...")
+            Text(L10n.App.loadingData)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -356,7 +356,7 @@ struct DatabaseErrorView: View {
                 .font(.system(size: 60))
                 .foregroundStyle(.orange)
 
-            Text("Something Went Wrong")
+            Text(L10n.App.somethingWentWrong)
                 .font(.title2.weight(.bold))
 
             Text(error.localizedDescription)
@@ -377,7 +377,7 @@ struct DatabaseErrorView: View {
                 Button {
                     onRetry()
                 } label: {
-                    Text("Try Again")
+                    Text(L10n.Common.tryAgain)
                         .font(.headline)
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
@@ -394,7 +394,7 @@ struct DatabaseErrorView: View {
                         UIApplication.shared.open(url)
                     }
                 } label: {
-                    Text("Contact Support")
+                    Text(L10n.Common.contactSupport)
                         .font(.subheadline)
                 }
             }

@@ -48,7 +48,7 @@ struct WeeklyReviewView: View {
     private var headerView: some View {
         HStack {
             VStack(alignment: .leading) {
-                Text("Weekly Review")
+                Text(L10n.AICoach.weeklyReview)
                     .font(.title.weight(.bold))
                 Text(formatWeekId(weekId))
                     .font(.subheadline)
@@ -168,11 +168,11 @@ struct LoadingReviewView: View {
                     .symbolEffect(.pulse, options: .repeating)
             }
 
-            Text("Analyzing your week\(dots)")
+            Text(L10n.AICoach.analyzingWeek + dots)
                 .font(.headline)
                 .foregroundStyle(.secondary)
 
-            Text("This may take a moment...")
+            Text(L10n.AICoach.mayTakeMoment)
                 .font(.caption)
                 .foregroundStyle(.secondary.opacity(0.7))
         }
@@ -283,7 +283,7 @@ struct ErrorView: View {
                 .font(.largeTitle)
                 .foregroundStyle(.orange)
 
-            Text("Couldn't Generate Review")
+            Text(L10n.AICoach.couldntGenerate)
                 .font(.headline)
 
             Text(error.localizedDescription)
@@ -316,10 +316,10 @@ struct WeeklyReviewCard: View {
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Label("Weekly Review", systemImage: "brain.head.profile")
+                    Label(L10n.AICoach.weeklyReview, systemImage: "brain.head.profile")
                         .font(.headline)
 
-                    Text("Get AI-powered insights on your training")
+                    Text(L10n.AICoach.getInsights)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

@@ -10,6 +10,9 @@ enum L10n {
     // MARK: - App
     enum App {
         static let name = String(localized: "app.name")
+        static let nameUppercase = String(localized: "app.name_uppercase")
+        static let loadingData = String(localized: "app.loading_data")
+        static let somethingWentWrong = String(localized: "app.something_went_wrong")
     }
 
     // MARK: - Common
@@ -21,6 +24,14 @@ enum L10n {
         static let edit = String(localized: "common.edit")
         static let add = String(localized: "common.add")
         static let skipForNow = String(localized: "common.skip_for_now")
+        static let tryAgain = String(localized: "common.try_again")
+        static let contactSupport = String(localized: "common.contact_support")
+        static let today = String(localized: "common.today")
+        static let active = String(localized: "common.active")
+        static let noData = String(localized: "common.no_data")
+        static let notes = String(localized: "common.notes")
+        static let advanced = String(localized: "common.advanced")
+        static let copiedToClipboard = String(localized: "common.copied_to_clipboard")
     }
 
     // MARK: - Workout
@@ -33,6 +44,20 @@ enum L10n {
         static let exercises = String(localized: "workout.exercises")
         static let restDay = String(localized: "workout.rest_day")
         static let trainingDay = String(localized: "workout.training_day")
+        static let startWorkout = String(localized: "workout.start_workout")
+        static let beginNewSession = String(localized: "workout.begin_new_session")
+        static let recentWorkouts = String(localized: "workout.recent_workouts")
+        static let startFirstWorkout = String(localized: "workout.start_first_workout")
+        static let readyToTrain = String(localized: "workout.ready_to_train")
+        static let startNewSession = String(localized: "workout.start_new_session")
+        static let duration = String(localized: "workout.duration")
+        static let volume = String(localized: "workout.volume")
+        static let compound = String(localized: "workout.compound")
+        static let distance = String(localized: "workout.distance")
+        static let rpe = String(localized: "workout.rpe")
+        static func setNumber(_ number: Int) -> String {
+            String(localized: "workout.set_number \(number)")
+        }
     }
 
     // MARK: - Streak
@@ -40,6 +65,9 @@ enum L10n {
         static let dayStreak = String(localized: "streak.day_streak")
         static let thisWeek = String(localized: "streak.this_week")
         static let workoutsOfGoal = String(localized: "streak.workouts_of_goal")
+        static let totalVolumLifted = String(localized: "streak.total_volume_lifted")
+        static let weeklyGoal = String(localized: "streak.weekly_goal")
+        static let goalReached = String(localized: "streak.goal_reached")
     }
 
     // MARK: - Badge
@@ -49,6 +77,8 @@ enum L10n {
         static let earned = String(localized: "badge.earned")
         static let locked = String(localized: "badge.locked")
         static let recentBadges = String(localized: "badge.recent_badges")
+        static let earnedOn = String(localized: "badge.earned_on")
+        static let requirement = String(localized: "badge.requirement")
     }
 
     // MARK: - PR (Personal Record)
@@ -73,6 +103,16 @@ enum L10n {
         static let weekAvg = String(localized: "analytics.week_avg")
         static let weightTimesReps = String(localized: "analytics.weight_times_reps")
         static let exercisesImproving = String(localized: "analytics.exercises_improving")
+        static let analyzingProgress = String(localized: "analytics.analyzing_progress")
+        static let noDataYet = String(localized: "analytics.no_data_yet")
+        static let completeWorkoutsToSee = String(localized: "analytics.complete_workouts_to_see")
+        static let noExercisesTracked = String(localized: "analytics.no_exercises_tracked")
+        static let weeklyVolume = String(localized: "analytics.weekly_volume")
+        static let average = String(localized: "analytics.average")
+        static let recentSets = String(localized: "analytics.recent_sets")
+        static func e1rm(_ value: Int) -> String {
+            String(localized: "analytics.e1rm \(value)")
+        }
     }
 
     // MARK: - Plan
@@ -95,6 +135,27 @@ enum L10n {
         static let deletePlan = String(localized: "plan.delete_plan")
         static let makeTrainingDay = String(localized: "plan.make_training_day")
         static let makeRestDay = String(localized: "plan.make_rest_day")
+        static let quickActions = String(localized: "plan.quick_actions")
+        static let myPlans = String(localized: "plan.my_plans")
+        static let activePlan = String(localized: "plan.active_plan")
+        static let createFirstPlan = String(localized: "plan.create_first_plan")
+        static let weekAtAGlance = String(localized: "plan.week_at_a_glance")
+        static let viewPlan = String(localized: "plan.view_plan")
+        static let daysPerWeek = String(localized: "plan.days_per_week")
+        static let dayInfo = String(localized: "plan.day_info")
+        static let addExercisesToDay = String(localized: "plan.add_exercises_to_day")
+        static let superset = String(localized: "plan.superset")
+        static let repRange = String(localized: "plan.rep_range")
+        static let prescription = String(localized: "plan.prescription")
+        static let targetRpe = String(localized: "plan.target_rpe")
+        static let intensity = String(localized: "plan.intensity")
+        static let rpeDescription = String(localized: "plan.rpe_description")
+        static let restBetweenSets = String(localized: "plan.rest_between_sets")
+        static let supersetDescription = String(localized: "plan.superset_description")
+        static let quickPresets = String(localized: "plan.quick_presets")
+        static let customizeAfterAdding = String(localized: "plan.customize_after_adding")
+        static let deleteConfirmation = String(localized: "plan.delete_confirmation")
+        static let tapDayToConfigure = String(localized: "plan.tap_day_to_configure")
     }
 
     // MARK: - Rest Timer
@@ -126,6 +187,62 @@ enum L10n {
     enum Settings {
         static let title = String(localized: "settings.title")
         static let restTimer = String(localized: "settings.rest_timer")
+        static let version = String(localized: "settings.version")
+        static let signOutMessage = String(localized: "settings.sign_out_message")
+    }
+
+    // MARK: - Health
+    enum Health {
+        static let bodyWeight = String(localized: "health.body_weight")
+        static let noWeightData = String(localized: "health.no_weight_data")
+        static let connectToHealth = String(localized: "health.connect_to_health")
+        static let dataSource = String(localized: "health.data_source")
+        static let dataSourceDescription = String(localized: "health.data_source_description")
+    }
+
+    // MARK: - AI Coach
+    enum AICoach {
+        static let weeklyReview = String(localized: "ai_coach.weekly_review")
+        static let analyzingWeek = String(localized: "ai_coach.analyzing_week")
+        static let mayTakeMoment = String(localized: "ai_coach.may_take_moment")
+        static let couldntGenerate = String(localized: "ai_coach.couldnt_generate")
+        static let getInsights = String(localized: "ai_coach.get_insights")
+        static let aiSuggestion = String(localized: "ai_coach.ai_suggestion")
+        static let nextSession = String(localized: "ai_coach.next_session")
+    }
+
+    // MARK: - Sharing
+    enum Sharing {
+        static let shareMethod = String(localized: "sharing.share_method")
+        static let exportDesc = String(localized: "sharing.export_desc")
+        static let exportFile = String(localized: "sharing.export_file")
+        static let generateLinkDesc = String(localized: "sharing.generate_link_desc")
+        static let generateLink = String(localized: "sharing.generate_link")
+        static let shareCodeDesc = String(localized: "sharing.share_code_desc")
+        static let generateCode = String(localized: "sharing.generate_code")
+        static let shareCodeNote = String(localized: "sharing.share_code_note")
+        static let importFrom = String(localized: "sharing.import_from")
+        static let importFile = String(localized: "sharing.import_file")
+        static let selectPlanFile = String(localized: "sharing.select_plan_file")
+        static let enterShareCode = String(localized: "sharing.enter_share_code")
+        static let enterCodeDesc = String(localized: "sharing.enter_code_desc")
+        static let importPlan = String(localized: "sharing.import_plan")
+        static let planFound = String(localized: "sharing.plan_found")
+        static let createdBy = String(localized: "sharing.created_by")
+        static let importThisPlan = String(localized: "sharing.import_this_plan")
+        static let planImported = String(localized: "sharing.plan_imported")
+        static let couldntLoadPlan = String(localized: "sharing.couldnt_load_plan")
+    }
+
+    // MARK: - Network
+    enum Network {
+        static let youreOffline = String(localized: "network.youre_offline")
+        static let willSyncWhenConnected = String(localized: "network.will_sync_when_connected")
+    }
+
+    // MARK: - Debug
+    enum Debug {
+        static let noErrorsRecorded = String(localized: "debug.no_errors_recorded")
     }
 
     // MARK: - Onboarding
@@ -178,12 +295,24 @@ enum L10n {
         static let touchID = String(localized: "biometric.touch_id")
         static let opticID = String(localized: "biometric.optic_id")
         static let appLock = String(localized: "biometric.app_lock")
+        static let locked = String(localized: "biometric.locked")
+        static let unlockWith = String(localized: "biometric.unlock_with")
+        static let security = String(localized: "biometric.security")
+        static let use = String(localized: "biometric.use")
+        static let requireOnLaunch = String(localized: "biometric.require_on_launch")
+        static let askWhenOpening = String(localized: "biometric.ask_when_opening")
+        static let protectData = String(localized: "biometric.protect_data")
+        static let notEnrolled = String(localized: "biometric.not_enrolled")
+        static let notAvailable = String(localized: "biometric.not_available")
     }
 
     // MARK: - Units
     enum Units {
         static let pounds = String(localized: "units.pounds")
         static let kilograms = String(localized: "units.kilograms")
+        static let lbs = String(localized: "units.lbs")
+        static let kg = String(localized: "units.kg")
+        static let repsAbbrev = String(localized: "units.reps_abbrev")
     }
 
     // MARK: - Time

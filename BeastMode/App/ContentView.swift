@@ -117,9 +117,9 @@ struct QuickStartButton: View {
                     .font(.title2)
 
                 VStack(alignment: .leading) {
-                    Text("Start Workout")
+                    Text(L10n.Workout.startWorkout)
                         .font(.headline)
-                    Text("Begin a new training session")
+                    Text(L10n.Workout.beginNewSession)
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.7))
                 }
@@ -151,14 +151,14 @@ struct RecentWorkoutsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Recent Workouts")
+            Text(L10n.Workout.recentWorkouts)
                 .font(.headline)
 
             if workouts.isEmpty {
                 ContentUnavailableView {
                     Label("No Workouts Yet", systemImage: "figure.strengthtraining.traditional")
                 } description: {
-                    Text("Start your first workout to see it here.")
+                    Text(L10n.Workout.startFirstWorkout)
                 }
                 .frame(height: 150)
             } else {
@@ -254,10 +254,10 @@ struct StartWorkoutView: View {
                 .font(.system(size: 80))
                 .foregroundStyle(.orange)
 
-            Text("Ready to Train?")
+            Text(L10n.Workout.readyToTrain)
                 .font(.title.weight(.bold))
 
-            Text("Start a new workout session to begin tracking your lifts.")
+            Text(L10n.Workout.startNewSession)
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -266,7 +266,7 @@ struct StartWorkoutView: View {
             Button {
                 onStart()
             } label: {
-                Text("Start Workout")
+                Text(L10n.Workout.startWorkout)
                     .font(.headline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
@@ -353,7 +353,7 @@ struct WorkoutHeaderView: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading) {
-                Text("Duration")
+                Text(L10n.Workout.duration)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Text(formatDuration(elapsed))
@@ -363,7 +363,7 @@ struct WorkoutHeaderView: View {
             Spacer()
 
             VStack(alignment: .trailing) {
-                Text("Volume")
+                Text(L10n.Workout.volume)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Text("\(Int(workout.calculateTotalVolume())) lbs")
@@ -496,7 +496,7 @@ struct ExerciseSelectorView: View {
                         Spacer()
 
                         if exercise.isCompound {
-                            Text("Compound")
+                            Text(L10n.Workout.compound)
                                 .font(.caption2)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
@@ -597,7 +597,7 @@ struct ProfileView: View {
                             HStack {
                                 Label("iCloud Sync", systemImage: "checkmark.icloud.fill")
                                 Spacer()
-                                Text("Active")
+                                Text(L10n.Common.active)
                                     .font(.caption)
                                     .foregroundStyle(.green)
                             }
@@ -650,7 +650,7 @@ struct ProfileView: View {
 
                     Section("About") {
                         HStack {
-                            Text("Version")
+                            Text(L10n.Settings.version)
                             Spacer()
                             Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")
                                 .foregroundStyle(.secondary)
@@ -674,7 +674,7 @@ struct ProfileView: View {
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Your local data will be kept, but it won't sync to other devices until you sign in again.")
+                Text(L10n.Settings.signOutMessage)
             }
         }
     }

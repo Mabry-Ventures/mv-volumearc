@@ -104,7 +104,7 @@ struct PlanLibraryView: View {
 
     private var quickActionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Quick Actions")
+            Text(L10n.Plan.quickActions)
                 .font(.headline)
                 .padding(.horizontal)
 
@@ -142,7 +142,7 @@ struct PlanLibraryView: View {
     private var myPlansSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("My Plans")
+                Text(L10n.Plan.myPlans)
                     .font(.headline)
 
                 Spacer()
@@ -175,7 +175,7 @@ struct PlanLibraryView: View {
         ContentUnavailableView {
             Label("No Plans Yet", systemImage: "calendar.badge.plus")
         } description: {
-            Text("Create your first workout plan or import one from a friend.")
+            Text(L10n.Plan.createFirstPlan)
         } actions: {
             Button("Create Plan") {
                 showCreatePlan = true
@@ -290,7 +290,7 @@ struct ActivePlanCard: View {
                     HStack(spacing: 6) {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(.green)
-                        Text("Active Plan")
+                        Text(L10n.Plan.activePlan)
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.green)
                     }
@@ -316,7 +316,7 @@ struct ActivePlanCard: View {
             if let today = todayDay {
                 HStack {
                     VStack(alignment: .leading) {
-                        Text("Today")
+                        Text(L10n.Common.today)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Text(today.name)
@@ -652,7 +652,7 @@ struct PlanDetailView: View {
 
     private var weekOverviewView: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Week at a Glance")
+            Text(L10n.Plan.weekAtAGlance)
                 .font(.headline)
 
             HStack(spacing: 4) {
