@@ -26,19 +26,26 @@ struct ContentView: View {
                 }
                 .tag(1)
 
+            // Plans
+            PlanLibraryView()
+                .tabItem {
+                    Label("Plans", systemImage: "calendar")
+                }
+                .tag(2)
+
             // Progress/Stats
             ProgressView()
                 .tabItem {
                     Label("Progress", systemImage: "chart.line.uptrend.xyaxis")
                 }
-                .tag(2)
+                .tag(3)
 
             // Profile/Settings
             ProfileView()
                 .tabItem {
                     Label("Profile", systemImage: "person.fill")
                 }
-                .tag(3)
+                .tag(4)
         }
         .environmentObject(celebrationCoordinator)
         .celebrationOverlay(coordinator: celebrationCoordinator)

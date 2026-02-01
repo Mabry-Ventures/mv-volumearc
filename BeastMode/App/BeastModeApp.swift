@@ -8,6 +8,7 @@ import SwiftData
 @main
 struct BeastModeApp: App {
     let modelContainer: ModelContainer
+    @StateObject private var deepLinkHandler = DeepLinkHandler()
 
     init() {
         do {
@@ -19,7 +20,10 @@ struct BeastModeApp: App {
                 Workout.self,
                 WorkoutExercise.self,
                 SetLog.self,
-                PersonalRecord.self
+                PersonalRecord.self,
+                WorkoutPlan.self,
+                PlanDay.self,
+                PlanExercise.self
             ])
 
             let modelConfiguration = ModelConfiguration(
@@ -44,6 +48,18 @@ struct BeastModeApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(deepLinkHandler)
+                .onOpenURL { url in
+                    deepLinkHandler.handleURL(url)
+                }
+                .sheet(isPresented: $deepLinkHandler.showImportSheet) {
+                    if let url = deepLinkHandler.pendingImport {
+                        DeepLinkImportView(url: url)
+                            .onDisappear {
+                                deepLinkHandler.clearPendingImport()
+                            }
+                    }
+                }
         }
         .modelContainer(modelContainer)
     }
