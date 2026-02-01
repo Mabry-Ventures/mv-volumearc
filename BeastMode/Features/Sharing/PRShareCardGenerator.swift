@@ -81,7 +81,7 @@ struct PRShareCard: View {
                         Text("\(Int(weight))")
                             .font(.system(size: 56, weight: .black, design: .rounded))
                             .foregroundStyle(.white)
-                        Text("LBS")
+                        Text(L10n.Units.lbs)
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.white.opacity(0.6))
                             .tracking(1)
@@ -95,7 +95,7 @@ struct PRShareCard: View {
                         Text("\(reps)")
                             .font(.system(size: 56, weight: .black, design: .rounded))
                             .foregroundStyle(.white)
-                        Text("REPS")
+                        Text(L10n.Units.repsAbbrev)
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.white.opacity(0.6))
                             .tracking(1)
@@ -210,7 +210,7 @@ struct BeastModeLogo: View {
                     )
                 )
 
-            Text("BEAST MODE")
+            Text(L10n.App.nameUppercase)
                 .font(.system(size: size.fontSize, weight: .black, design: .rounded))
                 .foregroundStyle(.white)
         }

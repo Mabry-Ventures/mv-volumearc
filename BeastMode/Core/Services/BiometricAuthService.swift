@@ -345,11 +345,11 @@ struct AppLockView: View {
                         )
                 }
 
-                Text("Beast Mode")
+                Text(L10n.App.name)
                     .font(.title.weight(.bold))
                     .foregroundStyle(.white)
 
-                Text("Locked")
+                Text(L10n.Biometric.locked)
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.6))
 
@@ -371,7 +371,7 @@ struct AppLockView: View {
                                     .font(.title2)
                             }
 
-                            Text("Unlock with \(biometricService.biometricType.displayName)")
+                            Text("\(L10n.Biometric.unlockWith) \(biometricService.biometricType.displayName)")
                                 .font(.headline)
                         }
                         .frame(maxWidth: .infinity)
@@ -464,7 +464,7 @@ struct BiometricSettingsView: View {
                         }
                     )) {
                         Label {
-                            Text("Use \(biometricService.biometricType.displayName)")
+                            Text("\(L10n.Biometric.use) \(biometricService.biometricType.displayName)")
                         } icon: {
                             Image(systemName: biometricService.biometricType.iconName)
                                 .foregroundStyle(Color(hex: "FF6B35"))
@@ -475,8 +475,8 @@ struct BiometricSettingsView: View {
                         Toggle(isOn: $biometricService.requireAuthOnLaunch) {
                             Label {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("Require on App Launch")
-                                    Text("Ask for \(biometricService.biometricType.displayName) when opening the app")
+                                    Text(L10n.Biometric.requireOnLaunch)
+                                    Text(L10n.Biometric.askWhenOpening)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -487,9 +487,9 @@ struct BiometricSettingsView: View {
                         }
                     }
                 } header: {
-                    Text("Security")
+                    Text(L10n.Biometric.security)
                 } footer: {
-                    Text("Protect your workout data with \(biometricService.biometricType.displayName).")
+                    Text(L10n.Biometric.protectData)
                 }
             } else {
                 Section {
@@ -498,18 +498,18 @@ struct BiometricSettingsView: View {
                             .foregroundStyle(.orange)
 
                         if !biometricService.isEnrolled {
-                            Text("No \(biometricService.biometricType.displayName) enrolled. Set up in Settings.")
+                            Text(L10n.Biometric.notEnrolled)
                         } else {
-                            Text("Biometric authentication not available on this device.")
+                            Text(L10n.Biometric.notAvailable)
                         }
                     }
                     .font(.subheadline)
                 } header: {
-                    Text("Security")
+                    Text(L10n.Biometric.security)
                 }
             }
         }
-        .navigationTitle("Security")
+        .navigationTitle(L10n.Biometric.security)
         .alert("Couldn't Enable \(biometricService.biometricType.displayName)", isPresented: $showEnableError) {
             Button("OK", role: .cancel) {}
         } message: {

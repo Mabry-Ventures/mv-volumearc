@@ -415,10 +415,10 @@ struct AuthenticationView: View {
                     )
 
                 VStack(spacing: 8) {
-                    Text("Beast Mode")
+                    Text(L10n.App.name)
                         .font(.largeTitle.weight(.bold))
 
-                    Text("Sign in to sync your data across devices and never lose your progress.")
+                    Text(L10n.Onboarding.signInDesc)
                         .font(.body)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)

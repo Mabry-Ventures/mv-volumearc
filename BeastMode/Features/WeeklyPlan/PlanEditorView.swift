@@ -84,7 +84,7 @@ struct PlanEditorView: View {
                     deletePlan()
                 }
             } message: {
-                Text("Are you sure you want to delete this plan? This action cannot be undone.")
+                Text(L10n.Plan.deleteConfirmation)
             }
             .onAppear {
                 loadPlanData()
@@ -151,7 +151,7 @@ struct PlanEditorView: View {
         } header: {
             Text(L10n.Plan.schedule)
         } footer: {
-            Text("Tap a day below to configure its exercises")
+            Text(L10n.Plan.tapDayToConfigure)
         }
     }
 

@@ -93,7 +93,7 @@ struct AnalyticsDashboardView: View {
         VStack(spacing: 16) {
             ProgressView()
                 .scaleEffect(1.5)
-            Text("Analyzing your progress...")
+            Text(L10n.Analytics.analyzingProgress)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -102,9 +102,9 @@ struct AnalyticsDashboardView: View {
 
     private var emptyStateView: some View {
         ContentUnavailableView {
-            Label("No Data Yet", systemImage: "chart.line.uptrend.xyaxis")
+            Label(L10n.Analytics.noDataYet, systemImage: "chart.line.uptrend.xyaxis")
         } description: {
-            Text("Complete some workouts to see your progress analytics here.")
+            Text(L10n.Analytics.completeWorkoutsToSee)
         }
     }
 
@@ -347,7 +347,7 @@ struct ExerciseTrendsListView: View {
                 .padding(.horizontal)
 
             if exercises.isEmpty {
-                Text("No exercises tracked yet")
+                Text(L10n.Analytics.noExercisesTracked)
                     .foregroundStyle(.secondary)
                     .padding()
             } else {
@@ -375,7 +375,7 @@ struct ExerciseTrendRow: View {
                     .font(.headline)
 
                 if let e1rm = analytics.estimatedOneRepMax {
-                    Text("Est. 1RM: \(Int(e1rm)) lbs")
+                    Text(L10n.Analytics.e1rm(Int(e1rm)))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

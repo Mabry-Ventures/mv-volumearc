@@ -152,12 +152,12 @@ struct BadgeDetailView: View {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.green)
-                    Text("Earned \(date.formatted(.dateTime.month().day().year()))")
+                    Text("\(L10n.Badge.earnedOn) \(date.formatted(.dateTime.month().day().year()))")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
             } else if let threshold = badge.threshold {
-                Text("Requirement: \(threshold)")
+                Text("\(L10n.Badge.requirement): \(threshold)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
