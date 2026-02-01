@@ -11,6 +11,11 @@
             "containerPath" : "container:BeastMode.xcodeproj",
             "identifier" : "BeastMode",
             "name" : "BeastMode"
+          },
+          {
+            "containerPath" : "container:BeastMode.xcodeproj",
+            "identifier" : "BeastModeWatch",
+            "name" : "BeastModeWatch"
           }
         ],
         "commandLineArgumentEntries" : [
@@ -58,6 +63,11 @@
         "containerPath" : "container:BeastMode.xcodeproj",
         "identifier" : "BeastMode",
         "name" : "BeastMode"
+      },
+      {
+        "containerPath" : "container:BeastMode.xcodeproj",
+        "identifier" : "BeastModeWatch",
+        "name" : "BeastModeWatch"
       }
     ],
     "maximumTestExecutionTimeAllowance" : 300,
@@ -73,6 +83,14 @@
         "containerPath" : "container:BeastMode.xcodeproj",
         "identifier" : "BeastModeTests",
         "name" : "BeastModeTests"
+      }
+    },
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:BeastMode.xcodeproj",
+        "identifier" : "BeastModeWatchTests",
+        "name" : "BeastModeWatchTests"
       }
     }
   ],

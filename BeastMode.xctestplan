@@ -10,6 +10,11 @@
             "containerPath" : "container:BeastMode.xcodeproj",
             "identifier" : "BeastMode",
             "name" : "BeastMode"
+          },
+          {
+            "containerPath" : "container:BeastMode.xcodeproj",
+            "identifier" : "BeastModeWatch",
+            "name" : "BeastModeWatch"
           }
         ],
         "environmentVariableEntries" : [
@@ -40,6 +45,11 @@
         "containerPath" : "container:BeastMode.xcodeproj",
         "identifier" : "BeastMode",
         "name" : "BeastMode"
+      },
+      {
+        "containerPath" : "container:BeastMode.xcodeproj",
+        "identifier" : "BeastModeWatch",
+        "name" : "BeastModeWatch"
       }
     ],
     "testExecutionOrdering" : "random",
@@ -55,6 +65,14 @@
         "containerPath" : "container:BeastMode.xcodeproj",
         "identifier" : "BeastModeTests",
         "name" : "BeastModeTests"
+      }
+    },
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:BeastMode.xcodeproj",
+        "identifier" : "BeastModeWatchTests",
+        "name" : "BeastModeWatchTests"
       }
     }
   ],

@@ -23,12 +23,14 @@ on:
 env:
   DEVELOPER_DIR: /Applications/Xcode_15.4.app/Contents/Developer
   SCHEME: BeastMode
-  DESTINATION: 'platform=iOS Simulator,name=iPhone 15 Pro,OS=17.5'
+  WATCH_SCHEME: BeastModeWatch
+  IOS_DESTINATION: 'platform=iOS Simulator,name=iPhone 15 Pro,OS=17.5'
+  WATCHOS_DESTINATION: 'platform=watchOS Simulator,name=Apple Watch Series 9 (45mm),OS=10.5'
 
 jobs:
-  # Unit and Integration Tests
-  test:
-    name: Run Tests
+  # iOS Unit and Integration Tests
+  test-ios:
+    name: iOS Tests
     runs-on: macos-14
     timeout-minutes: 30
 
@@ -56,54 +58,124 @@ jobs:
         run: |
           xcodebuild -resolvePackageDependencies \
             -scheme "$SCHEME" \
-            -destination "$DESTINATION"
+            -destination "$IOS_DESTINATION"
 
       - name: Build for testing
         run: |
           xcodebuild build-for-testing \
             -scheme "$SCHEME" \
-            -destination "$DESTINATION" \
+            -destination "$IOS_DESTINATION" \
             -testPlan "${{ github.event.inputs.test_plan || 'BeastMode-CI' }}" \
             -derivedDataPath DerivedData \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Run tests
+      - name: Run iOS tests
         run: |
           xcodebuild test-without-building \
             -scheme "$SCHEME" \
-            -destination "$DESTINATION" \
+            -destination "$IOS_DESTINATION" \
             -testPlan "${{ github.event.inputs.test_plan || 'BeastMode-CI' }}" \
             -derivedDataPath DerivedData \
-            -resultBundlePath TestResults.xcresult \
+            -resultBundlePath TestResults-iOS.xcresult \
             CODE_SIGNING_ALLOWED=NO
 
       - name: Generate coverage report
         if: always()
         run: |
-          xcrun xccov view --report --json TestResults.xcresult > coverage.json || true
-          python3 scripts/check_coverage.py coverage.json 80.0 || true
+          xcrun xccov view --report --json TestResults-iOS.xcresult > coverage-ios.json || true
+          python3 scripts/check_coverage.py coverage-ios.json 80.0 || true
 
-      - name: Upload test results
+      - name: Upload iOS test results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: test-results
-          path: TestResults.xcresult
+          name: ios-test-results
+          path: TestResults-iOS.xcresult
           retention-days: 7
 
-      - name: Upload coverage report
+      - name: Upload iOS coverage report
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: coverage-report
-          path: coverage.json
+          name: ios-coverage-report
+          path: coverage-ios.json
+          retention-days: 7
+
+  # watchOS Unit Tests
+  test-watchos:
+    name: watchOS Tests
+    runs-on: macos-14
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Resolve packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -scheme "$WATCH_SCHEME" \
+            -destination "$WATCHOS_DESTINATION"
+
+      - name: Build watchOS for testing
+        run: |
+          xcodebuild build-for-testing \
+            -scheme "$WATCH_SCHEME" \
+            -destination "$WATCHOS_DESTINATION" \
+            -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Run watchOS tests
+        run: |
+          xcodebuild test-without-building \
+            -scheme "$WATCH_SCHEME" \
+            -destination "$WATCHOS_DESTINATION" \
+            -derivedDataPath DerivedData \
+            -resultBundlePath TestResults-watchOS.xcresult \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Generate watchOS coverage report
+        if: always()
+        run: |
+          xcrun xccov view --report --json TestResults-watchOS.xcresult > coverage-watchos.json || true
+
+      - name: Upload watchOS test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: watchos-test-results
+          path: TestResults-watchOS.xcresult
+          retention-days: 7
+
+      - name: Upload watchOS coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: watchos-coverage-report
+          path: coverage-watchos.json
           retention-days: 7
 
   # Nightly Tests (full suite with sanitizers)
   nightly:
     name: Nightly Full Test Suite
     runs-on: macos-14
-    timeout-minutes: 60
+    timeout-minutes: 90
     if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.test_plan == 'BeastMode-Nightly')
 
     steps:
@@ -123,43 +195,73 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-spm-
 
-      - name: Resolve packages
+      - name: Resolve packages (iOS)
         run: |
           xcodebuild -resolvePackageDependencies \
             -scheme "$SCHEME" \
-            -destination "$DESTINATION"
+            -destination "$IOS_DESTINATION"
 
-      - name: Build for testing
+      - name: Build iOS for nightly testing
         run: |
           xcodebuild build-for-testing \
             -scheme "$SCHEME" \
-            -destination "$DESTINATION" \
+            -destination "$IOS_DESTINATION" \
             -testPlan "BeastMode-Nightly" \
             -derivedDataPath DerivedData \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Run nightly tests
+      - name: Run iOS nightly tests
         run: |
           xcodebuild test-without-building \
             -scheme "$SCHEME" \
-            -destination "$DESTINATION" \
+            -destination "$IOS_DESTINATION" \
             -testPlan "BeastMode-Nightly" \
             -derivedDataPath DerivedData \
-            -resultBundlePath NightlyResults.xcresult \
+            -resultBundlePath NightlyResults-iOS.xcresult \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Generate coverage report
+      - name: Build watchOS for nightly testing
+        run: |
+          xcodebuild build-for-testing \
+            -scheme "$WATCH_SCHEME" \
+            -destination "$WATCHOS_DESTINATION" \
+            -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Run watchOS nightly tests
+        run: |
+          xcodebuild test-without-building \
+            -scheme "$WATCH_SCHEME" \
+            -destination "$WATCHOS_DESTINATION" \
+            -derivedDataPath DerivedData \
+            -resultBundlePath NightlyResults-watchOS.xcresult \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Generate iOS nightly coverage report
         if: always()
         run: |
-          xcrun xccov view --report --json NightlyResults.xcresult > nightly-coverage.json || true
-          python3 scripts/check_coverage.py nightly-coverage.json 90.0 || true
+          xcrun xccov view --report --json NightlyResults-iOS.xcresult > nightly-coverage-ios.json || true
+          python3 scripts/check_coverage.py nightly-coverage-ios.json 90.0 || true
 
-      - name: Upload nightly results
+      - name: Generate watchOS nightly coverage report
+        if: always()
+        run: |
+          xcrun xccov view --report --json NightlyResults-watchOS.xcresult > nightly-coverage-watchos.json || true
+
+      - name: Upload nightly iOS results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: nightly-results
-          path: NightlyResults.xcresult
+          name: nightly-ios-results
+          path: NightlyResults-iOS.xcresult
+          retention-days: 14
+
+      - name: Upload nightly watchOS results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nightly-watchos-results
+          path: NightlyResults-watchOS.xcresult
           retention-days: 14
 
       - name: Notify on failure
@@ -171,7 +273,7 @@ jobs:
   build:
     name: Build Verification
     runs-on: macos-14
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -194,18 +296,17 @@ jobs:
         run: |
           xcodebuild build \
             -scheme "$SCHEME" \
-            -destination "$DESTINATION" \
+            -destination "$IOS_DESTINATION" \
             -derivedDataPath DerivedData \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Build Watch App
+      - name: Build watchOS
         run: |
           xcodebuild build \
-            -scheme "BeastModeWatch" \
-            -destination 'platform=watchOS Simulator,name=Apple Watch Series 9 (45mm),OS=10.5' \
+            -scheme "$WATCH_SCHEME" \
+            -destination "$WATCHOS_DESTINATION" \
             -derivedDataPath DerivedData \
             CODE_SIGNING_ALLOWED=NO
-        continue-on-error: true
 
   # Code quality checks
   lint:
@@ -227,7 +328,7 @@ jobs:
       - name: Check for TODO/FIXME
         run: |
           echo "Checking for TODO and FIXME comments..."
-          TODOS=$(grep -rn "TODO\|FIXME" --include="*.swift" BeastMode/ || true)
+          TODOS=$(grep -rn "TODO\|FIXME" --include="*.swift" BeastMode/ BeastModeWatch/ || true)
           if [ -n "$TODOS" ]; then
             echo "::warning::Found TODO/FIXME comments:"
             echo "$TODOS"
