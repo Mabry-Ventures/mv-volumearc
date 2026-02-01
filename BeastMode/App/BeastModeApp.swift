@@ -12,6 +12,11 @@ struct BeastModeApp: App {
     @StateObject private var deepLinkHandler = DeepLinkHandler()
     @StateObject private var authenticationManager = AuthenticationManager()
     @StateObject private var onboardingManager = OnboardingManager()
+    @ObservedObject private var biometricService = BiometricAuthService.shared
+
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isAppLocked = false
+    @State private var backgroundTime: Date?
 
     init() {
         // Configure logging
@@ -21,27 +26,34 @@ struct BeastModeApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                switch appState.initializationState {
-                case .initializing:
-                    AppLoadingView()
-                case .failed(let error):
-                    DatabaseErrorView(error: error, onRetry: {
-                        Task { await appState.initialize() }
-                    })
-                case .ready:
-                    if let container = appState.modelContainer {
-                        // Show onboarding for new users, main app for returning users
-                        if onboardingManager.isOnboardingComplete {
-                            mainAppView(container: container)
-                        } else {
-                            OnboardingView()
-                                .environmentObject(authenticationManager)
-                                .environmentObject(onboardingManager)
-                                .onChange(of: onboardingManager.isOnboardingComplete) { _, isComplete in
-                                    if isComplete {
-                                        Logger.app.info("Onboarding completed, showing main app")
+                // Check if app should be locked
+                if shouldShowAppLock {
+                    AppLockView(biometricService: biometricService) {
+                        isAppLocked = false
+                    }
+                } else {
+                    switch appState.initializationState {
+                    case .initializing:
+                        AppLoadingView()
+                    case .failed(let error):
+                        DatabaseErrorView(error: error, onRetry: {
+                            Task { await appState.initialize() }
+                        })
+                    case .ready:
+                        if let container = appState.modelContainer {
+                            // Show onboarding for new users, main app for returning users
+                            if onboardingManager.isOnboardingComplete {
+                                mainAppView(container: container)
+                            } else {
+                                OnboardingView()
+                                    .environmentObject(authenticationManager)
+                                    .environmentObject(onboardingManager)
+                                    .onChange(of: onboardingManager.isOnboardingComplete) { _, isComplete in
+                                        if isComplete {
+                                            Logger.app.info("Onboarding completed, showing main app")
+                                        }
                                     }
-                                }
+                            }
                         }
                     }
                 }
@@ -49,6 +61,55 @@ struct BeastModeApp: App {
             .task {
                 await appState.initialize()
             }
+            .onChange(of: scenePhase) { oldPhase, newPhase in
+                handleScenePhaseChange(from: oldPhase, to: newPhase)
+            }
+        }
+    }
+
+    /// Determines if the app lock screen should be shown
+    private var shouldShowAppLock: Bool {
+        // Only show lock if:
+        // 1. Biometrics are enabled
+        // 2. Require auth on launch is enabled
+        // 3. App is in locked state
+        // 4. User is not currently authenticated
+        return biometricService.isEnabled &&
+               biometricService.requireAuthOnLaunch &&
+               (isAppLocked || !biometricService.isAuthenticated)
+    }
+
+    /// Handle app lifecycle changes for locking
+    private func handleScenePhaseChange(from oldPhase: ScenePhase, to newPhase: ScenePhase) {
+        switch newPhase {
+        case .active:
+            // App became active
+            if let backgroundTime = backgroundTime {
+                // Lock if app was in background for more than 30 seconds
+                let elapsed = Date().timeIntervalSince(backgroundTime)
+                if elapsed > 30 && biometricService.isEnabled && biometricService.requireAuthOnLaunch {
+                    isAppLocked = true
+                    biometricService.resetAuthenticationState()
+                    Logger.authentication.info("App locked after \(Int(elapsed)) seconds in background")
+                }
+            }
+            self.backgroundTime = nil
+
+        case .inactive:
+            // App is transitioning (e.g., showing app switcher)
+            break
+
+        case .background:
+            // App went to background - record time
+            backgroundTime = Date()
+
+            // Notify crash reporter
+            CrashReporter.shared.appDidEnterBackground()
+
+            Logger.app.info("App entered background")
+
+        @unknown default:
+            break
         }
     }
 

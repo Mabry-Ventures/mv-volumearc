@@ -66,6 +66,12 @@ struct OnboardingView: View {
                     )
                     .tag(OnboardingStep.notifications)
 
+                    BiometricStepView(
+                        biometricService: onboardingManager.biometricService,
+                        onContinue: onboardingManager.nextStep
+                    )
+                    .tag(OnboardingStep.biometric)
+
                     SignInStepView(
                         authManager: authManager,
                         onContinue: onboardingManager.nextStep
@@ -75,6 +81,8 @@ struct OnboardingView: View {
                     CompleteStepView(
                         healthKitGranted: onboardingManager.healthKitStatus.isGranted,
                         notificationsGranted: onboardingManager.notificationStatus.isGranted,
+                        biometricEnabled: onboardingManager.biometricService.isEnabled,
+                        biometricType: onboardingManager.biometricService.biometricType,
                         isSignedIn: authManager.isAuthenticated,
                         onGetStarted: onboardingManager.completeOnboarding
                     )
@@ -430,6 +438,126 @@ struct NotificationStepView: View {
     }
 }
 
+// MARK: - Biometric Step
+
+struct BiometricStepView: View {
+    @ObservedObject var biometricService: BiometricAuthService
+    let onContinue: () -> Void
+
+    @State private var enableError: BiometricError?
+    @State private var showError = false
+
+    var body: some View {
+        VStack(spacing: 32) {
+            Spacer()
+
+            // Icon
+            ZStack {
+                Circle()
+                    .fill(Color.purple.opacity(0.2))
+                    .frame(width: 120, height: 120)
+
+                Image(systemName: biometricService.biometricType.iconName)
+                    .font(.system(size: 50))
+                    .foregroundStyle(.purple)
+            }
+
+            VStack(spacing: 16) {
+                Text("Secure Your Data")
+                    .font(.title.weight(.bold))
+                    .foregroundStyle(.white)
+
+                Text("Use \(biometricService.biometricType.displayName) to protect your workout data and keep your progress private.")
+                    .font(.body)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.white.opacity(0.7))
+                    .padding(.horizontal, 32)
+
+                // Benefits
+                VStack(alignment: .leading, spacing: 12) {
+                    BenefitItem(icon: "lock.shield.fill", text: "Quick and secure access")
+                    BenefitItem(icon: "eye.slash.fill", text: "Keep your data private")
+                    BenefitItem(icon: "bolt.fill", text: "Unlock instantly with a glance")
+                }
+                .padding(.top, 8)
+            }
+
+            Spacer()
+
+            // Status indicator
+            if biometricService.isEnabled {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text("\(biometricService.biometricType.displayName) Enabled")
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+                .font(.subheadline)
+            }
+
+            VStack(spacing: 12) {
+                if !biometricService.isAvailable || !biometricService.isEnrolled {
+                    // Biometrics not available
+                    VStack(spacing: 8) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                            Text(biometricService.isEnrolled ? "Biometrics not available" : "No biometrics enrolled")
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+                        .font(.subheadline)
+
+                        OnboardingButton(title: "Continue", action: onContinue)
+                    }
+                } else if biometricService.isEnabled {
+                    OnboardingButton(title: "Continue", action: onContinue)
+                } else {
+                    OnboardingButton(
+                        title: biometricService.isAuthenticating ? "Enabling..." : "Enable \(biometricService.biometricType.displayName)",
+                        isLoading: biometricService.isAuthenticating,
+                        action: {
+                            Task { await enableBiometrics() }
+                        }
+                    )
+
+                    Button("Skip for Now") {
+                        onContinue()
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.6))
+                }
+            }
+            .padding(.horizontal, 40)
+            .padding(.bottom, 40)
+        }
+        .alert("Couldn't Enable \(biometricService.biometricType.displayName)", isPresented: $showError) {
+            Button("Try Again") {
+                Task { await enableBiometrics() }
+            }
+            Button("Skip", role: .cancel) {
+                onContinue()
+            }
+        } message: {
+            Text(enableError?.localizedDescription ?? "Please try again")
+        }
+    }
+
+    private func enableBiometrics() async {
+        let result = await biometricService.enableBiometrics()
+
+        switch result {
+        case .success:
+            // Successfully enabled, will auto-update UI
+            break
+        case .failure(let error):
+            if error.isRecoverable {
+                enableError = error
+                showError = true
+            }
+        }
+    }
+}
+
 // MARK: - Sign In Step
 
 struct SignInStepView: View {
@@ -517,6 +645,8 @@ struct SignInStepView: View {
 struct CompleteStepView: View {
     let healthKitGranted: Bool
     let notificationsGranted: Bool
+    let biometricEnabled: Bool
+    let biometricType: BiometricType
     let isSignedIn: Bool
     let onGetStarted: () -> Void
 
@@ -570,6 +700,11 @@ struct CompleteStepView: View {
                     icon: "bell.fill",
                     title: "Notifications",
                     isEnabled: notificationsGranted
+                )
+                SetupSummaryRow(
+                    icon: biometricType.iconName,
+                    title: biometricType == .none ? "App Lock" : biometricType.displayName,
+                    isEnabled: biometricEnabled
                 )
                 SetupSummaryRow(
                     icon: "icloud.fill",
@@ -770,8 +905,20 @@ private extension Color {
         CompleteStepView(
             healthKitGranted: true,
             notificationsGranted: true,
+            biometricEnabled: true,
+            biometricType: .faceID,
             isSignedIn: false,
             onGetStarted: {}
+        )
+    }
+}
+
+#Preview("Biometric Step") {
+    ZStack {
+        Color(hex: "1a1a2e").ignoresSafeArea()
+        BiometricStepView(
+            biometricService: BiometricAuthService.shared,
+            onContinue: {}
         )
     }
 }

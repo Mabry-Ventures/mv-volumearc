@@ -59,6 +59,8 @@
 	<string>Beast Mode can save your workout data to Apple Health to keep all your fitness data in one place.</string>
 	<key>NSHealthClinicalHealthRecordsShareUsageDescription</key>
 	<string>Beast Mode can access health records to provide more comprehensive fitness insights.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Beast Mode uses Face ID to securely unlock the app and protect your workout data.</string>
 
 	<!-- URL Schemes for Deep Linking -->
 	<key>CFBundleURLTypes</key>

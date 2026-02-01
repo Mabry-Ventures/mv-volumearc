@@ -14,6 +14,7 @@ enum OnboardingStep: Int, CaseIterable, Identifiable {
     case features
     case healthKit
     case notifications
+    case biometric
     case signIn
     case complete
 
@@ -25,6 +26,7 @@ enum OnboardingStep: Int, CaseIterable, Identifiable {
         case .features: return "Features"
         case .healthKit: return "Health Data"
         case .notifications: return "Notifications"
+        case .biometric: return "Security"
         case .signIn: return "Account"
         case .complete: return "Ready"
         }
@@ -32,7 +34,7 @@ enum OnboardingStep: Int, CaseIterable, Identifiable {
 
     var isPermissionStep: Bool {
         switch self {
-        case .healthKit, .notifications, .signIn:
+        case .healthKit, .notifications, .biometric, .signIn:
             return true
         default:
             return false
@@ -64,6 +66,10 @@ class OnboardingManager: ObservableObject {
     @Published var healthKitStatus: PermissionStatus = .notDetermined
     @Published var notificationStatus: PermissionStatus = .notDetermined
     @Published var isRequestingPermission: Bool = false
+
+    // MARK: - Biometric Service
+
+    let biometricService = BiometricAuthService.shared
 
     // MARK: - Private Properties
 
