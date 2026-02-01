@@ -3,14 +3,41 @@
 // Service for AI-powered coaching features using Claude API
 
 import Foundation
+import os
 
 /// Service for generating AI-powered coaching insights
 actor AICoachService {
-    private let apiKey: String?
+    private let keychainService: KeychainService
     private let baseURL = "https://api.anthropic.com/v1/messages"
+    private var cachedResponses: [String: CachedResponse] = [:]
+    private let cacheExpirationInterval: TimeInterval = 3600 // 1 hour
+
+    struct CachedResponse {
+        let response: String
+        let timestamp: Date
+
+        var isExpired: Bool {
+            Date().timeIntervalSince(timestamp) > 3600
+        }
+    }
 
     init(apiKey: String? = nil) {
-        self.apiKey = apiKey ?? ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"]
+        self.keychainService = KeychainService.shared
+
+        // If an API key is provided, store it securely
+        if let apiKey = apiKey {
+            keychainService.setAPIKey(apiKey)
+        }
+    }
+
+    /// Get the API key from secure storage
+    private var apiKey: String? {
+        keychainService.getAPIKey()
+    }
+
+    /// Check if the service is configured with an API key
+    var isConfigured: Bool {
+        apiKey != nil
     }
 
     // MARK: - Weekly Review
@@ -98,10 +125,32 @@ actor AICoachService {
 
     // MARK: - Private Helpers
 
-    private func makeRequest(prompt: String, maxTokens: Int) async throws -> String {
+    private func makeRequest(prompt: String, maxTokens: Int, useCache: Bool = true) async throws -> String {
+        // Check cache first if enabled
+        let cacheKey = prompt.hashValue.description
+        if useCache, let cached = cachedResponses[cacheKey], !cached.isExpired {
+            Logger.network.debug("Returning cached AI response")
+            return cached.response
+        }
+
         guard let apiKey else {
+            Logger.network.info("No API key configured, returning mock response")
             // Return mock response for development/testing
             return generateMockResponse(for: prompt)
+        }
+
+        // Check network connectivity
+        let networkMonitor = await NetworkMonitor.shared
+        guard await networkMonitor.isConnected else {
+            Logger.network.warning("Offline - cannot make AI request")
+
+            // Return cached response if available, even if expired
+            if let cached = cachedResponses[cacheKey] {
+                Logger.network.info("Returning stale cached response due to offline status")
+                return cached.response
+            }
+
+            throw AIError.offline
         }
 
         guard let url = URL(string: baseURL) else {
@@ -113,9 +162,10 @@ actor AICoachService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        request.timeoutInterval = 30
 
         let body: [String: Any] = [
-            "model": "claude-3-5-sonnet-20241022",
+            "model": "claude-sonnet-4-20250514",
             "max_tokens": maxTokens,
             "messages": [
                 ["role": "user", "content": prompt]
@@ -124,23 +174,52 @@ actor AICoachService {
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        Logger.network.debug("Making AI API request")
 
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AIError.invalidResponse
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw AIError.invalidResponse
+            }
+
+            guard httpResponse.statusCode == 200 else {
+                Logger.network.error("AI API error: \(httpResponse.statusCode)")
+                CrashReporter.shared.recordNonFatalError(
+                    "AI API Error",
+                    properties: ["statusCode": httpResponse.statusCode]
+                )
+                throw AIError.apiError(statusCode: httpResponse.statusCode)
+            }
+
+            let apiResponse = try JSONDecoder().decode(ClaudeResponse.self, from: data)
+
+            guard let content = apiResponse.content.first?.text else {
+                throw AIError.emptyResponse
+            }
+
+            // Cache successful response
+            cachedResponses[cacheKey] = CachedResponse(response: content, timestamp: Date())
+
+            Logger.network.debug("AI request successful")
+            return content
+
+        } catch let error as URLError {
+            Logger.network.error("Network error during AI request: \(error.localizedDescription)")
+
+            // Return cached response on network error
+            if let cached = cachedResponses[cacheKey] {
+                Logger.network.info("Returning cached response due to network error")
+                return cached.response
+            }
+
+            throw AIError.networkError(error)
         }
+    }
 
-        guard httpResponse.statusCode == 200 else {
-            throw AIError.apiError(statusCode: httpResponse.statusCode)
-        }
-
-        let apiResponse = try JSONDecoder().decode(ClaudeResponse.self, from: data)
-
-        guard let content = apiResponse.content.first?.text else {
-            throw AIError.emptyResponse
-        }
-
-        return content
+    /// Clear cached responses
+    func clearCache() {
+        cachedResponses.removeAll()
     }
 
     private func extractJSON(from text: String) -> String {
@@ -205,6 +284,10 @@ enum AIError: Error, LocalizedError {
     case emptyResponse
     case apiError(statusCode: Int)
     case decodingError(Error)
+    case offline
+    case networkError(URLError)
+    case rateLimited
+    case timeout
 
     var errorDescription: String? {
         switch self {
@@ -220,6 +303,23 @@ enum AIError: Error, LocalizedError {
             return "API error: \(code)"
         case .decodingError(let error):
             return "Failed to decode response: \(error.localizedDescription)"
+        case .offline:
+            return "You're offline. AI features require an internet connection."
+        case .networkError(let error):
+            return "Network error: \(error.localizedDescription)"
+        case .rateLimited:
+            return "Too many requests. Please try again in a few minutes."
+        case .timeout:
+            return "Request timed out. Please try again."
+        }
+    }
+
+    var isRecoverable: Bool {
+        switch self {
+        case .offline, .networkError, .rateLimited, .timeout:
+            return true
+        default:
+            return false
         }
     }
 }

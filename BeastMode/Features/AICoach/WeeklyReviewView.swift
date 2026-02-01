@@ -152,7 +152,7 @@ struct WeeklyReviewView: View {
 
 struct LoadingReviewView: View {
     @State private var dots = ""
-    @State private var animationPhase = 0
+    @State private var timer: Timer?
 
     var body: some View {
         VStack(spacing: 16) {
@@ -178,9 +178,15 @@ struct LoadingReviewView: View {
         }
         .frame(height: 200)
         .onAppear {
-            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
-                dots = dots.count >= 3 ? "" : dots + "."
+            timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [self] _ in
+                Task { @MainActor in
+                    dots = dots.count >= 3 ? "" : dots + "."
+                }
             }
+        }
+        .onDisappear {
+            timer?.invalidate()
+            timer = nil
         }
     }
 }
