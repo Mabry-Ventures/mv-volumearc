@@ -37,6 +37,9 @@ struct ContentView: View {
         .onAppear {
             configureServices()
         }
+        .onChange(of: selectedTab) { _, newTab in
+            AnalyticsService.shared.track(.tabSelected(tab: newTab.rawValue))
+        }
         .sheet(isPresented: $appState.showingOnboarding) {
             OnboardingView()
         }
@@ -87,6 +90,7 @@ struct OnboardingView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Skip") {
+                        AnalyticsService.shared.track(.onboardingSkipped)
                         appState.completeOnboarding()
                     }
                 }
@@ -94,6 +98,7 @@ struct OnboardingView: View {
             .safeAreaInset(edge: .bottom) {
                 if currentPage == 3 {
                     TintedGlassButton("Get Started", icon: "arrow.right") {
+                        AnalyticsService.shared.track(.onboardingCompleted)
                         appState.completeOnboarding()
                     }
                     .padding()

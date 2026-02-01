@@ -1,8 +1,16 @@
 import SwiftUI
 import SwiftData
+import TelemetryClient
 
 @main
 struct BeastModeApp: App {
+    init() {
+        // Initialize analytics
+        if Configuration.isAnalyticsEnabled {
+            AnalyticsService.shared.configure()
+        }
+    }
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             UserProfile.self,

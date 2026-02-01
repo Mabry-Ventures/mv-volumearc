@@ -244,6 +244,10 @@ struct DailyLogView: View {
         appState.startWorkout()
         try? DataService.shared.save()
         HapticManager.shared.workoutStart()
+
+        // Track analytics
+        let focusArea = dailyLog?.weekday.fullName ?? "Unknown"
+        AnalyticsService.shared.track(.workoutStarted(focusArea: focusArea))
     }
 
     private func endWorkout() {
@@ -256,12 +260,23 @@ struct DailyLogView: View {
         try? DataService.shared.save()
         HapticManager.shared.workoutEnd()
         showingWorkoutComplete = true
+
+        // Track analytics
+        AnalyticsService.shared.trackWorkoutComplete(
+            focusArea: log.weekday.fullName,
+            duration: log.totalDuration ?? 0,
+            exerciseCount: log.exerciseLogs.count,
+            setCount: log.completedSetsCount
+        )
     }
 
     private func addExercise(name: String, type: ExerciseType) {
         guard let log = dailyLog else { return }
         _ = try? DataService.shared.addExerciseLog(to: log, exerciseName: name, exerciseType: type)
         HapticManager.shared.light()
+
+        // Track analytics
+        AnalyticsService.shared.track(.exerciseAdded(exerciseName: name, exerciseType: type.rawValue))
     }
 
     private func formatVolume(_ volume: Double) -> String {
@@ -477,7 +492,22 @@ struct SetInputView: View {
                 _ = try? DataService.shared.checkAndSavePR(setLog: set, exerciseName: exerciseLog.exerciseName)
                 if set.isPR {
                     HapticManager.shared.personalRecord()
+
+                    // Track PR analytics
+                    if let weight = set.weight, let reps = set.reps {
+                        AnalyticsService.shared.trackPR(
+                            exerciseName: exerciseLog.exerciseName,
+                            weight: weight,
+                            reps: reps
+                        )
+                    }
                 }
+
+                // Track set logged
+                AnalyticsService.shared.track(.setLogged(
+                    exerciseName: exerciseLog.exerciseName,
+                    isWarmup: set.isWarmup
+                ))
             }
         } else {
             set.completedAt = nil

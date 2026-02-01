@@ -17,6 +17,18 @@ enum Configuration {
         return ""
     }
 
+    /// TelemetryDeck app ID for privacy-focused analytics
+    static var telemetryDeckAppID: String {
+        if let appID = ProcessInfo.processInfo.environment["TELEMETRYDECK_APP_ID"] {
+            return appID
+        }
+        if let appID = Bundle.main.object(forInfoDictionaryKey: "TELEMETRYDECK_APP_ID") as? String {
+            return appID
+        }
+        // Replace with your TelemetryDeck App ID
+        return ""
+    }
+
     // MARK: - CloudKit
 
     static let cloudKitContainerIdentifier = "iCloud.com.beastmode.BeastMode"
@@ -30,6 +42,7 @@ enum Configuration {
     static let isAICoachEnabled = true
     static let isHealthKitEnabled = true
     static let isWatchSyncEnabled = true
+    static let isAnalyticsEnabled = true
 
     // MARK: - Default Values
 

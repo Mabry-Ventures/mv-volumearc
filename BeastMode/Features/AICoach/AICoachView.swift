@@ -58,6 +58,9 @@ struct AICoachView: View {
                 LinearGradient.beastBackgroundGradient
                     .ignoresSafeArea()
             }
+            .onAppear {
+                AnalyticsService.shared.track(.aiCoachOpened)
+            }
         }
     }
 
@@ -129,6 +132,9 @@ struct AICoachView: View {
 
         isLoading = true
 
+        // Track analytics
+        AnalyticsService.shared.track(.aiCoachQuestionAsked(questionType: "general"))
+
         Task {
             do {
                 let context = recentLogs.prefix(7).map { log in
@@ -165,6 +171,9 @@ struct AICoachView: View {
         messages.append(userMessage)
 
         isLoading = true
+
+        // Track analytics
+        AnalyticsService.shared.track(.aiWeeklyReviewRequested)
 
         Task {
             do {
