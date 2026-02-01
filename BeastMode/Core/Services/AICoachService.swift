@@ -146,7 +146,7 @@ actor AICoachService {
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
 
         let body: [String: Any] = [
-            "model": "claude-3-5-sonnet-20241022",
+            "model": "claude-haiku-4-20250414",
             "max_tokens": maxTokens,
             "messages": [
                 ["role": "user", "content": prompt]
