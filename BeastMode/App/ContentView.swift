@@ -52,12 +52,22 @@ struct HomeView: View {
     @Query(sort: \Workout.startedAt, order: .reverse)
     private var recentWorkouts: [Workout]
 
+    private var currentWeekId: String {
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: .now)
+        return "\(components.yearForWeekOfYear ?? 0)-W\(components.weekOfYear ?? 0)"
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
                     // Streak display
                     StreakDisplayView()
+                        .padding(.horizontal)
+
+                    // Weekly Review card
+                    WeeklyReviewCard(weekId: currentWeekId)
                         .padding(.horizontal)
 
                     // Recent badges
@@ -520,24 +530,11 @@ struct ExerciseSelectorView: View {
     }
 }
 
-// MARK: - Progress View (Placeholder)
+// MARK: - Progress View
 
 struct ProgressView: View {
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 20) {
-                    StreakStatsView()
-                        .padding(.horizontal)
-
-                    // PR History would go here
-                    Text("PR History Coming Soon")
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.vertical)
-            }
-            .navigationTitle("Progress")
-        }
+        AnalyticsDashboardView()
     }
 }
 

@@ -4,9 +4,9 @@ This document provides context for Claude Code sessions working on the Beast Mod
 
 ## Project Overview
 
-Beast Mode is a SwiftUI/SwiftData iOS fitness tracking app focused on strength training. The app emphasizes the emotional experience of hitting personal records (PRs) with celebrations, social sharing, and gamification.
+Beast Mode is a SwiftUI/SwiftData iOS fitness tracking app focused on strength training. The app emphasizes the emotional experience of hitting personal records (PRs) with celebrations, social sharing, gamification, and now AI-powered analytics.
 
-**Current Version**: 1.1 "Victory Lap"
+**Current Version**: 1.2 "Crystal Ball"
 **Platform**: iOS 17+, macOS 14+
 **Architecture**: SwiftUI + SwiftData + MVVM
 
@@ -15,23 +15,34 @@ Beast Mode is a SwiftUI/SwiftData iOS fitness tracking app focused on strength t
 ```
 BeastMode/
 ├── App/
-│   ├── BeastModeApp.swift      # Main entry point, SwiftData container setup
-│   └── ContentView.swift       # Tab navigation, main views
+│   ├── BeastModeApp.swift          # Main entry point, SwiftData container setup
+│   └── ContentView.swift           # Tab navigation, main views
 ├── Core/
 │   ├── Models/
-│   │   ├── Exercise.swift      # Exercise definitions, categories, types
-│   │   ├── PersonalRecord.swift # PR model with PRType enum
-│   │   ├── SetLog.swift        # Individual set tracking
-│   │   ├── Streak.swift        # UserStreak model, Badge enum (15 badges)
-│   │   ├── UserProfile.swift   # User prefs, rest timer settings
-│   │   └── Workout.swift       # Workout + WorkoutExercise models
+│   │   ├── Analytics.swift         # Analytics models, trends, time ranges (V1.2)
+│   │   ├── Exercise.swift          # Exercise definitions, categories, types
+│   │   ├── PersonalRecord.swift    # PR model with PRType enum
+│   │   ├── SetLog.swift            # Individual set tracking
+│   │   ├── Streak.swift            # UserStreak model, Badge enum (15 badges)
+│   │   ├── UserProfile.swift       # User prefs, rest timer settings
+│   │   └── Workout.swift           # Workout + WorkoutExercise models
 │   └── Services/
-│       ├── PRDetectionService.swift   # PR detection with Brzycki E1RM formula
-│       ├── RestTimerService.swift     # Smart rest duration + timer manager
-│       └── StreakService.swift        # Streak tracking, badge awards
+│       ├── AICoachService.swift        # Claude API integration for AI coaching (V1.2)
+│       ├── AnalyticsService.swift      # Progressive overload analytics (V1.2)
+│       ├── HealthKitService.swift      # HealthKit body weight integration (V1.2)
+│       ├── PRDetectionService.swift    # PR detection with Brzycki E1RM formula
+│       ├── RestTimerService.swift      # Smart rest duration + timer manager
+│       ├── StreakService.swift         # Streak tracking, badge awards
+│       └── WeeklyReviewService.swift   # AI weekly review generation (V1.2)
 ├── Features/
+│   ├── AICoach/
+│   │   └── WeeklyReviewView.swift      # AI-powered weekly review UI (V1.2)
 │   ├── Celebrations/
-│   │   └── PRCelebrationView.swift    # Full-screen PR celebration + coordinator
+│   │   └── PRCelebrationView.swift     # Full-screen PR celebration + coordinator
+│   ├── Progress/
+│   │   ├── AnalyticsDashboardView.swift    # Main analytics dashboard (V1.2)
+│   │   ├── BodyWeightChartView.swift       # HealthKit weight chart (V1.2)
+│   │   └── ExerciseDetailAnalyticsView.swift # Exercise trends detail (V1.2)
 │   ├── Settings/
 │   │   └── RestTimerSettingsView.swift # Rest timer customization UI
 │   ├── Sharing/
@@ -42,15 +53,43 @@ BeastMode/
 │   └── Workout/
 │       └── SetInputView.swift          # Set input with PR integration
 └── UI/
-    └── Components/                      # Reusable UI components
+    └── Components/                     # Reusable UI components
 Tests/
 └── BeastModeTests/
+    ├── AnalyticsTests.swift            # Trend calculations, analytics tests (V1.2)
     ├── PRDetectionTests.swift          # E1RM formula, PR detection edge cases
     ├── RestTimerTests.swift            # Timer service, formatting tests
     └── StreakTests.swift               # Streak calculation, badge award tests
 ```
 
-## Key Architectural Decisions
+## Version 1.2 Features (Crystal Ball)
+
+### HealthKit Integration
+- `HealthKitService` reads body weight from Apple Health
+- Supports historical data fetch and real-time observation
+- `BodyWeightChartView` displays trends with interactive charts
+- Trend analysis: gaining, losing, or stable
+
+### Progressive Overload Analytics
+- `AnalyticsService` computes trends across all exercises
+- `ProgressTrend` enum: increasing (>2.5%), plateau, decreasing, insufficient
+- `VolumeTrend` tracks week-over-week volume changes
+- `ExerciseAnalytics` aggregates E1RM, volume, frequency per exercise
+- `AnalyticsDashboardView` shows summary cards and progress breakdown
+
+### AI Weekly Review
+- `AICoachService` integrates with Claude API
+- `Prompts.weeklyReview()` generates context-aware prompts
+- `WeeklyReviewService` aggregates workout data for analysis
+- `WeeklyReviewView` displays AI-generated insights
+- Mock responses available when API key not configured
+
+### Weight Progression Suggestions
+- AI suggests next session's weight/reps based on trends
+- `WeightSuggestion` model with confidence levels (high/medium/low)
+- `WeightSuggestionCard` displays recommendations in exercise detail view
+
+## Version 1.1 Features (Victory Lap)
 
 ### PR Detection System
 - Uses **Brzycki formula** for E1RM: `weight × (36 / (37 - reps))`
@@ -88,12 +127,46 @@ All models use `@Model` macro with `@Attribute(.unique)` for IDs:
 - `SetLog` - Individual set with weight/reps/duration
 - `PersonalRecord` - Historical PR records
 
+## Key Analytics Types (V1.2)
+
+### ProgressTrend
+```swift
+enum ProgressTrend {
+    case increasing(percentage: Double)  // >2.5% improvement
+    case plateau(weeks: Int)             // Within ±2.5%
+    case decreasing(percentage: Double)  // >2.5% decline
+    case insufficient                    // <4 data points
+}
+```
+
+### ChartTimeRange
+```swift
+enum ChartTimeRange {
+    case oneMonth, threeMonths, sixMonths, oneYear, allTime
+}
+```
+
+### WeightSuggestion
+```swift
+struct WeightSuggestion {
+    let suggestedWeight: Double
+    let suggestedReps: Int
+    let confidence: Confidence  // high, medium, low
+    let reasoning: String
+    let alternativeApproach: String?
+}
+```
+
 ## Dependencies
 
 ```swift
 // Package.swift
 .package(url: "https://github.com/simibac/ConfettiSwiftUI.git", from: "1.1.0")
 ```
+
+## Environment Variables
+
+- `ANTHROPIC_API_KEY` - Optional, enables Claude API for AI coaching features
 
 ## Common Patterns
 
@@ -107,6 +180,9 @@ All models use `@Model` macro with `@Attribute(.unique)` for IDs:
 ### Color Extension
 - `Color(hex:)` initializer for hex color strings (supports RGB, ARGB)
 
+### Actor Pattern
+- Services use `actor` for thread-safe data access: `PRDetectionService`, `StreakService`, `AnalyticsService`, `WeeklyReviewService`
+
 ## Testing
 
 Unit tests cover:
@@ -115,11 +191,17 @@ Unit tests cover:
 - Streak calculation (consecutive days, gaps, same-day)
 - Badge award logic (no duplicates, threshold checks)
 - Rest timer service (compound vs isolation detection)
+- Progress trend calculations (V1.2)
+- Volume trend calculations (V1.2)
+- Weight suggestion JSON decoding (V1.2)
+- Analytics overview categorization (V1.2)
 
-## Future Development (Not Yet Implemented)
+## Future Development
 
-From V1.1 spec, these areas may need attention:
-- Snapshot tests for share cards
-- UI tests for celebration flow
-- Push notifications for streak reminders
+From V1.2 spec, these areas may need attention:
+- Integration tests for HealthKit
+- Claude API response parsing edge cases
+- Snapshot tests for analytics charts
+- UI tests for dashboard navigation
+- Push notifications for weekly review availability
 - iCloud sync for cross-device data
