@@ -549,6 +549,9 @@ struct ProgressView: View {
 
 struct ProfileView: View {
     @Query private var profiles: [UserProfile]
+    @EnvironmentObject private var authManager: AuthenticationManager
+    @State private var showSignInSheet = false
+    @State private var showSignOutConfirmation = false
 
     private var profile: UserProfile? {
         profiles.first
@@ -558,6 +561,7 @@ struct ProfileView: View {
         NavigationStack {
             List {
                 if let profile = profile {
+                    // Profile header section
                     Section {
                         HStack {
                             Circle()
@@ -576,10 +580,45 @@ struct ProfileView: View {
                                     Text(email)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
+                                } else if let user = authManager.currentUser, let email = user.email {
+                                    Text(email)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
                                 }
                             }
                         }
                         .padding(.vertical, 8)
+                    }
+
+                    // Account section
+                    Section("Account") {
+                        if authManager.isAuthenticated {
+                            // Signed in state
+                            HStack {
+                                Label("iCloud Sync", systemImage: "checkmark.icloud.fill")
+                                Spacer()
+                                Text("Active")
+                                    .font(.caption)
+                                    .foregroundStyle(.green)
+                            }
+
+                            Button(role: .destructive) {
+                                showSignOutConfirmation = true
+                            } label: {
+                                Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                            }
+                        } else {
+                            // Signed out state
+                            Button {
+                                showSignInSheet = true
+                            } label: {
+                                Label("Sign in with Apple", systemImage: "apple.logo")
+                            }
+
+                            Text("Sign in to sync your data across devices and never lose your progress.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     Section("Preferences") {
@@ -608,9 +647,35 @@ struct ProfileView: View {
                             Label("Badges", systemImage: "trophy.fill")
                         }
                     }
+
+                    Section("About") {
+                        HStack {
+                            Text("Version")
+                            Spacer()
+                            Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
             }
             .navigationTitle("Profile")
+            .sheet(isPresented: $showSignInSheet) {
+                AuthenticationView()
+            }
+            .confirmationDialog(
+                "Sign Out",
+                isPresented: $showSignOutConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Sign Out", role: .destructive) {
+                    Task {
+                        await authManager.signOut()
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Your local data will be kept, but it won't sync to other devices until you sign in again.")
+            }
         }
     }
 }

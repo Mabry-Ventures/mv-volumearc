@@ -46,11 +46,10 @@ struct WeeklyProgressData: Codable {
 class ComplicationDataManager {
     static let shared = ComplicationDataManager()
 
-    private let appGroupIdentifier = "group.com.beastmode.app"
-    private let dataKey = "complicationData"
+    private let dataKey = WatchConfiguration.complicationDataKey
 
     private var defaults: UserDefaults? {
-        UserDefaults(suiteName: appGroupIdentifier)
+        WatchConfiguration.sharedUserDefaults
     }
 
     private init() {}

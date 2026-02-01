@@ -180,6 +180,36 @@ class AuthenticationManager: NSObject, ObservableObject {
         return false
     }
 
+    /// Handle successful authentication from external source (e.g., SignInWithAppleButton)
+    /// This method properly encapsulates state management
+    func handleSuccessfulAuthentication(credential: ASAuthorizationAppleIDCredential) {
+        let userId = credential.user
+        Logger.authentication.info("Processing external authentication")
+
+        // Create credentials object
+        let credentials = UserCredentials(
+            userId: userId,
+            email: credential.email,
+            fullName: credential.fullName,
+            identityToken: credential.identityToken,
+            authorizationCode: credential.authorizationCode,
+            lastAuthenticated: Date()
+        )
+
+        // Store in keychain
+        keychainService.setString(userId, forKey: Self.userIdKey)
+
+        if let credentialsData = try? JSONEncoder().encode(credentials) {
+            keychainService.setData(credentialsData, forKey: Self.credentialsKey)
+        }
+
+        currentUser = credentials
+        state = .authenticated(userId: userId)
+
+        // Record successful sign in
+        CrashReporter.shared.setUserIdentifier(userId)
+    }
+
     // MARK: - Private Methods
 
     private func handleAuthorization(_ authorization: ASAuthorization) {
@@ -290,24 +320,8 @@ struct SignInWithAppleButton: View {
             switch result {
             case .success(let authorization):
                 if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
-                    let userId = appleIDCredential.user
-
-                    let credentials = UserCredentials(
-                        userId: userId,
-                        email: appleIDCredential.email,
-                        fullName: appleIDCredential.fullName,
-                        identityToken: appleIDCredential.identityToken,
-                        authorizationCode: appleIDCredential.authorizationCode,
-                        lastAuthenticated: Date()
-                    )
-
                     Task { @MainActor in
-                        KeychainService.shared.setString(userId, forKey: "com.beastmode.apple.userId")
-                        if let credentialsData = try? JSONEncoder().encode(credentials) {
-                            KeychainService.shared.setData(credentialsData, forKey: "com.beastmode.apple.credentials")
-                        }
-                        authManager.currentUser = credentials
-                        authManager.state = .authenticated(userId: userId)
+                        authManager.handleSuccessfulAuthentication(credential: appleIDCredential)
                         onCompletion?(.success(()))
                     }
                 }

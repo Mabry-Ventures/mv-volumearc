@@ -97,19 +97,6 @@ class AppState: ObservableObject {
     @Published private(set) var initializationState: AppInitializationState = .initializing
     @Published private(set) var modelContainer: ModelContainer?
 
-    private let schema = Schema([
-        UserProfile.self,
-        UserStreak.self,
-        Exercise.self,
-        Workout.self,
-        WorkoutExercise.self,
-        SetLog.self,
-        PersonalRecord.self,
-        WorkoutPlan.self,
-        PlanDay.self,
-        PlanExercise.self
-    ])
-
     func initialize() async {
         guard case .initializing = initializationState else {
             // Already initialized or failed, reset to initializing for retry
@@ -120,18 +107,11 @@ class AppState: ObservableObject {
             }
         }
 
-        Logger.app.info("Starting database initialization")
+        Logger.app.info("Starting database initialization with migration support")
 
         do {
-            let modelConfiguration = ModelConfiguration(
-                schema: schema,
-                isStoredInMemoryOnly: false
-            )
-
-            let container = try ModelContainer(
-                for: schema,
-                configurations: [modelConfiguration]
-            )
+            // Use ModelContainerFactory for proper migration handling
+            let container = try ModelContainerFactory.createContainer()
 
             // Initialize default data
             await initializeDefaultData(container: container)

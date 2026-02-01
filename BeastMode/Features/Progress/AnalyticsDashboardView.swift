@@ -4,6 +4,7 @@
 
 import SwiftUI
 import Charts
+import os
 
 /// Main analytics dashboard showing progress across all exercises
 struct AnalyticsDashboardView: View {
@@ -118,11 +119,37 @@ struct AnalyticsDashboardView: View {
         let analyticsService = AnalyticsService(modelContext: modelContext)
         overview = try? await analyticsService.generateOverview(for: userId, timeRange: timeRange)
 
-        // Load body weight
-        let healthKitService = HealthKitService()
-        bodyWeightEntries = (try? await healthKitService.fetchBodyWeightHistory(from: timeRange.startDate)) ?? []
+        // Load body weight with proper authorization check
+        await loadBodyWeightData()
 
         isLoading = false
+    }
+
+    private func loadBodyWeightData() async {
+        let healthKitService = HealthKitService()
+
+        // Check if HealthKit is available
+        guard await healthKitService.isHealthKitAvailable else {
+            Logger.healthKit.info("HealthKit not available on this device")
+            return
+        }
+
+        // Request authorization if needed (silently fails if denied)
+        do {
+            try await healthKitService.requestAuthorization()
+
+            // Only fetch if we have authorization
+            if await healthKitService.isBodyWeightAuthorized {
+                bodyWeightEntries = (try? await healthKitService.fetchBodyWeightHistory(from: timeRange.startDate)) ?? []
+                Logger.healthKit.debug("Loaded \(self.bodyWeightEntries.count) body weight entries")
+            } else {
+                Logger.healthKit.info("Body weight access not authorized")
+                bodyWeightEntries = []
+            }
+        } catch {
+            Logger.healthKit.error("Failed to authorize HealthKit: \(error.localizedDescription)")
+            bodyWeightEntries = []
+        }
     }
 }
 
