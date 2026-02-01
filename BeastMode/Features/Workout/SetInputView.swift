@@ -4,6 +4,7 @@
 
 import SwiftUI
 import SwiftData
+import os
 
 /// View for entering weight and reps for a set
 struct SetInputView: View {
@@ -85,6 +86,8 @@ struct SetInputView: View {
                         .foregroundStyle(canComplete ? .white : .gray)
                     }
                     .disabled(!canComplete || isCompleting)
+                    .accessibilityLabel("Complete set")
+                    .accessibilityHint(canComplete ? "Double tap to mark this set as complete" : "Enter weight and reps first")
                 }
             }
 
@@ -127,10 +130,14 @@ struct SetInputView: View {
                         .onChange(of: weight) { _, newValue in
                             set.weight = Double(newValue)
                         }
+                        .accessibilityLabel("Weight")
+                        .accessibilityValue(weight.isEmpty ? "Not set" : "\(weight) \(currentUser?.unitSystemEnum.weightUnit ?? "pounds")")
+                        .accessibilityHint("Enter the weight lifted")
 
                     Text(currentUser?.unitSystemEnum.weightUnit ?? "lbs")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                 }
             }
 
@@ -154,10 +161,14 @@ struct SetInputView: View {
                         .onChange(of: reps) { _, newValue in
                             set.reps = Int(newValue)
                         }
+                        .accessibilityLabel("Repetitions")
+                        .accessibilityValue(reps.isEmpty ? "Not set" : "\(reps) reps")
+                        .accessibilityHint("Enter the number of repetitions")
 
                     Text("reps")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                 }
             }
 
@@ -259,11 +270,13 @@ struct SetInputView: View {
                 if let weight = set.weight, let reps = set.reps {
                     Text("\(Int(weight)) lbs × \(reps) reps")
                         .font(.headline)
+                        .accessibilityLabel("\(Int(weight)) pounds for \(reps) repetitions")
                 }
                 if let time = set.completedAt {
                     Text(time.formatted(.dateTime.hour().minute()))
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .accessibilityLabel("Completed at \(time.formatted(.dateTime.hour().minute()))")
                 }
             }
 
@@ -277,12 +290,15 @@ struct SetInputView: View {
                     .font(.caption)
             }
             .buttonStyle(.bordered)
+            .accessibilityLabel("Edit set")
+            .accessibilityHint("Double tap to modify this completed set")
         }
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(.green.opacity(0.1))
         )
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Logic
@@ -344,21 +360,30 @@ struct SetInputView: View {
                 reps: reps,
                 userId: userId
             ) {
-                // Save the PR
-                try? await prService.savePR(
-                    exerciseName: exerciseName,
-                    weight: weight,
-                    reps: reps,
-                    prType: prType,
-                    sourceSetId: set.id,
-                    userId: userId
-                )
+                // Save the PR with error handling
+                do {
+                    try await prService.savePR(
+                        exerciseName: exerciseName,
+                        weight: weight,
+                        reps: reps,
+                        prType: prType,
+                        sourceSetId: set.id,
+                        userId: userId
+                    )
+                } catch {
+                    Logger.workout.error("Failed to save PR: \(error.localizedDescription)")
+                    CrashReporter.shared.recordError(error, context: "PR save failed for \(exerciseName)")
+                }
 
                 // Record PR for badge tracking
-                let streakService = StreakService(modelContext: modelContext)
-                _ = try? await streakService.recordPR(for: userId)
+                do {
+                    let streakService = StreakService(modelContext: modelContext)
+                    _ = try await streakService.recordPR(for: userId)
+                } catch {
+                    Logger.workout.error("Failed to record PR for streak: \(error.localizedDescription)")
+                }
 
-                // Trigger celebration
+                // Trigger celebration (even if save failed, user did the work)
                 await MainActor.run {
                     celebrationCoordinator.celebrate(
                         pr: prType,

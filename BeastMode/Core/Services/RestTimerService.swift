@@ -125,6 +125,11 @@ class RestTimerManager: ObservableObject {
     private var timer: Timer?
     private var completionHandler: (() -> Void)?
 
+    deinit {
+        timer?.invalidate()
+        timer = nil
+    }
+
     var formattedTime: String {
         let mins = Int(remainingTime) / 60
         let secs = Int(remainingTime) % 60

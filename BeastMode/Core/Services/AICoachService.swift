@@ -134,9 +134,13 @@ actor AICoachService {
         }
 
         guard let apiKey else {
-            Logger.network.info("No API key configured, returning mock response")
-            // Return mock response for development/testing
+            #if DEBUG
+            Logger.network.info("No API key configured, returning mock response (DEBUG mode)")
             return generateMockResponse(for: prompt)
+            #else
+            Logger.network.warning("No API key configured - AI features unavailable in production")
+            throw AIError.noAPIKey
+            #endif
         }
 
         // Check network connectivity
@@ -232,10 +236,11 @@ actor AICoachService {
     }
 
     private func generateMockResponse(for prompt: String) -> String {
-        // Return mock responses for development
+        // Return mock responses for development/testing only
+        // These responses simulate what the AI would return
         if prompt.contains("weekly review") || prompt.contains("Weekly Review") {
             return """
-            **💪 Wins This Week**
+            **💪 Wins This Week** _(Demo)_
             - Hit a new PR on Bench Press at 205 lbs!
             - Maintained your 7-day workout streak
 
@@ -247,6 +252,8 @@ actor AICoachService {
 
             **🔥 Coach's Note**
             You're building real momentum. Keep showing up and the gains will follow!
+
+            _Note: This is demo content. Configure your API key for personalized AI coaching._
             """
         } else if prompt.contains("progressive overload") {
             return """
@@ -254,12 +261,12 @@ actor AICoachService {
                 "suggestedWeight": 190,
                 "suggestedReps": 6,
                 "confidence": "high",
-                "reasoning": "You've been hitting 8+ reps consistently at 185 lbs. Time to increase the weight and work back up to 8 reps.",
+                "reasoning": "Demo: You've been hitting 8+ reps consistently. Consider increasing weight.",
                 "alternativeApproach": null
             }
             """
         } else {
-            return "Keep pushing! Your consistency is paying off. 💪"
+            return "Keep pushing! Your consistency is paying off. 💪 (Demo response - configure API key for personalized coaching)"
         }
     }
 }

@@ -182,20 +182,19 @@ final class KeychainService: @unchecked Sendable {
         return setString(apiKey, forKey: "com.beastmode.api.key")
     }
 
-    /// Retrieve the API key
+    /// Retrieve the API key from secure storage only
+    /// Returns nil if no API key has been configured
     func getAPIKey() -> String? {
-        // First check keychain
-        if let key = getString(forKey: "com.beastmode.api.key") {
-            return key
+        let key = getString(forKey: "com.beastmode.api.key")
+        if key == nil {
+            Logger.app.info("No API key configured in keychain")
         }
-
-        // Fallback to environment variable (for development)
-        return ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"]
+        return key
     }
 
     /// Check if API key is stored
     var hasAPIKey: Bool {
-        return getAPIKey() != nil
+        return getString(forKey: "com.beastmode.api.key") != nil
     }
 
     // MARK: - Private Helpers

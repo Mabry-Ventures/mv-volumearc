@@ -115,42 +115,51 @@ struct AnalyticsDashboardView: View {
 
         isLoading = true
 
-        // Load analytics
-        let analyticsService = AnalyticsService(modelContext: modelContext)
-        overview = try? await analyticsService.generateOverview(for: userId, timeRange: timeRange)
+        // Load analytics and body weight concurrently for better performance
+        async let analyticsTask: AnalyticsOverview? = {
+            let analyticsService = AnalyticsService(modelContext: modelContext)
+            return try? await analyticsService.generateOverview(for: userId, timeRange: timeRange)
+        }()
 
-        // Load body weight with proper authorization check
-        await loadBodyWeightData()
+        async let bodyWeightTask: [BodyWeightEntry] = loadBodyWeightDataAsync()
+
+        // Wait for both to complete
+        let (analyticsResult, bodyWeightResult) = await (analyticsTask, bodyWeightTask)
+
+        overview = analyticsResult
+        bodyWeightEntries = bodyWeightResult
 
         isLoading = false
     }
 
-    private func loadBodyWeightData() async {
+    private func loadBodyWeightDataAsync() async -> [BodyWeightEntry] {
         let healthKitService = HealthKitService()
 
         // Check if HealthKit is available
         guard await healthKitService.isHealthKitAvailable else {
             Logger.healthKit.info("HealthKit not available on this device")
-            return
+            return []
         }
 
-        // Request authorization if needed (silently fails if denied)
+        // Request authorization if needed
         do {
             try await healthKitService.requestAuthorization()
 
             // Only fetch if we have authorization
             if await healthKitService.isBodyWeightAuthorized {
-                bodyWeightEntries = (try? await healthKitService.fetchBodyWeightHistory(from: timeRange.startDate)) ?? []
-                Logger.healthKit.debug("Loaded \(self.bodyWeightEntries.count) body weight entries")
+                let entries = (try? await healthKitService.fetchBodyWeightHistory(from: timeRange.startDate)) ?? []
+                Logger.healthKit.debug("Loaded \(entries.count) body weight entries")
+                return entries
             } else {
                 Logger.healthKit.info("Body weight access not authorized")
-                bodyWeightEntries = []
+                return []
             }
         } catch {
             Logger.healthKit.error("Failed to authorize HealthKit: \(error.localizedDescription)")
-            bodyWeightEntries = []
+            return []
         }
     }
+
 }
 
 // MARK: - Summary Cards

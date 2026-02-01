@@ -286,24 +286,40 @@ final class CrashReporter: CrashReporting, @unchecked Sendable {
     }
 
     private func persistErrors() {
-        guard let data = try? JSONEncoder().encode(recentErrors) else { return }
-
-        let url = errorStorageURL
-        try? data.write(to: url, options: .atomic)
+        do {
+            let data = try JSONEncoder().encode(recentErrors)
+            guard let url = errorStorageURL else {
+                Logger.app.error("Could not get error storage URL for persistence")
+                return
+            }
+            try data.write(to: url, options: .atomic)
+        } catch {
+            Logger.app.error("Failed to persist errors: \(error.localizedDescription)")
+        }
     }
 
     private func loadPersistedErrors() {
-        let url = errorStorageURL
-        guard let data = try? Data(contentsOf: url),
-              let errors = try? JSONDecoder().decode([RecordedError].self, from: data) else {
+        guard let url = errorStorageURL else {
+            Logger.app.warning("Could not get error storage URL for loading")
             return
         }
 
-        recentErrors = errors
+        do {
+            let data = try Data(contentsOf: url)
+            recentErrors = try JSONDecoder().decode([RecordedError].self, from: data)
+        } catch {
+            // File may not exist on first launch - this is expected
+            if (error as NSError).code != NSFileReadNoSuchFileError {
+                Logger.app.warning("Failed to load persisted errors: \(error.localizedDescription)")
+            }
+        }
     }
 
-    private var errorStorageURL: URL {
-        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+    private var errorStorageURL: URL? {
+        guard let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            Logger.app.error("Could not access documents directory")
+            return nil
+        }
         return documentsDirectory.appendingPathComponent("crash_reports.json")
     }
 }

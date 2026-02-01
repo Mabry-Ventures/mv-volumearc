@@ -32,11 +32,27 @@ enum AppConfiguration {
 
     // MARK: - Keychain
 
-    /// Keychain access group for shared credentials
-    static let keychainAccessGroup = "\(teamIdentifier).com.beastmode.shared"
+    /// Team identifier - MUST be set to your Apple Developer Team ID
+    /// Find this in your Apple Developer account under Membership Details
+    static let teamIdentifier: String = {
+        // Read from Info.plist or use environment at build time
+        if let teamId = Bundle.main.object(forInfoDictionaryKey: "DevelopmentTeam") as? String,
+           !teamId.isEmpty, teamId != "XXXXXXXXXX" {
+            return teamId
+        }
+        #if DEBUG
+        // In debug, warn but don't crash
+        assertionFailure("Team identifier not configured. Set DevelopmentTeam in Info.plist or update AppConfiguration.swift")
+        return "DEVELOPMENT"
+        #else
+        fatalError("Team identifier must be configured for production builds")
+        #endif
+    }()
 
-    /// Team identifier (replace with actual team ID in production)
-    static let teamIdentifier = "XXXXXXXXXX"
+    /// Keychain access group for shared credentials
+    static var keychainAccessGroup: String {
+        "\(teamIdentifier).com.beastmode.shared"
+    }
 
     // MARK: - API Configuration
 
@@ -96,10 +112,21 @@ enum AppConfiguration {
     static let supportEmail = "support@beastmode.app"
 
     /// Privacy policy URL
-    static let privacyPolicyURL = URL(string: "https://beastmode.app/privacy")!
+    static var privacyPolicyURL: URL {
+        // swiftlint:disable:next force_unwrapping
+        URL(string: "https://beastmode.app/privacy")!
+    }
 
     /// Terms of service URL
-    static let termsOfServiceURL = URL(string: "https://beastmode.app/terms")!
+    static var termsOfServiceURL: URL {
+        // swiftlint:disable:next force_unwrapping
+        URL(string: "https://beastmode.app/terms")!
+    }
+
+    /// Support URL for contacting help
+    static var supportURL: URL? {
+        URL(string: "mailto:\(supportEmail)")
+    }
 }
 
 // MARK: - Debug Configuration
