@@ -1,0 +1,82 @@
+{
+  "name": "Beast Mode Split",
+  "days": [
+    {
+      "weekday": 1,
+      "focusArea": "Rest",
+      "exercises": []
+    },
+    {
+      "weekday": 2,
+      "focusArea": "Push",
+      "exercises": [
+        {"name": "Barbell Bench Press", "sets": 4, "repsMin": 6, "repsMax": 8, "type": "strength"},
+        {"name": "Incline Dumbbell Press", "sets": 3, "repsMin": 8, "repsMax": 12, "type": "strength"},
+        {"name": "Overhead Press", "sets": 3, "repsMin": 8, "repsMax": 10, "type": "strength"},
+        {"name": "Lateral Raises", "sets": 3, "repsMin": 12, "repsMax": 15, "type": "strength"},
+        {"name": "Tricep Pushdowns", "sets": 3, "repsMin": 10, "repsMax": 12, "type": "strength"},
+        {"name": "Overhead Tricep Extension", "sets": 3, "repsMin": 10, "repsMax": 12, "type": "strength"}
+      ]
+    },
+    {
+      "weekday": 3,
+      "focusArea": "Pull",
+      "exercises": [
+        {"name": "Deadlift", "sets": 4, "repsMin": 5, "repsMax": 6, "type": "strength"},
+        {"name": "Pull-ups", "sets": 4, "repsMin": 6, "repsMax": 10, "type": "strength"},
+        {"name": "Barbell Rows", "sets": 3, "repsMin": 8, "repsMax": 10, "type": "strength"},
+        {"name": "Face Pulls", "sets": 3, "repsMin": 15, "repsMax": 20, "type": "strength"},
+        {"name": "Barbell Curls", "sets": 3, "repsMin": 10, "repsMax": 12, "type": "strength"},
+        {"name": "Hammer Curls", "sets": 3, "repsMin": 10, "repsMax": 12, "type": "strength"}
+      ]
+    },
+    {
+      "weekday": 4,
+      "focusArea": "Legs",
+      "exercises": [
+        {"name": "Barbell Squats", "sets": 4, "repsMin": 6, "repsMax": 8, "type": "strength"},
+        {"name": "Romanian Deadlift", "sets": 3, "repsMin": 8, "repsMax": 10, "type": "strength"},
+        {"name": "Leg Press", "sets": 3, "repsMin": 10, "repsMax": 12, "type": "strength"},
+        {"name": "Leg Curls", "sets": 3, "repsMin": 10, "repsMax": 12, "type": "strength"},
+        {"name": "Calf Raises", "sets": 4, "repsMin": 12, "repsMax": 15, "type": "strength"},
+        {"name": "Plank", "sets": 3, "repsMin": 60, "repsMax": 60, "type": "timed", "notes": "Hold for 60 seconds"}
+      ]
+    },
+    {
+      "weekday": 5,
+      "focusArea": "Push",
+      "exercises": [
+        {"name": "Dumbbell Bench Press", "sets": 4, "repsMin": 8, "repsMax": 10, "type": "strength"},
+        {"name": "Cable Flyes", "sets": 3, "repsMin": 12, "repsMax": 15, "type": "strength"},
+        {"name": "Arnold Press", "sets": 3, "repsMin": 8, "repsMax": 10, "type": "strength"},
+        {"name": "Front Raises", "sets": 3, "repsMin": 12, "repsMax": 15, "type": "strength"},
+        {"name": "Skull Crushers", "sets": 3, "repsMin": 10, "repsMax": 12, "type": "strength"},
+        {"name": "Diamond Push-ups", "sets": 3, "repsMin": 12, "repsMax": 15, "type": "strength"}
+      ]
+    },
+    {
+      "weekday": 6,
+      "focusArea": "Pull",
+      "exercises": [
+        {"name": "Barbell Rows", "sets": 4, "repsMin": 6, "repsMax": 8, "type": "strength"},
+        {"name": "Lat Pulldown", "sets": 3, "repsMin": 10, "repsMax": 12, "type": "strength"},
+        {"name": "Seated Cable Row", "sets": 3, "repsMin": 10, "repsMax": 12, "type": "strength"},
+        {"name": "Reverse Flyes", "sets": 3, "repsMin": 15, "repsMax": 20, "type": "strength"},
+        {"name": "Preacher Curls", "sets": 3, "repsMin": 10, "repsMax": 12, "type": "strength"},
+        {"name": "Incline Curls", "sets": 3, "repsMin": 10, "repsMax": 12, "type": "strength"}
+      ]
+    },
+    {
+      "weekday": 7,
+      "focusArea": "Legs + Core",
+      "exercises": [
+        {"name": "Front Squats", "sets": 4, "repsMin": 6, "repsMax": 8, "type": "strength"},
+        {"name": "Walking Lunges", "sets": 3, "repsMin": 12, "repsMax": 12, "type": "strength", "notes": "12 steps per leg"},
+        {"name": "Leg Extensions", "sets": 3, "repsMin": 12, "repsMax": 15, "type": "strength"},
+        {"name": "Glute Bridges", "sets": 3, "repsMin": 12, "repsMax": 15, "type": "strength"},
+        {"name": "Hanging Leg Raises", "sets": 3, "repsMin": 10, "repsMax": 15, "type": "core"},
+        {"name": "Cable Crunches", "sets": 3, "repsMin": 15, "repsMax": 20, "type": "core"}
+      ]
+    }
+  ]
+}
