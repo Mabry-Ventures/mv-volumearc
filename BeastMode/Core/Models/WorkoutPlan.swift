@@ -323,6 +323,7 @@ enum PlanTemplate: String, CaseIterable, Identifiable {
 // MARK: - Shareable Plan DTO
 
 /// Data transfer object for sharing plans
+/// Supports multiple versions for backwards compatibility
 struct ShareablePlan: Codable {
     let version: Int
     let name: String
@@ -335,8 +336,19 @@ struct ShareablePlan: Codable {
     let days: [ShareablePlanDay]
     let createdAt: Date
 
+    // V2 fields (optional for backwards compatibility)
+    let tags: [String]?
+    let equipmentRequired: [String]?
+    let targetMuscleGroups: [String]?
+
+    /// Export format version (distinct from schema version)
+    static let currentExportVersion = 2
+
+    /// Minimum supported import version
+    static let minimumSupportedVersion = 1
+
     init(from plan: WorkoutPlan) {
-        self.version = 1
+        self.version = Self.currentExportVersion
         self.name = plan.name
         self.description = plan.planDescription
         self.authorName = plan.authorName
@@ -346,9 +358,24 @@ struct ShareablePlan: Codable {
         self.estimatedDuration = plan.estimatedDuration
         self.days = plan.sortedDays.map { ShareablePlanDay(from: $0) }
         self.createdAt = plan.createdAt
+
+        // V2 fields
+        self.tags = plan.tags.isEmpty ? nil : plan.tags
+        self.equipmentRequired = plan.equipmentRequired.isEmpty ? nil : plan.equipmentRequired
+        self.targetMuscleGroups = plan.targetMuscleGroups.isEmpty ? nil : plan.targetMuscleGroups
     }
 
-    /// Convert back to WorkoutPlan
+    /// Check if this version is supported for import
+    var isVersionSupported: Bool {
+        version >= Self.minimumSupportedVersion && version <= Self.currentExportVersion
+    }
+
+    /// Check if this is an older version that needs migration
+    var needsMigration: Bool {
+        version < Self.currentExportVersion
+    }
+
+    /// Convert back to WorkoutPlan (handles all supported versions)
     func toPlan(userId: UUID) -> WorkoutPlan {
         let plan = WorkoutPlan(
             userId: userId,
@@ -360,6 +387,15 @@ struct ShareablePlan: Codable {
         )
         plan.estimatedDuration = estimatedDuration
         plan.authorName = authorName
+
+        // Apply V2 fields if present, otherwise use defaults
+        plan.tags = tags ?? []
+        plan.equipmentRequired = equipmentRequired ?? []
+        plan.targetMuscleGroups = targetMuscleGroups ?? []
+
+        // Set schema version based on import version
+        // If importing V1, mark as needing potential upgrade
+        plan.schemaVersion = version == 1 ? 1 : kWorkoutPlanCurrentVersion
 
         for dayDTO in days {
             let day = PlanDay(
@@ -389,6 +425,58 @@ struct ShareablePlan: Codable {
         }
 
         return plan
+    }
+
+    /// Create a migrated copy at the current version
+    func migratedToCurrentVersion() -> ShareablePlan {
+        guard needsMigration else { return self }
+
+        return ShareablePlan(
+            version: Self.currentExportVersion,
+            name: name,
+            description: description,
+            authorName: authorName,
+            difficulty: difficulty,
+            goal: goal,
+            daysPerWeek: daysPerWeek,
+            estimatedDuration: estimatedDuration,
+            days: days,
+            createdAt: createdAt,
+            tags: tags,
+            equipmentRequired: equipmentRequired,
+            targetMuscleGroups: targetMuscleGroups
+        )
+    }
+
+    /// Full initializer for migration
+    private init(
+        version: Int,
+        name: String,
+        description: String?,
+        authorName: String?,
+        difficulty: String,
+        goal: String,
+        daysPerWeek: Int,
+        estimatedDuration: Int,
+        days: [ShareablePlanDay],
+        createdAt: Date,
+        tags: [String]?,
+        equipmentRequired: [String]?,
+        targetMuscleGroups: [String]?
+    ) {
+        self.version = version
+        self.name = name
+        self.description = description
+        self.authorName = authorName
+        self.difficulty = difficulty
+        self.goal = goal
+        self.daysPerWeek = daysPerWeek
+        self.estimatedDuration = estimatedDuration
+        self.days = days
+        self.createdAt = createdAt
+        self.tags = tags
+        self.equipmentRequired = equipmentRequired
+        self.targetMuscleGroups = targetMuscleGroups
     }
 }
 

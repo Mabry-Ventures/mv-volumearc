@@ -177,10 +177,17 @@ actor AICoachService {
 
     // MARK: - Private Helpers
 
-    private func makeRequest(prompt: String, maxTokens: Int, useCache: Bool = true) async throws -> String {
+    private func makeRequest(
+        prompt: String,
+        maxTokens: Int,
+        useCache: Bool = true,
+        configuration: AIRequestConfiguration? = nil
+    ) async throws -> String {
+        let config = configuration ?? defaultConfiguration
+
         // Check cache first if enabled
         let cacheKey = prompt.hashValue.description
-        if useCache, let cached = cachedResponses[cacheKey], !cached.isExpired {
+        if useCache && config.useCache, let cached = cachedResponses[cacheKey], !cached.isExpired {
             Logger.network.debug("Returning cached AI response")
             return cached.response
         }
@@ -193,6 +200,26 @@ actor AICoachService {
             Logger.network.warning("No API key configured - AI features unavailable in production")
             throw AIError.noAPIKey
             #endif
+        }
+
+        // Check if we're in a rate limit cooldown period
+        if let resetTime = rateLimitResetTime, Date() < resetTime {
+            let waitTime = resetTime.timeIntervalSinceNow
+            Logger.network.warning("Rate limited, waiting \(Int(waitTime)) seconds")
+
+            // Return cached response if available during rate limit
+            if let cached = cachedResponses[cacheKey] {
+                Logger.network.info("Returning cached response during rate limit")
+                return cached.response
+            }
+
+            throw AIError.rateLimited(retryAfter: waitTime)
+        }
+
+        // Check for circuit breaker (too many consecutive failures)
+        if consecutiveFailures >= maxConsecutiveFailures {
+            Logger.network.error("Circuit breaker open - too many consecutive failures")
+            throw AIError.circuitBreakerOpen(failures: consecutiveFailures)
         }
 
         // Check network connectivity
@@ -209,6 +236,123 @@ actor AICoachService {
             throw AIError.offline
         }
 
+        // Execute request with retry logic
+        return try await executeWithRetry(
+            prompt: prompt,
+            maxTokens: maxTokens,
+            cacheKey: cacheKey,
+            configuration: config
+        )
+    }
+
+    /// Execute request with exponential backoff retry logic
+    private func executeWithRetry(
+        prompt: String,
+        maxTokens: Int,
+        cacheKey: String,
+        configuration: AIRequestConfiguration
+    ) async throws -> String {
+        var lastError: Error?
+
+        for attempt in 0..<configuration.maxRetryAttempts {
+            do {
+                let result = try await executeSingleRequest(
+                    prompt: prompt,
+                    maxTokens: maxTokens,
+                    timeout: configuration.timeout
+                )
+
+                // Reset failure counter on success
+                consecutiveFailures = 0
+                rateLimitResetTime = nil
+
+                // Cache successful response
+                cachedResponses[cacheKey] = CachedResponse(response: result, timestamp: Date())
+                Logger.network.debug("AI request successful on attempt \(attempt + 1)")
+
+                return result
+
+            } catch let error as AIError {
+                lastError = error
+
+                // Determine if we should retry based on error type
+                guard error.isRetryable else {
+                    consecutiveFailures += 1
+                    throw error
+                }
+
+                // Handle rate limiting specifically
+                if case .rateLimited(let retryAfter) = error {
+                    rateLimitResetTime = Date().addingTimeInterval(retryAfter ?? 60)
+                }
+
+                // Calculate exponential backoff delay
+                let delay = calculateBackoffDelay(
+                    attempt: attempt,
+                    baseDelay: configuration.baseRetryDelay,
+                    maxDelay: configuration.maxRetryDelay
+                )
+
+                Logger.network.info("Retry attempt \(attempt + 1)/\(configuration.maxRetryAttempts) after \(String(format: "%.1f", delay))s delay")
+
+                // Wait before retrying
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+
+            } catch let error as URLError {
+                lastError = error
+
+                // URLError timeout should be retried
+                if error.code == .timedOut {
+                    let delay = calculateBackoffDelay(
+                        attempt: attempt,
+                        baseDelay: configuration.baseRetryDelay,
+                        maxDelay: configuration.maxRetryDelay
+                    )
+                    Logger.network.info("Timeout, retrying after \(String(format: "%.1f", delay))s delay")
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                } else {
+                    consecutiveFailures += 1
+
+                    // Return cached response on network error
+                    if let cached = cachedResponses[cacheKey] {
+                        Logger.network.info("Returning cached response due to network error")
+                        return cached.response
+                    }
+
+                    throw AIError.networkError(error)
+                }
+            } catch {
+                lastError = error
+                consecutiveFailures += 1
+                throw error
+            }
+        }
+
+        // All retries exhausted
+        consecutiveFailures += 1
+
+        // Try to return cached response as last resort
+        if let cached = cachedResponses[cacheKey] {
+            Logger.network.info("All retries exhausted, returning cached response")
+            return cached.response
+        }
+
+        throw AIError.maxRetriesExceeded(
+            attempts: configuration.maxRetryAttempts,
+            lastError: lastError
+        )
+    }
+
+    /// Execute a single API request
+    private func executeSingleRequest(
+        prompt: String,
+        maxTokens: Int,
+        timeout: TimeInterval
+    ) async throws -> String {
+        guard let apiKey else {
+            throw AIError.noAPIKey
+        }
+
         guard let url = URL(string: baseURL) else {
             throw AIError.invalidURL
         }
@@ -218,7 +362,7 @@ actor AICoachService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        request.timeoutInterval = 30
+        request.timeoutInterval = timeout
 
         let body: [String: Any] = [
             "model": "claude-sonnet-4-20250514",
@@ -230,47 +374,177 @@ actor AICoachService {
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        Logger.network.debug("Making AI API request")
+        Logger.network.debug("Making AI API request with timeout \(timeout)s")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIError.invalidResponse(reason: "Response is not HTTP")
+        }
+
+        // Handle specific HTTP status codes
+        switch httpResponse.statusCode {
+        case 200:
+            break // Success, continue processing
+
+        case 429:
+            // Rate limited - extract retry-after header if available
+            let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After")
+                .flatMap { Double($0) } ?? 60
+            Logger.network.warning("Rate limited, retry after \(retryAfter)s")
+            throw AIError.rateLimited(retryAfter: retryAfter)
+
+        case 408, 504:
+            // Timeout from server
+            Logger.network.warning("Server timeout (status \(httpResponse.statusCode))")
+            throw AIError.timeout(duration: timeout)
+
+        case 500, 502, 503:
+            // Server errors - retryable
+            Logger.network.error("Server error: \(httpResponse.statusCode)")
+            throw AIError.serverError(statusCode: httpResponse.statusCode)
+
+        case 400:
+            // Bad request - parse error message
+            let errorMessage = parseErrorMessage(from: data)
+            Logger.network.error("Bad request: \(errorMessage ?? "unknown")")
+            throw AIError.badRequest(message: errorMessage)
+
+        case 401:
+            Logger.network.error("Authentication failed - invalid API key")
+            throw AIError.authenticationFailed
+
+        case 403:
+            Logger.network.error("Access forbidden")
+            throw AIError.forbidden
+
+        default:
+            Logger.network.error("AI API error: \(httpResponse.statusCode)")
+            CrashReporter.shared.recordNonFatalError(
+                "AI API Error",
+                properties: ["statusCode": httpResponse.statusCode]
+            )
+            throw AIError.apiError(statusCode: httpResponse.statusCode)
+        }
+
+        // Parse and validate response
+        return try parseAndValidateResponse(data: data)
+    }
+
+    /// Parse and validate the API response
+    private func parseAndValidateResponse(data: Data) throws -> String {
+        // Validate that data is not empty
+        guard !data.isEmpty else {
+            throw AIError.emptyResponse
+        }
+
+        // Try to parse as JSON first to validate structure
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            // Check if it's a partial/streaming response
+            if let partialString = String(data: data, encoding: .utf8) {
+                if partialString.contains("event:") || partialString.contains("data:") {
+                    throw AIError.unexpectedStreamingResponse(partial: partialString)
+                }
+            }
+            throw AIError.malformedJSON(dataPreview: String(data: data.prefix(200), encoding: .utf8))
+        }
+
+        // Validate required fields exist
+        guard json["content"] != nil else {
+            // Check for error response
+            if let errorInfo = json["error"] as? [String: Any] {
+                let errorType = errorInfo["type"] as? String ?? "unknown"
+                let errorMessage = errorInfo["message"] as? String ?? "Unknown error"
+                throw AIError.apiErrorResponse(type: errorType, message: errorMessage)
+            }
+            throw AIError.invalidResponseStructure(missingField: "content")
+        }
+
+        // Decode using Codable for type safety
+        let decoder = JSONDecoder()
+        let apiResponse: ClaudeResponse
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw AIError.invalidResponse
-            }
-
-            guard httpResponse.statusCode == 200 else {
-                Logger.network.error("AI API error: \(httpResponse.statusCode)")
-                CrashReporter.shared.recordNonFatalError(
-                    "AI API Error",
-                    properties: ["statusCode": httpResponse.statusCode]
-                )
-                throw AIError.apiError(statusCode: httpResponse.statusCode)
-            }
-
-            let apiResponse = try JSONDecoder().decode(ClaudeResponse.self, from: data)
-
-            guard let content = apiResponse.content.first?.text else {
-                throw AIError.emptyResponse
-            }
-
-            // Cache successful response
-            cachedResponses[cacheKey] = CachedResponse(response: content, timestamp: Date())
-
-            Logger.network.debug("AI request successful")
-            return content
-
-        } catch let error as URLError {
-            Logger.network.error("Network error during AI request: \(error.localizedDescription)")
-
-            // Return cached response on network error
-            if let cached = cachedResponses[cacheKey] {
-                Logger.network.info("Returning cached response due to network error")
-                return cached.response
-            }
-
-            throw AIError.networkError(error)
+            apiResponse = try decoder.decode(ClaudeResponse.self, from: data)
+        } catch let decodingError as DecodingError {
+            throw AIError.decodingError(decodingError, context: describeDecodingError(decodingError))
         }
+
+        // Validate content array
+        guard !apiResponse.content.isEmpty else {
+            throw AIError.emptyContentArray
+        }
+
+        // Extract text content
+        let textBlocks = apiResponse.content.compactMap { $0.text }
+        guard !textBlocks.isEmpty else {
+            // Check if there are other content types
+            let contentTypes = apiResponse.content.map { $0.type }
+            throw AIError.noTextContent(foundTypes: contentTypes)
+        }
+
+        // Join all text blocks (handles multi-part responses)
+        let fullContent = textBlocks.joined(separator: "\n")
+
+        // Validate content is not just whitespace
+        guard !fullContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw AIError.emptyResponse
+        }
+
+        // Check for truncation indicator
+        if let stopReason = apiResponse.stopReason, stopReason == "max_tokens" {
+            Logger.network.warning("Response was truncated due to max_tokens limit")
+        }
+
+        return fullContent
+    }
+
+    /// Calculate exponential backoff delay with jitter
+    private func calculateBackoffDelay(
+        attempt: Int,
+        baseDelay: TimeInterval,
+        maxDelay: TimeInterval
+    ) -> TimeInterval {
+        // Exponential backoff: base * 2^attempt
+        let exponentialDelay = baseDelay * pow(2.0, Double(attempt))
+
+        // Add jitter (random 0-25% of delay) to prevent thundering herd
+        let jitter = Double.random(in: 0...0.25) * exponentialDelay
+
+        // Cap at maximum delay
+        return min(exponentialDelay + jitter, maxDelay)
+    }
+
+    /// Parse error message from API error response
+    private func parseErrorMessage(from data: Data) -> String? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let error = json["error"] as? [String: Any],
+              let message = error["message"] as? String else {
+            return String(data: data, encoding: .utf8)
+        }
+        return message
+    }
+
+    /// Describe a DecodingError for better error messages
+    private func describeDecodingError(_ error: DecodingError) -> String {
+        switch error {
+        case .keyNotFound(let key, let context):
+            return "Missing key '\(key.stringValue)' at \(context.codingPath.map { $0.stringValue }.joined(separator: "."))"
+        case .typeMismatch(let type, let context):
+            return "Type mismatch for \(type) at \(context.codingPath.map { $0.stringValue }.joined(separator: "."))"
+        case .valueNotFound(let type, let context):
+            return "Missing value for \(type) at \(context.codingPath.map { $0.stringValue }.joined(separator: "."))"
+        case .dataCorrupted(let context):
+            return "Data corrupted at \(context.codingPath.map { $0.stringValue }.joined(separator: ".")): \(context.debugDescription)"
+        @unknown default:
+            return "Unknown decoding error"
+        }
+    }
+
+    /// Reset the circuit breaker (call after successful recovery)
+    func resetCircuitBreaker() {
+        consecutiveFailures = 0
+        rateLimitResetTime = nil
     }
 
     /// Clear cached responses
@@ -326,11 +600,35 @@ actor AICoachService {
 // MARK: - API Response Types
 
 private struct ClaudeResponse: Codable {
+    let id: String?
+    let type: String?
+    let role: String?
     let content: [ContentBlock]
+    let model: String?
+    let stopReason: String?
+    let stopSequence: String?
+    let usage: Usage?
+
+    enum CodingKeys: String, CodingKey {
+        case id, type, role, content, model
+        case stopReason = "stop_reason"
+        case stopSequence = "stop_sequence"
+        case usage
+    }
 
     struct ContentBlock: Codable {
         let type: String
         let text: String?
+    }
+
+    struct Usage: Codable {
+        let inputTokens: Int?
+        let outputTokens: Int?
+
+        enum CodingKeys: String, CodingKey {
+            case inputTokens = "input_tokens"
+            case outputTokens = "output_tokens"
+        }
     }
 }
 

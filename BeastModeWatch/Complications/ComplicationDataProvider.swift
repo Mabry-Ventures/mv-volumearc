@@ -148,12 +148,68 @@ class ComplicationDataManager {
     static let shared = ComplicationDataManager()
 
     private let dataKey = WatchConfiguration.complicationDataKey
+    private let configurationKey = "widgetConfiguration"
 
     private var defaults: UserDefaults? {
         WatchConfiguration.sharedUserDefaults
     }
 
     private init() {}
+
+    // MARK: - Widget Configuration
+
+    /// Save widget configuration preferences
+    func saveConfiguration(_ config: WidgetConfigurationModel) {
+        guard let defaults else { return }
+
+        do {
+            let encoded = try JSONEncoder().encode(config)
+            defaults.set(encoded, forKey: configurationKey)
+
+            // Request complication update when configuration changes
+            #if os(watchOS)
+            WidgetCenter.shared.reloadAllTimelines()
+            #endif
+        } catch {
+            print("Failed to save widget configuration: \(error)")
+        }
+    }
+
+    /// Load widget configuration preferences
+    func loadConfiguration() -> WidgetConfigurationModel {
+        guard let defaults,
+              let data = defaults.data(forKey: configurationKey) else {
+            return .default
+        }
+
+        do {
+            return try JSONDecoder().decode(WidgetConfigurationModel.self, from: data)
+        } catch {
+            print("Failed to load widget configuration: \(error)")
+            return .default
+        }
+    }
+
+    /// Update streak display mode
+    func updateStreakDisplayMode(_ mode: StreakDisplayMode) {
+        var config = loadConfiguration()
+        config.streakDisplayMode = mode
+        saveConfiguration(config)
+    }
+
+    /// Update workout display mode
+    func updateWorkoutDisplayMode(_ mode: WorkoutDisplayMode) {
+        var config = loadConfiguration()
+        config.workoutDisplayMode = mode
+        saveConfiguration(config)
+    }
+
+    /// Update weekly goal
+    func updateWeeklyGoal(_ goal: WeeklyGoalOption) {
+        var config = loadConfiguration()
+        config.weeklyGoal = goal
+        saveConfiguration(config)
+    }
 
     /// Save complication data (called from iPhone app)
     func saveData(_ data: ComplicationData) {
