@@ -7,6 +7,10 @@ import SwiftData
 
 // MARK: - Workout Plan Model
 
+/// Current schema version for WorkoutPlan
+/// Increment this when making breaking changes to the plan structure
+let kWorkoutPlanCurrentVersion: Int = 2
+
 /// A custom workout plan/split that can be shared
 @Model
 final class WorkoutPlan {
@@ -17,6 +21,9 @@ final class WorkoutPlan {
     var createdAt: Date
     var updatedAt: Date
     var isActive: Bool
+
+    // Schema version for migration support
+    var schemaVersion: Int
 
     // Sharing properties
     var isPublic: Bool
@@ -29,6 +36,11 @@ final class WorkoutPlan {
     var difficulty: PlanDifficulty
     var targetGoal: PlanGoal
     var estimatedDuration: Int  // weeks
+
+    // V2: Additional metadata for enhanced plan features
+    var tags: [String]
+    var equipmentRequired: [String]
+    var targetMuscleGroups: [String]
 
     @Relationship(deleteRule: .cascade)
     var days: [PlanDay]
@@ -48,6 +60,7 @@ final class WorkoutPlan {
         self.createdAt = .now
         self.updatedAt = .now
         self.isActive = false
+        self.schemaVersion = kWorkoutPlanCurrentVersion
         self.isPublic = false
         self.shareCode = nil
         self.authorName = nil
@@ -56,7 +69,15 @@ final class WorkoutPlan {
         self.difficulty = difficulty
         self.targetGoal = targetGoal
         self.estimatedDuration = 8
+        self.tags = []
+        self.equipmentRequired = []
+        self.targetMuscleGroups = []
         self.days = []
+    }
+
+    /// Check if plan needs migration to current version
+    var needsMigration: Bool {
+        schemaVersion < kWorkoutPlanCurrentVersion
     }
 
     /// Generate a unique share code

@@ -5,6 +5,37 @@
 import Foundation
 import os
 
+// MARK: - Configuration
+
+/// Configuration for AI service request behavior
+struct AIRequestConfiguration {
+    /// Timeout duration for requests (default: 30 seconds)
+    var timeout: TimeInterval = 30
+
+    /// Maximum number of retry attempts for transient errors
+    var maxRetryAttempts: Int = 3
+
+    /// Base delay for exponential backoff (default: 1 second)
+    var baseRetryDelay: TimeInterval = 1.0
+
+    /// Maximum delay between retries (default: 30 seconds)
+    var maxRetryDelay: TimeInterval = 30.0
+
+    /// Whether to use cached responses
+    var useCache: Bool = true
+
+    /// Default configuration
+    static let `default` = AIRequestConfiguration()
+
+    /// Configuration with longer timeout for complex requests
+    static let extended = AIRequestConfiguration(
+        timeout: 60,
+        maxRetryAttempts: 5,
+        baseRetryDelay: 2.0,
+        maxRetryDelay: 60.0
+    )
+}
+
 /// Service for generating AI-powered coaching insights
 actor AICoachService {
     private let keychainService: KeychainService
@@ -12,22 +43,43 @@ actor AICoachService {
     private var cachedResponses: [String: CachedResponse] = [:]
     private let cacheExpirationInterval: TimeInterval = 3600 // 1 hour
 
+    /// Default request configuration
+    private var defaultConfiguration: AIRequestConfiguration = .default
+
+    /// Track rate limit state
+    private var rateLimitResetTime: Date?
+    private var consecutiveFailures: Int = 0
+    private let maxConsecutiveFailures: Int = 5
+
     struct CachedResponse {
         let response: String
         let timestamp: Date
+        let expirationInterval: TimeInterval
+
+        init(response: String, timestamp: Date = Date(), expirationInterval: TimeInterval = 3600) {
+            self.response = response
+            self.timestamp = timestamp
+            self.expirationInterval = expirationInterval
+        }
 
         var isExpired: Bool {
-            Date().timeIntervalSince(timestamp) > 3600
+            Date().timeIntervalSince(timestamp) > expirationInterval
         }
     }
 
-    init(apiKey: String? = nil) {
+    init(apiKey: String? = nil, configuration: AIRequestConfiguration = .default) {
         self.keychainService = KeychainService.shared
+        self.defaultConfiguration = configuration
 
         // If an API key is provided, store it securely
         if let apiKey = apiKey {
             keychainService.setAPIKey(apiKey)
         }
+    }
+
+    /// Update the default configuration
+    func updateConfiguration(_ configuration: AIRequestConfiguration) {
+        self.defaultConfiguration = configuration
     }
 
     /// Get the API key from secure storage
