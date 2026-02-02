@@ -205,6 +205,9 @@ final class WorkoutPlanTests: XCTestCase {
             targetGoal: .strength
         )
         plan.authorName = "Test Author"
+        plan.tags = ["strength", "4-day"]
+        plan.equipmentRequired = ["Barbell"]
+        plan.targetMuscleGroups = ["Chest"]
 
         let day = PlanDay(weekday: 2, name: "Push", isRestDay: false)
         let exercise = PlanExercise(
@@ -236,6 +239,10 @@ final class WorkoutPlanTests: XCTestCase {
         XCTAssertEqual(decoded.daysPerWeek, 4)
         XCTAssertEqual(decoded.difficulty, "Intermediate")
         XCTAssertEqual(decoded.goal, "Strength")
+        XCTAssertEqual(decoded.version, ShareablePlan.currentExportVersion)
+        XCTAssertEqual(decoded.tags, ["strength", "4-day"])
+        XCTAssertEqual(decoded.equipmentRequired, ["Barbell"])
+        XCTAssertEqual(decoded.targetMuscleGroups, ["Chest"])
         XCTAssertEqual(decoded.days.count, 1)
         XCTAssertEqual(decoded.days[0].exercises.count, 1)
     }
@@ -243,7 +250,7 @@ final class WorkoutPlanTests: XCTestCase {
     func testShareablePlan_ToPlan() throws {
         let json = """
         {
-            "version": 1,
+            "version": 2,
             "name": "Imported Plan",
             "description": "From a friend",
             "authorName": "Friend",
@@ -271,7 +278,10 @@ final class WorkoutPlanTests: XCTestCase {
                     ]
                 }
             ],
-            "createdAt": "2024-01-15T10:00:00Z"
+            "createdAt": "2024-01-15T10:00:00Z",
+            "tags": ["hypertrophy", "5-day"],
+            "equipmentRequired": ["Barbell", "Dumbbells"],
+            "targetMuscleGroups": ["Chest", "Arms"]
         }
         """
 
@@ -291,6 +301,10 @@ final class WorkoutPlanTests: XCTestCase {
         XCTAssertEqual(plan.daysPerWeek, 5)
         XCTAssertEqual(plan.estimatedDuration, 12)
         XCTAssertEqual(plan.userId, userId)
+        XCTAssertEqual(plan.schemaVersion, kWorkoutPlanCurrentVersion)
+        XCTAssertEqual(plan.tags, ["hypertrophy", "5-day"])
+        XCTAssertEqual(plan.equipmentRequired, ["Barbell", "Dumbbells"])
+        XCTAssertEqual(plan.targetMuscleGroups, ["Chest", "Arms"])
         XCTAssertEqual(plan.days.count, 1)
 
         let day = plan.days[0]
@@ -306,6 +320,40 @@ final class WorkoutPlanTests: XCTestCase {
         XCTAssertEqual(exercise.targetRepsMax, 12)
         XCTAssertEqual(exercise.targetRPE, 8.0)
         XCTAssertEqual(exercise.restSeconds, 120)
+    }
+
+    func testShareablePlan_V1Import_SetsDefaults() throws {
+        // Test that V1 plans (without V2 fields) import correctly with defaults
+        let v1Json = """
+        {
+            "version": 1,
+            "name": "Legacy Plan",
+            "description": null,
+            "authorName": null,
+            "difficulty": "Intermediate",
+            "goal": "Strength",
+            "daysPerWeek": 4,
+            "estimatedDuration": 8,
+            "days": [],
+            "createdAt": "2024-01-15T10:00:00Z"
+        }
+        """
+
+        let data = v1Json.data(using: .utf8)!
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let shareable = try decoder.decode(ShareablePlan.self, from: data)
+
+        let plan = shareable.toPlan(userId: UUID())
+
+        // V2 fields should be empty arrays (not nil)
+        XCTAssertTrue(plan.tags.isEmpty)
+        XCTAssertTrue(plan.equipmentRequired.isEmpty)
+        XCTAssertTrue(plan.targetMuscleGroups.isEmpty)
+
+        // Schema version should reflect original import version
+        XCTAssertEqual(plan.schemaVersion, 1)
+        XCTAssertTrue(plan.needsMigration)
     }
 }
 
@@ -359,7 +407,7 @@ final class PlanSharingServiceTests: XCTestCase {
     func testPlanSharingService_ImportPlan() async throws {
         let json = """
         {
-            "version": 1,
+            "version": 2,
             "name": "Imported Plan",
             "description": null,
             "authorName": null,
@@ -367,8 +415,19 @@ final class PlanSharingServiceTests: XCTestCase {
             "goal": "Strength",
             "daysPerWeek": 4,
             "estimatedDuration": 8,
-            "days": [],
-            "createdAt": "2024-01-15T10:00:00Z"
+            "days": [
+                {
+                    "weekday": 2,
+                    "name": "Day 1",
+                    "isRestDay": false,
+                    "notes": null,
+                    "exercises": []
+                }
+            ],
+            "createdAt": "2024-01-15T10:00:00Z",
+            "tags": null,
+            "equipmentRequired": null,
+            "targetMuscleGroups": null
         }
         """
 
@@ -380,6 +439,7 @@ final class PlanSharingServiceTests: XCTestCase {
 
         XCTAssertEqual(plan.name, "Imported Plan")
         XCTAssertEqual(plan.userId, userId)
+        XCTAssertEqual(plan.schemaVersion, kWorkoutPlanCurrentVersion)
     }
 
     func testPlanSharingService_ValidatePlanData_UnsupportedVersion() async throws {

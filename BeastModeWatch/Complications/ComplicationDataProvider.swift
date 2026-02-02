@@ -244,10 +244,11 @@ class ComplicationDataManager {
     }
 
     /// Update just the streak (convenience method)
-    func updateStreak(_ streak: Int) {
+    func updateStreak(current: Int, longest: Int) {
         var data = loadData()
         data = ComplicationData(
-            currentStreak: streak,
+            currentStreak: current,
+            longestStreak: longest,
             todayWorkout: data.todayWorkout,
             weeklyProgress: data.weeklyProgress,
             lastUpdated: .now
@@ -260,6 +261,7 @@ class ComplicationDataManager {
         var data = loadData()
         data = ComplicationData(
             currentStreak: data.currentStreak,
+            longestStreak: data.longestStreak,
             todayWorkout: workout,
             weeklyProgress: data.weeklyProgress,
             lastUpdated: .now
@@ -272,6 +274,7 @@ class ComplicationDataManager {
         var data = loadData()
         data = ComplicationData(
             currentStreak: data.currentStreak,
+            longestStreak: data.longestStreak,
             todayWorkout: data.todayWorkout,
             weeklyProgress: WeeklyProgressData(completed: completed, target: target),
             lastUpdated: .now
@@ -295,6 +298,7 @@ struct BeastModeTimelineProvider: TimelineProvider {
             date: .now,
             data: ComplicationData(
                 currentStreak: 7,
+                longestStreak: 14,
                 todayWorkout: TodayWorkoutData(
                     dayName: "Push Day",
                     exerciseCount: 6,
@@ -322,5 +326,190 @@ struct BeastModeTimelineProvider: TimelineProvider {
         let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
 
         completion(timeline)
+    }
+}
+
+// MARK: - Configurable Timeline Entries
+
+/// Timeline entry for configurable streak widget
+struct StreakTimelineEntry: TimelineEntry {
+    let date: Date
+    let data: ComplicationData
+    let configuration: StreakWidgetConfigurationIntent
+}
+
+/// Timeline entry for configurable workout widget
+struct WorkoutTimelineEntry: TimelineEntry {
+    let date: Date
+    let data: ComplicationData
+    let configuration: WorkoutWidgetConfigurationIntent
+}
+
+/// Timeline entry for configurable weekly progress widget
+struct WeeklyProgressTimelineEntry: TimelineEntry {
+    let date: Date
+    let data: ComplicationData
+    let configuration: WeeklyProgressWidgetConfigurationIntent
+}
+
+// MARK: - Widget Configuration Intents
+
+/// Configuration intent for Streak Widget
+struct StreakWidgetConfigurationIntent: WidgetConfigurationIntent {
+    static var title: LocalizedStringResource = "Streak Configuration"
+    static var description = IntentDescription("Configure how the streak is displayed")
+
+    @Parameter(title: "Display Mode", default: .currentStreak)
+    var displayMode: StreakDisplayMode
+
+    init() {}
+
+    init(displayMode: StreakDisplayMode) {
+        self.displayMode = displayMode
+    }
+}
+
+/// Configuration intent for Workout Widget
+struct WorkoutWidgetConfigurationIntent: WidgetConfigurationIntent {
+    static var title: LocalizedStringResource = "Workout Configuration"
+    static var description = IntentDescription("Configure how today's workout is displayed")
+
+    @Parameter(title: "Display Mode", default: .exerciseCount)
+    var displayMode: WorkoutDisplayMode
+
+    init() {}
+
+    init(displayMode: WorkoutDisplayMode) {
+        self.displayMode = displayMode
+    }
+}
+
+/// Configuration intent for Weekly Progress Widget
+struct WeeklyProgressWidgetConfigurationIntent: WidgetConfigurationIntent {
+    static var title: LocalizedStringResource = "Weekly Goal Configuration"
+    static var description = IntentDescription("Set your weekly workout goal")
+
+    @Parameter(title: "Weekly Goal", default: .four)
+    var weeklyGoal: WeeklyGoalOption
+
+    init() {}
+
+    init(weeklyGoal: WeeklyGoalOption) {
+        self.weeklyGoal = weeklyGoal
+    }
+}
+
+// MARK: - Configurable Timeline Providers
+
+/// Timeline provider for configurable streak widget
+struct StreakTimelineProvider: AppIntentTimelineProvider {
+    typealias Entry = StreakTimelineEntry
+    typealias Intent = StreakWidgetConfigurationIntent
+
+    func placeholder(in context: Context) -> StreakTimelineEntry {
+        StreakTimelineEntry(
+            date: .now,
+            data: ComplicationData(
+                currentStreak: 7,
+                longestStreak: 14,
+                todayWorkout: nil,
+                weeklyProgress: WeeklyProgressData(completed: 3, target: 4),
+                lastUpdated: .now
+            ),
+            configuration: StreakWidgetConfigurationIntent()
+        )
+    }
+
+    func snapshot(for configuration: StreakWidgetConfigurationIntent, in context: Context) async -> StreakTimelineEntry {
+        let data = ComplicationDataManager.shared.loadData()
+        return StreakTimelineEntry(date: .now, data: data, configuration: configuration)
+    }
+
+    func timeline(for configuration: StreakWidgetConfigurationIntent, in context: Context) async -> Timeline<StreakTimelineEntry> {
+        let data = ComplicationDataManager.shared.loadData()
+        let entry = StreakTimelineEntry(date: .now, data: data, configuration: configuration)
+
+        // Save configuration preference
+        ComplicationDataManager.shared.updateStreakDisplayMode(configuration.displayMode)
+
+        let nextUpdate = Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now
+        return Timeline(entries: [entry], policy: .after(nextUpdate))
+    }
+}
+
+/// Timeline provider for configurable workout widget
+struct WorkoutTimelineProvider: AppIntentTimelineProvider {
+    typealias Entry = WorkoutTimelineEntry
+    typealias Intent = WorkoutWidgetConfigurationIntent
+
+    func placeholder(in context: Context) -> WorkoutTimelineEntry {
+        WorkoutTimelineEntry(
+            date: .now,
+            data: ComplicationData(
+                currentStreak: 7,
+                longestStreak: 14,
+                todayWorkout: TodayWorkoutData(
+                    dayName: "Push Day",
+                    exerciseCount: 6,
+                    isRestDay: false,
+                    isCompleted: false
+                ),
+                weeklyProgress: WeeklyProgressData(completed: 3, target: 4),
+                lastUpdated: .now
+            ),
+            configuration: WorkoutWidgetConfigurationIntent()
+        )
+    }
+
+    func snapshot(for configuration: WorkoutWidgetConfigurationIntent, in context: Context) async -> WorkoutTimelineEntry {
+        let data = ComplicationDataManager.shared.loadData()
+        return WorkoutTimelineEntry(date: .now, data: data, configuration: configuration)
+    }
+
+    func timeline(for configuration: WorkoutWidgetConfigurationIntent, in context: Context) async -> Timeline<WorkoutTimelineEntry> {
+        let data = ComplicationDataManager.shared.loadData()
+        let entry = WorkoutTimelineEntry(date: .now, data: data, configuration: configuration)
+
+        // Save configuration preference
+        ComplicationDataManager.shared.updateWorkoutDisplayMode(configuration.displayMode)
+
+        let nextUpdate = Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now
+        return Timeline(entries: [entry], policy: .after(nextUpdate))
+    }
+}
+
+/// Timeline provider for configurable weekly progress widget
+struct WeeklyProgressTimelineProvider: AppIntentTimelineProvider {
+    typealias Entry = WeeklyProgressTimelineEntry
+    typealias Intent = WeeklyProgressWidgetConfigurationIntent
+
+    func placeholder(in context: Context) -> WeeklyProgressTimelineEntry {
+        WeeklyProgressTimelineEntry(
+            date: .now,
+            data: ComplicationData(
+                currentStreak: 7,
+                longestStreak: 14,
+                todayWorkout: nil,
+                weeklyProgress: WeeklyProgressData(completed: 3, target: 4),
+                lastUpdated: .now
+            ),
+            configuration: WeeklyProgressWidgetConfigurationIntent()
+        )
+    }
+
+    func snapshot(for configuration: WeeklyProgressWidgetConfigurationIntent, in context: Context) async -> WeeklyProgressTimelineEntry {
+        let data = ComplicationDataManager.shared.loadData()
+        return WeeklyProgressTimelineEntry(date: .now, data: data, configuration: configuration)
+    }
+
+    func timeline(for configuration: WeeklyProgressWidgetConfigurationIntent, in context: Context) async -> Timeline<WeeklyProgressTimelineEntry> {
+        let data = ComplicationDataManager.shared.loadData()
+        let entry = WeeklyProgressTimelineEntry(date: .now, data: data, configuration: configuration)
+
+        // Save configuration preference
+        ComplicationDataManager.shared.updateWeeklyGoal(configuration.weeklyGoal)
+
+        let nextUpdate = Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now
+        return Timeline(entries: [entry], policy: .after(nextUpdate))
     }
 }

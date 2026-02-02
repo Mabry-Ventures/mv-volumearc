@@ -27,6 +27,7 @@ struct AnalyticsDashboardView: View {
                 LazyVStack(spacing: 16) {
                     // Time range picker
                     timeRangePicker
+                        .accessibilityIdentifier(UITestIdentifiers.Analytics.timeRangePicker)
 
                     if isLoading {
                         loadingView
@@ -42,10 +43,12 @@ struct AnalyticsDashboardView: View {
 
                         // Summary cards
                         SummaryCardsView(overview: overview)
+                            .accessibilityIdentifier(UITestIdentifiers.Analytics.summaryCards)
 
                         // Progress breakdown
                         ProgressBreakdownView(overview: overview)
                             .padding(.horizontal)
+                            .accessibilityIdentifier(UITestIdentifiers.Analytics.progressBreakdown)
 
                         // Exercise trends list
                         ExerciseTrendsListView(
@@ -58,6 +61,7 @@ struct AnalyticsDashboardView: View {
                 }
                 .padding(.vertical)
             }
+            .accessibilityIdentifier(UITestIdentifiers.Analytics.dashboard)
             .navigationTitle(L10n.Analytics.title)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -66,10 +70,12 @@ struct AnalyticsDashboardView: View {
                     } label: {
                         Image(systemName: "gear")
                     }
+                    .accessibilityIdentifier(UITestIdentifiers.Analytics.settingsButton)
                 }
             }
             .sheet(item: $selectedExercise) { exercise in
                 ExerciseDetailAnalyticsView(analytics: exercise)
+                    .accessibilityIdentifier(UITestIdentifiers.Analytics.exerciseDetail)
             }
         }
         .task(id: timeRange) {
@@ -358,6 +364,7 @@ struct ExerciseTrendsListView: View {
                         ExerciseTrendRow(analytics: exercise)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier(UITestIdentifiers.Analytics.exerciseTrendRow)
                 }
             }
         }

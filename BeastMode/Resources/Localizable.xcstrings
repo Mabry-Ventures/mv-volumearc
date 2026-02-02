@@ -2618,6 +2618,281 @@
           }
         }
       }
+    },
+    "notification.weekly_review.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weekly Review Ready"
+          }
+        }
+      }
+    },
+    "notification.weekly_review.body" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your AI-powered weekly training review is ready. See your progress and get personalized insights!"
+          }
+        }
+      }
+    },
+    "notification.weekly_review.hidden_preview" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weekly training insights available"
+          }
+        }
+      }
+    },
+    "notification.streak_reminder.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep Your Streak Going!"
+          }
+        }
+      }
+    },
+    "notification.streak_reminder.body %lld" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You're on a %lld day streak. Don't break it now - log a workout today!"
+          }
+        }
+      }
+    },
+    "notification.streak_reminder.hidden_preview" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Streak reminder"
+          }
+        }
+      }
+    },
+    "notification.streak_at_risk.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Streak at Risk!"
+          }
+        }
+      }
+    },
+    "notification.streak_at_risk.body %lld" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your %lld day streak will break if you don't work out today. You've got this!"
+          }
+        }
+      }
+    },
+    "notification.workout_reminder.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Time to Train!"
+          }
+        }
+      }
+    },
+    "notification.workout_reminder.body %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "It's %@ - your scheduled workout day. Ready to crush it?"
+          }
+        }
+      }
+    },
+    "notification.workout_reminder.hidden_preview" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Workout reminder"
+          }
+        }
+      }
+    },
+    "notification.congratulations.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Congratulations!"
+          }
+        }
+      }
+    },
+    "notification.congratulations.body %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You earned the %@ badge! Keep up the great work."
+          }
+        }
+      }
+    },
+    "notification.snooze.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reminder: Time to Work Out"
+          }
+        }
+      }
+    },
+    "notification.snooze.body" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You snoozed your workout reminder. Ready to hit the gym now?"
+          }
+        }
+      }
+    },
+    "notification.action.view_review" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View Review"
+          }
+        }
+      }
+    },
+    "notification.action.dismiss" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dismiss"
+          }
+        }
+      }
+    },
+    "notification.action.start_workout" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start Workout"
+          }
+        }
+      }
+    },
+    "notification.action.snooze" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snooze 1 Hour"
+          }
+        }
+      }
+    },
+    "notification.settings.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notifications"
+          }
+        }
+      }
+    },
+    "notification.settings.weekly_review" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weekly Review Notifications"
+          }
+        }
+      }
+    },
+    "notification.settings.streak_reminders" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Streak Reminders"
+          }
+        }
+      }
+    },
+    "notification.settings.workout_reminders" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Workout Reminders"
+          }
+        }
+      }
+    },
+    "notification.settings.reminder_time" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reminder Time"
+          }
+        }
+      }
+    },
+    "notification.settings.reminder_days" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reminder Days"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

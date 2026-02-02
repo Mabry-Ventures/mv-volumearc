@@ -41,10 +41,12 @@ struct PlanLibraryView: View {
                     if let active = activePlan {
                         ActivePlanCard(plan: active)
                             .padding(.horizontal)
+                            .accessibilityIdentifier(UITestIdentifiers.Plans.activePlanCard)
                     }
 
                     // Quick actions
                     quickActionsSection
+                        .accessibilityIdentifier(UITestIdentifiers.Plans.quickActions)
 
                     // My plans
                     myPlansSection
@@ -79,6 +81,7 @@ struct PlanLibraryView: View {
                         Image(systemName: "plus.circle.fill")
                             .font(.title3)
                     }
+                    .accessibilityIdentifier(UITestIdentifiers.Plans.addPlanButton)
                 }
             }
             .sheet(isPresented: $showCreatePlan) {
@@ -164,6 +167,7 @@ struct PlanLibraryView: View {
                         .contextMenu {
                             planContextMenu(for: plan)
                         }
+                        .accessibilityIdentifier(UITestIdentifiers.Plans.planRow)
                     }
                 }
                 .padding(.horizontal)

@@ -139,18 +139,22 @@ actor AICoachService {
 
         // Parse JSON response
         guard let data = response.data(using: .utf8) else {
-            throw AIError.invalidResponse
+            throw AIError.invalidResponse(reason: "Response is not valid UTF-8")
         }
 
         // Try to extract JSON from the response (Claude may wrap it in text)
         let jsonString = extractJSON(from: response)
         guard let jsonData = jsonString.data(using: .utf8) else {
-            throw AIError.invalidResponse
+            throw AIError.invalidResponse(reason: "Extracted JSON is not valid UTF-8")
         }
 
-        var suggestion = try JSONDecoder().decode(WeightSuggestion.self, from: jsonData)
-        suggestion.exerciseName = exerciseName
-        return suggestion
+        do {
+            var suggestion = try JSONDecoder().decode(WeightSuggestion.self, from: jsonData)
+            suggestion.exerciseName = exerciseName
+            return suggestion
+        } catch let error as DecodingError {
+            throw AIError.decodingError(error, context: describeDecodingError(error))
+        }
     }
 
     // MARK: - Motivational Messages
@@ -634,49 +638,229 @@ private struct ClaudeResponse: Codable {
 
 // MARK: - Errors
 
-enum AIError: Error, LocalizedError {
+/// Comprehensive error types for AI service operations
+enum AIError: Error, LocalizedError, Equatable {
+    // MARK: - Configuration Errors
     case noAPIKey
     case invalidURL
-    case invalidResponse
-    case emptyResponse
-    case apiError(statusCode: Int)
-    case decodingError(Error)
+
+    // MARK: - Network Errors
     case offline
     case networkError(URLError)
-    case rateLimited
-    case timeout
+    case timeout(duration: TimeInterval)
+
+    // MARK: - HTTP Errors
+    case rateLimited(retryAfter: TimeInterval?)
+    case authenticationFailed
+    case forbidden
+    case badRequest(message: String?)
+    case serverError(statusCode: Int)
+    case apiError(statusCode: Int)
+
+    // MARK: - Response Parsing Errors
+    case invalidResponse(reason: String)
+    case emptyResponse
+    case emptyContentArray
+    case malformedJSON(dataPreview: String?)
+    case unexpectedStreamingResponse(partial: String)
+    case invalidResponseStructure(missingField: String)
+    case noTextContent(foundTypes: [String])
+    case apiErrorResponse(type: String, message: String)
+    case decodingError(DecodingError, context: String)
+
+    // MARK: - Retry/Circuit Breaker Errors
+    case maxRetriesExceeded(attempts: Int, lastError: Error?)
+    case circuitBreakerOpen(failures: Int)
+
+    // MARK: - Equatable Conformance
+
+    static func == (lhs: AIError, rhs: AIError) -> Bool {
+        switch (lhs, rhs) {
+        case (.noAPIKey, .noAPIKey),
+             (.invalidURL, .invalidURL),
+             (.offline, .offline),
+             (.authenticationFailed, .authenticationFailed),
+             (.forbidden, .forbidden),
+             (.emptyResponse, .emptyResponse),
+             (.emptyContentArray, .emptyContentArray):
+            return true
+        case (.networkError(let lhsError), .networkError(let rhsError)):
+            return lhsError.code == rhsError.code
+        case (.timeout(let lhsDuration), .timeout(let rhsDuration)):
+            return lhsDuration == rhsDuration
+        case (.rateLimited(let lhsRetry), .rateLimited(let rhsRetry)):
+            return lhsRetry == rhsRetry
+        case (.badRequest(let lhsMsg), .badRequest(let rhsMsg)):
+            return lhsMsg == rhsMsg
+        case (.serverError(let lhsCode), .serverError(let rhsCode)):
+            return lhsCode == rhsCode
+        case (.apiError(let lhsCode), .apiError(let rhsCode)):
+            return lhsCode == rhsCode
+        case (.invalidResponse(let lhsReason), .invalidResponse(let rhsReason)):
+            return lhsReason == rhsReason
+        case (.malformedJSON(let lhsPreview), .malformedJSON(let rhsPreview)):
+            return lhsPreview == rhsPreview
+        case (.unexpectedStreamingResponse(let lhsPartial), .unexpectedStreamingResponse(let rhsPartial)):
+            return lhsPartial == rhsPartial
+        case (.invalidResponseStructure(let lhsField), .invalidResponseStructure(let rhsField)):
+            return lhsField == rhsField
+        case (.noTextContent(let lhsTypes), .noTextContent(let rhsTypes)):
+            return lhsTypes == rhsTypes
+        case (.apiErrorResponse(let lhsType, let lhsMsg), .apiErrorResponse(let rhsType, let rhsMsg)):
+            return lhsType == rhsType && lhsMsg == rhsMsg
+        case (.decodingError(_, let lhsContext), .decodingError(_, let rhsContext)):
+            return lhsContext == rhsContext
+        case (.maxRetriesExceeded(let lhsAttempts, _), .maxRetriesExceeded(let rhsAttempts, _)):
+            return lhsAttempts == rhsAttempts
+        case (.circuitBreakerOpen(let lhsFailures), .circuitBreakerOpen(let rhsFailures)):
+            return lhsFailures == rhsFailures
+        default:
+            return false
+        }
+    }
+
+    // MARK: - Error Descriptions
 
     var errorDescription: String? {
         switch self {
         case .noAPIKey:
-            return "No API key configured"
+            return String(localized: "No API key configured. Please add your Claude API key in settings.")
         case .invalidURL:
-            return "Invalid API URL"
-        case .invalidResponse:
-            return "Invalid response from AI service"
-        case .emptyResponse:
-            return "Empty response from AI service"
-        case .apiError(let code):
-            return "API error: \(code)"
-        case .decodingError(let error):
-            return "Failed to decode response: \(error.localizedDescription)"
+            return String(localized: "Invalid API URL configuration.")
         case .offline:
-            return "You're offline. AI features require an internet connection."
+            return String(localized: "You're offline. AI features require an internet connection.")
         case .networkError(let error):
-            return "Network error: \(error.localizedDescription)"
-        case .rateLimited:
-            return "Too many requests. Please try again in a few minutes."
-        case .timeout:
-            return "Request timed out. Please try again."
+            return String(localized: "Network error: \(error.localizedDescription)")
+        case .timeout(let duration):
+            return String(localized: "Request timed out after \(Int(duration)) seconds. Please try again.")
+        case .rateLimited(let retryAfter):
+            if let seconds = retryAfter {
+                return String(localized: "Too many requests. Please try again in \(Int(seconds)) seconds.")
+            }
+            return String(localized: "Too many requests. Please try again in a few minutes.")
+        case .authenticationFailed:
+            return String(localized: "Authentication failed. Please check your API key.")
+        case .forbidden:
+            return String(localized: "Access forbidden. Your API key may not have the required permissions.")
+        case .badRequest(let message):
+            return String(localized: "Invalid request: \(message ?? "Unknown error")")
+        case .serverError(let statusCode):
+            return String(localized: "Server error (\(statusCode)). The AI service is temporarily unavailable.")
+        case .apiError(let code):
+            return String(localized: "API error: \(code)")
+        case .invalidResponse(let reason):
+            return String(localized: "Invalid response from AI service: \(reason)")
+        case .emptyResponse:
+            return String(localized: "The AI service returned an empty response.")
+        case .emptyContentArray:
+            return String(localized: "The AI response contained no content blocks.")
+        case .malformedJSON(let preview):
+            let previewText = preview.map { " Preview: \($0.prefix(50))..." } ?? ""
+            return String(localized: "Received malformed JSON response.\(previewText)")
+        case .unexpectedStreamingResponse:
+            return String(localized: "Received unexpected streaming response format.")
+        case .invalidResponseStructure(let missingField):
+            return String(localized: "Invalid response structure: missing '\(missingField)' field.")
+        case .noTextContent(let foundTypes):
+            return String(localized: "No text content in response. Found content types: \(foundTypes.joined(separator: ", "))")
+        case .apiErrorResponse(let type, let message):
+            return String(localized: "API error (\(type)): \(message)")
+        case .decodingError(_, let context):
+            return String(localized: "Failed to decode response: \(context)")
+        case .maxRetriesExceeded(let attempts, let lastError):
+            let errorInfo = lastError.map { " Last error: \($0.localizedDescription)" } ?? ""
+            return String(localized: "Request failed after \(attempts) attempts.\(errorInfo)")
+        case .circuitBreakerOpen(let failures):
+            return String(localized: "Service temporarily disabled after \(failures) consecutive failures. Please try again later.")
         }
     }
 
+    // MARK: - Error Classification
+
+    /// Whether this error is potentially recoverable with a retry
     var isRecoverable: Bool {
         switch self {
-        case .offline, .networkError, .rateLimited, .timeout:
+        case .offline, .networkError, .timeout, .rateLimited, .serverError:
+            return true
+        case .maxRetriesExceeded, .circuitBreakerOpen:
+            return true // Can recover after waiting
+        default:
+            return false
+        }
+    }
+
+    /// Whether this error should trigger a retry attempt
+    var isRetryable: Bool {
+        switch self {
+        case .timeout, .serverError, .rateLimited:
+            return true
+        case .networkError(let urlError):
+            // Retry on temporary network issues
+            switch urlError.code {
+            case .timedOut, .networkConnectionLost, .notConnectedToInternet:
+                return true
+            default:
+                return false
+            }
+        default:
+            return false
+        }
+    }
+
+    /// Whether this error indicates an authentication/configuration issue
+    var isConfigurationError: Bool {
+        switch self {
+        case .noAPIKey, .authenticationFailed, .forbidden, .invalidURL:
             return true
         default:
             return false
+        }
+    }
+
+    /// Suggested user action for this error
+    var suggestedAction: String {
+        switch self {
+        case .noAPIKey:
+            return String(localized: "Go to Settings to add your API key.")
+        case .authenticationFailed:
+            return String(localized: "Check your API key in Settings.")
+        case .forbidden:
+            return String(localized: "Verify your API key has the correct permissions.")
+        case .offline:
+            return String(localized: "Check your internet connection.")
+        case .rateLimited(let retryAfter):
+            if let seconds = retryAfter {
+                return String(localized: "Wait \(Int(seconds)) seconds before trying again.")
+            }
+            return String(localized: "Wait a few minutes before trying again.")
+        case .timeout, .serverError, .networkError:
+            return String(localized: "Try again in a moment.")
+        case .circuitBreakerOpen:
+            return String(localized: "Wait a few minutes for the service to recover.")
+        case .maxRetriesExceeded:
+            return String(localized: "Check your connection and try again later.")
+        default:
+            return String(localized: "Try again or contact support if the problem persists.")
+        }
+    }
+
+    /// HTTP status code if applicable
+    var statusCode: Int? {
+        switch self {
+        case .rateLimited:
+            return 429
+        case .authenticationFailed:
+            return 401
+        case .forbidden:
+            return 403
+        case .badRequest:
+            return 400
+        case .serverError(let code):
+            return code
+        case .apiError(let code):
+            return code
+        default:
+            return nil
         }
     }
 }

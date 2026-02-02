@@ -245,6 +245,32 @@ enum L10n {
         static let noErrorsRecorded = String(localized: "debug.no_errors_recorded")
     }
 
+    // MARK: - Sync
+    enum Sync {
+        static let syncing = String(localized: "sync.syncing")
+        static let synced = String(localized: "sync.synced")
+        static let pending = String(localized: "sync.pending")
+        static let conflict = String(localized: "sync.conflict")
+        static let error = String(localized: "sync.error")
+        static let iCloudSync = String(localized: "sync.icloud_sync")
+        static let syncNow = String(localized: "sync.sync_now")
+        static let lastSyncedNever = String(localized: "sync.last_synced_never")
+        static let iCloudRequired = String(localized: "sync.icloud_required")
+        static let signInToSync = String(localized: "sync.sign_in_to_sync")
+        static let syncInProgress = String(localized: "sync.sync_in_progress")
+        static let conflictResolved = String(localized: "sync.conflict_resolved")
+        static let offlineChangesQueued = String(localized: "sync.offline_changes_queued")
+        static func pendingChanges(_ count: Int) -> String {
+            String(localized: "sync.pending_changes \(count)")
+        }
+        static func lastSynced(_ time: String) -> String {
+            String(localized: "sync.last_synced \(time)")
+        }
+        static func syncFailed(_ reason: String) -> String {
+            String(localized: "sync.sync_failed \(reason)")
+        }
+    }
+
     // MARK: - Onboarding
     enum Onboarding {
         static let welcome = String(localized: "onboarding.welcome")
@@ -333,6 +359,58 @@ enum L10n {
         static let doubleTapToViewDetails = String(localized: "accessibility.double_tap_to_view_details")
         static let dismissCelebration = String(localized: "accessibility.dismiss_celebration")
         static let loadingPleaseWait = String(localized: "accessibility.loading_please_wait")
+    }
+
+    // MARK: - Notifications
+    enum Notification {
+        // Weekly Review
+        static let weeklyReviewTitle = String(localized: "notification.weekly_review.title")
+        static let weeklyReviewBody = String(localized: "notification.weekly_review.body")
+        static let weeklyReviewHiddenPreview = String(localized: "notification.weekly_review.hidden_preview")
+
+        // Streak Reminder
+        static let streakReminderTitle = String(localized: "notification.streak_reminder.title")
+        static func streakReminderBody(streak: Int) -> String {
+            String(localized: "notification.streak_reminder.body \(streak)")
+        }
+        static let streakReminderHiddenPreview = String(localized: "notification.streak_reminder.hidden_preview")
+
+        // Streak At Risk
+        static let streakAtRiskTitle = String(localized: "notification.streak_at_risk.title")
+        static func streakAtRiskBody(streak: Int) -> String {
+            String(localized: "notification.streak_at_risk.body \(streak)")
+        }
+
+        // Workout Reminder
+        static let workoutReminderTitle = String(localized: "notification.workout_reminder.title")
+        static func workoutReminderBody(dayName: String) -> String {
+            String(localized: "notification.workout_reminder.body \(dayName)")
+        }
+        static let workoutReminderHiddenPreview = String(localized: "notification.workout_reminder.hidden_preview")
+
+        // Congratulations
+        static let congratulationsTitle = String(localized: "notification.congratulations.title")
+        static func congratulationsBody(badge: String) -> String {
+            String(localized: "notification.congratulations.body \(badge)")
+        }
+
+        // Snooze
+        static let snoozeTitle = String(localized: "notification.snooze.title")
+        static let snoozeBody = String(localized: "notification.snooze.body")
+
+        // Actions
+        static let actionViewReview = String(localized: "notification.action.view_review")
+        static let actionDismiss = String(localized: "notification.action.dismiss")
+        static let actionStartWorkout = String(localized: "notification.action.start_workout")
+        static let actionSnooze = String(localized: "notification.action.snooze")
+
+        // Settings
+        static let notificationsTitle = String(localized: "notification.settings.title")
+        static let weeklyReviewNotifications = String(localized: "notification.settings.weekly_review")
+        static let streakReminders = String(localized: "notification.settings.streak_reminders")
+        static let workoutReminders = String(localized: "notification.settings.workout_reminders")
+        static let reminderTime = String(localized: "notification.settings.reminder_time")
+        static let reminderDays = String(localized: "notification.settings.reminder_days")
     }
 }
 

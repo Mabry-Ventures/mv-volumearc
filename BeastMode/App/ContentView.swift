@@ -18,6 +18,7 @@ struct ContentView: View {
                     Label("Home", systemImage: "house.fill")
                 }
                 .tag(0)
+                .accessibilityIdentifier(UITestIdentifiers.TabBar.home)
 
             // Workout
             WorkoutView()
@@ -25,6 +26,7 @@ struct ContentView: View {
                     Label("Workout", systemImage: "figure.strengthtraining.traditional")
                 }
                 .tag(1)
+                .accessibilityIdentifier(UITestIdentifiers.TabBar.workout)
 
             // Plans
             PlanLibraryView()
@@ -32,6 +34,7 @@ struct ContentView: View {
                     Label("Plans", systemImage: "calendar")
                 }
                 .tag(2)
+                .accessibilityIdentifier(UITestIdentifiers.TabBar.plans)
 
             // Progress/Stats
             ProgressView()
@@ -39,6 +42,7 @@ struct ContentView: View {
                     Label("Progress", systemImage: "chart.line.uptrend.xyaxis")
                 }
                 .tag(3)
+                .accessibilityIdentifier(UITestIdentifiers.TabBar.progress)
 
             // Profile/Settings
             ProfileView()
@@ -46,6 +50,7 @@ struct ContentView: View {
                     Label("Profile", systemImage: "person.fill")
                 }
                 .tag(4)
+                .accessibilityIdentifier(UITestIdentifiers.TabBar.profile)
         }
         .environmentObject(celebrationCoordinator)
         .celebrationOverlay(coordinator: celebrationCoordinator)
@@ -72,10 +77,12 @@ struct HomeView: View {
                     // Streak display
                     StreakDisplayView()
                         .padding(.horizontal)
+                        .accessibilityIdentifier(UITestIdentifiers.Home.streakDisplay)
 
                     // Weekly Review card
                     WeeklyReviewCard(weekId: currentWeekId)
                         .padding(.horizontal)
+                        .accessibilityIdentifier(UITestIdentifiers.Home.weeklyReviewCard)
 
                     // Recent badges
                     RecentBadgesView()
@@ -99,6 +106,7 @@ struct HomeView: View {
                     } label: {
                         Image(systemName: "trophy.fill")
                     }
+                    .accessibilityIdentifier(UITestIdentifiers.Home.trophyButton)
                 }
             }
         }
@@ -141,6 +149,7 @@ struct QuickStartButton: View {
                     )
             )
         }
+        .accessibilityIdentifier(UITestIdentifiers.Home.quickStartButton)
     }
 }
 
@@ -153,6 +162,7 @@ struct RecentWorkoutsSection: View {
         VStack(alignment: .leading, spacing: 12) {
             Text(L10n.Workout.recentWorkouts)
                 .font(.headline)
+                .accessibilityIdentifier(UITestIdentifiers.Home.recentWorkoutsSection)
 
             if workouts.isEmpty {
                 ContentUnavailableView {
@@ -164,6 +174,7 @@ struct RecentWorkoutsSection: View {
             } else {
                 ForEach(workouts) { workout in
                     WorkoutRowView(workout: workout)
+                        .accessibilityIdentifier(UITestIdentifiers.Home.workoutRow)
                 }
             }
         }
@@ -277,6 +288,7 @@ struct StartWorkoutView: View {
                     )
             }
             .padding(.horizontal, 40)
+            .accessibilityIdentifier(UITestIdentifiers.Workout.startButton)
 
             Spacer()
         }
@@ -300,6 +312,7 @@ struct ActiveWorkoutView: View {
                 // Exercises
                 ForEach(workout.exercises.sorted(by: { $0.order < $1.order })) { exercise in
                     ExerciseCardView(exercise: exercise)
+                        .accessibilityIdentifier(UITestIdentifiers.Workout.exerciseCard)
                 }
 
                 // Add exercise button
@@ -317,9 +330,11 @@ struct ActiveWorkoutView: View {
                         )
                 }
                 .padding(.top)
+                .accessibilityIdentifier(UITestIdentifiers.Workout.addExerciseButton)
             }
             .padding()
         }
+        .accessibilityIdentifier(UITestIdentifiers.Workout.activeWorkoutView)
         .navigationTitle(workout.name ?? "Workout")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -328,6 +343,7 @@ struct ActiveWorkoutView: View {
                     finishWorkout()
                 }
                 .fontWeight(.semibold)
+                .accessibilityIdentifier(UITestIdentifiers.Workout.finishButton)
             }
         }
         .sheet(isPresented: $showAddExercise) {
@@ -627,6 +643,7 @@ struct ProfileView: View {
                         } label: {
                             Label("Rest Timer", systemImage: "timer")
                         }
+                        .accessibilityIdentifier(UITestIdentifiers.Settings.restTimerCell)
 
                         Picker(selection: Binding(
                             get: { profile.unitSystemEnum },
@@ -638,6 +655,7 @@ struct ProfileView: View {
                         } label: {
                             Label("Units", systemImage: "scalemass")
                         }
+                        .accessibilityIdentifier(UITestIdentifiers.Settings.unitsCell)
                     }
 
                     Section("Achievements") {
@@ -646,6 +664,7 @@ struct ProfileView: View {
                         } label: {
                             Label("Badges", systemImage: "trophy.fill")
                         }
+                        .accessibilityIdentifier(UITestIdentifiers.Settings.badgesCell)
                     }
 
                     Section("About") {
@@ -706,6 +725,82 @@ extension Color {
             blue:  Double(b) / 255,
             opacity: Double(a) / 255
         )
+    }
+}
+
+// MARK: - UI Test Identifiers
+
+/// Accessibility identifiers for UI testing
+enum UITestIdentifiers {
+
+    enum TabBar {
+        static let home = "tab_home"
+        static let workout = "tab_workout"
+        static let plans = "tab_plans"
+        static let progress = "tab_progress"
+        static let profile = "tab_profile"
+    }
+
+    enum Home {
+        static let trophyButton = "home_trophy_button"
+        static let quickStartButton = "home_quick_start_button"
+        static let recentWorkoutsSection = "home_recent_workouts_section"
+        static let workoutRow = "home_workout_row"
+        static let streakDisplay = "home_streak_display"
+        static let weeklyReviewCard = "home_weekly_review_card"
+    }
+
+    enum Workout {
+        static let startButton = "workout_start_button"
+        static let activeWorkoutView = "workout_active_view"
+        static let detailView = "workout_detail_view"
+        static let addExerciseButton = "workout_add_exercise_button"
+        static let finishButton = "workout_finish_button"
+        static let exerciseCard = "workout_exercise_card"
+        static let setInput = "workout_set_input"
+    }
+
+    enum Plans {
+        static let addPlanButton = "plans_add_button"
+        static let planRow = "plans_plan_row"
+        static let planEditor = "plans_plan_editor"
+        static let planDetail = "plans_plan_detail"
+        static let activePlanCard = "plans_active_plan_card"
+        static let quickActions = "plans_quick_actions"
+        static let importSheet = "plans_import_sheet"
+        static let templatePicker = "plans_template_picker"
+    }
+
+    enum Analytics {
+        static let dashboard = "analytics_dashboard"
+        static let timeRangePicker = "analytics_time_range_picker"
+        static let exerciseTrendRow = "analytics_exercise_trend_row"
+        static let exerciseDetail = "analytics_exercise_detail"
+        static let summaryCards = "analytics_summary_cards"
+        static let progressBreakdown = "analytics_progress_breakdown"
+        static let settingsButton = "analytics_settings_button"
+    }
+
+    enum Settings {
+        static let restTimerCell = "settings_rest_timer_cell"
+        static let restTimerView = "settings_rest_timer_view"
+        static let badgesCell = "settings_badges_cell"
+        static let unitsCell = "settings_units_cell"
+        static let signOutButton = "settings_sign_out_button"
+    }
+
+    enum DeepLink {
+        static let importSheet = "deep_link_import_sheet"
+        static let loadingView = "deep_link_loading_view"
+        static let errorView = "deep_link_error_view"
+        static let successView = "deep_link_success_view"
+    }
+
+    enum Common {
+        static let cancelButton = "common_cancel_button"
+        static let saveButton = "common_save_button"
+        static let doneButton = "common_done_button"
+        static let backButton = "common_back_button"
     }
 }
 

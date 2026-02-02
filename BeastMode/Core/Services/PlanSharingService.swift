@@ -70,22 +70,46 @@ actor PlanSharingService {
 
     // MARK: - Import
 
-    /// Import a plan from JSON data
+    /// Import a plan from JSON data with automatic version migration
     func importPlan(from data: Data, userId: UUID) throws -> WorkoutPlan {
+        // Detect and validate version
+        let version = try PlanMigrationService.detectVersion(from: data)
+
+        guard PlanMigrationService.isVersionSupported(version) else {
+            throw PlanSharingError.unsupportedVersion(version)
+        }
+
+        // Migrate data if needed
+        let migratedData: Data
+        if version < ShareablePlan.currentExportVersion {
+            migratedData = try PlanMigrationService.migrateImportData(data)
+        } else {
+            migratedData = data
+        }
+
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
 
-        let shareable = try decoder.decode(ShareablePlan.self, from: data)
+        let shareable = try decoder.decode(ShareablePlan.self, from: migratedData)
+        let plan = shareable.toPlan(userId: userId)
 
-        // Validate version
-        guard shareable.version == 1 else {
-            throw PlanSharingError.unsupportedVersion(shareable.version)
+        // Ensure plan is at current schema version
+        if plan.needsMigration {
+            let migrationService = PlanMigrationService(modelContext: modelContext)
+            Task {
+                await migrationService.migratePlan(plan)
+            }
         }
 
-        let plan = shareable.toPlan(userId: userId)
         modelContext.insert(plan)
 
         return plan
+    }
+
+    /// Import a plan with detailed migration results
+    func importPlanWithMigration(from data: Data, userId: UUID) throws -> (WorkoutPlan, MigrationResult?) {
+        let migrationService = PlanMigrationService(modelContext: modelContext)
+        return try migrationService.importAndMigrate(from: data, userId: userId)
     }
 
     /// Import a plan from a file URL
@@ -124,15 +148,17 @@ actor PlanSharingService {
 
     /// Validate plan data before import
     func validatePlanData(_ data: Data) throws -> ShareablePlan {
+        // First check version
+        let version = try PlanMigrationService.detectVersion(from: data)
+
+        guard PlanMigrationService.isVersionSupported(version) else {
+            throw PlanSharingError.unsupportedVersion(version)
+        }
+
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
 
         let shareable = try decoder.decode(ShareablePlan.self, from: data)
-
-        // Validate version
-        guard shareable.version == 1 else {
-            throw PlanSharingError.unsupportedVersion(shareable.version)
-        }
 
         // Validate required fields
         guard !shareable.name.isEmpty else {
@@ -146,9 +172,43 @@ actor PlanSharingService {
         return shareable
     }
 
-    // MARK: - Helpers
+    /// Get version info for plan data without full validation
+    func getPlanVersionInfo(_ data: Data) throws -> PlanVersionInfo {
+        let version = try PlanMigrationService.detectVersion(from: data)
+        let isSupported = PlanMigrationService.isVersionSupported(version)
+        let needsMigration = version < ShareablePlan.currentExportVersion
 
-    private func sanitizeFileName(_ name: String) -> String {
+        return PlanVersionInfo(
+            version: version,
+            currentVersion: ShareablePlan.currentExportVersion,
+            isSupported: isSupported,
+            needsMigration: needsMigration
+        )
+    }
+}
+
+/// Information about a plan's version status
+struct PlanVersionInfo: Sendable {
+    let version: Int
+    let currentVersion: Int
+    let isSupported: Bool
+    let needsMigration: Bool
+
+    var versionDescription: String {
+        if !isSupported {
+            return "Unsupported (v\(version))"
+        } else if needsMigration {
+            return "v\(version) (will upgrade to v\(currentVersion))"
+        } else {
+            return "v\(version) (current)"
+        }
+    }
+}
+
+// MARK: - PlanSharingService Helpers
+
+private extension PlanSharingService {
+    func sanitizeFileName(_ name: String) -> String {
         // Remove invalid characters for file names
         let invalidCharacters = CharacterSet(charactersIn: "/\\?%*|\"<>:")
         let sanitized = name.components(separatedBy: invalidCharacters).joined(separator: "-")
