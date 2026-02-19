@@ -3,25 +3,28 @@
 import { useEffect, useState } from 'react';
 import { Calendar, Trash2, ChevronRight } from 'lucide-react';
 import { storage } from '@/utils/storage';
-import { calculateWorkoutVolume, formatDuration, formatWeight } from '@/utils/calculations';
-import { Workout } from '@/types';
+import { calculateWorkoutVolume, convertWeight, formatDuration, formatWeight } from '@/utils/calculations';
+import type { Workout, WorkoutSet } from '@/types';
 
 export default function HistoryPage() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
+  const [unit, setUnit] = useState<'lbs' | 'kg'>('lbs');
 
   useEffect(() => {
     const data = storage.getWorkouts();
+    const settings = storage.getSettings();
     const completed = data
       .filter(w => w.completed)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     setWorkouts(completed);
+    setUnit(settings.unit);
   }, []);
 
   const handleDelete = (id: string) => {
     if (confirm('Are you sure you want to delete this workout?')) {
       storage.deleteWorkout(id);
-      setWorkouts(workouts.filter(w => w.id !== id));
+      setWorkouts(prev => prev.filter(w => w.id !== id));
       if (selectedWorkout?.id === id) {
         setSelectedWorkout(null);
       }
@@ -37,6 +40,12 @@ export default function HistoryPage() {
     });
   };
 
+  const formatSetWeight = (set: WorkoutSet): string => {
+    const weight =
+      set.unit === unit ? set.weight : convertWeight(set.weight, set.unit, unit);
+    return `${weight} ${unit}`;
+  };
+
   // Workout detail view
   if (selectedWorkout) {
     return (
@@ -44,6 +53,7 @@ export default function HistoryPage() {
         <header className="page-header flex justify-between items-center">
           <div>
             <button
+              type="button"
               className="text-muted mb-2"
               onClick={() => setSelectedWorkout(null)}
               style={{ fontSize: '0.875rem' }}
@@ -81,9 +91,25 @@ export default function HistoryPage() {
 
         <div className="card mb-4">
           <h3 className="mb-3" style={{ fontWeight: 600 }}>
-            Total Volume: {formatWeight(calculateWorkoutVolume(selectedWorkout), 'lbs')}
+            Total Volume: {formatWeight(calculateWorkoutVolume(selectedWorkout, unit), unit)}
           </h3>
         </div>
+
+        {selectedWorkout.aiSummary && (
+          <div className="card mb-4">
+            <h3 className="mb-2" style={{ fontWeight: 600 }}>
+              AI Summary
+            </h3>
+            <p className="mb-3">{selectedWorkout.aiSummary.summary}</p>
+            {selectedWorkout.aiSummary.keyWins.length > 0 && (
+              <ul style={{ paddingLeft: '1.25rem' }}>
+                {selectedWorkout.aiSummary.keyWins.map(win => (
+                  <li key={win}>{win}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         {selectedWorkout.exercises.map(exercise => (
           <div key={exercise.id} className="card mb-3">
@@ -100,7 +126,7 @@ export default function HistoryPage() {
               .map((set, index) => (
                 <div key={set.id} className="grid grid-cols-3 gap-2 py-1">
                   <div>{index + 1}</div>
-                  <div>{set.weight} {set.unit}</div>
+                  <div>{formatSetWeight(set)}</div>
                   <div>{set.reps}</div>
                 </div>
               ))}
@@ -128,14 +154,21 @@ export default function HistoryPage() {
       ) : (
         <div>
           {workouts.map(workout => (
-            <div
-              key={workout.id}
-              className="workout-history-item"
-              style={{ cursor: 'pointer' }}
-              onClick={() => setSelectedWorkout(workout)}
-            >
+            <div key={workout.id} className="workout-history-item">
               <div className="flex justify-between items-start">
-                <div>
+                <button
+                  type="button"
+                  className="text-left"
+                  onClick={() => setSelectedWorkout(workout)}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    padding: 0,
+                    margin: 0,
+                    flex: 1,
+                    cursor: 'pointer',
+                  }}
+                >
                   <div className="workout-history-date">
                     {formatDate(workout.date)}
                   </div>
@@ -145,11 +178,12 @@ export default function HistoryPage() {
                     {workout.duration && (
                       <span>{formatDuration(workout.duration)}</span>
                     )}
-                    <span>{formatWeight(calculateWorkoutVolume(workout), 'lbs')}</span>
+                    <span>{formatWeight(calculateWorkoutVolume(workout, unit), unit)}</span>
                   </div>
-                </div>
+                </button>
                 <div className="flex gap-2 items-center">
                   <button
+                    type="button"
                     className="btn btn-ghost btn-sm"
                     onClick={e => {
                       e.stopPropagation();

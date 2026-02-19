@@ -29,17 +29,17 @@ export const Timer = () => {
 
       <div className="flex justify-center gap-2 mt-4">
         {timer.isRunning ? (
-          <button className="btn btn-secondary" onClick={timer.pause}>
+          <button type="button" className="btn btn-secondary" onClick={timer.pause}>
             <Pause size={20} />
             Pause
           </button>
         ) : (
-          <button className="btn btn-primary" onClick={() => timer.start()}>
+          <button type="button" className="btn btn-primary" onClick={() => timer.start()}>
             <Play size={20} />
             {timer.timeRemaining < timer.duration ? 'Resume' : 'Start'}
           </button>
         )}
-        <button className="btn btn-ghost" onClick={timer.reset}>
+        <button type="button" className="btn btn-ghost" onClick={timer.reset}>
           <RotateCcw size={20} />
         </button>
       </div>
@@ -47,6 +47,7 @@ export const Timer = () => {
       <div className="timer-presets">
         {PRESETS.map(seconds => (
           <button
+            type="button"
             key={seconds}
             className="timer-preset"
             onClick={() => timer.setTime(seconds)}

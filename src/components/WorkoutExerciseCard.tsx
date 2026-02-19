@@ -1,7 +1,7 @@
 'use client';
 
 import { Plus, Trash2, Check } from 'lucide-react';
-import { WorkoutExercise, WorkoutSet } from '@/types';
+import type { WorkoutExercise, WorkoutSet } from '@/types';
 
 interface WorkoutExerciseCardProps {
   workoutExercise: WorkoutExercise;
@@ -18,6 +18,22 @@ export const WorkoutExerciseCard = ({
   onRemoveSet,
   onRemoveExercise,
 }: WorkoutExerciseCardProps) => {
+  const handleNumberChange = (
+    setId: string,
+    field: 'weight' | 'reps',
+    rawValue: string
+  ) => {
+    if (rawValue === '') {
+      onUpdateSet(setId, { [field]: 0 } as Partial<WorkoutSet>);
+      return;
+    }
+
+    const parsed = Number(rawValue);
+    if (!Number.isFinite(parsed)) return;
+
+    onUpdateSet(setId, { [field]: Math.max(0, parsed) } as Partial<WorkoutSet>);
+  };
+
   return (
     <div className="exercise-card mb-4">
       <div className="exercise-header">
@@ -27,7 +43,7 @@ export const WorkoutExerciseCard = ({
             {workoutExercise.exercise.muscleGroups.join(', ')}
           </div>
         </div>
-        <button className="btn btn-ghost btn-sm" onClick={onRemoveExercise}>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onRemoveExercise}>
           <Trash2 size={18} />
         </button>
       </div>
@@ -49,7 +65,7 @@ export const WorkoutExerciseCard = ({
               placeholder="0"
               value={set.weight || ''}
               onChange={e =>
-                onUpdateSet(set.id, { weight: Number(e.target.value) })
+                handleNumberChange(set.id, 'weight', e.target.value)
               }
             />
             <input
@@ -58,10 +74,11 @@ export const WorkoutExerciseCard = ({
               placeholder="0"
               value={set.reps || ''}
               onChange={e =>
-                onUpdateSet(set.id, { reps: Number(e.target.value) })
+                handleNumberChange(set.id, 'reps', e.target.value)
               }
             />
             <button
+              type="button"
               className={`set-complete ${set.completed ? 'completed' : ''}`}
               onClick={() => onUpdateSet(set.id, { completed: !set.completed })}
             >
@@ -71,12 +88,13 @@ export const WorkoutExerciseCard = ({
         ))}
 
         <div className="flex gap-2 mt-3 p-2">
-          <button className="btn btn-secondary btn-sm flex-1" onClick={onAddSet}>
+          <button type="button" className="btn btn-secondary btn-sm flex-1" onClick={onAddSet}>
             <Plus size={16} />
             Add Set
           </button>
           {workoutExercise.sets.length > 1 && (
             <button
+              type="button"
               className="btn btn-ghost btn-sm"
               onClick={() =>
                 onRemoveSet(workoutExercise.sets[workoutExercise.sets.length - 1].id)

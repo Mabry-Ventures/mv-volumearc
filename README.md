@@ -36,12 +36,18 @@ Beast Mode is a comprehensive fitness tracking application that helps you log wo
    npm install
    ```
 
-3. Start the development server:
+3. Configure environment variables:
+   ```bash
+   cp .env.example .env.local
+   ```
+   Add your `OPENAI_API_KEY` and optional rate-limit credentials.
+
+4. Start the development server:
    ```bash
    npm run dev
    ```
 
-4. Open your browser and navigate to `http://localhost:3000`
+5. Open your browser and navigate to `http://localhost:3000`
 
 ## Usage
 
@@ -96,7 +102,7 @@ Contributions are welcome! Please follow these steps:
 - [ ] Social features - share workouts with friends
 - [ ] Workout templates from fitness influencers
 - [ ] Apple Watch / Wear OS integration
-- [ ] AI-powered workout recommendations
+- [x] AI-powered workout recommendations
 - [ ] Nutrition tracking integration
 - [ ] Multi-language support
 

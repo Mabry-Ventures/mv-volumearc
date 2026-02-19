@@ -1,4 +1,4 @@
-import { Exercise } from '@/types';
+import type { Exercise, ExerciseCategory, MuscleGroup } from '@/types';
 
 export const defaultExercises: Exercise[] = [
   // Chest
@@ -205,12 +205,12 @@ export const defaultExercises: Exercise[] = [
   }
 ];
 
-export const getExercisesByCategory = (category: string): Exercise[] => {
+export const getExercisesByCategory = (category: ExerciseCategory): Exercise[] => {
   return defaultExercises.filter(e => e.category === category);
 };
 
-export const getExercisesByMuscle = (muscle: string): Exercise[] => {
-  return defaultExercises.filter(e => e.muscleGroups.includes(muscle as any));
+export const getExercisesByMuscle = (muscle: MuscleGroup): Exercise[] => {
+  return defaultExercises.filter(e => e.muscleGroups.includes(muscle));
 };
 
 export const getExerciseById = (id: string): Exercise | undefined => {

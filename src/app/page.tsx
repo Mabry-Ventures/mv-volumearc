@@ -6,23 +6,26 @@ import { Dumbbell, Flame, Trophy, TrendingUp } from 'lucide-react';
 import { StatsCard } from '@/components/StatsCard';
 import { storage } from '@/utils/storage';
 import { calculateUserStats, formatWeight } from '@/utils/calculations';
-import { Workout, UserStats } from '@/types';
+import type { Workout, UserStats } from '@/types';
 
 export default function HomePage() {
   const [stats, setStats] = useState<UserStats | null>(null);
   const [recentWorkout, setRecentWorkout] = useState<Workout | null>(null);
   const [hasCurrentWorkout, setHasCurrentWorkout] = useState(false);
+  const [unit, setUnit] = useState<'lbs' | 'kg'>('lbs');
 
   useEffect(() => {
     const workouts = storage.getWorkouts();
     const currentWorkout = storage.getCurrentWorkout();
+    const settings = storage.getSettings();
 
-    setStats(calculateUserStats(workouts));
+    setUnit(settings.unit);
+    setStats(calculateUserStats(workouts, settings.unit));
     setHasCurrentWorkout(!!currentWorkout);
 
     const completed = workouts.filter(w => w.completed);
     if (completed.length > 0) {
-      const sorted = completed.sort(
+      const sorted = [...completed].sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
       );
       setRecentWorkout(sorted[0]);
@@ -35,7 +38,7 @@ export default function HomePage() {
         <h1 style={{ fontSize: '2rem', fontWeight: 700 }}>
           Beast Mode
         </h1>
-        <p className="text-muted mt-1">Let's crush it today!</p>
+        <p className="text-muted mt-1">Let&apos;s crush it today!</p>
       </header>
 
       {hasCurrentWorkout ? (
@@ -63,7 +66,7 @@ export default function HomePage() {
             icon={<Flame size={24} color="var(--primary)" />}
           />
           <StatsCard
-            value={formatWeight(stats.totalVolume, 'lbs')}
+            value={formatWeight(stats.totalVolume, unit)}
             label="Total Volume"
             icon={<TrendingUp size={24} color="var(--primary)" />}
           />
