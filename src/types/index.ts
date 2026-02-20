@@ -123,6 +123,89 @@ export interface AppState {
   currentWorkout: Workout | null;
 }
 
+export interface DesignTokenSet {
+  color: {
+    bg: string;
+    bgElevated: string;
+    fg: string;
+    muted: string;
+    accent: string;
+    border: string;
+    success: string;
+    warning: string;
+    danger: string;
+  };
+  radius: {
+    sm: number;
+    md: number;
+    lg: number;
+    xl: number;
+    pill: number;
+  };
+  spacing: {
+    xs: number;
+    sm: number;
+    md: number;
+    lg: number;
+    xl: number;
+    xxl: number;
+  };
+  motion: {
+    fastMs: number;
+    normalMs: number;
+    slowMs: number;
+  };
+}
+
+export type WorkoutFlowStage =
+  | 'home'
+  | 'workout_start'
+  | 'workout_active'
+  | 'exercise_edit'
+  | 'workout_complete'
+  | 'history'
+  | 'stats'
+  | 'settings';
+
+export type SetActionType =
+  | 'set_complete_toggle'
+  | 'set_add'
+  | 'set_remove'
+  | 'set_duplicate'
+  | 'set_edit'
+  | 'set_apply_live_coach';
+
+export interface UiInteractionEvent {
+  id: string;
+  stage: WorkoutFlowStage;
+  action: string;
+  elapsedMs?: number;
+  metadata?: Record<string, string | number | boolean | null>;
+  createdAt: string;
+}
+
+export interface CoachSuggestionApplyResult {
+  suggestionId: string;
+  actionability: 'apply' | 'review';
+  applied: boolean;
+  reason?: string;
+}
+
+export interface WorkoutUxPreferences {
+  compactMode: boolean;
+  enableHaptics: boolean;
+  autoStartRestTimer: boolean;
+  restTimerDefaultSeconds: number;
+  showPreviousValues: boolean;
+}
+
+export interface WorkoutQuickAction {
+  id: string;
+  label: string;
+  command: string;
+  category: 'logging' | 'navigation' | 'coaching';
+}
+
 export interface AiUserPreferences {
   coachingStyle: 'direct' | 'encouraging' | 'technical';
   verbosity: 'brief' | 'balanced' | 'detailed';
@@ -208,6 +291,7 @@ export interface AiWorkoutPlanRequest {
 
 export interface AiWorkoutPlanResponse {
   workoutName: string;
+  estimatedSessionMinutes?: number;
   warmup: string[];
   exercises: AiPlanExercise[];
   cooldown: string[];
@@ -237,6 +321,7 @@ export interface AiLiveCoachResponse {
     restSeconds: number;
     unit: 'lbs' | 'kg';
   };
+  actionability?: 'apply' | 'review';
   confidence: number;
   rationale: string[];
   caution?: string;
@@ -296,6 +381,7 @@ export interface AiParsedExercise {
 
 export interface AiParseLogResponse {
   confidence: number;
+  requiresReview?: boolean;
   exercises: AiParsedExercise[];
   notes: string[];
   tokenUsage?: AiTokenUsage;

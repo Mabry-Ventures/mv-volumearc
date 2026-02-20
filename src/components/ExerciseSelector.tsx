@@ -96,7 +96,7 @@ export const ExerciseSelector = ({
                   left: '0.75rem',
                   top: '50%',
                   transform: 'translateY(-50%)',
-                  color: 'var(--muted)',
+                  color: 'var(--text-muted)',
                 }}
               />
               <input

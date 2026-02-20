@@ -1,11 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Dumbbell, Flame, Trophy, TrendingUp } from 'lucide-react';
+import { Dumbbell, Flame, Trophy, TrendingUp, Zap, Sparkles, ArrowRight } from 'lucide-react';
 import { StatsCard } from '@/components/StatsCard';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
 import { storage } from '@/utils/storage';
 import { calculateUserStats, formatWeight } from '@/utils/calculations';
+import { uiAnalytics } from '@/lib/analytics';
 import type { Workout, UserStats } from '@/types';
 
 export default function HomePage() {
@@ -21,91 +24,135 @@ export default function HomePage() {
 
     setUnit(settings.unit);
     setStats(calculateUserStats(workouts, settings.unit));
-    setHasCurrentWorkout(!!currentWorkout);
+    setHasCurrentWorkout(Boolean(currentWorkout));
 
-    const completed = workouts.filter(w => w.completed);
+    const completed = workouts.filter(workout => workout.completed);
     if (completed.length > 0) {
       const sorted = [...completed].sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
       );
       setRecentWorkout(sorted[0]);
     }
+
+    uiAnalytics.track({
+      stage: 'home',
+      action: 'home_loaded',
+      metadata: {
+        workouts: workouts.length,
+        hasCurrentWorkout: Boolean(currentWorkout),
+      },
+    });
   }, []);
+
+  const readinessMessage = useMemo(() => {
+    if (!stats || stats.totalWorkouts === 0) return 'Lock in your first session.';
+    if (stats.currentStreak >= 5) return 'Streak hot. Keep momentum rolling.';
+    if (stats.currentStreak >= 2) return 'You are consistent this week. Hit another clean lift day.';
+    return 'Reset focus and stack one strong session today.';
+  }, [stats]);
 
   return (
     <div className="py-6">
-      <header className="mb-6">
-        <h1 style={{ fontSize: '2rem', fontWeight: 700 }}>
-          Beast Mode
-        </h1>
-        <p className="text-muted mt-1">Let&apos;s crush it today!</p>
+      <header className="hero-card mb-4">
+        <p className="workflow-chip mb-2" style={{ display: 'inline-flex' }}>
+          Premium Athlete Mode
+        </p>
+        <h1 className="hero-title">Beast Mode</h1>
+        <p className="hero-subtitle">Fast logging. Smart coaching. No wasted reps.</p>
+
+        <div className="workflow-chip-row mt-3 mb-3">
+          <span className="workflow-chip">Quick Start</span>
+          <span className="workflow-chip">Last Routine</span>
+          <span className="workflow-chip">AI Plan</span>
+        </div>
+
+        <p className="text-muted" style={{ fontSize: '0.84rem' }}>{readinessMessage}</p>
       </header>
 
       {hasCurrentWorkout ? (
-        <Link href="/workout" className="btn btn-primary btn-lg btn-block mb-6">
-          <Dumbbell />
-          Continue Workout
+        <Link href="/workout" onClick={() => uiAnalytics.track({ stage: 'home', action: 'continue_workout_click' })}>
+          <Button variant="primary" size="lg" block className="mb-4">
+            <Dumbbell size={18} />
+            Continue Workout
+          </Button>
         </Link>
       ) : (
-        <Link href="/workout" className="btn btn-primary btn-lg btn-block mb-6">
-          <Dumbbell />
-          Start Workout
+        <Link href="/workout" onClick={() => uiAnalytics.track({ stage: 'home', action: 'start_workout_click' })}>
+          <Button variant="primary" size="lg" block className="mb-4">
+            <Zap size={18} />
+            Start Workout
+          </Button>
         </Link>
       )}
 
-      {stats && (
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <StatsCard
-            value={stats.totalWorkouts}
-            label="Total Workouts"
-            icon={<Dumbbell size={24} color="var(--primary)" />}
-          />
-          <StatsCard
-            value={stats.currentStreak}
-            label="Day Streak"
-            icon={<Flame size={24} color="var(--primary)" />}
-          />
-          <StatsCard
-            value={formatWeight(stats.totalVolume, unit)}
-            label="Total Volume"
-            icon={<TrendingUp size={24} color="var(--primary)" />}
-          />
-          <StatsCard
-            value={stats.longestStreak}
-            label="Best Streak"
-            icon={<Trophy size={24} color="var(--primary)" />}
-          />
-        </div>
-      )}
+      <div className="kpi-grid mb-4">
+        {stats ? (
+          <>
+            <StatsCard
+              value={stats.totalWorkouts}
+              label="Total Workouts"
+              icon={<Dumbbell size={20} color="var(--accent-400)" />}
+            />
+            <StatsCard
+              value={stats.currentStreak}
+              label="Current Streak"
+              icon={<Flame size={20} color="var(--warning-500)" />}
+            />
+            <StatsCard
+              value={formatWeight(stats.totalVolume, unit)}
+              label="Total Volume"
+              icon={<TrendingUp size={20} color="var(--success-500)" />}
+            />
+            <StatsCard
+              value={stats.longestStreak}
+              label="Best Streak"
+              icon={<Trophy size={20} color="var(--accent-400)" />}
+            />
+          </>
+        ) : (
+          <>
+            <StatsCard value="-" label="Total Workouts" />
+            <StatsCard value="-" label="Current Streak" />
+            <StatsCard value="-" label="Total Volume" />
+            <StatsCard value="-" label="Best Streak" />
+          </>
+        )}
+      </div>
 
       {recentWorkout && (
-        <div className="card">
-          <h3 className="mb-3" style={{ fontWeight: 600 }}>Last Workout</h3>
-          <div className="workout-history-item" style={{ margin: 0 }}>
-            <div className="workout-history-date">
-              {new Date(recentWorkout.date).toLocaleDateString('en-US', {
-                weekday: 'long',
-                month: 'short',
-                day: 'numeric',
-              })}
-            </div>
-            <div className="workout-history-name">{recentWorkout.name}</div>
-            <div className="workout-history-stats">
-              <span>{recentWorkout.exercises.length} exercises</span>
-              {recentWorkout.duration && <span>{recentWorkout.duration} min</span>}
-            </div>
+        <Card className="mb-4" elevated>
+          <div className="flex justify-between items-center mb-2">
+            <h3 style={{ fontWeight: 700 }}>Last Session Delta</h3>
+            <Link href="/history" className="workflow-chip">
+              Full History
+            </Link>
           </div>
-        </div>
+          <p style={{ fontWeight: 650 }}>{recentWorkout.name}</p>
+          <p className="text-muted" style={{ fontSize: '0.78rem', marginTop: '0.2rem' }}>
+            {new Date(recentWorkout.date).toLocaleDateString('en-US', {
+              weekday: 'short',
+              month: 'short',
+              day: 'numeric',
+            })}
+          </p>
+          <div className="workflow-chip-row mt-3">
+            <span className="workflow-chip">{recentWorkout.exercises.length} exercises</span>
+            <span className="workflow-chip">{recentWorkout.duration || 0} min</span>
+          </div>
+        </Card>
       )}
 
       {!stats?.totalWorkouts && (
-        <div className="empty-state">
-          <Dumbbell className="empty-state-icon" />
+        <Card className="empty-state" elevated>
+          <Sparkles className="empty-state-icon" />
           <h3 className="empty-state-title">Ready to start?</h3>
           <p className="empty-state-description">
-            Begin your fitness journey by starting your first workout.
+            Finish one session and your coaching dashboard unlocks.
           </p>
-        </div>
+          <Link href="/workout" className="btn btn-secondary">
+            Quick Start <ArrowRight size={16} />
+          </Link>
+        </Card>
       )}
     </div>
   );

@@ -2,7 +2,22 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Check, X, Sparkles, Mic, MicOff, Wand2 } from 'lucide-react';
+import {
+  Plus,
+  Check,
+  X,
+  Sparkles,
+  Mic,
+  MicOff,
+  Wand2,
+  ChevronDown,
+  ChevronUp,
+  Save,
+  Share2,
+  CalendarPlus,
+  Zap,
+} from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid';
 import { useWorkouts } from '@/hooks/useWorkouts';
 import { useAiWorkoutPlan } from '@/hooks/useAiWorkoutPlan';
 import { useLiveCoach } from '@/hooks/useLiveCoach';
@@ -11,9 +26,11 @@ import { useNaturalLanguageLog } from '@/hooks/useNaturalLanguageLog';
 import { Timer } from '@/components/Timer';
 import { ExerciseSelector } from '@/components/ExerciseSelector';
 import { WorkoutExerciseCard } from '@/components/WorkoutExerciseCard';
+import { Button, Card, Input, ProgressRing, Toast } from '@/components';
 import { storage } from '@/utils/storage';
 import { buildHistoryDigest, buildHistoryDigestLite } from '@/lib/ai/contextBuilder';
-import type { WorkoutSet, Workout } from '@/types';
+import { uiAnalytics } from '@/lib/analytics';
+import type { WorkoutSet, Workout, WorkoutTemplate, AiLiveCoachResponse } from '@/types';
 
 const getLastSet = (workout: Workout | null): WorkoutSet | null => {
   if (!workout) return null;
@@ -23,9 +40,54 @@ const getLastSet = (workout: Workout | null): WorkoutSet | null => {
   return sets[sets.length - 1];
 };
 
+const getElapsedMinutes = (startedAtIso: string): number => {
+  const elapsedMs = Date.now() - new Date(startedAtIso).getTime();
+  return Math.max(0, Math.round(elapsedMs / 60000));
+};
+
+const formatElapsed = (minutes: number): string => {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
+};
+
+const buildPreviousSetLookup = (workouts: Workout[]) => {
+  const lookup = new Map<string, Array<{ weight: number; reps: number; unit: 'lbs' | 'kg' }>>();
+
+  const completed = workouts.filter(workout => workout.completed);
+  const ordered = [...completed].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+
+  ordered.forEach(workout => {
+    workout.exercises.forEach(exercise => {
+      if (lookup.has(exercise.exercise.id)) return;
+
+      lookup.set(
+        exercise.exercise.id,
+        exercise.sets.map(set => ({ weight: set.weight, reps: set.reps, unit: set.unit }))
+      );
+    });
+  });
+
+  return lookup;
+};
+
+const getCompletionProgress = (workout: Workout | null): number => {
+  if (!workout) return 0;
+
+  const allSets = workout.exercises.flatMap(exercise => exercise.sets);
+  if (allSets.length === 0) return 0;
+
+  const completedSets = allSets.filter(set => set.completed).length;
+  return Math.round((completedSets / allSets.length) * 100);
+};
+
 export default function WorkoutPage() {
   const router = useRouter();
   const {
+    workouts,
     currentWorkout,
     isLoading,
     startWorkout,
@@ -35,6 +97,7 @@ export default function WorkoutPage() {
     addSetToExercise,
     updateSet,
     removeSet,
+    duplicateSet,
     completeWorkout,
     cancelWorkout,
     applyParsedLogPatch,
@@ -54,6 +117,10 @@ export default function WorkoutPage() {
   const [quickLogText, setQuickLogText] = useState('');
   const [showCompletionCard, setShowCompletionCard] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [restTimerKickSeconds, setRestTimerKickSeconds] = useState<number | null>(null);
+  const [isCoachCollapsed, setIsCoachCollapsed] = useState(true);
+
   const workoutNameInputId = 'workout-name';
   const goalInputId = 'ai-goal';
   const durationInputId = 'ai-duration-minutes';
@@ -62,6 +129,9 @@ export default function WorkoutPage() {
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
+
+  const aiPreferences = useMemo(() => storage.getAiPreferences(), []);
+  const uxPreferences = useMemo(() => storage.getWorkoutUxPreferences(), []);
 
   useEffect(() => {
     if (currentWorkout) {
@@ -76,27 +146,48 @@ export default function WorkoutPage() {
 
   const lastSet = useMemo(() => getLastSet(currentWorkout), [currentWorkout]);
 
+  const previousSetLookup = useMemo(() => buildPreviousSetLookup(workouts), [workouts]);
+
+  const sessionProgress = useMemo(() => getCompletionProgress(currentWorkout), [currentWorkout]);
+
   useEffect(() => {
     if (!currentWorkout || currentWorkout.exercises.length === 0) return;
 
-    const currentDigest = getCurrentDigest();
+    const digest = getCurrentDigest();
     liveCoach.queueSuggestion(
       {
         activeWorkout: currentWorkout,
         lastSet,
-        fullHistoryDigestLite: buildHistoryDigestLite(currentDigest),
+        fullHistoryDigestLite: buildHistoryDigestLite(digest),
       },
-      400
+      350
     );
   }, [currentWorkout, lastSet, liveCoach, getCurrentDigest]);
+
+  useEffect(() => {
+    if (!naturalLanguageLog.parseResult || !aiPreferences.autoApplySuggestions) return;
+
+    if (naturalLanguageLog.parseResult.requiresReview) return;
+
+    applyParsedLogPatch(naturalLanguageLog.parseResult);
+    setToastMessage('AI log patch auto-applied.');
+  }, [naturalLanguageLog.parseResult, aiPreferences.autoApplySuggestions, applyParsedLogPatch]);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+
+    const timeout = setTimeout(() => setToastMessage(''), 1800);
+    return () => clearTimeout(timeout);
+  }, [toastMessage]);
 
   const handleStartWorkout = () => {
     const name = workoutName.trim() || undefined;
     startWorkout(name);
+    uiAnalytics.track({ stage: 'workout_start', action: 'quick_start_tap' });
   };
 
   const handleGeneratePlan = async () => {
-    await aiPlan.generatePlan({
+    const result = await aiPlan.generatePlan({
       goal: goal.trim(),
       durationMinutes: Math.max(15, durationMinutes),
       equipment: equipmentCsv
@@ -109,25 +200,25 @@ export default function WorkoutPage() {
         .filter(Boolean),
       fullHistoryDigest: getCurrentDigest(),
     });
+
+    if (result) {
+      setIsCoachCollapsed(false);
+      uiAnalytics.track({ stage: 'workout_start', action: 'ai_plan_generated' });
+    }
   };
 
   const handleStartFromAiPlan = () => {
     if (!aiPlan.data) return;
 
-    startWorkoutWithPlan(
-      workoutName.trim() || aiPlan.data.workoutName,
-      aiPlan.data.exercises
-    );
+    startWorkoutWithPlan(workoutName.trim() || aiPlan.data.workoutName, aiPlan.data.exercises);
+    uiAnalytics.track({ stage: 'workout_start', action: 'ai_plan_applied' });
   };
 
   const handleCompleteWorkout = async () => {
     const completed = completeWorkout();
     if (!completed) return;
 
-    const digest = buildHistoryDigest(
-      storage.getWorkouts(),
-      storage.getSettings().unit
-    );
+    const digest = buildHistoryDigest(storage.getWorkouts(), storage.getSettings().unit);
 
     const summary = await postWorkoutAi.generateSummary({
       completedWorkout: completed,
@@ -137,6 +228,7 @@ export default function WorkoutPage() {
     if (summary) {
       storage.updateWorkout({ ...completed, aiSummary: summary });
       setShowCompletionCard(true);
+      uiAnalytics.track({ stage: 'workout_complete', action: 'summary_generated' });
       return;
     }
 
@@ -146,31 +238,147 @@ export default function WorkoutPage() {
   const handleCancelWorkout = () => {
     if (confirm('Are you sure you want to cancel this workout? All progress will be lost.')) {
       cancelWorkout();
+      uiAnalytics.track({ stage: 'workout_active', action: 'workout_cancelled' });
     }
+  };
+
+  const applySuggestionToCurrentSet = (suggestion: AiLiveCoachResponse) => {
+    if (!currentWorkout) return;
+
+    const exercise = currentWorkout.exercises[currentWorkout.exercises.length - 1];
+    if (!exercise) return;
+
+    const targetSet = exercise.sets.find(set => !set.completed) || exercise.sets[exercise.sets.length - 1];
+    if (!targetSet) return;
+
+    updateSet(exercise.id, targetSet.id, {
+      weight: suggestion.nextSet.weight,
+      reps: suggestion.nextSet.reps,
+      unit: suggestion.nextSet.unit,
+    });
+
+    uiAnalytics.trackSetAction('set_apply_live_coach', {
+      confidence: suggestion.confidence,
+      actionability: suggestion.actionability || 'review',
+    });
+    setToastMessage('Live coach suggestion applied.');
   };
 
   const handleRequestLiveSuggestion = async () => {
     if (!currentWorkout) return;
 
-    await liveCoach.requestSuggestion({
-        activeWorkout: currentWorkout,
-        lastSet,
-        fullHistoryDigestLite: buildHistoryDigestLite(getCurrentDigest()),
-      });
+    const result = await liveCoach.requestSuggestion({
+      activeWorkout: currentWorkout,
+      lastSet,
+      fullHistoryDigestLite: buildHistoryDigestLite(getCurrentDigest()),
+    });
+
+    if (result) {
+      setIsCoachCollapsed(false);
+      uiAnalytics.track({ stage: 'workout_active', action: 'live_suggestion_requested' });
+    }
   };
 
   const handleParseQuickLog = async () => {
     if (!currentWorkout) return;
 
-    await naturalLanguageLog.parseTextLog({
+    const result = await naturalLanguageLog.parseTextLog({
       text: quickLogText,
       sessionContext: currentWorkout,
     });
+
+    if (result) {
+      uiAnalytics.track({
+        stage: 'workout_active',
+        action: 'quick_log_parsed',
+        metadata: { confidence: result.confidence, requiresReview: result.requiresReview ?? true },
+      });
+    }
   };
 
   const handleApplyParsedLog = () => {
     if (!naturalLanguageLog.parseResult) return;
+
     applyParsedLogPatch(naturalLanguageLog.parseResult);
+    setToastMessage('Parsed workout patch applied.');
+  };
+
+  const handleSaveTemplate = () => {
+    if (!postWorkoutAi.data) return;
+
+    const sourceWorkout = storage
+      .getWorkouts()
+      .filter(workout => workout.completed)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+
+    if (!sourceWorkout) return;
+
+    const template: WorkoutTemplate = {
+      id: uuidv4(),
+      name: `${sourceWorkout.name} Template`,
+      exercises: sourceWorkout.exercises.map(exercise => ({
+        exercise: exercise.exercise,
+        targetSets: exercise.sets.length,
+        targetReps:
+          exercise.sets.length > 0
+            ? Math.round(
+                exercise.sets.reduce((sum, set) => sum + set.reps, 0) / exercise.sets.length
+              )
+            : 8,
+      })),
+    };
+
+    storage.addTemplate(template);
+    setToastMessage('Saved as template.');
+  };
+
+  const handleShareSummary = async () => {
+    if (!postWorkoutAi.data) return;
+
+    const text = `${postWorkoutAi.data.summary}\n\nFocus: ${postWorkoutAi.data.nextSessionRecommendation.focus}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Beast Mode Summary',
+          text,
+        });
+        return;
+      } catch {
+        // Ignore cancelled share.
+      }
+    }
+
+    await navigator.clipboard.writeText(text);
+    setToastMessage('Summary copied to clipboard.');
+  };
+
+  const handleScheduleNext = () => {
+    const next = new Date();
+    next.setDate(next.getDate() + 1);
+    setToastMessage(`Next session target: ${next.toLocaleDateString()}`);
+  };
+
+  const handleSetCompleted = (set: WorkoutSet) => {
+    const restSeconds =
+      liveCoach.data?.nextSet.restSeconds || uxPreferences.restTimerDefaultSeconds || 90;
+    if (uxPreferences.autoStartRestTimer) {
+      setRestTimerKickSeconds(restSeconds);
+      setToastMessage(`Rest timer started (${restSeconds}s).`);
+    }
+
+    if (uxPreferences.enableHaptics && typeof window !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate(30);
+    }
+
+    uiAnalytics.track({
+      stage: 'workout_active',
+      action: 'set_completed',
+      metadata: {
+        reps: set.reps,
+        weight: set.weight,
+      },
+    });
   };
 
   const startRecording = async () => {
@@ -214,6 +422,7 @@ export default function WorkoutPage() {
       recorder.start();
       recorderRef.current = recorder;
       setIsRecording(true);
+      uiAnalytics.track({ stage: 'workout_active', action: 'voice_record_started' });
     } catch {
       window.alert('Unable to access microphone.');
     }
@@ -222,6 +431,7 @@ export default function WorkoutPage() {
   const stopRecording = () => {
     recorderRef.current?.stop();
     setIsRecording(false);
+    uiAnalytics.track({ stage: 'workout_active', action: 'voice_record_stopped' });
   };
 
   if (isLoading) {
@@ -235,306 +445,348 @@ export default function WorkoutPage() {
   if (showCompletionCard && postWorkoutAi.data) {
     return (
       <div className="py-6">
-        <div className="card mb-4">
-          <h2 className="mb-2" style={{ fontSize: '1.5rem', fontWeight: 700 }}>
-            AI Post-Workout Summary
+        <Card className="mb-4" elevated>
+          <h2 className="mb-2" style={{ fontSize: '1.45rem', fontWeight: 760 }}>
+            Session Complete
           </h2>
           <p className="mb-3">{postWorkoutAi.data.summary}</p>
 
-          <h3 className="mb-2" style={{ fontWeight: 600 }}>Key Wins</h3>
+          <h3 className="mb-2" style={{ fontWeight: 680 }}>Key Wins</h3>
           <ul className="mb-3" style={{ paddingLeft: '1.25rem' }}>
             {postWorkoutAi.data.keyWins.map(win => (
               <li key={win}>{win}</li>
             ))}
           </ul>
 
-          <h3 className="mb-2" style={{ fontWeight: 600 }}>Next Session Focus</h3>
+          <h3 className="mb-2" style={{ fontWeight: 680 }}>Next Session Focus</h3>
           <p className="mb-3">{postWorkoutAi.data.nextSessionRecommendation.focus}</p>
 
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => router.push('/history')}
-            >
-              View History
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => {
-                setShowCompletionCard(false);
-                router.push('/');
-              }}
-            >
-              Back Home
-            </button>
+          <div className="workflow-chip-row mb-3">
+            <Button variant="secondary" size="sm" onClick={handleSaveTemplate}>
+              <Save size={15} />
+              Save as Template
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => { void handleShareSummary(); }}>
+              <Share2 size={15} />
+              Share
+            </Button>
+            <Button variant="secondary" size="sm" onClick={handleScheduleNext}>
+              <CalendarPlus size={15} />
+              Schedule Next
+            </Button>
           </div>
-        </div>
+
+          <div className="flex gap-2">
+            <Button variant="primary" onClick={() => router.push('/history')}>
+              View History
+            </Button>
+            <Button variant="ghost" onClick={() => router.push('/')}>
+              Back Home
+            </Button>
+          </div>
+        </Card>
       </div>
     );
   }
 
-  // No active workout - show start screen
   if (!currentWorkout) {
     return (
       <div className="py-6">
         <header className="page-header">
           <h1 className="page-title">New Workout</h1>
+          <p className="text-muted" style={{ marginTop: '0.25rem', fontSize: '0.85rem' }}>
+            Fastest route to your first completed set.
+          </p>
         </header>
 
-        <div className="card mb-6">
-          <label className="label" htmlFor={workoutNameInputId}>
-            Workout Name (optional)
-          </label>
-          <input
+        <Card className="mb-4" elevated>
+          <Input
             id={workoutNameInputId}
+            label="Workout Name (optional)"
             type="text"
-            className="input"
+            className="mb-3"
             placeholder={`Workout ${new Date().toLocaleDateString()}`}
             value={workoutName}
             onChange={event => setWorkoutName(event.target.value)}
           />
-        </div>
 
-        <button
-          type="button"
-          className="btn btn-primary btn-lg btn-block mb-4"
-          onClick={handleStartWorkout}
-        >
-          Start Empty Workout
-        </button>
+          <Button variant="primary" size="lg" block className="mb-2" onClick={handleStartWorkout}>
+            <Zap size={18} />
+            Start Empty Workout
+          </Button>
 
-        <div className="card mb-4">
+          <div className="workflow-chip-row">
+            {storage.getTemplates().slice(0, 3).map(template => (
+              <span key={template.id} className="workflow-chip">
+                {template.name}
+              </span>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="mb-4" elevated>
           <h2 className="mb-2" style={{ fontWeight: 700 }}>
             <Sparkles size={18} style={{ display: 'inline', marginRight: '0.5rem' }} />
-            AI Workout Builder
+            AI Builder
           </h2>
 
-          <label className="label" htmlFor={goalInputId}>Goal</label>
-          <input
+          <Input
             id={goalInputId}
+            label="Goal"
             type="text"
-            className="input mb-3"
+            className="mb-3"
             value={goal}
             onChange={event => setGoal(event.target.value)}
           />
 
-          <label className="label" htmlFor={durationInputId}>Duration (minutes)</label>
-          <input
+          <Input
             id={durationInputId}
+            label="Duration (minutes)"
             type="number"
-            className="input mb-3"
+            className="mb-3"
             min={15}
             max={180}
             value={durationMinutes}
             onChange={event => setDurationMinutes(Number(event.target.value) || 45)}
           />
 
-          <label className="label" htmlFor={equipmentInputId}>Equipment (comma separated)</label>
-          <input
+          <Input
             id={equipmentInputId}
+            label="Equipment (comma separated)"
             type="text"
-            className="input mb-3"
+            className="mb-3"
             value={equipmentCsv}
             onChange={event => setEquipmentCsv(event.target.value)}
           />
 
-          <label className="label" htmlFor={constraintsInputId}>Constraints (comma separated)</label>
-          <input
+          <Input
             id={constraintsInputId}
+            label="Constraints (comma separated)"
             type="text"
-            className="input mb-3"
-            placeholder="shoulder-friendly, no jumping"
+            className="mb-3"
+            placeholder="shoulder-friendly, low impact"
             value={constraintsCsv}
             onChange={event => setConstraintsCsv(event.target.value)}
           />
 
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={handleGeneratePlan}
-            disabled={aiPlan.isLoading}
-          >
+          <Button variant="secondary" onClick={handleGeneratePlan} disabled={aiPlan.isLoading}>
             <Wand2 size={16} />
             {aiPlan.isLoading ? 'Generating...' : 'Generate AI Plan'}
-          </button>
+          </Button>
 
           {aiPlan.error && (
-            <p className="text-danger mt-3" style={{ fontSize: '0.875rem' }}>
+            <p className="text-danger mt-3" style={{ fontSize: '0.85rem' }}>
               {aiPlan.error}
             </p>
           )}
 
           {aiPlan.data && (
-            <div className="mt-4">
-              <h3 className="mb-2" style={{ fontWeight: 600 }}>{aiPlan.data.workoutName}</h3>
-              <div className="text-muted mb-3" style={{ fontSize: '0.875rem' }}>
-                {aiPlan.data.exercises.length} exercises generated
-              </div>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleStartFromAiPlan}
-              >
+            <div className="mt-3">
+              <h3 className="mb-2" style={{ fontWeight: 680 }}>{aiPlan.data.workoutName}</h3>
+              <p className="text-muted" style={{ fontSize: '0.82rem' }}>
+                {aiPlan.data.estimatedSessionMinutes || durationMinutes} min estimated, {aiPlan.data.exercises.length} exercises
+              </p>
+              <Button variant="primary" className="mt-2" onClick={handleStartFromAiPlan}>
                 Start From AI Plan
-              </button>
+              </Button>
             </div>
           )}
-        </div>
-
-        <p className="text-muted text-center mt-4" style={{ fontSize: '0.875rem' }}>
-          Add exercises as you go, or start from an AI-generated plan
-        </p>
+        </Card>
       </div>
     );
   }
 
-  // Active workout
+  const elapsedMinutes = getElapsedMinutes(currentWorkout.date);
+  const totalSets = currentWorkout.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0);
+  const completedSets = currentWorkout.exercises.reduce(
+    (sum, exercise) => sum + exercise.sets.filter(set => set.completed).length,
+    0
+  );
+
   return (
-    <div className="py-6">
-      <header className="flex justify-between items-center mb-6">
-        <div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>
-            {currentWorkout.name}
-          </h1>
-          <p className="text-muted" style={{ fontSize: '0.875rem' }}>
-            Started {new Date(currentWorkout.date).toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </p>
-        </div>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={handleCancelWorkout}>
-          <X size={20} />
-        </button>
-      </header>
-
-      <Timer />
-
-      <div className="card mt-4 mb-4">
-        <div className="flex justify-between items-center mb-2">
-          <h3 style={{ fontWeight: 600 }}>Live Coach</h3>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={handleRequestLiveSuggestion}
-            disabled={liveCoach.isLoading}
-          >
-            {liveCoach.isLoading ? 'Thinking...' : 'Refresh Suggestion'}
-          </button>
-        </div>
-
-        {liveCoach.error && <p className="text-danger">{liveCoach.error}</p>}
-
-        {liveCoach.data ? (
+    <div className={`py-6 ${uxPreferences.compactMode ? 'compact-mode' : ''}`.trim()}>
+      <div className="workout-topbar">
+        <div className="flex justify-between items-center">
           <div>
-            <p className="mb-2">
-              Next Set: {liveCoach.data.nextSet.weight} {liveCoach.data.nextSet.unit} x{' '}
-              {liveCoach.data.nextSet.reps}, rest {liveCoach.data.nextSet.restSeconds}s
-            </p>
-            <p className="text-muted" style={{ fontSize: '0.875rem' }}>
-              Confidence: {Math.round(liveCoach.data.confidence * 100)}%
-            </p>
-            {liveCoach.data.rationale.length > 0 && (
-              <ul style={{ paddingLeft: '1.25rem', marginTop: '0.5rem' }}>
-                {liveCoach.data.rationale.map(item => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            )}
+            <h1 style={{ fontSize: '1.2rem', fontWeight: 740 }}>{currentWorkout.name}</h1>
+            <div className="workout-topbar-metrics mt-1">
+              <span className="metric-pill">Elapsed {formatElapsed(elapsedMinutes)}</span>
+              <span className="metric-pill">{completedSets}/{totalSets} sets</span>
+              <span className="metric-pill">{sessionProgress}% complete</span>
+            </div>
           </div>
-        ) : (
-          <p className="text-muted" style={{ fontSize: '0.875rem' }}>
-            Complete a few sets to improve suggestion quality.
-          </p>
-        )}
+
+          <div className="flex items-center gap-2">
+            <ProgressRing value={sessionProgress} size={56} label={`${sessionProgress}%`} />
+            <Button variant="ghost" size="sm" onClick={handleCancelWorkout} aria-label="Cancel workout">
+              <X size={18} />
+            </Button>
+          </div>
+        </div>
       </div>
 
-      <div className="card mb-4">
-        <h3 className="mb-2" style={{ fontWeight: 600 }}>Quick Log (Text or Voice)</h3>
+      <Timer autoStartSeconds={restTimerKickSeconds} />
+
+      <Card className="mt-4 mb-4" elevated>
+        <div className="flex justify-between items-center mb-2">
+          <h3 style={{ fontWeight: 700 }}>Live Coach</h3>
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsCoachCollapsed(prev => !prev)}
+              aria-label="Toggle live coach"
+            >
+              {isCoachCollapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleRequestLiveSuggestion}
+              disabled={liveCoach.isLoading}
+            >
+              {liveCoach.isLoading ? 'Thinking...' : 'Refresh'}
+            </Button>
+          </div>
+        </div>
+
+        {!isCoachCollapsed && (
+          <>
+            {liveCoach.error && <p className="text-danger">{liveCoach.error}</p>}
+
+            {liveCoach.data ? (
+              <>
+                <p className="mb-2" style={{ fontWeight: 650 }}>
+                  Next Set: {liveCoach.data.nextSet.weight} {liveCoach.data.nextSet.unit} x {liveCoach.data.nextSet.reps}
+                </p>
+                <p className="text-muted" style={{ fontSize: '0.82rem' }}>
+                  Rest {liveCoach.data.nextSet.restSeconds}s, confidence {Math.round(liveCoach.data.confidence * 100)}%
+                </p>
+                {liveCoach.data.rationale.length > 0 && (
+                  <ul style={{ paddingLeft: '1.25rem', marginTop: '0.5rem' }}>
+                    {liveCoach.data.rationale.map(item => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                )}
+                <div className="mt-2">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      if (liveCoach.data) {
+                        applySuggestionToCurrentSet(liveCoach.data);
+                      }
+                    }}
+                    disabled={(liveCoach.data.actionability || 'review') !== 'apply'}
+                  >
+                    Apply Suggestion
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <p className="text-muted" style={{ fontSize: '0.84rem' }}>
+                Complete a set to unlock personalized suggestions.
+              </p>
+            )}
+          </>
+        )}
+      </Card>
+
+      <Card className="mb-4" elevated>
+        <h3 className="mb-2" style={{ fontWeight: 700 }}>Quick Log (Text or Voice)</h3>
         <textarea
           className="input mb-2"
           value={quickLogText}
           onChange={event => setQuickLogText(event.target.value)}
-          placeholder="Example: Bench press 3x5 at 185, last set RPE 9"
+          placeholder="Bench 3x5 185, row 3x10 95, RPE 8"
           rows={3}
           style={{ resize: 'vertical' }}
         />
 
         <div className="flex gap-2 mb-2">
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={handleParseQuickLog}
             disabled={naturalLanguageLog.isParsing}
           >
             {naturalLanguageLog.isParsing ? 'Parsing...' : 'Parse Log'}
-          </button>
+          </Button>
 
-          <button
-            type="button"
-            className={`btn btn-sm ${isRecording ? 'btn-danger' : 'btn-ghost'}`}
+          <Button
+            variant={isRecording ? 'danger' : 'ghost'}
+            size="sm"
             onClick={isRecording ? stopRecording : startRecording}
             disabled={naturalLanguageLog.isTranscribing}
           >
             {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
             {isRecording ? 'Stop Recording' : 'Record Note'}
-          </button>
+          </Button>
         </div>
 
         {naturalLanguageLog.error && (
-          <p className="text-danger" style={{ fontSize: '0.875rem' }}>
+          <p className="text-danger" style={{ fontSize: '0.84rem' }}>
             {naturalLanguageLog.error}
           </p>
         )}
 
         {naturalLanguageLog.parseResult && (
           <div className="mt-2">
-            <p className="text-muted" style={{ fontSize: '0.875rem' }}>
-              Parse confidence: {Math.round(naturalLanguageLog.parseResult.confidence * 100)}%
+            <p className="text-muted" style={{ fontSize: '0.82rem' }}>
+              Confidence {Math.round(naturalLanguageLog.parseResult.confidence * 100)}% | parsed {naturalLanguageLog.parseResult.exercises.length} exercises
             </p>
-            <p style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
-              Parsed exercises: {naturalLanguageLog.parseResult.exercises.length}
+            <p className="text-muted" style={{ fontSize: '0.78rem', marginTop: '0.2rem' }}>
+              {naturalLanguageLog.parseResult.requiresReview ? 'Review required before apply.' : 'Safe to apply immediately.'}
             </p>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm mt-2"
+            <Button
+              variant="primary"
+              size="sm"
+              className="mt-2"
               onClick={handleApplyParsedLog}
               disabled={naturalLanguageLog.parseResult.exercises.length === 0}
             >
               Apply Parsed Patch
-            </button>
+            </Button>
           </div>
         )}
-      </div>
+      </Card>
 
-      <div className="mt-6">
+      <div className="mt-4">
         {currentWorkout.exercises.map(exercise => (
           <WorkoutExerciseCard
             key={exercise.id}
             workoutExercise={exercise}
+            previousSets={
+              uxPreferences.showPreviousValues
+                ? previousSetLookup.get(exercise.exercise.id) || []
+                : []
+            }
             onAddSet={() => addSetToExercise(exercise.id)}
             onUpdateSet={(setId, updates) => updateSet(exercise.id, setId, updates)}
             onRemoveSet={setId => removeSet(exercise.id, setId)}
+            onDuplicateSet={setId => duplicateSet(exercise.id, setId)}
+            onSetCompleted={handleSetCompleted}
             onRemoveExercise={() => removeExerciseFromWorkout(exercise.id)}
           />
         ))}
       </div>
 
-      <button
-        type="button"
-        className="btn btn-secondary btn-block mb-4"
+      <Button
+        variant="secondary"
+        block
+        className="mb-3"
         onClick={() => setShowExerciseSelector(true)}
       >
         <Plus size={20} />
         Add Exercise
-      </button>
+      </Button>
 
       {currentWorkout.exercises.length > 0 && (
-        <button
-          type="button"
-          className="btn btn-primary btn-lg btn-block"
+        <Button
+          variant="primary"
+          size="lg"
+          block
           onClick={() => {
             void handleCompleteWorkout();
           }}
@@ -542,7 +794,7 @@ export default function WorkoutPage() {
         >
           <Check size={20} />
           {postWorkoutAi.isLoading ? 'Finishing Workout...' : 'Complete Workout'}
-        </button>
+        </Button>
       )}
 
       <ExerciseSelector
@@ -550,6 +802,8 @@ export default function WorkoutPage() {
         onClose={() => setShowExerciseSelector(false)}
         onSelect={addExerciseToWorkout}
       />
+
+      <Toast message={toastMessage} tone="success" visible={toastMessage.length > 0} />
     </div>
   );
 }

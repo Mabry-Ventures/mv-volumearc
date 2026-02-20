@@ -87,6 +87,7 @@ export const aiOutputSchemas: Record<
       required: ['workoutName', 'warmup', 'exercises', 'cooldown', 'notes'],
       properties: {
         workoutName: { type: 'string' },
+        estimatedSessionMinutes: { type: 'number' },
         warmup: { type: 'array', items: { type: 'string' } },
         cooldown: { type: 'array', items: { type: 'string' } },
         notes: { type: 'array', items: { type: 'string' } },
@@ -142,6 +143,7 @@ export const aiOutputSchemas: Record<
           },
         },
         confidence: { type: 'number' },
+        actionability: { type: 'string' },
         rationale: { type: 'array', items: { type: 'string' } },
         caution: { type: 'string' },
       },
@@ -231,6 +233,7 @@ export const aiOutputSchemas: Record<
       required: ['confidence', 'exercises', 'notes'],
       properties: {
         confidence: { type: 'number' },
+        requiresReview: { type: 'boolean' },
         notes: { type: 'array', items: { type: 'string' } },
         exercises: {
           type: 'array',
@@ -346,6 +349,8 @@ export const parseAiWorkoutPlanResponse = (value: unknown): AiWorkoutPlanRespons
 
   return {
     workoutName: value.workoutName,
+    estimatedSessionMinutes:
+      parseBoundedNumber(value.estimatedSessionMinutes, 5, 360) ?? undefined,
     warmup: value.warmup,
     cooldown: value.cooldown,
     notes: value.notes,
@@ -372,6 +377,7 @@ export const parseAiLiveCoachResponse = (value: unknown): AiLiveCoachResponse | 
       restSeconds,
       unit: value.nextSet.unit,
     },
+    actionability: value.actionability === 'apply' ? 'apply' : 'review',
     confidence,
     rationale: value.rationale,
     caution: isString(value.caution) ? value.caution : undefined,
@@ -526,6 +532,8 @@ export const parseAiParseLogResponse = (value: unknown): AiParseLogResponse | nu
 
   return {
     confidence,
+    requiresReview:
+      typeof value.requiresReview === 'boolean' ? value.requiresReview : true,
     exercises,
     notes: value.notes,
   };

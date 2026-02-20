@@ -44,6 +44,7 @@ export const aiFallbacks = {
 
     return {
       workoutName: `${toTitleCase(input.goal)} Plan`,
+      estimatedSessionMinutes: input.durationMinutes,
       warmup: ['5 minutes easy cardio', '2 ramp-up sets on first compound movement'],
       cooldown: ['Light stretch for 5 minutes'],
       notes: ['Generated from deterministic fallback because AI was unavailable.'],
@@ -63,6 +64,7 @@ export const aiFallbacks = {
         restSeconds: 90,
         unit,
       },
+      actionability: 'review',
       confidence: 0.35,
       rationale: ['Keep effort controlled and focus on form consistency.'],
       caution: 'Fallback suggestion: adjust manually if needed.',
@@ -127,6 +129,7 @@ export const aiFallbacks = {
 
     return {
       confidence: 0.3,
+      requiresReview: true,
       exercises: firstExercise
         ? [
             {

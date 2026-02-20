@@ -6,6 +6,7 @@ import type {
   PersonalRecord,
   Workout,
   WorkoutAiSummary,
+  WorkoutUxPreferences,
   WorkoutTemplate,
 } from '@/types';
 
@@ -17,6 +18,7 @@ const STORAGE_KEYS = {
   SETTINGS: 'beast-mode-settings',
   AI_PREFERENCES: 'beast-mode-ai-preferences',
   AI_CACHE: 'beast-mode-ai-cache',
+  WORKOUT_UX_PREFERENCES: 'beast-mode-workout-ux-preferences',
 } as const;
 
 const DEFAULT_SETTINGS = { unit: 'lbs' as const };
@@ -28,6 +30,13 @@ const DEFAULT_AI_PREFERENCES: AiUserPreferences = {
   shareFullHistory: true,
   enableSpeechLogging: true,
   dailyBudgetUsd: 2,
+};
+const DEFAULT_WORKOUT_UX_PREFERENCES: WorkoutUxPreferences = {
+  compactMode: false,
+  enableHaptics: true,
+  autoStartRestTimer: true,
+  restTimerDefaultSeconds: 90,
+  showPreviousValues: true,
 };
 
 const VALID_EXERCISE_CATEGORIES: ExerciseCategory[] = [
@@ -231,6 +240,20 @@ const isAiCache = (value: unknown): value is Record<string, unknown> => {
   if (!isObject(value)) return false;
   if (!('updatedAt' in value) || !isString(value.updatedAt)) return false;
   return true;
+};
+
+const isWorkoutUxPreferences = (value: unknown): value is WorkoutUxPreferences => {
+  if (!isObject(value)) return false;
+
+  return (
+    isBoolean(value.compactMode) &&
+    isBoolean(value.enableHaptics) &&
+    isBoolean(value.autoStartRestTimer) &&
+    isFiniteNumber(value.restTimerDefaultSeconds) &&
+    value.restTimerDefaultSeconds >= 15 &&
+    value.restTimerDefaultSeconds <= 300 &&
+    isBoolean(value.showPreviousValues)
+  );
 };
 
 const readRaw = (key: string): unknown => {
@@ -447,6 +470,23 @@ export const storage = {
     writeRaw(STORAGE_KEYS.AI_CACHE, cache);
   },
 
+  getWorkoutUxPreferences: (): WorkoutUxPreferences => {
+    const parsed = readRaw(STORAGE_KEYS.WORKOUT_UX_PREFERENCES);
+    if (parsed === null) return DEFAULT_WORKOUT_UX_PREFERENCES;
+
+    if (!isWorkoutUxPreferences(parsed)) {
+      localStorage.removeItem(STORAGE_KEYS.WORKOUT_UX_PREFERENCES);
+      return DEFAULT_WORKOUT_UX_PREFERENCES;
+    }
+
+    return parsed;
+  },
+
+  saveWorkoutUxPreferences: (preferences: WorkoutUxPreferences): void => {
+    if (typeof window === 'undefined') return;
+    writeRaw(STORAGE_KEYS.WORKOUT_UX_PREFERENCES, preferences);
+  },
+
   // Import backup data after strict validation.
   importData: (payload: unknown): boolean => {
     if (!isObject(payload)) return false;
@@ -457,7 +497,8 @@ export const storage = {
       'personalRecords' in payload ||
       'settings' in payload ||
       'aiPreferences' in payload ||
-      'aiCache' in payload;
+      'aiCache' in payload ||
+      'workoutUxPreferences' in payload;
 
     if (!hasSupportedFields) return false;
 
@@ -467,6 +508,7 @@ export const storage = {
     let validatedSettings: { unit: 'lbs' | 'kg' } | null = null;
     let validatedAiPreferences: AiUserPreferences | null = null;
     let validatedAiCache: Record<string, unknown> | null = null;
+    let validatedWorkoutUxPreferences: WorkoutUxPreferences | null = null;
 
     if ('workouts' in payload) {
       validatedWorkouts = toValidatedArray(payload.workouts, isWorkout);
@@ -498,6 +540,11 @@ export const storage = {
       validatedAiCache = payload.aiCache;
     }
 
+    if ('workoutUxPreferences' in payload) {
+      if (!isWorkoutUxPreferences(payload.workoutUxPreferences)) return false;
+      validatedWorkoutUxPreferences = payload.workoutUxPreferences;
+    }
+
     if (validatedWorkouts !== null) {
       storage.saveWorkouts(validatedWorkouts);
     }
@@ -520,6 +567,10 @@ export const storage = {
 
     if (validatedAiCache !== null) {
       storage.saveAiCache(validatedAiCache);
+    }
+
+    if (validatedWorkoutUxPreferences !== null) {
+      storage.saveWorkoutUxPreferences(validatedWorkoutUxPreferences);
     }
 
     return true;

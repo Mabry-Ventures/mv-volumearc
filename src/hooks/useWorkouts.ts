@@ -176,6 +176,26 @@ export const useWorkouts = () => {
     }));
   }, [updateCurrentWorkout]);
 
+  const duplicateSet = useCallback((exerciseId: string, setId: string) => {
+    updateCurrentWorkout(prev => ({
+      ...prev,
+      exercises: prev.exercises.map(ex => {
+        if (ex.id !== exerciseId) return ex;
+
+        const sourceSet = ex.sets.find(set => set.id === setId);
+        if (!sourceSet) return ex;
+
+        const duplicated: WorkoutSet = {
+          ...sourceSet,
+          id: uuidv4(),
+          completed: false,
+        };
+
+        return { ...ex, sets: [...ex.sets, duplicated] };
+      }),
+    }));
+  }, [updateCurrentWorkout]);
+
   const completeWorkout = useCallback(() => {
     if (!currentWorkout) return;
 
@@ -299,6 +319,7 @@ export const useWorkouts = () => {
     addSetToExercise,
     updateSet,
     removeSet,
+    duplicateSet,
     completeWorkout,
     cancelWorkout,
     applyParsedLogPatch,
