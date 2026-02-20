@@ -28,35 +28,39 @@ Object.defineProperty(globalThis, '__mockUseRouter', {
 });
 
 beforeAll(() => {
-  Object.defineProperty(window, 'confirm', {
-    value: jest.fn(),
-    writable: true,
-  });
+  if (typeof window !== 'undefined') {
+    Object.defineProperty(window, 'confirm', {
+      value: jest.fn(),
+      writable: true,
+    });
 
-  Object.defineProperty(window, 'alert', {
-    value: jest.fn(),
-    writable: true,
-  });
+    Object.defineProperty(window, 'alert', {
+      value: jest.fn(),
+      writable: true,
+    });
 
-  if (!('vibrate' in navigator)) {
-    Object.defineProperty(navigator, 'vibrate', {
+    if (typeof navigator !== 'undefined' && !('vibrate' in navigator)) {
+      Object.defineProperty(navigator, 'vibrate', {
+        value: jest.fn(),
+        writable: true,
+      });
+    }
+
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: jest.fn(() => 'blob:mock'),
+      writable: true,
+    });
+
+    Object.defineProperty(URL, 'revokeObjectURL', {
       value: jest.fn(),
       writable: true,
     });
   }
-
-  Object.defineProperty(URL, 'createObjectURL', {
-    value: jest.fn(() => 'blob:mock'),
-    writable: true,
-  });
-
-  Object.defineProperty(URL, 'revokeObjectURL', {
-    value: jest.fn(),
-    writable: true,
-  });
 });
 
 beforeEach(() => {
-  localStorage.clear();
+  if (typeof localStorage !== 'undefined') {
+    localStorage.clear();
+  }
   jest.clearAllMocks();
 });

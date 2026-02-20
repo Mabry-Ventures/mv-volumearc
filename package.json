@@ -18,6 +18,7 @@
     "env:bootstrap:prod": "tsx scripts/bootstrap_prod_env.ts",
     "ai:eval": "tsx scripts/ai_eval.ts",
     "test": "jest",
+    "test:coverage": "jest --coverage --runInBand",
     "test:watch": "jest --watch"
   },
   "dependencies": {
