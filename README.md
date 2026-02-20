@@ -64,6 +64,22 @@ Beast Mode is a comprehensive fitness tracking application that helps you log wo
 - Check your personal records in the "PRs" section
 - Analyze trends in the "Statistics" dashboard
 
+## Visual Baselines
+
+Capture visual baseline snapshots for the redesigned core flows:
+
+```bash
+# Start the app in another terminal first
+npm run dev -- --hostname 127.0.0.1 --port 4173
+
+# Then capture desktop + mobile baselines
+npm run visual:baseline
+```
+
+Snapshots are written to:
+
+`output/playwright/visual-baselines`
+
 ## Project Structure
 
 ```
