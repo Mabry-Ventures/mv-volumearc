@@ -39,8 +39,12 @@ Beast Mode is a comprehensive fitness tracking application that helps you log wo
 3. Configure environment variables:
    ```bash
    cp .env.example .env.local
+   npm run env:bootstrap:prod
+   npm run env:check
    ```
    Add your `OPENAI_API_KEY` and optional rate-limit credentials.
+   For cloud sync persistence, set `DATABASE_URL` and apply:
+   `npm run db:migrate`.
 
 4. Start the development server:
    ```bash
@@ -69,16 +73,68 @@ Beast Mode is a comprehensive fitness tracking application that helps you log wo
 Capture visual baseline snapshots for the redesigned core flows:
 
 ```bash
-# Start the app in another terminal first
-npm run dev -- --hostname 127.0.0.1 --port 4173
+# Build and start the app in another terminal
+npm run build
+npm run start -- --hostname 127.0.0.1 --port 4173
 
-# Then capture desktop + mobile baselines
+# Capture baseline images
 npm run visual:baseline
+
+# On later runs, compare current UI against baselines
+npm run visual:ci
 ```
 
 Snapshots are written to:
 
 `output/playwright/visual-baselines`
+
+## Release Checklist
+
+Run this checklist before each production release:
+
+1. Verify environment variables from `.env.example` are set for the target environment.
+2. Confirm progressive rollout flags in `GET /api/me/features` match intended rollout.
+3. Run quality gates:
+   - `npm run lint`
+   - `npm test -- --runInBand`
+   - `npm run build`
+   - `npm run ai:eval`
+4. Validate AI safety rails:
+   - all AI routes return schema-valid payloads
+   - deterministic fallback responses are returned when provider calls fail
+5. Validate retention KPI telemetry:
+   - `POST /api/telemetry/ingest` accepts events
+   - `GET /api/telemetry/dashboard` shows set-log latency and fallback rates
+6. Confirm rollback readiness:
+   - feature-flag kill switches are available
+   - latest stable tag/build is deployable
+
+## Kill-Switch Map
+
+Use these flags to disable features without redeploying code:
+
+- `AI_ENABLE_WORKOUT_PLAN`: `/api/ai/workout-plan`
+- `AI_ENABLE_LIVE_COACH`: `/api/ai/live-coach`
+- `AI_ENABLE_POST_WORKOUT`: `/api/ai/post-workout`
+- `AI_ENABLE_RISK_ANALYSIS`: `/api/ai/risk-analysis`
+- `AI_ENABLE_LOG_PARSER`: `/api/ai/parse-log`
+- `AI_ENABLE_TRANSCRIBE`: `/api/ai/transcribe`
+- `AI_ENABLE_PROGRESSION_PLAN`: `/api/ai/progression-plan`
+- `FEATURE_TELEMETRY_INGEST`: `/api/telemetry/ingest`
+- `FEATURE_CLOUD_SYNC_ALPHA`: `/api/sync/push`, `/api/sync/pull`
+- `FEATURE_PROGRESSION_AUTOPILOT`: progression plan generation/apply flow
+- `FEATURE_HEALTH_INTEGRATIONS`: `/api/integrations/health/import`
+- `FEATURE_MONETIZATION_CONTROLS`: `/api/subscription/entitlements`
+
+Additional health sync route: `/api/integrations/health/sync` (provider pull, currently `oura` and `generic-json`).
+
+Telemetry export wiring:
+
+- `TELEMETRY_EXPORT_URL`: webhook endpoint that receives dashboard snapshots
+- `TELEMETRY_EXPORT_TOKEN`: optional bearer token for export auth
+- `TELEMETRY_EXPORT_MIN_INTERVAL_MS`: minimum export interval (default `30000`)
+
+Program delivery plan: `docs/program/beast-mode-maximization-sprints-2026.md`
 
 ## Project Structure
 

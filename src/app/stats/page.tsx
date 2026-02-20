@@ -11,16 +11,27 @@ import {
   Activity,
   HeartPulse,
   Target,
+  Gauge,
 } from 'lucide-react';
 import { storage } from '@/utils/storage';
 import { calculateUserStats, calculateWorkoutVolume, formatWeight } from '@/utils/calculations';
 import { StatsCard, Card, SegmentedControl } from '@/components';
 import { useRiskAnalysis } from '@/hooks/useRiskAnalysis';
+import { useProgressionPlan } from '@/hooks/useProgressionPlan';
 import { buildHistoryDigest } from '@/lib/ai/contextBuilder';
 import { uiAnalytics } from '@/lib/analytics';
 import type { Workout, UserStats } from '@/types';
 
 type VolumeOverlay = 'volume' | 'intensity' | 'frequency' | 'recovery';
+type KpiDashboardResponse = {
+  kpis: {
+    setLogLatencyMs: { p50: number | null; p95: number | null };
+    liveCoachLatencyMs: { p50: number | null; p95: number | null };
+    aiFallbackRate: number;
+    dailyActiveUsers: number;
+    day7RetentionRate: number;
+  };
+};
 
 const severityTone = (level: 'low' | 'medium' | 'high') => {
   if (level === 'high') return 'var(--danger-500)';
@@ -36,7 +47,9 @@ export default function StatsPage() {
   >([]);
   const [unit, setUnit] = useState<'lbs' | 'kg'>('lbs');
   const [overlay, setOverlay] = useState<VolumeOverlay>('volume');
+  const [kpiDashboard, setKpiDashboard] = useState<KpiDashboardResponse | null>(null);
   const riskAnalysis = useRiskAnalysis();
+  const progressionPlan = useProgressionPlan();
 
   useEffect(() => {
     const settings = storage.getSettings();
@@ -50,6 +63,19 @@ export default function StatsPage() {
       fullHistoryDigest: digest,
       trendWindows: [7, 30, 90],
     });
+    void progressionPlan.generateProgressionPlan(digest);
+
+    void (async () => {
+      try {
+        const response = await fetch('/api/telemetry/dashboard');
+        const payload = (await response.json()) as KpiDashboardResponse;
+        if (response.ok && payload.kpis) {
+          setKpiDashboard(payload);
+        }
+      } catch {
+        // Optional dashboard enrichment.
+      }
+    })();
 
     const today = new Date();
     const weekData: {
@@ -99,7 +125,7 @@ export default function StatsPage() {
 
     setWeeklyVolume(weekData);
     uiAnalytics.track({ stage: 'stats', action: 'stats_loaded', metadata: { workouts: data.length } });
-  }, [riskAnalysis.analyzeRisk]);
+  }, [riskAnalysis.analyzeRisk, progressionPlan.generateProgressionPlan]);
 
   const chartConfig = useMemo(() => {
     if (overlay === 'volume') {
@@ -205,6 +231,41 @@ export default function StatsPage() {
               {goalProgress}% complete this week
             </p>
           </Card>
+
+          {kpiDashboard?.kpis && (
+            <Card className="mb-4" elevated>
+              <div className="flex items-center gap-2 mb-3">
+                <Gauge size={18} color="var(--accent-400)" />
+                <h3 style={{ fontWeight: 700 }}>KPI Dashboard (24h)</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="card" style={{ padding: '0.75rem' }}>
+                  <p className="text-muted" style={{ fontSize: '0.75rem' }}>Set Log p95</p>
+                  <p style={{ fontWeight: 700 }}>
+                    {kpiDashboard.kpis.setLogLatencyMs.p95 ?? '-'} ms
+                  </p>
+                </div>
+                <div className="card" style={{ padding: '0.75rem' }}>
+                  <p className="text-muted" style={{ fontSize: '0.75rem' }}>Live Coach p95</p>
+                  <p style={{ fontWeight: 700 }}>
+                    {kpiDashboard.kpis.liveCoachLatencyMs.p95 ?? '-'} ms
+                  </p>
+                </div>
+                <div className="card" style={{ padding: '0.75rem' }}>
+                  <p className="text-muted" style={{ fontSize: '0.75rem' }}>AI Fallback Rate</p>
+                  <p style={{ fontWeight: 700 }}>
+                    {(kpiDashboard.kpis.aiFallbackRate * 100).toFixed(2)}%
+                  </p>
+                </div>
+                <div className="card" style={{ padding: '0.75rem' }}>
+                  <p className="text-muted" style={{ fontSize: '0.75rem' }}>D7 Retention</p>
+                  <p style={{ fontWeight: 700 }}>
+                    {(kpiDashboard.kpis.day7RetentionRate * 100).toFixed(2)}%
+                  </p>
+                </div>
+              </div>
+            </Card>
+          )}
 
           <Card className="mb-4" elevated>
             <div className="flex items-center gap-2 mb-3">
@@ -343,6 +404,27 @@ export default function StatsPage() {
               </span>
             </div>
           </Card>
+
+          {progressionPlan.data && (
+            <Card className="mt-4" elevated>
+              <div className="flex items-center gap-2 mb-2">
+                <Activity size={17} color="var(--accent-400)" />
+                <p style={{ fontWeight: 680 }}>Weekly Progression Plan</p>
+              </div>
+              <p className="text-muted" style={{ fontSize: '0.8rem' }}>
+                {progressionPlan.data.blockName} • {progressionPlan.data.durationWeeks} week
+              </p>
+              <ul style={{ paddingLeft: '1.25rem', marginTop: '0.5rem' }}>
+                {progressionPlan.data.updates.slice(0, 4).map(update => (
+                  <li key={update.exerciseId}>
+                    {update.exerciseName}: {update.currentTarget.weight} {update.currentTarget.unit} x{' '}
+                    {update.currentTarget.reps} → {update.nextTarget.weight} {update.nextTarget.unit} x{' '}
+                    {update.nextTarget.reps}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
 
           <Card className="mt-4" elevated>
             <div className="flex items-center gap-2 mb-2">

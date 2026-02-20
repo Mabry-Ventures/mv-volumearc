@@ -6,7 +6,8 @@ export type AiEndpointName =
   | 'post-workout'
   | 'risk-analysis'
   | 'parse-log'
-  | 'transcribe';
+  | 'transcribe'
+  | 'progression-plan';
 
 const ENDPOINT_MAX_INPUT_CHARS: Record<AiEndpointName, number> = {
   'workout-plan': 20000,
@@ -15,6 +16,7 @@ const ENDPOINT_MAX_INPUT_CHARS: Record<AiEndpointName, number> = {
   'risk-analysis': 16000,
   'parse-log': 12000,
   transcribe: 2000,
+  'progression-plan': 14000,
 };
 
 const ENDPOINT_MAX_OUTPUT_TOKENS: Record<AiEndpointName, number> = {
@@ -24,6 +26,7 @@ const ENDPOINT_MAX_OUTPUT_TOKENS: Record<AiEndpointName, number> = {
   'risk-analysis': 600,
   'parse-log': 600,
   transcribe: 500,
+  'progression-plan': 500,
 };
 
 const DAILY_BUDGET_DEFAULT_USD = 2;
@@ -77,7 +80,11 @@ export const costGuard = {
     return { digest: clone, wasPruned };
   },
 
-  canSpendForIp: (ip: string, inputChars: number, requestedBudgetUsd?: number): boolean => {
+  canSpendForActor: (
+    actorId: string,
+    inputChars: number,
+    requestedBudgetUsd?: number
+  ): boolean => {
     const dayKey = getDayKey();
     const budgetLimit =
       typeof requestedBudgetUsd === 'number' && requestedBudgetUsd >= 0
@@ -85,17 +92,20 @@ export const costGuard = {
         : DAILY_BUDGET_DEFAULT_USD;
 
     const estimated = approximateCostUsd(inputChars);
-    const existing = budgetLedger.get(ip);
+    const existing = budgetLedger.get(actorId);
 
     if (!existing || existing.dayKey !== dayKey) {
-      budgetLedger.set(ip, { dayKey, usd: estimated });
+      budgetLedger.set(actorId, { dayKey, usd: estimated });
       return estimated <= budgetLimit;
     }
 
     if (existing.usd + estimated > budgetLimit) return false;
 
     existing.usd += estimated;
-    budgetLedger.set(ip, existing);
+    budgetLedger.set(actorId, existing);
     return true;
   },
+
+  canSpendForIp: (ip: string, inputChars: number, requestedBudgetUsd?: number): boolean =>
+    costGuard.canSpendForActor(ip, inputChars, requestedBudgetUsd),
 };

@@ -10,4 +10,5 @@ export const aiFlags = {
   riskAnalysis: isEnabled(process.env.AI_ENABLE_RISK_ANALYSIS),
   logParser: isEnabled(process.env.AI_ENABLE_LOG_PARSER),
   transcribe: isEnabled(process.env.AI_ENABLE_TRANSCRIBE),
+  progressionPlan: isEnabled(process.env.AI_ENABLE_PROGRESSION_PLAN),
 };

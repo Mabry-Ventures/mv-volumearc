@@ -23,6 +23,7 @@ import { useAiWorkoutPlan } from '@/hooks/useAiWorkoutPlan';
 import { useLiveCoach } from '@/hooks/useLiveCoach';
 import { usePostWorkoutAi } from '@/hooks/usePostWorkoutAi';
 import { useNaturalLanguageLog } from '@/hooks/useNaturalLanguageLog';
+import { useProgressionPlan } from '@/hooks/useProgressionPlan';
 import { Timer } from '@/components/Timer';
 import { ExerciseSelector } from '@/components/ExerciseSelector';
 import { WorkoutExerciseCard } from '@/components/WorkoutExerciseCard';
@@ -107,6 +108,7 @@ export default function WorkoutPage() {
   const liveCoach = useLiveCoach();
   const postWorkoutAi = usePostWorkoutAi();
   const naturalLanguageLog = useNaturalLanguageLog();
+  const progressionPlan = useProgressionPlan();
 
   const [showExerciseSelector, setShowExerciseSelector] = useState(false);
   const [workoutName, setWorkoutName] = useState('');
@@ -163,6 +165,11 @@ export default function WorkoutPage() {
       350
     );
   }, [currentWorkout, lastSet, liveCoach, getCurrentDigest]);
+
+  useEffect(() => {
+    if (!currentWorkout || workouts.length === 0) return;
+    void progressionPlan.generateProgressionPlan(getCurrentDigest());
+  }, [currentWorkout, workouts.length, progressionPlan.generateProgressionPlan, getCurrentDigest]);
 
   useEffect(() => {
     if (!naturalLanguageLog.parseResult || !aiPreferences.autoApplySuggestions) return;
@@ -381,6 +388,28 @@ export default function WorkoutPage() {
     });
   };
 
+  const handleApplyProgressionTargets = () => {
+    if (!currentWorkout || !progressionPlan.data) return;
+
+    progressionPlan.data.updates.forEach(update => {
+      const exercise = currentWorkout.exercises.find(
+        current => current.exercise.id === update.exerciseId
+      );
+      if (!exercise) return;
+
+      const targetSet = exercise.sets.find(set => !set.completed) || exercise.sets[0];
+      if (!targetSet) return;
+
+      updateSet(exercise.id, targetSet.id, {
+        weight: update.nextTarget.weight,
+        reps: update.nextTarget.reps,
+        unit: update.nextTarget.unit,
+      });
+    });
+
+    setToastMessage('Progression targets applied to current workout.');
+  };
+
   const startRecording = async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
       window.alert('Audio recording is not supported in this browser.');
@@ -460,6 +489,12 @@ export default function WorkoutPage() {
 
           <h3 className="mb-2" style={{ fontWeight: 680 }}>Next Session Focus</h3>
           <p className="mb-3">{postWorkoutAi.data.nextSessionRecommendation.focus}</p>
+
+          <div className="workflow-chip-row mb-3">
+            <span className="workflow-chip">PR Tracking Active</span>
+            <span className="workflow-chip">Volume Badge</span>
+            <span className="workflow-chip">Consistency Badge</span>
+          </div>
 
           <div className="workflow-chip-row mb-3">
             <Button variant="secondary" size="sm" onClick={handleSaveTemplate}>
@@ -690,6 +725,46 @@ export default function WorkoutPage() {
               </p>
             )}
           </>
+        )}
+      </Card>
+
+      <Card className="mb-4" elevated>
+        <div className="flex justify-between items-center mb-2">
+          <h3 style={{ fontWeight: 700 }}>Progression Autopilot</h3>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              void progressionPlan.generateProgressionPlan(getCurrentDigest());
+            }}
+            disabled={progressionPlan.isLoading}
+          >
+            {progressionPlan.isLoading ? 'Updating...' : 'Refresh'}
+          </Button>
+        </div>
+        {progressionPlan.error && (
+          <p className="text-danger" style={{ fontSize: '0.82rem' }}>
+            {progressionPlan.error}
+          </p>
+        )}
+        {progressionPlan.data ? (
+          <>
+            <p className="text-muted" style={{ fontSize: '0.82rem' }}>
+              {progressionPlan.data.blockName} • {progressionPlan.data.updates.length} target updates
+            </p>
+            <Button
+              variant="primary"
+              size="sm"
+              className="mt-2"
+              onClick={handleApplyProgressionTargets}
+            >
+              Apply Progression Targets
+            </Button>
+          </>
+        ) : (
+          <p className="text-muted" style={{ fontSize: '0.82rem' }}>
+            Generate targets from your full history to auto-adjust loads and reps.
+          </p>
         )}
       </Card>
 

@@ -4,6 +4,7 @@ import { enforceRateAndBudget, jsonError } from '@/lib/ai/http';
 import { executeStructuredTask } from '@/lib/ai/execute';
 import { aiFallbacks } from '@/lib/ai/fallbacks';
 import { baseSystemPrompt } from '@/lib/ai/prompts';
+import { getActorIdFromRequest } from '@/lib/server/actor';
 import {
   isAiParseLogRequest,
   parseAiParseLogResponse,
@@ -12,6 +13,8 @@ import {
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
+  const actorId = getActorIdFromRequest(request);
+
   if (!aiFlags.logParser) {
     return jsonError('Log parser AI feature is disabled.', 503);
   }
@@ -57,9 +60,11 @@ export async function POST(request: Request) {
     userPrompt,
     parseResponse: parseAiParseLogResponse,
     fallback: () => aiFallbacks.parseLog(payload.text),
+    actorId,
   });
 
   const response = {
+    actorId,
     ...result.value,
     model: result.model,
     fallbackReason: result.usedFallback

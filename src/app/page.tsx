@@ -51,6 +51,12 @@ export default function HomePage() {
     return 'Reset focus and stack one strong session today.';
   }, [stats]);
 
+  const streakRescueMessage = useMemo(() => {
+    if (!stats || stats.totalWorkouts === 0) return null;
+    if (stats.currentStreak > 0) return null;
+    return 'Streak rescue available: complete one short session today to restart momentum.';
+  }, [stats]);
+
   return (
     <div className="py-6">
       <header className="hero-card mb-4">
@@ -139,6 +145,30 @@ export default function HomePage() {
             <span className="workflow-chip">{recentWorkout.exercises.length} exercises</span>
             <span className="workflow-chip">{recentWorkout.duration || 0} min</span>
           </div>
+        </Card>
+      )}
+
+      <Card className="mb-4" elevated>
+        <div className="flex justify-between items-center mb-2">
+          <h3 style={{ fontWeight: 700 }}>Next Workout Ready</h3>
+          <span className="workflow-chip">Retention Loop</span>
+        </div>
+        <p className="text-muted" style={{ fontSize: '0.82rem' }}>
+          Your next session is prepped with AI progression targets and recovery-aware guidance.
+        </p>
+        <div className="mt-3">
+          <Link href="/workout" className="btn btn-secondary">
+            Start Next Session <ArrowRight size={15} />
+          </Link>
+        </div>
+      </Card>
+
+      {streakRescueMessage && (
+        <Card className="mb-4" elevated>
+          <p style={{ fontWeight: 650 }}>Streak Rescue</p>
+          <p className="text-muted mt-1" style={{ fontSize: '0.82rem' }}>
+            {streakRescueMessage}
+          </p>
         </Card>
       )}
 

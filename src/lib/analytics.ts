@@ -30,6 +30,21 @@ const writeEvents = (events: UiInteractionEvent[]) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(events.slice(-MAX_EVENTS)));
 };
 
+const shipEvent = async (event: UiInteractionEvent): Promise<void> => {
+  if (typeof window === 'undefined') return;
+
+  try {
+    await fetch('/api/telemetry/ingest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uiEvents: [event] }),
+      keepalive: true,
+    });
+  } catch {
+    // Best-effort telemetry.
+  }
+};
+
 export const uiAnalytics = {
   track(params: {
     stage: WorkoutFlowStage;
@@ -39,6 +54,7 @@ export const uiAnalytics = {
   }): UiInteractionEvent {
     const event: UiInteractionEvent = {
       id: uuidv4(),
+      version: '1.0.0',
       stage: params.stage,
       action: params.action,
       elapsedMs: params.elapsedMs,
@@ -49,6 +65,7 @@ export const uiAnalytics = {
     const events = readEvents();
     events.push(event);
     writeEvents(events);
+    void shipEvent(event);
     return event;
   },
 

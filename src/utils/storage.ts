@@ -3,6 +3,7 @@ import type {
   Exercise,
   ExerciseCategory,
   MuscleGroup,
+  NotificationPreference,
   PersonalRecord,
   Workout,
   WorkoutAiSummary,
@@ -19,6 +20,7 @@ const STORAGE_KEYS = {
   AI_PREFERENCES: 'beast-mode-ai-preferences',
   AI_CACHE: 'beast-mode-ai-cache',
   WORKOUT_UX_PREFERENCES: 'beast-mode-workout-ux-preferences',
+  NOTIFICATION_PREFERENCES: 'beast-mode-notification-preferences',
 } as const;
 
 const DEFAULT_SETTINGS = { unit: 'lbs' as const };
@@ -37,6 +39,13 @@ const DEFAULT_WORKOUT_UX_PREFERENCES: WorkoutUxPreferences = {
   autoStartRestTimer: true,
   restTimerDefaultSeconds: 90,
   showPreviousValues: true,
+};
+const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreference = {
+  webPushEnabled: false,
+  emailEnabled: false,
+  streakRescueEnabled: true,
+  nextWorkoutReminderEnabled: true,
+  reminderHourLocal: 18,
 };
 
 const VALID_EXERCISE_CATEGORIES: ExerciseCategory[] = [
@@ -253,6 +262,20 @@ const isWorkoutUxPreferences = (value: unknown): value is WorkoutUxPreferences =
     value.restTimerDefaultSeconds >= 15 &&
     value.restTimerDefaultSeconds <= 300 &&
     isBoolean(value.showPreviousValues)
+  );
+};
+
+const isNotificationPreference = (value: unknown): value is NotificationPreference => {
+  if (!isObject(value)) return false;
+
+  return (
+    isBoolean(value.webPushEnabled) &&
+    isBoolean(value.emailEnabled) &&
+    isBoolean(value.streakRescueEnabled) &&
+    isBoolean(value.nextWorkoutReminderEnabled) &&
+    isFiniteNumber(value.reminderHourLocal) &&
+    value.reminderHourLocal >= 0 &&
+    value.reminderHourLocal <= 23
   );
 };
 
@@ -487,6 +510,23 @@ export const storage = {
     writeRaw(STORAGE_KEYS.WORKOUT_UX_PREFERENCES, preferences);
   },
 
+  getNotificationPreferences: (): NotificationPreference => {
+    const parsed = readRaw(STORAGE_KEYS.NOTIFICATION_PREFERENCES);
+    if (parsed === null) return DEFAULT_NOTIFICATION_PREFERENCES;
+
+    if (!isNotificationPreference(parsed)) {
+      localStorage.removeItem(STORAGE_KEYS.NOTIFICATION_PREFERENCES);
+      return DEFAULT_NOTIFICATION_PREFERENCES;
+    }
+
+    return parsed;
+  },
+
+  saveNotificationPreferences: (preferences: NotificationPreference): void => {
+    if (typeof window === 'undefined') return;
+    writeRaw(STORAGE_KEYS.NOTIFICATION_PREFERENCES, preferences);
+  },
+
   // Import backup data after strict validation.
   importData: (payload: unknown): boolean => {
     if (!isObject(payload)) return false;
@@ -498,7 +538,8 @@ export const storage = {
       'settings' in payload ||
       'aiPreferences' in payload ||
       'aiCache' in payload ||
-      'workoutUxPreferences' in payload;
+      'workoutUxPreferences' in payload ||
+      'notificationPreferences' in payload;
 
     if (!hasSupportedFields) return false;
 
@@ -509,6 +550,7 @@ export const storage = {
     let validatedAiPreferences: AiUserPreferences | null = null;
     let validatedAiCache: Record<string, unknown> | null = null;
     let validatedWorkoutUxPreferences: WorkoutUxPreferences | null = null;
+    let validatedNotificationPreferences: NotificationPreference | null = null;
 
     if ('workouts' in payload) {
       validatedWorkouts = toValidatedArray(payload.workouts, isWorkout);
@@ -545,6 +587,11 @@ export const storage = {
       validatedWorkoutUxPreferences = payload.workoutUxPreferences;
     }
 
+    if ('notificationPreferences' in payload) {
+      if (!isNotificationPreference(payload.notificationPreferences)) return false;
+      validatedNotificationPreferences = payload.notificationPreferences;
+    }
+
     if (validatedWorkouts !== null) {
       storage.saveWorkouts(validatedWorkouts);
     }
@@ -571,6 +618,10 @@ export const storage = {
 
     if (validatedWorkoutUxPreferences !== null) {
       storage.saveWorkoutUxPreferences(validatedWorkoutUxPreferences);
+    }
+
+    if (validatedNotificationPreferences !== null) {
+      storage.saveNotificationPreferences(validatedNotificationPreferences);
     }
 
     return true;

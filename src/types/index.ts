@@ -177,10 +177,12 @@ export type SetActionType =
 
 export interface UiInteractionEvent {
   id: string;
+  version: string;
   stage: WorkoutFlowStage;
   action: string;
   elapsedMs?: number;
   metadata?: Record<string, string | number | boolean | null>;
+  actorId?: string;
   createdAt: string;
 }
 
@@ -393,4 +395,172 @@ export interface AiTranscriptionResponse {
   confidence: number;
   durationSeconds?: number;
   fallbackReason?: string;
+}
+
+export interface WorkoutFunnelEvent {
+  id: string;
+  actorId: string;
+  stage:
+    | 'workout_started'
+    | 'first_set_completed'
+    | 'workout_completed'
+    | 'workout_cancelled';
+  createdAt: string;
+  metadata?: Record<string, string | number | boolean | null>;
+}
+
+export interface AiLatencyEvent {
+  id: string;
+  actorId: string;
+  endpoint:
+    | 'workout-plan'
+    | 'live-coach'
+    | 'post-workout'
+    | 'risk-analysis'
+    | 'parse-log'
+    | 'transcribe'
+    | 'progression-plan';
+  model: string;
+  latencyMs: number;
+  createdAt: string;
+}
+
+export interface AiFallbackEvent {
+  id: string;
+  actorId: string;
+  endpoint:
+    | 'workout-plan'
+    | 'live-coach'
+    | 'post-workout'
+    | 'risk-analysis'
+    | 'parse-log'
+    | 'transcribe'
+    | 'progression-plan';
+  reason: string;
+  createdAt: string;
+}
+
+export interface SyncOperation {
+  id: string;
+  deviceId: string;
+  entityType: 'workout' | 'template' | 'preference';
+  entityId: string;
+  op: 'upsert' | 'delete';
+  payload?: unknown;
+  clientUpdatedAt: string;
+  serverReceivedAt?: string;
+}
+
+export interface SyncCheckpoint {
+  actorId: string;
+  cursor: number;
+  lastSyncedAt: string;
+}
+
+export type DeviceId = string;
+
+export interface ConflictRecord {
+  id: string;
+  actorId: string;
+  entityType: SyncOperation['entityType'];
+  entityId: string;
+  keptOperationId: string;
+  droppedOperationId: string;
+  reason: string;
+  resolvedAt: string;
+}
+
+export interface AiEvalCase {
+  id: string;
+  category:
+    | 'workout-plan-schema'
+    | 'live-coach-quality'
+    | 'parse-log-accuracy'
+    | 'risk-consistency';
+  input: unknown;
+  expected: unknown;
+  threshold?: number;
+}
+
+export interface AiEvalResult {
+  caseId: string;
+  category: AiEvalCase['category'];
+  passed: boolean;
+  score: number;
+  details: string;
+}
+
+export interface ProgressionDecisionReason {
+  code:
+    | 'volume_up'
+    | 'volume_down'
+    | 'plateau_risk'
+    | 'recovery_low'
+    | 'stable_progress'
+    | 'technique_focus';
+  detail: string;
+}
+
+export interface TargetSetUpdate {
+  exerciseId: string;
+  exerciseName: string;
+  currentTarget: {
+    reps: number;
+    weight: number;
+    unit: 'lbs' | 'kg';
+  };
+  nextTarget: {
+    reps: number;
+    weight: number;
+    unit: 'lbs' | 'kg';
+  };
+  confidence: number;
+  reasons: ProgressionDecisionReason[];
+}
+
+export interface ProgressionBlock {
+  generatedAt: string;
+  blockName: string;
+  durationWeeks: number;
+  updates: TargetSetUpdate[];
+  deloadRecommended: boolean;
+  notes: string[];
+}
+
+export interface Entitlement {
+  tier: 'free' | 'pro' | 'team';
+  aiEnabled: boolean;
+  liveCoachEnabled: boolean;
+  syncEnabled: boolean;
+  maxDailyAiUsd: number;
+  maxMonthlyAiUsd: number;
+  supportLevel: 'community' | 'priority';
+}
+
+export interface NotificationPreference {
+  webPushEnabled: boolean;
+  emailEnabled: boolean;
+  streakRescueEnabled: boolean;
+  nextWorkoutReminderEnabled: boolean;
+  reminderHourLocal: number;
+}
+
+export interface RecoverySignal {
+  recordedAt: string;
+  score: number;
+  source: 'manual' | 'apple-health' | 'google-fit' | 'wearable';
+}
+
+export interface SleepSignal {
+  recordedAt: string;
+  durationHours: number;
+  qualityScore?: number;
+  source: 'manual' | 'apple-health' | 'google-fit' | 'wearable';
+}
+
+export interface HrSignal {
+  recordedAt: string;
+  restingHr?: number;
+  hrvMs?: number;
+  source: 'manual' | 'apple-health' | 'google-fit' | 'wearable';
 }

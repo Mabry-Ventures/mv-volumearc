@@ -6,6 +6,7 @@ import { executeStructuredTask } from '@/lib/ai/execute';
 import { aiFallbacks } from '@/lib/ai/fallbacks';
 import { aiCache } from '@/lib/ai/cache';
 import { baseSystemPrompt } from '@/lib/ai/prompts';
+import { getActorIdFromRequest } from '@/lib/server/actor';
 import {
   isAiWorkoutPlanRequest,
   parseAiWorkoutPlanResponse,
@@ -15,6 +16,8 @@ import { digestFingerprint } from '@/lib/ai/contextBuilder';
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
+  const actorId = getActorIdFromRequest(request);
+
   if (!aiFlags.workoutPlan) {
     return jsonError('Workout plan AI feature is disabled.', 503);
   }
@@ -73,9 +76,11 @@ export async function POST(request: Request) {
     userPrompt,
     parseResponse: parseAiWorkoutPlanResponse,
     fallback: () => aiFallbacks.workoutPlan({ ...payload, fullHistoryDigest: pruned.digest }),
+    actorId,
   });
 
   const response = {
+    actorId,
     ...result.value,
     model: result.model,
     fallbackReason: result.usedFallback

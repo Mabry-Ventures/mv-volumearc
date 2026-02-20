@@ -1,10 +1,26 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Trash2, Download, Upload, Sparkles, SlidersHorizontal, ShieldCheck } from 'lucide-react';
+import {
+  Trash2,
+  Download,
+  Upload,
+  Sparkles,
+  SlidersHorizontal,
+  ShieldCheck,
+  UserRound,
+  Bell,
+  Activity,
+  Link2,
+} from 'lucide-react';
 import { storage } from '@/utils/storage';
 import { Button, Card, Input, SegmentedControl } from '@/components';
-import type { AiUserPreferences, WorkoutUxPreferences } from '@/types';
+import type {
+  AiUserPreferences,
+  Entitlement,
+  NotificationPreference,
+  WorkoutUxPreferences,
+} from '@/types';
 
 const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 
@@ -15,6 +31,7 @@ const aiFeatureFlags = [
   { label: 'Risk Analysis', value: process.env.NEXT_PUBLIC_AI_ENABLE_RISK_ANALYSIS !== 'false' },
   { label: 'Log Parser', value: process.env.NEXT_PUBLIC_AI_ENABLE_LOG_PARSER !== 'false' },
   { label: 'Transcription', value: process.env.NEXT_PUBLIC_AI_ENABLE_TRANSCRIBE !== 'false' },
+  { label: 'Progression Plan', value: process.env.NEXT_PUBLIC_AI_ENABLE_PROGRESSION_PLAN !== 'false' },
 ];
 
 const riskOptions: Array<{ value: AiUserPreferences['riskSensitivity']; label: string }> = [
@@ -35,11 +52,29 @@ const verbosityOptions: Array<{ value: AiUserPreferences['verbosity']; label: st
   { value: 'detailed', label: 'Detailed' },
 ];
 
+type HealthSyncProvider = 'oura' | 'generic-json';
+
+const healthProviderOptions: Array<{ value: HealthSyncProvider; label: string }> = [
+  { value: 'oura', label: 'Oura' },
+  { value: 'generic-json', label: 'Generic JSON' },
+];
+
 export default function SettingsPage() {
   const [unit, setUnit] = useState<'lbs' | 'kg'>('lbs');
   const [workoutCount, setWorkoutCount] = useState(0);
   const [aiPreferences, setAiPreferences] = useState<AiUserPreferences | null>(null);
   const [uxPreferences, setUxPreferences] = useState<WorkoutUxPreferences | null>(null);
+  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreference | null>(null);
+  const [entitlement, setEntitlement] = useState<Entitlement | null>(null);
+  const [dailyUsageUsd, setDailyUsageUsd] = useState<number | null>(null);
+  const [healthIntegrationsEnabled, setHealthIntegrationsEnabled] = useState(false);
+  const [healthSyncProvider, setHealthSyncProvider] = useState<HealthSyncProvider>('oura');
+  const [healthAccessToken, setHealthAccessToken] = useState('');
+  const [healthGenericUrl, setHealthGenericUrl] = useState('');
+  const [healthStartDate, setHealthStartDate] = useState('');
+  const [healthEndDate, setHealthEndDate] = useState('');
+  const [healthSyncLoading, setHealthSyncLoading] = useState(false);
+  const [healthSyncMessage, setHealthSyncMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const settings = storage.getSettings();
@@ -47,6 +82,37 @@ export default function SettingsPage() {
     setWorkoutCount(storage.getWorkouts().length);
     setAiPreferences(storage.getAiPreferences());
     setUxPreferences(storage.getWorkoutUxPreferences());
+    setNotificationPreferences(storage.getNotificationPreferences());
+
+    void (async () => {
+      try {
+        const response = await fetch('/api/subscription/entitlements');
+        const payload = (await response.json()) as {
+          entitlement?: Entitlement;
+          usage?: { totalUsd: number };
+        };
+        if (response.ok && payload.entitlement) {
+          setEntitlement(payload.entitlement);
+          setDailyUsageUsd(typeof payload.usage?.totalUsd === 'number' ? payload.usage.totalUsd : 0);
+        }
+      } catch {
+        // Non-blocking settings enhancement.
+      }
+    })();
+
+    void (async () => {
+      try {
+        const response = await fetch('/api/me/features');
+        const payload = (await response.json()) as {
+          featureFlags?: { healthIntegrations?: boolean };
+        };
+        if (response.ok) {
+          setHealthIntegrationsEnabled(payload.featureFlags?.healthIntegrations === true);
+        }
+      } catch {
+        setHealthIntegrationsEnabled(false);
+      }
+    })();
   }, []);
 
   const saveAiPreferences = (next: AiUserPreferences) => {
@@ -57,6 +123,11 @@ export default function SettingsPage() {
   const saveUxPreferences = (next: WorkoutUxPreferences) => {
     setUxPreferences(next);
     storage.saveWorkoutUxPreferences(next);
+  };
+
+  const saveNotificationPreferences = (next: NotificationPreference) => {
+    setNotificationPreferences(next);
+    storage.saveNotificationPreferences(next);
   };
 
   const handleUnitChange = (newUnit: 'lbs' | 'kg') => {
@@ -72,6 +143,7 @@ export default function SettingsPage() {
       settings: storage.getSettings(),
       aiPreferences: storage.getAiPreferences(),
       workoutUxPreferences: storage.getWorkoutUxPreferences(),
+      notificationPreferences: storage.getNotificationPreferences(),
       aiCache: storage.getAiCache(),
       exportedAt: new Date().toISOString(),
     };
@@ -131,6 +203,55 @@ export default function SettingsPage() {
     }
   };
 
+  const handleHealthSync = async () => {
+    const token = healthAccessToken.trim();
+    if (!token) {
+      setHealthSyncMessage('Access token is required.');
+      return;
+    }
+
+    if (healthSyncProvider === 'generic-json' && !healthGenericUrl.trim()) {
+      setHealthSyncMessage('Generic JSON URL is required for this provider.');
+      return;
+    }
+
+    setHealthSyncLoading(true);
+    setHealthSyncMessage(null);
+
+    try {
+      const response = await fetch('/api/integrations/health/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: healthSyncProvider,
+          accessToken: token,
+          startDate: healthStartDate || undefined,
+          endDate: healthEndDate || undefined,
+          genericUrl: healthSyncProvider === 'generic-json' ? healthGenericUrl.trim() : undefined,
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        error?: string;
+        imported?: { recovery: number; sleep: number; heart: number };
+      };
+
+      if (!response.ok) {
+        setHealthSyncMessage(payload.error || 'Health sync failed.');
+        return;
+      }
+
+      const imported = payload.imported || { recovery: 0, sleep: 0, heart: 0 };
+      setHealthSyncMessage(
+        `Sync complete: ${imported.recovery} recovery, ${imported.sleep} sleep, ${imported.heart} heart records imported.`
+      );
+    } catch {
+      setHealthSyncMessage('Health sync failed due to a network error.');
+    } finally {
+      setHealthSyncLoading(false);
+    }
+  };
+
   return (
     <div className="py-6">
       <header className="page-header">
@@ -139,6 +260,98 @@ export default function SettingsPage() {
           Configure AI coaching style, workout speed controls, and privacy defaults.
         </p>
       </header>
+
+      <Card className="mb-4" elevated>
+        <h3 className="mb-3" style={{ fontWeight: 700 }}>
+          <UserRound size={18} style={{ display: 'inline', marginRight: '0.5rem' }} />
+          Account & Sync (Alpha)
+        </h3>
+        <p className="text-muted mb-3" style={{ fontSize: '0.82rem' }}>
+          Local-first mode is always available. Connect an account for cross-device sync.
+        </p>
+        <div className="flex gap-2">
+          <a href="/api/auth/signin" className="btn btn-secondary">
+            Connect Account
+          </a>
+          <a href="/api/auth/signout" className="btn btn-ghost">
+            Disconnect
+          </a>
+        </div>
+      </Card>
+
+      <Card className="mb-4" elevated>
+        <h3 className="mb-3" style={{ fontWeight: 700 }}>
+          <Link2 size={18} style={{ display: 'inline', marginRight: '0.5rem' }} />
+          Health Provider Sync
+        </h3>
+        <p className="text-muted mb-3" style={{ fontSize: '0.82rem' }}>
+          Connect a recovery provider and import wearable signals for risk analysis enrichment.
+        </p>
+
+        <div className="mb-3">
+          <p className="label">Provider</p>
+          <SegmentedControl
+            ariaLabel="Health sync provider"
+            value={healthSyncProvider}
+            options={healthProviderOptions}
+            onChange={value => setHealthSyncProvider(value)}
+          />
+        </div>
+
+        <Input
+          id="health-access-token"
+          label="Access Token"
+          type="password"
+          className="mb-3"
+          placeholder="Paste provider access token"
+          value={healthAccessToken}
+          onChange={event => setHealthAccessToken(event.target.value)}
+        />
+
+        {healthSyncProvider === 'generic-json' && (
+          <Input
+            id="health-generic-url"
+            label="Generic Provider URL"
+            className="mb-3"
+            placeholder="https://provider.example.com/health"
+            value={healthGenericUrl}
+            onChange={event => setHealthGenericUrl(event.target.value)}
+          />
+        )}
+
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <Input
+            id="health-start-date"
+            label="Start Date"
+            type="date"
+            value={healthStartDate}
+            onChange={event => setHealthStartDate(event.target.value)}
+          />
+          <Input
+            id="health-end-date"
+            label="End Date"
+            type="date"
+            value={healthEndDate}
+            onChange={event => setHealthEndDate(event.target.value)}
+          />
+        </div>
+
+        {!healthIntegrationsEnabled ? (
+          <p className="text-muted" style={{ fontSize: '0.8rem' }}>
+            Health integrations are currently disabled by feature flag.
+          </p>
+        ) : (
+          <Button variant="secondary" onClick={handleHealthSync} disabled={healthSyncLoading} block>
+            {healthSyncLoading ? 'Syncing...' : 'Sync Health Data'}
+          </Button>
+        )}
+
+        {healthSyncMessage && (
+          <p className="text-muted mt-2" style={{ fontSize: '0.8rem' }}>
+            {healthSyncMessage}
+          </p>
+        )}
+      </Card>
 
       <Card className="mb-4" elevated>
         <h3 className="mb-3" style={{ fontWeight: 700 }}>Weight Unit</h3>
@@ -371,6 +584,114 @@ export default function SettingsPage() {
                 <div style={{ fontWeight: 600 }}>{flag.value ? 'Enabled' : 'Disabled'}</div>
               </div>
             ))}
+          </div>
+        </Card>
+      )}
+
+      {notificationPreferences && (
+        <Card className="mb-4" elevated>
+          <h3 className="mb-3" style={{ fontWeight: 700 }}>
+            <Bell size={18} style={{ display: 'inline', marginRight: '0.5rem' }} />
+            Notification Preferences
+          </h3>
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <label className="card" style={{ padding: '0.75rem' }}>
+              <span style={{ fontWeight: 640, fontSize: '0.85rem' }}>Web Push</span>
+              <input
+                type="checkbox"
+                checked={notificationPreferences.webPushEnabled}
+                onChange={event =>
+                  saveNotificationPreferences({
+                    ...notificationPreferences,
+                    webPushEnabled: event.target.checked,
+                  })
+                }
+                style={{ marginTop: '0.45rem' }}
+              />
+            </label>
+            <label className="card" style={{ padding: '0.75rem' }}>
+              <span style={{ fontWeight: 640, fontSize: '0.85rem' }}>Email</span>
+              <input
+                type="checkbox"
+                checked={notificationPreferences.emailEnabled}
+                onChange={event =>
+                  saveNotificationPreferences({
+                    ...notificationPreferences,
+                    emailEnabled: event.target.checked,
+                  })
+                }
+                style={{ marginTop: '0.45rem' }}
+              />
+            </label>
+            <label className="card" style={{ padding: '0.75rem' }}>
+              <span style={{ fontWeight: 640, fontSize: '0.85rem' }}>Streak Rescue</span>
+              <input
+                type="checkbox"
+                checked={notificationPreferences.streakRescueEnabled}
+                onChange={event =>
+                  saveNotificationPreferences({
+                    ...notificationPreferences,
+                    streakRescueEnabled: event.target.checked,
+                  })
+                }
+                style={{ marginTop: '0.45rem' }}
+              />
+            </label>
+            <label className="card" style={{ padding: '0.75rem' }}>
+              <span style={{ fontWeight: 640, fontSize: '0.85rem' }}>Next Workout Reminder</span>
+              <input
+                type="checkbox"
+                checked={notificationPreferences.nextWorkoutReminderEnabled}
+                onChange={event =>
+                  saveNotificationPreferences({
+                    ...notificationPreferences,
+                    nextWorkoutReminderEnabled: event.target.checked,
+                  })
+                }
+                style={{ marginTop: '0.45rem' }}
+              />
+            </label>
+          </div>
+          <Input
+            id="notification-hour-local"
+            label="Reminder Hour (Local)"
+            type="number"
+            min={0}
+            max={23}
+            value={notificationPreferences.reminderHourLocal}
+            onChange={event =>
+              saveNotificationPreferences({
+                ...notificationPreferences,
+                reminderHourLocal: Math.max(0, Math.min(23, Number(event.target.value) || 18)),
+              })
+            }
+          />
+        </Card>
+      )}
+
+      {entitlement && (
+        <Card className="mb-4" elevated>
+          <h3 className="mb-3" style={{ fontWeight: 700 }}>
+            <Activity size={18} style={{ display: 'inline', marginRight: '0.5rem' }} />
+            Plan & Usage
+          </h3>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="card" style={{ padding: '0.75rem' }}>
+              <p className="text-muted" style={{ fontSize: '0.75rem' }}>Tier</p>
+              <p style={{ fontWeight: 700, textTransform: 'uppercase' }}>{entitlement.tier}</p>
+            </div>
+            <div className="card" style={{ padding: '0.75rem' }}>
+              <p className="text-muted" style={{ fontSize: '0.75rem' }}>Daily AI Budget</p>
+              <p style={{ fontWeight: 700 }}>${entitlement.maxDailyAiUsd.toFixed(2)}</p>
+            </div>
+            <div className="card" style={{ padding: '0.75rem' }}>
+              <p className="text-muted" style={{ fontSize: '0.75rem' }}>Monthly AI Budget</p>
+              <p style={{ fontWeight: 700 }}>${entitlement.maxMonthlyAiUsd.toFixed(2)}</p>
+            </div>
+            <div className="card" style={{ padding: '0.75rem' }}>
+              <p className="text-muted" style={{ fontSize: '0.75rem' }}>Daily Spend</p>
+              <p style={{ fontWeight: 700 }}>${(dailyUsageUsd || 0).toFixed(3)}</p>
+            </div>
           </div>
         </Card>
       )}
