@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next typegen && find .next/types -name '* 2.ts' -delete && biome lint src jest.setup.ts && tsc --noEmit",
+    "lint": "biome lint src jest.setup.ts && tsc --noEmit",
     "lint:biome": "biome lint src jest.setup.ts",
     "test": "jest",
     "test:watch": "jest --watch"
@@ -15,7 +15,7 @@
   "dependencies": {
     "date-fns": "^2.30.0",
     "lucide-react": "^0.294.0",
-    "next": "^15.5.10",
+    "next": "^14.2.35",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "recharts": "^2.10.0",
