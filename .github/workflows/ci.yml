@@ -25,8 +25,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/VolumeArcNative
-          path: ../VolumeArcNative
+          path: VolumeArcNative
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Symlink VolumeArcNative to sibling path
+        run: ln -sfn "$GITHUB_WORKSPACE/VolumeArcNative" "../VolumeArcNative"
 
       - name: Verify Ruby and xcodeproj gem
         run: |
@@ -70,8 +73,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/VolumeArcNative
-          path: ../VolumeArcNative
+          path: VolumeArcNative
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Symlink VolumeArcNative to sibling path
+        run: ln -sfn "$GITHUB_WORKSPACE/VolumeArcNative" "../VolumeArcNative"
 
       - name: Install dependencies
         run: bundle install
