@@ -26,7 +26,7 @@ jobs:
         with:
           repository: ${{ github.repository_owner }}/VolumeArcNative
           path: VolumeArcNative
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.VOLUMEARC_PAT }}
 
       - name: Symlink VolumeArcNative to sibling path
         run: ln -sfn "$GITHUB_WORKSPACE/VolumeArcNative" "../VolumeArcNative"
@@ -74,7 +74,7 @@ jobs:
         with:
           repository: ${{ github.repository_owner }}/VolumeArcNative
           path: VolumeArcNative
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.VOLUMEARC_PAT }}
 
       - name: Symlink VolumeArcNative to sibling path
         run: ln -sfn "$GITHUB_WORKSPACE/VolumeArcNative" "../VolumeArcNative"
