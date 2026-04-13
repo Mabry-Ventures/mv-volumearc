@@ -163,6 +163,7 @@ add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   'Intents/VolumeArcIntents.swift',
   'VolumeArcCloudConfiguration.swift',
   'VolumeArcLiveActivityController.swift',
+  'VolumeArcPersistenceController.swift',
   'VolumeArcPremiumCatalog.swift',
   'VolumeArcSecureStore.swift',
   'VolumeArcWidgetController.swift',
