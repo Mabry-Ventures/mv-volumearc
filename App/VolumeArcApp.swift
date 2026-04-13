@@ -21,6 +21,9 @@ struct VolumeArcApp: App {
     #endif
 
     init() {
+        #if canImport(Sentry)
+        VolumeArcSentryConfiguration.bootstrapIfNeeded()
+        #endif
         VolumeArcAIConfiguration.bootstrapRelaySecretsIfNeeded()
         #if canImport(SwiftData)
         let persistence = VolumeArcPersistenceController.shared
@@ -300,6 +303,19 @@ struct VolumeArcApp: App {
                 )
             )
         }
+
+        #if canImport(Sentry)
+        if let sentryWarning = VolumeArcSentryConfiguration.startupWarning {
+            signals.append(
+                OperationalSignalSummary(
+                    id: "sentry-config",
+                    title: "Crash Reporting",
+                    message: sentryWarning,
+                    severity: .warning
+                )
+            )
+        }
+        #endif
         return signals
     }
     #else
@@ -327,6 +343,19 @@ struct VolumeArcApp: App {
                 )
             )
         }
+
+        #if canImport(Sentry)
+        if let sentryWarning = VolumeArcSentryConfiguration.startupWarning {
+            signals.append(
+                OperationalSignalSummary(
+                    id: "sentry-config",
+                    title: "Crash Reporting",
+                    message: sentryWarning,
+                    severity: .warning
+                )
+            )
+        }
+        #endif
         return signals
     }
     #endif
@@ -378,9 +407,12 @@ struct VolumeArcApp: App {
         sinks.append(persistent)
         #if canImport(OSLog)
         sinks.append(OSLogTelemetrySink())
-        return FanoutTelemetrySink(sinks: sinks)
-        #else
-        return sinks.count == 1 ? persistent : FanoutTelemetrySink(sinks: sinks)
         #endif
+        #if canImport(Sentry)
+        if VolumeArcSentryConfiguration.isConfigured {
+            sinks.append(SentryTelemetrySink())
+        }
+        #endif
+        return sinks.count == 1 ? persistent : FanoutTelemetrySink(sinks: sinks)
     }
 }

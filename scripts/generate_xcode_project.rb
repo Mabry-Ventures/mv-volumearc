@@ -10,6 +10,10 @@ PACKAGE_ROOT = ROOT.join('../VolumeArcNative').expand_path
 PROJECT_PATH = ROOT.join('VolumeArcApple.xcodeproj')
 IOS_DEPLOYMENT_TARGET = '26.0'
 WATCHOS_DEPLOYMENT_TARGET = '26.4'
+MARKETING_VERSION = File.read(ROOT.join('VERSION')).strip
+BUILD_NUMBER = ENV.fetch('BUILD_NUMBER') {
+  `git -C "#{ROOT}" rev-list --count HEAD 2>/dev/null`.strip.then { |n| n.empty? ? '1' : n }
+}
 
 FileUtils.rm_rf(PROJECT_PATH)
 project = Xcodeproj::Project.new(PROJECT_PATH)
@@ -33,7 +37,9 @@ def configure_target(target, bundle_id: nil, extra: {})
   target.build_configurations.each do |config|
     config.build_settings['SWIFT_VERSION'] = '6.0'
     config.build_settings['GENERATE_INFOPLIST_FILE'] = 'YES'
-    config.build_settings['DEVELOPMENT_TEAM'] = ''
+    config.build_settings['MARKETING_VERSION'] = MARKETING_VERSION
+    config.build_settings['CURRENT_PROJECT_VERSION'] = BUILD_NUMBER
+    config.build_settings['DEVELOPMENT_TEAM'] = ENV.fetch('DEVELOPMENT_TEAM', '')
     config.build_settings['CODE_SIGN_STYLE'] = 'Automatic'
     config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
     config.build_settings['DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING'] = 'YES'
@@ -131,6 +137,11 @@ def add_swift_sources(group, target, base_dir)
   target.add_file_references(refs)
 end
 
+def add_resource(group, target, relative_path)
+  ref = group.find_file_by_path(relative_path) || group.new_file(relative_path)
+  target.resources_build_phase.add_file_reference(ref, true)
+end
+
 def add_selected_swift_sources(group, target, base_dir, relative_paths)
   refs = relative_paths.map do |relative_path|
     group.find_file_by_path(relative_path) || group.new_file(relative_path)
@@ -144,6 +155,10 @@ add_swift_sources(app_group, app_target, ROOT.join('App'))
 add_swift_sources(watch_group, watch_target, ROOT.join('Watch'))
 add_swift_sources(widgets_group, widget_target, ROOT.join('Widgets'))
 add_swift_sources(tests_group, app_tests_target, ROOT.join('Tests'))
+add_resource(app_group, app_target, 'PrivacyInfo.xcprivacy')
+add_resource(watch_group, watch_target, 'PrivacyInfo.xcprivacy')
+add_resource(widgets_group, widget_target, 'PrivacyInfo.xcprivacy')
+
 add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   'Intents/VolumeArcIntents.swift',
   'VolumeArcCloudConfiguration.swift',
@@ -152,6 +167,21 @@ add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   'VolumeArcSecureStore.swift',
   'VolumeArcWidgetController.swift',
 ])
+
+# Sentry Swift Package dependency
+sentry_url = 'https://github.com/getsentry/sentry-cocoa.git'
+sentry_requirement = { kind: 'upToNextMajorVersion', minimumVersion: '8.0.0' }
+sentry_ref = project.root_object.package_references.find { |r| r.repositoryURL == sentry_url }
+unless sentry_ref
+  sentry_ref = project.new(Xcodeproj::Project::Object::XCRemoteSwiftPackageReference)
+  sentry_ref.repositoryURL = sentry_url
+  sentry_ref.requirement = sentry_requirement
+  project.root_object.package_references << sentry_ref
+end
+sentry_dep = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+sentry_dep.package = sentry_ref
+sentry_dep.product_name = 'Sentry'
+app_target.package_product_dependencies << sentry_dep
 
 project.root_object.attributes['TargetAttributes'] ||= {}
 project.targets.each do |target|

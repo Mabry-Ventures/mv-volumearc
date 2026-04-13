@@ -1,0 +1,63 @@
+default_platform(:ios)
+
+before_all do
+  sh("ruby", "../scripts/generate_xcode_project.rb")
+end
+
+platform :ios do
+  desc "Run tests on iPhone 17 simulator"
+  lane :test do
+    run_tests(
+      project: "VolumeArcApple.xcodeproj",
+      scheme: "VolumeArcAppTests",
+      device: "iPhone 17",
+      code_coverage: true,
+      output_types: "junit",
+      output_directory: "build/test-results"
+    )
+  end
+
+  desc "Build and upload to TestFlight"
+  lane :beta do
+    version = File.read("../VERSION").strip
+    build_number = sh("git rev-list --count HEAD").strip
+
+    increment_version_number(
+      version_number: version,
+      xcodeproj: "VolumeArcApple.xcodeproj"
+    )
+    increment_build_number(
+      build_number: build_number,
+      xcodeproj: "VolumeArcApple.xcodeproj"
+    )
+
+    build_app(
+      project: "VolumeArcApple.xcodeproj",
+      scheme: "VolumeArcApp",
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "build/export",
+      output_name: "VolumeArc.ipa",
+      include_symbols: true,
+      include_bitcode: false
+    )
+
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true,
+      api_key_path: ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+    )
+  end
+
+  desc "Submit to App Store review"
+  lane :release do
+    beta
+
+    deliver(
+      submit_for_review: true,
+      automatic_release: false,
+      force: true,
+      skip_screenshots: true,
+      api_key_path: ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+    )
+  end
+end

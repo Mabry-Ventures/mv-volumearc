@@ -38,6 +38,9 @@ final class VolumeArcPersistenceController {
             try seedIfNeeded()
         } catch {
             // Keep the app alive even if first-run seed data cannot be written.
+            // The user will start with an empty profile and can configure later.
+            // This failure is tracked in bootstrapTelemetryEvents via the
+            // persistence status, so the startup notice will surface it.
         }
     }
 

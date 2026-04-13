@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: self-hosted
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Checkout VolumeArcNative
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/VolumeArcNative
+          path: ../VolumeArcNative
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify Ruby and xcodeproj gem
+        run: |
+          ruby --version
+          gem list xcodeproj --installed --version '>= 1.0' || gem install xcodeproj
+
+      - name: Generate Xcode project
+        run: ruby scripts/generate_xcode_project.rb
+
+      - name: Build all targets (Debug)
+        run: ./scripts/build_all_targets.sh
+
+      - name: Run tests
+        run: ./scripts/test_apple_targets.sh
+
+      - name: Lint (SwiftLint)
+        run: |
+          if command -v swiftlint &>/dev/null; then
+            swiftlint lint --strict
+          else
+            echo "::warning::SwiftLint not installed on runner — skipping lint step"
+          fi
+
+      - name: Validate release configuration
+        run: ./scripts/validate_release_config.sh
+
+  deploy-testflight:
+    name: Deploy to TestFlight
+    needs: build-and-test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: self-hosted
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout VolumeArcNative
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/VolumeArcNative
+          path: ../VolumeArcNative
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies
+        run: bundle install
+
+      - name: Deploy to TestFlight
+        env:
+          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
+          APP_STORE_CONNECT_API_KEY_PATH: ${{ secrets.APP_STORE_CONNECT_API_KEY_PATH }}
+        run: bundle exec fastlane ios beta
