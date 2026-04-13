@@ -11,7 +11,12 @@ enum VolumeArcAIConfiguration {
             ?? Bundle.main.object(forInfoDictionaryKey: "VolumeArcOpenAIBaseURL") as? String
 
         if let baseURLString, baseURLString.isEmpty == false {
-            try? secureStore.save(baseURLString, for: baseURLKey)
+            do {
+                try secureStore.save(baseURLString, for: baseURLKey)
+            } catch {
+                // Relay URL will still be available from the environment or bundle
+                // for the current launch, but won't persist to Keychain for next launch.
+            }
         }
     }
 

@@ -1,6 +1,14 @@
 import SwiftUI
 import VolumeArcCore
 
+private struct WatchLiveStatePayload: Codable, Sendable {
+    let action: String
+    let exercise: String
+    let targetWeight: Int
+    let targetUnit: String
+    let targetRepLower: Int
+}
+
 @MainActor
 final class WatchWorkoutModel: ObservableObject {
     @Published private(set) var autopilot: WorkoutAutopilotState
@@ -10,7 +18,7 @@ final class WatchWorkoutModel: ObservableObject {
     @Published var coachPrompt = "Rack is taken. Best fallback?"
     @Published private(set) var sessionActive = false
     @Published private(set) var pendingSyncCount = 0
-    @Published private(set) var statusMessage = "Watch coach standing by."
+    @Published private(set) var statusMessage = String(localized: "Watch coach standing by.", comment: "Watch default status")
 
     private let coordinator: WatchConnectivityCoordinator
     private let stateStore: WatchSessionStateStore
@@ -69,9 +77,9 @@ final class WatchWorkoutModel: ObservableObject {
         pendingSyncCount = await coordinator.pendingPayloadCount()
         statusMessage = reachable
             ? (pendingSyncCount == 0
-                ? "Connected to iPhone for live coaching."
+                ? String(localized: "Connected to iPhone for live coaching.", comment: "Watch connected status")
                 : "Connected again. Replayed \(pendingSyncCount) queued updates.")
-            : "Phone unavailable. We’ll queue key updates."
+            : String(localized: "Phone unavailable. We’ll queue key updates.", comment: "Watch disconnected status")
         await persistState()
     }
 
@@ -86,9 +94,9 @@ final class WatchWorkoutModel: ObservableObject {
 
         do {
             try await coordinator.send(payload)
-            statusMessage = "Rest timer synced."
+            statusMessage = String(localized: "Rest timer synced.", comment: "Watch rest timer sync status")
         } catch {
-            statusMessage = "Rest timer updated locally. Phone sync will retry."
+            statusMessage = String(localized: "Rest timer updated locally. Phone sync will retry.", comment: "Watch rest timer offline status")
         }
         pendingSyncCount = await coordinator.pendingPayloadCount()
         await persistState()
@@ -100,11 +108,15 @@ final class WatchWorkoutModel: ObservableObject {
         let payload = WatchPayload(
             kind: .liveState,
             workoutID: "active-strength-session",
-            body: [
-                "action=\(action.rawValue)",
-                "exercise=\(autopilot.nextExerciseName)",
-                "target=\(Int(autopilot.nextTarget.weight))\(autopilot.nextTarget.unit)x\(autopilot.nextTarget.repRange.lowerBound)"
-            ].joined(separator: "|")
+            body: SyncPayloadCodec.encode(
+                WatchLiveStatePayload(
+                    action: action.rawValue,
+                    exercise: autopilot.nextExerciseName,
+                    targetWeight: Int(autopilot.nextTarget.weight),
+                    targetUnit: autopilot.nextTarget.unit,
+                    targetRepLower: autopilot.nextTarget.repRange.lowerBound
+                )
+            ) ?? action.rawValue
         )
 
         do {
@@ -128,9 +140,9 @@ final class WatchWorkoutModel: ObservableObject {
         do {
             try await coordinator.send(payload)
             sessionActive = true
-            statusMessage = "Live session started on watch."
+            statusMessage = String(localized: "Live session started on watch.", comment: "Watch session start status")
         } catch {
-            statusMessage = "Watch session started locally. Phone sync will retry."
+            statusMessage = String(localized: "Watch session started locally. Phone sync will retry.", comment: "Watch session start offline")
             sessionActive = true
         }
         pendingSyncCount = await coordinator.pendingPayloadCount()
@@ -147,9 +159,9 @@ final class WatchWorkoutModel: ObservableObject {
 
         do {
             try await coordinator.send(payload)
-            statusMessage = "Live session ended."
+            statusMessage = String(localized: "Live session ended.", comment: "Watch session end status")
         } catch {
-            statusMessage = "Watch ended the session. Phone sync will retry."
+            statusMessage = String(localized: "Watch ended the session. Phone sync will retry.", comment: "Watch session end offline")
         }
         sessionActive = false
         pendingSyncCount = await coordinator.pendingPayloadCount()
@@ -166,9 +178,9 @@ final class WatchWorkoutModel: ObservableObject {
 
         do {
             try await coordinator.send(payload)
-            statusMessage = "Coach prompt sent to iPhone."
+            statusMessage = String(localized: "Coach prompt sent to iPhone.", comment: "Coach cue sent status")
         } catch {
-            statusMessage = "Coach prompt queued on watch until phone reconnects."
+            statusMessage = String(localized: "Coach prompt queued on watch until phone reconnects.", comment: "Coach cue offline status")
         }
         pendingSyncCount = await coordinator.pendingPayloadCount()
         await persistState()
@@ -205,9 +217,9 @@ final class WatchWorkoutModel: ObservableObject {
 
         do {
             try await coordinator.send(payload)
-            statusMessage = "Workout summary sent to iPhone."
+            statusMessage = String(localized: "Workout summary sent to iPhone.", comment: "Workout complete status")
         } catch {
-            statusMessage = "Workout summary queued for the phone."
+            statusMessage = String(localized: "Workout summary queued for the phone.", comment: "Workout complete offline status")
         }
         sessionActive = false
         pendingSyncCount = await coordinator.pendingPayloadCount()
@@ -217,11 +229,11 @@ final class WatchWorkoutModel: ObservableObject {
     func decisionSummary(for action: WorkoutAction) -> String {
         switch action {
         case .increase:
-            return "Move up only if the last rep stays clean."
+            return String(localized: "Move up only if the last rep stays clean.", comment: "Increase weight coaching cue")
         case .hold:
-            return "Hold the load and own the next set."
+            return String(localized: "Hold the load and own the next set.", comment: "Hold weight coaching cue")
         case .decrease:
-            return "Trim the jump and keep technique sharp."
+            return String(localized: "Trim the jump and keep technique sharp.", comment: "Decrease weight coaching cue")
         default:
             return autopilot.recommendationReason
         }
@@ -274,26 +286,28 @@ struct WatchWorkoutView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Now")
+                    Text(String(localized: "Now", comment: "Watch current exercise header"))
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
 
                     Text(model.autopilot.nextExerciseName)
                         .font(.title3.bold())
+                        .accessibilityLabel("Exercise: \(model.autopilot.nextExerciseName)")
 
                     Text("\(Int(model.autopilot.nextTarget.weight))\(model.autopilot.nextTarget.unit) x \(model.autopilot.nextTarget.repRange.lowerBound)-\(model.autopilot.nextTarget.repRange.upperBound)")
                         .font(.headline)
                         .foregroundStyle(.orange)
+                        .accessibilityValue("\(Int(model.autopilot.nextTarget.weight)) pounds, \(model.autopilot.nextTarget.repRange.lowerBound) to \(model.autopilot.nextTarget.repRange.upperBound) reps")
 
                     Text(model.autopilot.bestCue)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(model.sessionActive ? "Session Live" : "Session Ready")
+                        Text(model.sessionActive ? String(localized: "Session Live", comment: "Watch active session label") : String(localized: "Session Ready", comment: "Watch ready session label"))
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.secondary)
-                        Button(model.sessionActive ? "End Session" : "Start Session") {
+                        Button(model.sessionActive ? String(localized: "End Session", comment: "Watch end session button") : String(localized: "Start Session", comment: "Watch start session button")) {
                             Task {
                                 if model.sessionActive {
                                     await model.endSession()
@@ -303,14 +317,17 @@ struct WatchWorkoutView: View {
                             }
                         }
                         .buttonStyle(.bordered)
+                        .accessibilityLabel(model.sessionActive ? "End workout session" : "Start workout session")
 
                         Divider()
 
-                        Text("Rest")
+                        Text(String(localized: "Rest", comment: "Watch rest timer header"))
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.secondary)
-                        Text(remainingRest == 0 ? "Go time" : "\(remainingRest)s")
+                        Text(remainingRest == 0 ? String(localized: "Go time", comment: "Watch rest complete label") : "\(remainingRest)s")
                             .font(.title2.bold())
+                            .accessibilityLabel(remainingRest == 0 ? "Go time, rest complete" : "Rest timer")
+                            .accessibilityValue(remainingRest == 0 ? "Rest complete" : "\(remainingRest) seconds remaining")
                         Button(remainingRest == 0 ? "Restart Rest" : "Reset to 90s") {
                             Task {
                                 await model.resetRestTimer()
@@ -322,7 +339,7 @@ struct WatchWorkoutView: View {
 
                     Divider()
 
-                    Text("Decision")
+                    Text(String(localized: "Decision", comment: "Watch decision header"))
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
 
@@ -340,6 +357,7 @@ struct WatchWorkoutView: View {
 
                     Text("Readiness \(model.readiness.score)")
                         .font(.headline)
+                        .accessibilityLabel("Readiness score \(model.readiness.score)")
                     Text(model.readiness.brief)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -360,27 +378,30 @@ struct WatchWorkoutView: View {
                         Text("\(model.pendingSyncCount) updates waiting for phone sync")
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.orange)
+                            .accessibilityLabel("Pending sync updates")
                     }
 
                     Divider()
 
-                    Text("Coach cue")
+                    Text(String(localized: "Coach cue", comment: "Watch coach section header"))
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
-                    TextField("Ask for a fallback or load check", text: $model.coachPrompt)
-                    Button("Send Cue Request") {
+                    TextField(String(localized: "Ask for a fallback or load check", comment: "Watch coach prompt placeholder"), text: $model.coachPrompt)
+                    Button(String(localized: "Send Cue Request", comment: "Watch send coach cue button")) {
                         Task {
                             await model.requestCoachCue()
                         }
                     }
                     .buttonStyle(.bordered)
 
-                    Button("Complete on Watch") {
+                    Button(String(localized: "Complete on Watch", comment: "Watch complete workout button")) {
                         Task {
                             await model.completeWorkout()
                         }
                     }
                     .buttonStyle(.borderedProminent)
+                    .accessibilityLabel("Complete workout on Watch")
+                    .accessibilityHint("Finishes the session and queues the summary for phone sync")
                 }
                 .padding()
             }
@@ -405,5 +426,25 @@ struct WatchWorkoutView: View {
         }
         .buttonStyle(.bordered)
         .tint(model.selectedAction == action ? .orange : .gray)
+        .accessibilityLabel(accessibilityLabelForAction(action))
+        .accessibilityHint(accessibilityHintForAction(action))
+    }
+
+    private func accessibilityLabelForAction(_ action: WorkoutAction) -> String {
+        switch action {
+        case .increase: return "Increase weight"
+        case .hold: return "Hold weight"
+        case .decrease: return "Decrease weight"
+        default: return action.rawValue
+        }
+    }
+
+    private func accessibilityHintForAction(_ action: WorkoutAction) -> String {
+        switch action {
+        case .increase: return "Move up the load for the next set"
+        case .hold: return "Keep the same load for the next set"
+        case .decrease: return "Reduce the load for the next set"
+        default: return ""
+        }
     }
 }

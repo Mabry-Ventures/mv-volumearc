@@ -1,0 +1,2 @@
+app_identifier("com.mabryventures.VolumeArc")
+team_id(ENV["DEVELOPMENT_TEAM"] || "A886EMZZW6")

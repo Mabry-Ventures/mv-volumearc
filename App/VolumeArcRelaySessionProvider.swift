@@ -71,13 +71,25 @@ actor VolumeArcRelaySessionProvider: OpenAIRelayCredentialsProviding {
         return try JSONDecoder().decode(SessionResponse.self, from: data)
     }
 
+    private let fallbackDefaults = UserDefaults(suiteName: "com.mabryventures.VolumeArc.device-identity")
+
     private func deviceID() -> String {
         if let existing = try? secureStore.load(deviceIDKey), existing.isEmpty == false {
             return existing
         }
 
+        if let fallback = fallbackDefaults?.string(forKey: deviceIDKey), fallback.isEmpty == false {
+            return fallback
+        }
+
         let generated = UUID().uuidString.lowercased()
-        try? secureStore.save(generated, for: deviceIDKey)
+        do {
+            try secureStore.save(generated, for: deviceIDKey)
+        } catch {
+            // Keychain save failed — persist to UserDefaults so the device ID
+            // remains stable across launches even when the Keychain is unavailable.
+            fallbackDefaults?.set(generated, forKey: deviceIDKey)
+        }
         return generated
     }
 }

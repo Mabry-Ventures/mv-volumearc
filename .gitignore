@@ -1,5 +1,33 @@
+# macOS
 .DS_Store
+
+# Xcode build artifacts
 build/
+Build/
 DerivedData/
 xcuserdata/
 *.xcuserstate
+*.xcarchive
+
+# Signing & credentials
+*.mobileprovision
+*.p8
+*.p12
+*.cer
+*.xcconfig
+
+# Environment & secrets
+.env
+.env.*
+Secrets/
+
+# Dependencies
+Pods/
+Carthage/
+vendor/bundle/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/
+fastlane/test_output/

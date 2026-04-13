@@ -18,6 +18,20 @@ for path in \
   }
 done
 
+for path in \
+  "App/PrivacyInfo.xcprivacy" \
+  "Watch/PrivacyInfo.xcprivacy" \
+  "Widgets/PrivacyInfo.xcprivacy"; do
+  [[ -f "$path" ]] || {
+    echo "Missing required privacy manifest: $path" >&2
+    exit 1
+  }
+done
+
+if ! grep -q "aps-environment" "App/VolumeArc.entitlements"; then
+  echo "WARNING: aps-environment not found in App/VolumeArc.entitlements — push notifications will not work" >&2
+fi
+
 for forbidden in "DemoFixtures" "DemoServices" "VolumeArcDemoSupport"; do
   if rg -n "$forbidden" "$PROJECT" >/dev/null; then
     echo "Generated Xcode project unexpectedly references demo-only symbol: $forbidden" >&2
@@ -105,5 +119,40 @@ for required in "${test_required[@]}"; do
     exit 1
   fi
 done
+
+# --- Deep release checks (added by audit VOL-14) ---
+
+# Re-read app Release build settings for deeper checks
+xcodebuild \
+  -project "VolumeArcApple.xcodeproj" \
+  -target "VolumeArcApp" \
+  -configuration Release \
+  -showBuildSettings >"$tmp_settings"
+
+# ENABLE_TESTABILITY should be NO in Release (allows debugger injection if YES)
+if grep -F "ENABLE_TESTABILITY = YES" "$tmp_settings" >/dev/null 2>&1; then
+  echo "WARNING: ENABLE_TESTABILITY is YES in Release — consider setting to NO for production" >&2
+fi
+
+# Verify dSYM generation for crash reporting
+if ! grep -F "DEBUG_INFORMATION_FORMAT = dwarf-with-dsym" "$tmp_settings" >/dev/null 2>&1; then
+  echo "WARNING: DEBUG_INFORMATION_FORMAT should be dwarf-with-dsym in Release for crash reporting" >&2
+fi
+
+# VERSION file should exist
+[[ -f "VERSION" ]] || {
+  echo "Missing VERSION file at repo root" >&2
+  exit 1
+}
+
+# Version bump check: if git tags exist, verify VERSION differs from latest tag
+if git describe --tags --abbrev=0 >/dev/null 2>&1; then
+  latest_tag="$(git describe --tags --abbrev=0)"
+  current_version="$(cat VERSION | tr -d '[:space:]')"
+  tag_version="${latest_tag#v}"
+  if [[ "$current_version" == "$tag_version" ]]; then
+    echo "WARNING: VERSION ($current_version) matches latest tag ($latest_tag) — bump VERSION before release" >&2
+  fi
+fi
 
 echo "Release configuration validation passed."

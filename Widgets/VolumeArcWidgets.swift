@@ -39,13 +39,14 @@ struct NextWorkoutWidgetView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("VolumeArc")
+                Text(String(localized: "VolumeArc", comment: "Widget app name header"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text("\(entry.snapshot.streakDays)d streak")
                     .font(.caption2.bold())
                     .foregroundStyle(.orange)
+                    .accessibilityLabel("Training streak: \(entry.snapshot.streakDays) days")
             }
 
             Text(entry.snapshot.nextWorkoutTitle)
@@ -55,19 +56,22 @@ struct NextWorkoutWidgetView: View {
             Text("Readiness \(entry.snapshot.readinessScore)")
                 .font(.subheadline.bold())
                 .foregroundStyle(.primary)
+                .accessibilityLabel("Readiness score: \(entry.snapshot.readinessScore)")
 
             Text(entry.snapshot.primaryLiftForecast)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
+                .accessibilityLabel("Primary lift forecast: \(entry.snapshot.primaryLiftForecast)")
 
             HStack(spacing: 8) {
                 Label(entry.snapshot.nextActionTitle, systemImage: "play.fill")
                 Spacer()
-                Label("Coach", systemImage: "waveform.and.mic")
+                Label(String(localized: "Coach", comment: "Widget coach button label"), systemImage: "waveform.and.mic")
             }
             .font(.caption2.weight(.semibold))
             .foregroundStyle(.secondary)
+            .accessibilityElement(children: .combine)
 
             Text(entry.snapshot.syncSummary)
                 .font(.caption2)
@@ -86,8 +90,8 @@ struct NextWorkoutWidget: Widget {
         StaticConfiguration(kind: kind, provider: NextWorkoutProvider()) { entry in
             NextWorkoutWidgetView(entry: entry)
         }
-        .configurationDisplayName("Next Workout")
-        .description("See readiness, next session, and primary lift momentum.")
+        .configurationDisplayName(String(localized: "Next Workout", comment: "Widget display name"))
+        .description(String(localized: "See readiness, next session, and primary lift momentum.", comment: "Widget description"))
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
