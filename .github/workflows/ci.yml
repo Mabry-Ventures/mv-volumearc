@@ -31,10 +31,15 @@ jobs:
       - name: Symlink VolumeArcNative to sibling path
         run: ln -sfn "$GITHUB_WORKSPACE/VolumeArcNative" "../VolumeArcNative"
 
+      - name: Set up Ruby gem path
+        run: |
+          echo "GEM_HOME=$HOME/.gem" >> "$GITHUB_ENV"
+          echo "$HOME/.gem/bin" >> "$GITHUB_PATH"
+
       - name: Verify Ruby and xcodeproj gem
         run: |
           ruby --version
-          gem list xcodeproj --installed --version '>= 1.0' || gem install xcodeproj
+          gem list xcodeproj --installed --version '>= 1.0' || gem install --user-install xcodeproj
 
       - name: Generate Xcode project
         run: ruby scripts/generate_xcode_project.rb
