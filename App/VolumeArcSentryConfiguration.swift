@@ -48,8 +48,8 @@ enum VolumeArcSentryConfiguration {
 
 struct SentryTelemetrySink: TelemetrySink {
     func record(_ event: TelemetryEvent) {
-        let breadcrumb = Breadcrumb(level: sentryLevel(for: event.severity))
-        breadcrumb.category = event.category
+        let breadcrumb = Breadcrumb(category: event.category)
+        breadcrumb.level = sentryLevel(for: event.severity)
         breadcrumb.message = event.message
         breadcrumb.data = event.metadata
         SentrySDK.addBreadcrumb(breadcrumb)
