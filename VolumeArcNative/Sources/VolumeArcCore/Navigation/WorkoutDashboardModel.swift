@@ -345,6 +345,28 @@ public final class WorkoutDashboardModel: ObservableObject {
             severity: .info,
             message: "Manual sync requested"
         ))
+
+        #if canImport(StoreKit)
+        if let syncEngine {
+            do {
+                let recordCount = try await syncEngine.syncCycle()
+                telemetrySink.record(TelemetryEvent(
+                    category: "sync",
+                    name: "sync_complete",
+                    severity: .info,
+                    message: "Synced \(recordCount) records"
+                ))
+            } catch {
+                telemetrySink.record(TelemetryEvent(
+                    category: "sync",
+                    name: "sync_failed",
+                    severity: .warning,
+                    message: error.localizedDescription
+                ))
+            }
+        }
+        #endif
+
         await refresh()
     }
 
