@@ -35,7 +35,17 @@ struct MockCloudSyncTransport: CloudSyncTransport {
 
 // MARK: - Health
 
-struct MockHealthStore: HealthStore {}
+struct MockHealthStore: HealthStore {
+    var authorized: Bool = true
+
+    var isAuthorized: Bool {
+        get async { authorized }
+    }
+
+    func requestAuthorization() async throws -> Bool { authorized }
+    func startWorkoutSession(activityType: WorkoutActivityType) async throws {}
+    func endWorkoutSession() async throws {}
+}
 
 // MARK: - Telemetry
 
