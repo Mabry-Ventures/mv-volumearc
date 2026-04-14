@@ -273,6 +273,33 @@ final class WatchWorkoutModel: ObservableObject {
     }
 }
 
+/// Isolated rest timer display — the only view that re-renders every second.
+/// Keeping this out of the parent avoids redrawing the whole ScrollView at 1Hz.
+private struct WatchRestTimerDisplay: View {
+    let endsAt: Date
+    let onReset: () -> Void
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let remaining = max(Int(endsAt.timeIntervalSince(context.date)), 0)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(String(localized: "Rest", comment: "Watch rest timer header"))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(remaining == 0 ? String(localized: "Go time", comment: "Watch rest complete label") : "\(remaining)s")
+                    .font(.title2.bold())
+                    .foregroundStyle(remaining == 0 ? Color.green : Color.primary)
+                    .accessibilityLabel(remaining == 0 ? "Go time, rest complete" : "Rest timer")
+                    .accessibilityValue(remaining == 0 ? "Rest complete" : "\(remaining) seconds remaining")
+                Button(remaining == 0 ? "Restart Rest" : "Reset to 90s", action: onReset)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.orange)
+            }
+        }
+    }
+}
+
 struct WatchWorkoutView: View {
     @StateObject private var model: WatchWorkoutModel
 
@@ -281,61 +308,47 @@ struct WatchWorkoutView: View {
     }
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            let remainingRest = max(Int(model.restEndsAt.timeIntervalSince(context.date)), 0)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(String(localized: "Now", comment: "Watch current exercise header"))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(String(localized: "Now", comment: "Watch current exercise header"))
+                Text(model.autopilot.nextExerciseName)
+                    .font(.title3.bold())
+                    .accessibilityLabel("Exercise: \(model.autopilot.nextExerciseName)")
+
+                Text("\(Int(model.autopilot.nextTarget.weight))\(model.autopilot.nextTarget.unit) x \(model.autopilot.nextTarget.repRange.lowerBound)-\(model.autopilot.nextTarget.repRange.upperBound)")
+                    .font(.headline)
+                    .foregroundStyle(.orange)
+                    .accessibilityValue("\(Int(model.autopilot.nextTarget.weight)) pounds, \(model.autopilot.nextTarget.repRange.lowerBound) to \(model.autopilot.nextTarget.repRange.upperBound) reps")
+
+                Text(model.autopilot.bestCue)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(model.sessionActive ? String(localized: "Session Live", comment: "Watch active session label") : String(localized: "Session Ready", comment: "Watch ready session label"))
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
-
-                    Text(model.autopilot.nextExerciseName)
-                        .font(.title3.bold())
-                        .accessibilityLabel("Exercise: \(model.autopilot.nextExerciseName)")
-
-                    Text("\(Int(model.autopilot.nextTarget.weight))\(model.autopilot.nextTarget.unit) x \(model.autopilot.nextTarget.repRange.lowerBound)-\(model.autopilot.nextTarget.repRange.upperBound)")
-                        .font(.headline)
-                        .foregroundStyle(.orange)
-                        .accessibilityValue("\(Int(model.autopilot.nextTarget.weight)) pounds, \(model.autopilot.nextTarget.repRange.lowerBound) to \(model.autopilot.nextTarget.repRange.upperBound) reps")
-
-                    Text(model.autopilot.bestCue)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(model.sessionActive ? String(localized: "Session Live", comment: "Watch active session label") : String(localized: "Session Ready", comment: "Watch ready session label"))
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        Button(model.sessionActive ? String(localized: "End Session", comment: "Watch end session button") : String(localized: "Start Session", comment: "Watch start session button")) {
-                            Task {
-                                if model.sessionActive {
-                                    await model.endSession()
-                                } else {
-                                    await model.startSession()
-                                }
+                    Button(model.sessionActive ? String(localized: "End Session", comment: "Watch end session button") : String(localized: "Start Session", comment: "Watch start session button")) {
+                        Task {
+                            if model.sessionActive {
+                                await model.endSession()
+                            } else {
+                                await model.startSession()
                             }
                         }
-                        .buttonStyle(.bordered)
-                        .accessibilityLabel(model.sessionActive ? "End workout session" : "Start workout session")
-
-                        Divider()
-
-                        Text(String(localized: "Rest", comment: "Watch rest timer header"))
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        Text(remainingRest == 0 ? String(localized: "Go time", comment: "Watch rest complete label") : "\(remainingRest)s")
-                            .font(.title2.bold())
-                            .accessibilityLabel(remainingRest == 0 ? "Go time, rest complete" : "Rest timer")
-                            .accessibilityValue(remainingRest == 0 ? "Rest complete" : "\(remainingRest) seconds remaining")
-                        Button(remainingRest == 0 ? "Restart Rest" : "Reset to 90s") {
-                            Task {
-                                await model.resetRestTimer()
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.orange)
                     }
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel(model.sessionActive ? "End workout session" : "Start workout session")
+
+                    Divider()
+
+                    WatchRestTimerDisplay(endsAt: model.restEndsAt) {
+                        Task { await model.resetRestTimer() }
+                    }
+                }
 
                     Divider()
 
@@ -394,17 +407,16 @@ struct WatchWorkoutView: View {
                     }
                     .buttonStyle(.bordered)
 
-                    Button(String(localized: "Complete on Watch", comment: "Watch complete workout button")) {
-                        Task {
-                            await model.completeWorkout()
-                        }
+                Button(String(localized: "Complete on Watch", comment: "Watch complete workout button")) {
+                    Task {
+                        await model.completeWorkout()
                     }
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityLabel("Complete workout on Watch")
-                    .accessibilityHint("Finishes the session and queues the summary for phone sync")
                 }
-                .padding()
+                .buttonStyle(.borderedProminent)
+                .accessibilityLabel("Complete workout on Watch")
+                .accessibilityHint("Finishes the session and queues the summary for phone sync")
             }
+            .padding()
         }
         .task {
             await model.loadPersistedState()

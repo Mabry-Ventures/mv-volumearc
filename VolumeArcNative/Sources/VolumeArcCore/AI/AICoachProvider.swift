@@ -26,6 +26,33 @@ public enum AIRuntimeIntegrationError: Error, LocalizedError, Sendable {
 
 public protocol AICoachProvider: Sendable {
     func coachResponse(for prompt: String, context: String) async throws -> String
+
+    /// Stream a coach response token-by-token.
+    /// Default implementation returns the whole response as a single chunk.
+    func streamCoachResponse(for prompt: String, context: String) -> AsyncThrowingStream<String, Error>
+}
+
+public extension AICoachProvider {
+    /// Default streaming implementation: call the non-streaming response and yield it as chunks.
+    /// Providers that support native streaming (like a real OpenAI relay) should override this.
+    func streamCoachResponse(for prompt: String, context: String) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    let full = try await coachResponse(for: prompt, context: context)
+                    // Chunk the response by words for a typing feel.
+                    let words = full.split(separator: " ", omittingEmptySubsequences: false)
+                    for (index, word) in words.enumerated() {
+                        continuation.yield(index == 0 ? String(word) : " \(word)")
+                        try? await Task.sleep(nanoseconds: 30_000_000) // 30ms per word
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
 }
 
 public struct OpenAIRelayConfiguration: Sendable {
