@@ -32,6 +32,13 @@ struct VolumeArcApp: App {
         VolumeArcSentryConfiguration.bootstrapIfNeeded()
         #endif
         VolumeArcAIConfiguration.bootstrapRelaySecretsIfNeeded()
+        #if canImport(BackgroundTasks) && !os(watchOS)
+        // Must happen before the app finishes launching. The model holder
+        // is populated below once the dashboardModel is constructed.
+        VolumeArcBackgroundTasks.registerHandlers {
+            VolumeArcBackgroundTasks.sharedModel
+        }
+        #endif
         #if canImport(SwiftData)
         let persistence = VolumeArcPersistenceController.shared
         #endif
@@ -166,6 +173,12 @@ struct VolumeArcApp: App {
                 #endif
                 #if canImport(Network)
                 Self.startNetworkReachabilityMonitor()
+                #endif
+                #if canImport(BackgroundTasks) && !os(watchOS)
+                // Publish the model to the BG task handler holder and
+                // schedule the next refresh/processing opportunity.
+                VolumeArcBackgroundTasks.sharedModel = dashboardModel
+                VolumeArcBackgroundTasks.scheduleAll()
                 #endif
             }
             .onOpenURL { url in

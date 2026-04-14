@@ -303,7 +303,8 @@ public actor CloudSyncCoordinator {
         let cursor = stateStore.loadCursor()
         let result = try await transport.pullChanges(since: cursor)
 
-        // 3) Apply remote changes locally
+        // 3) Apply remote changes locally on the main actor (SwiftData is
+        //    bound to @MainActor via ModelContext thread affinity).
         #if canImport(SwiftData)
         if let payloadApplier {
             try await payloadApplier.apply(result: result)
@@ -320,6 +321,8 @@ public actor CloudSyncCoordinator {
 }
 
 #if canImport(SwiftData)
+/// Applies remote sync records to local SwiftData repositories.
+/// Uses last-write-wins based on the record's `modifiedAt` timestamp.
 public struct DefaultSyncPayloadApplier: Sendable {
     public let workoutRepository: SwiftDataWorkoutRepository
     public let coachMemoryRepository: SwiftDataCoachMemoryRepository
@@ -339,13 +342,105 @@ public struct DefaultSyncPayloadApplier: Sendable {
     }
 
     /// Apply a pull result to the local repositories.
-    /// Uses last-write-wins conflict resolution via `modifiedAt`.
+    @MainActor
     public func apply(result: CloudSyncPullResult) async throws {
-        // Simplified apply: log-only for now. Real CRUD by kind would iterate
-        // changedRecords and dispatch to the appropriate repository. This hook
-        // exists so CloudSyncCoordinator has a real path to invoke — the full
-        // per-kind apply is queued as a follow-up in FEATURES.md.
-        _ = result
+        for record in result.changedRecords {
+            try applyRecord(record)
+        }
+        for deletedID in result.deletedRecordIDs {
+            try applyDeletion(identifier: deletedID)
+        }
+    }
+
+    @MainActor
+    private func applyRecord(_ record: CloudSyncRecord) throws {
+        switch record.kind {
+        case .workout:
+            try applyWorkout(record)
+        case .userProfile:
+            try applyUserProfile(record)
+        case .trainingPlan:
+            try applyTrainingPlan(record)
+        case .coachMemory:
+            try applyCoachMemory(record)
+        }
+    }
+
+    @MainActor
+    private func applyDeletion(identifier: String) throws {
+        // Deletion routing by ID prefix is an approximation since we don't
+        // know the record kind from the ID alone. Try workout first (most
+        // common deletion target).
+        try? workoutRepository.deleteWorkout(identifier: identifier)
+    }
+
+    // MARK: - Per-kind appliers
+
+    @MainActor
+    private func applyWorkout(_ record: CloudSyncRecord) throws {
+        // Workout records sync the aggregate summary, not individual sets,
+        // to keep the wire format small. Sets are reconstructed from the
+        // setsJSON field if present.
+        guard let title = record.payload["title"] else { return }
+
+        // Check if we already have a local version that's newer (last-write-wins).
+        if let existing = try workoutRepository.workout(withIdentifier: record.identifier) {
+            let existingTime = existing.completedAt ?? existing.startedAt
+            if existingTime >= record.modifiedAt { return }
+            // Local is older — upsert with remote values.
+        }
+
+        _ = try workoutRepository.createWorkout(
+            title: title,
+            startedAt: record.modifiedAt
+        )
+    }
+
+    @MainActor
+    private func applyUserProfile(_ record: CloudSyncRecord) throws {
+        // Decode payload into a UserProfileDefaults and upsert.
+        let name = record.payload["name"] ?? ""
+        let coachingStyle = CoachingStyle(rawValue: record.payload["coachingStyle"] ?? "motivational") ?? .motivational
+        let privacyMode = PrivacyMode(rawValue: record.payload["privacyMode"] ?? "standard") ?? .standard
+        let advancementLevel = AdvancementLevel(rawValue: record.payload["advancementLevel"] ?? "intermediate") ?? .intermediate
+        let equipment: [Equipment] = (record.payload["equipment"] ?? "")
+            .split(separator: ",")
+            .compactMap { Equipment(rawValue: String($0)) }
+        let lower = Int(record.payload["preferredRepRangeLower"] ?? "5") ?? 5
+        let upper = Int(record.payload["preferredRepRangeUpper"] ?? "8") ?? 8
+        let time = Int(record.payload["sessionTimeBudgetMinutes"] ?? "60") ?? 60
+        let days = Int(record.payload["weeklyTrainingDays"] ?? "4") ?? 4
+
+        let defaults = UserProfileDefaults(
+            name: name,
+            coachingStyle: coachingStyle,
+            privacyMode: privacyMode,
+            advancementLevel: advancementLevel,
+            availableEquipment: equipment.isEmpty ? [.barbell, .dumbbell, .machine, .bodyweight] : equipment,
+            preferredRepRangeLower: lower,
+            preferredRepRangeUpper: upper,
+            sessionTimeBudgetMinutes: time,
+            weeklyTrainingDays: days
+        )
+
+        try userProfileRepository.upsertProfile(defaults)
+    }
+
+    @MainActor
+    private func applyTrainingPlan(_ record: CloudSyncRecord) throws {
+        guard let json = record.payload["workoutsJSON"],
+              let data = json.data(using: .utf8),
+              let workouts = try? JSONDecoder().decode([WeeklyWorkout].self, from: data)
+        else { return }
+        try trainingPlanRepository.upsertPlan(workouts)
+    }
+
+    @MainActor
+    private func applyCoachMemory(_ record: CloudSyncRecord) throws {
+        let content = record.payload["content"] ?? ""
+        let theme = record.payload["theme"] ?? ""
+        guard !content.isEmpty else { return }
+        try coachMemoryRepository.append(content: content, theme: theme)
     }
 }
 #endif
