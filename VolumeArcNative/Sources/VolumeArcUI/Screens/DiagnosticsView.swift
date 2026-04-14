@@ -19,8 +19,11 @@ public struct DiagnosticsView: View {
             if filteredEvents.isEmpty {
                 VAEmptyState(
                     icon: "doc.text.magnifyingglass",
-                    title: "No events yet",
-                    message: "Diagnostics events will appear here as you use the app."
+                    title: String(localized: "No events yet", comment: "Diagnostics empty-state title"),
+                    message: String(
+                        localized: "Diagnostics events will appear here as you use the app.",
+                        comment: "Diagnostics empty-state message"
+                    )
                 )
             } else {
                 List {
@@ -31,15 +34,22 @@ public struct DiagnosticsView: View {
                 .listStyle(.plain)
             }
         }
-        .navigationTitle("Diagnostics")
+        .navigationTitle(String(localized: "Diagnostics", comment: "Diagnostics screen navigation title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Button("Refresh", systemImage: "arrow.clockwise") {
+                    Button(
+                        String(localized: "Refresh", comment: "Diagnostics menu — refresh events"),
+                        systemImage: "arrow.clockwise"
+                    ) {
                         reload()
                     }
-                    Button("Clear", systemImage: "trash", role: .destructive) {
+                    Button(
+                        String(localized: "Clear", comment: "Diagnostics menu — clear stored events"),
+                        systemImage: "trash",
+                        role: .destructive
+                    ) {
                         sink.clear()
                         reload()
                     }
@@ -60,9 +70,12 @@ public struct DiagnosticsView: View {
 
         var title: String {
             switch self {
-            case .all: return "All"
-            case .warning: return "Warnings"
-            case .error: return "Errors"
+            case .all:
+                return String(localized: "All", comment: "Diagnostics filter — show all events")
+            case .warning:
+                return String(localized: "Warnings", comment: "Diagnostics filter — show only warnings")
+            case .error:
+                return String(localized: "Errors", comment: "Diagnostics filter — show only errors")
             }
         }
     }
@@ -88,9 +101,12 @@ public struct DiagnosticsView: View {
                 .buttonStyle(.plain)
             }
             Spacer()
-            Text("\(filteredEvents.count) of \(events.count)")
-                .font(VA.Typography.caption)
-                .foregroundStyle(VA.Colors.textSecondary)
+            Text(String(
+                localized: "\(filteredEvents.count) of \(events.count)",
+                comment: "Diagnostics counter — filtered events out of total"
+            ))
+            .font(VA.Typography.caption)
+            .foregroundStyle(VA.Colors.textSecondary)
         }
         .padding(VA.Space.md)
     }

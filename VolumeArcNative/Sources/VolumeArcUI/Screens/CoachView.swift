@@ -55,7 +55,14 @@ public struct CoachView: View {
                             .id(message.id)
                         }
                         if model.isCoachStreaming {
-                            VACoachBubble(sender: .coach, content: "Thinking…", isStreaming: true)
+                            VACoachBubble(
+                                sender: .coach,
+                                content: String(
+                                    localized: "Thinking…",
+                                    comment: "Placeholder shown in the coach bubble while streaming a response"
+                                ),
+                                isStreaming: true
+                            )
                         }
                     }
                     .padding(VA.Space.lg)
