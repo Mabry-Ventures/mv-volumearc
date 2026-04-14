@@ -76,8 +76,23 @@ public struct ProfileView: View {
                         .font(.caption)
                         .foregroundStyle(VA.Colors.textSecondary)
                     }
+                    // Combine the row contents into a single accessibility
+                    // element with a stable label and identifier. SwiftUI Form
+                    // wraps the Button as a Cell in the XCUITest hierarchy, and
+                    // identifiers attached only to the Button can fail to
+                    // propagate to the cell. Combining the children inside the
+                    // Button label and pinning the identifier here makes the
+                    // element reachable via app.buttons["profile.upgrade"] and
+                    // app.cells["profile.upgrade"] regardless of which type
+                    // SwiftUI exposes it as.
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("profile.upgrade")
+                    .accessibilityLabel(String(
+                        localized: "Upgrade to Premium",
+                        comment: "VoiceOver label for the upgrade row"
+                    ))
+                    .accessibilityAddTraits(.isButton)
                 }
-                .accessibilityIdentifier("profile.upgrade")
             }
 
             Section(String(localized: "App", comment: "Profile tab section header — app-level settings")) {

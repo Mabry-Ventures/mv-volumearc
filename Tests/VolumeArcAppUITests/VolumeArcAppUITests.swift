@@ -91,13 +91,11 @@ final class VolumeArcAppUITests: XCTestCase {
         XCTAssertTrue(profileTab.waitForExistence(timeout: 10), "Profile tab should be available")
         profileTab.tap()
 
-        // SwiftUI Form rows wrap their Button as a Cell in the XCUI hierarchy.
-        // Match by identifier across any element type so we don't depend on
-        // whether SwiftUI exposes the row as a Button, Cell, or Other element.
-        let upgradeRow = app.descendants(matching: .any)
-            .matching(identifier: "profile.upgrade")
-            .firstMatch
-        XCTAssertTrue(upgradeRow.waitForExistence(timeout: 10), "Upgrade row should appear on the profile screen")
+        // SwiftUI Form rows wrap the Button as a Cell with combined
+        // accessibility. Try buttons → cells → any descendant in order so
+        // the test is robust across SwiftUI runtime revisions.
+        let upgradeRow = firstUpgradeElement(in: app)
+        XCTAssertTrue(upgradeRow.waitForExistence(timeout: 15), "Upgrade row should appear on the profile screen")
         upgradeRow.tap()
 
         let paywall = app.descendants(matching: .any)
@@ -112,7 +110,20 @@ final class VolumeArcAppUITests: XCTestCase {
         closeButton.tap()
 
         // The cover dismisses and we should be back on the profile row.
-        XCTAssertTrue(upgradeRow.waitForExistence(timeout: 10), "Profile screen should still be visible after dismissing the paywall")
+        XCTAssertTrue(firstUpgradeElement(in: app).waitForExistence(timeout: 10), "Profile screen should still be visible after dismissing the paywall")
+    }
+
+    /// Best-effort lookup for the Profile → Upgrade row across SwiftUI
+    /// runtime revisions. Tries `buttons`, then `cells`, then any descendant
+    /// matching the `profile.upgrade` accessibility identifier.
+    private func firstUpgradeElement(in app: XCUIApplication) -> XCUIElement {
+        let asButton = app.buttons["profile.upgrade"]
+        if asButton.exists { return asButton }
+        let asCell = app.cells["profile.upgrade"]
+        if asCell.exists { return asCell }
+        return app.descendants(matching: .any)
+            .matching(identifier: "profile.upgrade")
+            .firstMatch
     }
 
     // MARK: - Performance
