@@ -103,16 +103,20 @@ public enum VA {
 
     // MARK: - Shadow / Elevation
 
-    public struct Shadow {
-        public let color: Color
+    public struct Shadow: Sendable {
+        public let opacity: Double
         public let radius: CGFloat
         public let x: CGFloat
         public let y: CGFloat
 
-        public static let none = Shadow(color: .clear, radius: 0, x: 0, y: 0)
-        public static let sm = Shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
-        public static let md = Shadow(color: Color.black.opacity(0.12), radius: 12, x: 0, y: 4)
-        public static let lg = Shadow(color: Color.black.opacity(0.18), radius: 24, x: 0, y: 8)
+        public var color: Color {
+            Color.black.opacity(opacity)
+        }
+
+        public static let none = Shadow(opacity: 0, radius: 0, x: 0, y: 0)
+        public static let sm = Shadow(opacity: 0.08, radius: 4, x: 0, y: 2)
+        public static let md = Shadow(opacity: 0.12, radius: 12, x: 0, y: 4)
+        public static let lg = Shadow(opacity: 0.18, radius: 24, x: 0, y: 8)
     }
 }
 
