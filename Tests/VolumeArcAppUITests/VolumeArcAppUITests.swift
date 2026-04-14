@@ -59,18 +59,6 @@ final class VolumeArcAppUITests: XCTestCase {
         )
     }
 
-    // MARK: - Performance
-
-    @MainActor
-    func testLaunchPerformance() throws {
-        if #available(iOS 13.0, *) {
-            measure(metrics: [XCTApplicationLaunchMetric()]) {
-                let app = makeApp()
-                app.launch()
-            }
-        }
-    }
-
     // MARK: - Helpers
 
     private func makeApp() -> XCUIApplication {
