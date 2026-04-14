@@ -10,6 +10,28 @@ public struct UserProfileDefaults: Sendable {
     public let preferredRepRangeUpper: Int
     public let sessionTimeBudgetMinutes: Int
     public let weeklyTrainingDays: Int
+
+    public init(
+        name: String,
+        coachingStyle: CoachingStyle,
+        privacyMode: PrivacyMode,
+        advancementLevel: AdvancementLevel,
+        availableEquipment: [Equipment],
+        preferredRepRangeLower: Int,
+        preferredRepRangeUpper: Int,
+        sessionTimeBudgetMinutes: Int,
+        weeklyTrainingDays: Int
+    ) {
+        self.name = name
+        self.coachingStyle = coachingStyle
+        self.privacyMode = privacyMode
+        self.advancementLevel = advancementLevel
+        self.availableEquipment = availableEquipment
+        self.preferredRepRangeLower = preferredRepRangeLower
+        self.preferredRepRangeUpper = preferredRepRangeUpper
+        self.sessionTimeBudgetMinutes = sessionTimeBudgetMinutes
+        self.weeklyTrainingDays = weeklyTrainingDays
+    }
 }
 
 public struct WeeklyWorkout: Codable, Sendable {

@@ -255,7 +255,13 @@ public struct OnboardingView: View {
                     .foregroundStyle(isSelected ? VA.Colors.primary : VA.Colors.textTertiary)
             }
             .padding(VA.Space.lg)
-            .background(isSelected ? VA.Colors.primary.opacity(0.08) : .regularMaterial)
+            .background {
+                if isSelected {
+                    VA.Colors.primary.opacity(0.08)
+                } else {
+                    Rectangle().fill(.regularMaterial)
+                }
+            }
             .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
             .overlay {
                 if isSelected {
