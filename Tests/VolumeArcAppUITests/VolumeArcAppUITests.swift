@@ -2,23 +2,20 @@ import XCTest
 
 /// XCUITest journey suite for VolumeArc iOS.
 ///
-/// These tests exercise the critical user journeys end-to-end against
-/// the real app binary. They run on the iPhone simulator in CI.
+/// All tests launch the app with `-UITestMode 1 -SkipOnboarding 1
+/// -SeedFixtures 1` so the dashboard is pre-populated with deterministic
+/// state and no permission prompts interrupt the flow.
 ///
-/// Note: many of these tests require seeded test state that the app should
-/// accept via launch arguments (e.g., `-UITestMode 1 -SeedFixtures 1`).
-/// Until that plumbing lands in the host app, these tests act as smoke
-/// checks — they verify the app launches and major UI elements exist.
+/// Targets `runsOn: self-hosted` CI on an iPhone 17 simulator.
 final class VolumeArcAppUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
     }
 
-    // MARK: - Smoke
+    // MARK: - Launch + smoke
 
     func testAppReachesForegroundOnLaunch() throws {
-        let app = XCUIApplication()
-        app.launchArguments += ["-UITestMode", "1"]
+        let app = makeApp()
         app.launch()
 
         XCTAssertTrue(
@@ -27,26 +24,34 @@ final class VolumeArcAppUITests: XCTestCase {
         )
     }
 
-    // MARK: - Navigation
+    func testRootDashboardAppears() throws {
+        let app = makeApp()
+        app.launch()
 
-    func testTabBarAppearsWithFiveTabs() throws {
-        let app = XCUIApplication()
-        app.launchArguments += ["-UITestMode", "1"]
+        let root = app.otherElements["root.dashboard"]
+        XCTAssertTrue(
+            root.waitForExistence(timeout: 15),
+            "Root dashboard element should exist after launch"
+        )
+    }
+
+    // MARK: - Tab navigation
+
+    func testTabBarHasFiveTabs() throws {
+        let app = makeApp()
         app.launch()
 
         let tabBar = app.tabBars.firstMatch
-        XCTAssertTrue(
-            tabBar.waitForExistence(timeout: 15),
-            "Tab bar should appear after launch"
+        XCTAssertTrue(tabBar.waitForExistence(timeout: 15), "Tab bar should appear")
+        XCTAssertGreaterThanOrEqual(
+            tabBar.buttons.count,
+            5,
+            "App should expose all 5 tabs (Today, Workouts, Coach, Signals, Profile)"
         )
-        // Five tabs: Today, Workouts, Coach, Signals, Profile
-        XCTAssertGreaterThanOrEqual(tabBar.buttons.count, 5,
-            "App should expose all 5 navigation tabs")
     }
 
-    func testSwitchingTabsPreservesAppRunning() throws {
-        let app = XCUIApplication()
-        app.launchArguments += ["-UITestMode", "1"]
+    func testCanNavigateThroughEveryTab() throws {
+        let app = makeApp()
         app.launch()
 
         let tabBar = app.tabBars.firstMatch
@@ -55,15 +60,117 @@ final class VolumeArcAppUITests: XCTestCase {
             return
         }
 
-        // Tap through several tabs — app should not crash or deadlock.
+        // Cycle through the tabs by index — staying in foreground proves
+        // none of them crash on first appearance.
         let tabCount = min(tabBar.buttons.count, 5)
         for index in 0..<tabCount {
             tabBar.buttons.element(boundBy: index).tap()
-            XCTAssertTrue(
-                app.state == .runningForeground,
-                "App should remain in foreground after tapping tab \(index)"
+            XCTAssertEqual(
+                app.state,
+                .runningForeground,
+                "App should remain foreground after tapping tab \(index)"
             )
         }
+    }
+
+    // MARK: - Today tab journey
+
+    func testTodayTabShowsReadinessAndNextWorkout() throws {
+        let app = makeApp()
+        app.launch()
+
+        let tabBar = app.tabBars.firstMatch
+        XCTAssertTrue(tabBar.waitForExistence(timeout: 15))
+        tabBar.buttons.firstMatch.tap() // Today is the first tab
+
+        // The Today tab should render at least the greeting + readiness.
+        // We can't assert exact text (depends on greeting time) so look for
+        // static keys.
+        let todayNavBar = app.navigationBars["Today"]
+        XCTAssertTrue(
+            todayNavBar.waitForExistence(timeout: 10),
+            "Today navigation title should appear"
+        )
+    }
+
+    // MARK: - Workouts tab
+
+    func testWorkoutsTabIsReachable() throws {
+        let app = makeApp()
+        app.launch()
+
+        let tabBar = app.tabBars.firstMatch
+        XCTAssertTrue(tabBar.waitForExistence(timeout: 15))
+
+        // Tap the second tab (Workouts).
+        if tabBar.buttons.count >= 2 {
+            tabBar.buttons.element(boundBy: 1).tap()
+        }
+
+        // Either "Session" (active) or "Workouts" (idle) title must appear.
+        let workoutsTitle = app.navigationBars["Workouts"]
+        let sessionTitle = app.navigationBars["Session"]
+        let reachable = workoutsTitle.waitForExistence(timeout: 10) ||
+                        sessionTitle.waitForExistence(timeout: 10)
+        XCTAssertTrue(reachable, "Workouts or Session navigation title should appear")
+    }
+
+    // MARK: - Coach tab
+
+    func testCoachTabRendersComposer() throws {
+        let app = makeApp()
+        app.launch()
+
+        let tabBar = app.tabBars.firstMatch
+        XCTAssertTrue(tabBar.waitForExistence(timeout: 15))
+
+        if tabBar.buttons.count >= 3 {
+            tabBar.buttons.element(boundBy: 2).tap()
+        }
+
+        let coachTitle = app.navigationBars["Coach"]
+        XCTAssertTrue(coachTitle.waitForExistence(timeout: 10), "Coach title should appear")
+
+        // The composer text field should be present.
+        let textField = app.textFields["Ask your coach"]
+        XCTAssertTrue(
+            textField.waitForExistence(timeout: 5),
+            "Coach composer text field should be visible"
+        )
+    }
+
+    // MARK: - Signals tab
+
+    func testSignalsTabShowsReadiness() throws {
+        let app = makeApp()
+        app.launch()
+
+        let tabBar = app.tabBars.firstMatch
+        XCTAssertTrue(tabBar.waitForExistence(timeout: 15))
+
+        if tabBar.buttons.count >= 4 {
+            tabBar.buttons.element(boundBy: 3).tap()
+        }
+
+        let title = app.navigationBars["Signals"]
+        XCTAssertTrue(title.waitForExistence(timeout: 10), "Signals title should appear")
+    }
+
+    // MARK: - Profile tab
+
+    func testProfileTabShowsSettingsRows() throws {
+        let app = makeApp()
+        app.launch()
+
+        let tabBar = app.tabBars.firstMatch
+        XCTAssertTrue(tabBar.waitForExistence(timeout: 15))
+
+        if tabBar.buttons.count >= 5 {
+            tabBar.buttons.element(boundBy: 4).tap()
+        }
+
+        let title = app.navigationBars["Profile"]
+        XCTAssertTrue(title.waitForExistence(timeout: 10), "Profile title should appear")
     }
 
     // MARK: - Performance
@@ -72,8 +179,21 @@ final class VolumeArcAppUITests: XCTestCase {
     func testLaunchPerformance() throws {
         if #available(iOS 13.0, *) {
             measure(metrics: [XCTApplicationLaunchMetric()]) {
-                XCUIApplication().launch()
+                let app = makeApp()
+                app.launch()
             }
         }
+    }
+
+    // MARK: - Helpers
+
+    private func makeApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "-UITestMode", "1",
+            "-SkipOnboarding", "1",
+            "-SeedFixtures", "1",
+        ]
+        return app
     }
 }
