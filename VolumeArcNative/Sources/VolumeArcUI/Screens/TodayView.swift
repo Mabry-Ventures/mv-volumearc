@@ -50,7 +50,7 @@ public struct TodayView: View {
                 .foregroundStyle(VA.Colors.textSecondary)
                 .textCase(.uppercase)
                 .tracking(0.5)
-            Text(model.athlete.name.isEmpty ? "Welcome back" : "Welcome back, \(firstName)")
+            Text(welcomeText)
                 .font(VA.Typography.title)
                 .foregroundStyle(VA.Colors.textPrimary)
         }
@@ -60,13 +60,24 @@ public struct TodayView: View {
         model.athlete.name.split(separator: " ").first.map(String.init) ?? model.athlete.name
     }
 
+    private var welcomeText: String {
+        if model.athlete.name.isEmpty {
+            return String(localized: "Welcome back", comment: "Dashboard greeting when no name is set")
+        }
+        return String(localized: "Welcome back, \(firstName)", comment: "Dashboard greeting with the athlete's first name")
+    }
+
     private var greetingText: String {
         let hour = Calendar.current.component(.hour, from: .now)
         switch hour {
-        case 4..<12: return "Good morning"
-        case 12..<17: return "Good afternoon"
-        case 17..<22: return "Good evening"
-        default: return "Hey there"
+        case 4..<12:
+            return String(localized: "Good morning", comment: "Morning greeting header")
+        case 12..<17:
+            return String(localized: "Good afternoon", comment: "Afternoon greeting header")
+        case 17..<22:
+            return String(localized: "Good evening", comment: "Evening greeting header")
+        default:
+            return String(localized: "Hey there", comment: "Late-night greeting header")
         }
     }
 
@@ -181,7 +192,9 @@ public struct TodayView: View {
     private var quickActionsRow: some View {
         HStack(spacing: VA.Space.md) {
             VAButton(
-                model.isSessionActive ? "Continue Session" : "Start Workout",
+                model.isSessionActive
+                    ? String(localized: "Continue Session", comment: "Button to resume an in-progress workout")
+                    : String(localized: "Start Workout", comment: "Button to begin a new workout"),
                 icon: "play.fill",
                 style: .primary
             ) {
@@ -193,9 +206,16 @@ public struct TodayView: View {
                 }
             }
 
-            VAButton("Ask Coach", icon: "waveform", style: .secondary) {
+            VAButton(
+                String(localized: "Ask Coach", comment: "Quick action to open the AI coach"),
+                icon: "waveform",
+                style: .secondary
+            ) {
                 VAHaptics.tap()
-                navigation.openCoach(prompt: "What should I focus on today?")
+                navigation.openCoach(prompt: String(
+                    localized: "What should I focus on today?",
+                    comment: "Default coach prompt when opening from quick action"
+                ))
             }
         }
     }

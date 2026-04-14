@@ -5,6 +5,7 @@ import VolumeArcCore
 /// The Workouts tab — active session screen with set logging, rest timer, coach cue.
 public struct WorkoutsView: View {
     @ObservedObject var model: WorkoutDashboardModel
+    @EnvironmentObject private var toastPresenter: VAToastPresenter
     @State private var restEndsAt: Date = .now.addingTimeInterval(90)
     @State private var restActive: Bool = false
     @State private var summary: CompletedSessionSnapshot?
@@ -164,12 +165,23 @@ public struct WorkoutsView: View {
     }
 
     private var logSetButton: some View {
-        VAButton("Log Set", icon: "checkmark.circle.fill", style: .primary) {
+        VAButton(
+            String(localized: "Log Set", comment: "Button to record the current set"),
+            icon: "checkmark.circle.fill",
+            style: .primary,
+            accessibilityHint: String(localized: "Records this set and starts the rest timer",
+                                      comment: "Log Set button VoiceOver hint")
+        ) {
             Task {
                 VAHaptics.setLogged()
                 await model.logRecommendedSet()
                 restEndsAt = .now.addingTimeInterval(90)
                 restActive = true
+                toastPresenter.show(VAToast(
+                    kind: .success,
+                    title: String(localized: "Set logged", comment: "Toast after logging a set"),
+                    message: String(localized: "Starting your 90-second rest.", comment: "Toast detail")
+                ))
             }
         }
     }
