@@ -28,3 +28,7 @@ When you change the **implementation status** of a system (a stub becomes real, 
 - Every visual property comes from `VA.Colors`, `VA.Typography`, `VA.Space`, `VA.Radius`, or `VA.Shadow` — never hardcode.
 - Every haptic goes through `VAHaptics.*`.
 - Main is protected: every merge requires green CI (build + unit/integration tests + UI smoke tests + SwiftLint + release validation) plus the two-bot AI review gate (Gemini + Codex).
+
+## Known launch blockers (post-95/95 audit)
+
+The project is **not** production-ready as of 2026-04-14. An independent audit found multiple systems with broken end-to-end wiring (empty migration plan, missing Info.plist keys, unreachable onboarding/paywall, dead feature flags). See [the launch-blocker section in `docs/PLATFORM.md`](docs/PLATFORM.md#implementation-status) and the active **VOL-54 through VOL-69** tickets in Linear before describing any system as "shipped" or "production-ready". The 95/95 score from the previous push was wrong — the surface-level audits I ran caught code paths but not end-to-end wiring, and the auditor caught what I missed. Treat the docs as the source of truth, not previous status messages.
