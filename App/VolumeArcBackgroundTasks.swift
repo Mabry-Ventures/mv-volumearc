@@ -68,41 +68,60 @@ enum VolumeArcBackgroundTasks {
 
     // MARK: - Handlers
 
-    @preconcurrency
     private static func handleAppRefresh(_ task: BGAppRefreshTask) {
-        // Reschedule the next refresh immediately so the chain continues.
         scheduleAppRefresh()
+        let completion = TaskCompletion(task: task)
 
         task.expirationHandler = {
-            task.setTaskCompleted(success: false)
+            completion.complete(success: false)
         }
 
         Task { @MainActor in
             if let model = sharedModel {
                 await model.refresh()
-                task.setTaskCompleted(success: true)
+                completion.complete(success: true)
             } else {
-                task.setTaskCompleted(success: false)
+                completion.complete(success: false)
             }
         }
     }
 
-    @preconcurrency
     private static func handleAppProcessing(_ task: BGProcessingTask) {
         scheduleAppProcessing()
+        let completion = TaskCompletion(task: task)
 
         task.expirationHandler = {
-            task.setTaskCompleted(success: false)
+            completion.complete(success: false)
         }
 
         Task { @MainActor in
             if let model = sharedModel {
                 await model.syncNow()
-                task.setTaskCompleted(success: true)
+                completion.complete(success: true)
             } else {
-                task.setTaskCompleted(success: false)
+                completion.complete(success: false)
             }
         }
+    }
+}
+
+/// Sendable wrapper around BGTask so the completion call can cross
+/// concurrency boundaries safely. BGTask.setTaskCompleted is thread-safe.
+private final class TaskCompletion: @unchecked Sendable {
+    private let task: BGTask
+    private let lock = NSLock()
+    private var completed = false
+
+    init(task: BGTask) {
+        self.task = task
+    }
+
+    func complete(success: Bool) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !completed else { return }
+        completed = true
+        task.setTaskCompleted(success: success)
     }
 }
 #endif
