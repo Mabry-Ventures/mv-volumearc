@@ -76,11 +76,14 @@ public struct CoachView: View {
                     Image(systemName: "waveform")
                         .font(.system(size: 24, weight: .semibold))
                         .foregroundStyle(VA.Colors.primary)
-                    Text("Your Coach")
+                    Text(String(localized: "Your Coach", comment: "Coach welcome card title"))
                         .font(VA.Typography.title2)
                         .foregroundStyle(VA.Colors.textPrimary)
                 }
-                Text("Ask anything about your training — load selection, form cues, recovery, or how last week looks. I'll pull from your recent sessions to give you a grounded answer.")
+                Text(String(
+                    localized: "Ask anything about your training — load selection, form cues, recovery, or how last week looks. I'll pull from your recent sessions to give you a grounded answer.",
+                    comment: "Coach welcome card description"
+                ))
                     .font(VA.Typography.body)
                     .foregroundStyle(VA.Colors.textSecondary)
             }
@@ -89,7 +92,7 @@ public struct CoachView: View {
 
     private var quickPrompts: some View {
         VStack(alignment: .leading, spacing: VA.Space.md) {
-            VASectionHeader("Try asking")
+            VASectionHeader(String(localized: "Try asking", comment: "Suggested prompts section header"))
             ForEach(suggestedPrompts, id: \.self) { prompt in
                 Button {
                     draftMessage = prompt
@@ -117,10 +120,10 @@ public struct CoachView: View {
 
     private var suggestedPrompts: [String] {
         [
-            "Am I ready to push on squats this week?",
-            "Last set felt heavy — should I hold or go up?",
-            "What accessories should I add for bench?",
-            "How does my recent volume look?",
+            String(localized: "Am I ready to push on squats this week?", comment: "Suggested coach prompt about squat progression"),
+            String(localized: "Last set felt heavy — should I hold or go up?", comment: "Suggested coach prompt about load decision"),
+            String(localized: "What accessories should I add for bench?", comment: "Suggested coach prompt about accessory work"),
+            String(localized: "How does my recent volume look?", comment: "Suggested coach prompt about training volume"),
         ]
     }
 
@@ -128,7 +131,11 @@ public struct CoachView: View {
 
     private var composer: some View {
         HStack(alignment: .bottom, spacing: VA.Space.sm) {
-            TextField("Ask your coach", text: $draftMessage, axis: .vertical)
+            TextField(
+                String(localized: "Ask your coach", comment: "Coach composer placeholder"),
+                text: $draftMessage,
+                axis: .vertical
+            )
                 .textFieldStyle(.plain)
                 .font(VA.Typography.body)
                 .padding(VA.Space.md)

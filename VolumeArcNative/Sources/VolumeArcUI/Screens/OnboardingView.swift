@@ -74,11 +74,14 @@ public struct OnboardingView: View {
                 .vaAppear()
 
             VStack(spacing: VA.Space.md) {
-                Text("Welcome to VolumeArc")
+                Text(String(localized: "Welcome to VolumeArc", comment: "Onboarding welcome step title"))
                     .font(VA.Typography.title)
                     .foregroundStyle(VA.Colors.textPrimary)
                     .multilineTextAlignment(.center)
-                Text("An AI coach that knows your training, adapts to your recovery, and helps you make the right call on every set.")
+                Text(String(
+                    localized: "An AI coach that knows your training, adapts to your recovery, and helps you make the right call on every set.",
+                    comment: "Onboarding welcome step description"
+                ))
                     .font(VA.Typography.body)
                     .foregroundStyle(VA.Colors.textSecondary)
                     .multilineTextAlignment(.center)
@@ -90,20 +93,26 @@ public struct OnboardingView: View {
     private var profileStep: some View {
         VStack(alignment: .leading, spacing: VA.Space.xl) {
             VStack(alignment: .leading, spacing: VA.Space.sm) {
-                Text("Tell me about you")
+                Text(String(localized: "Tell me about you", comment: "Onboarding profile step title"))
                     .font(VA.Typography.title)
                     .foregroundStyle(VA.Colors.textPrimary)
-                Text("I'll use this to personalize your training.")
+                Text(String(
+                    localized: "I'll use this to personalize your training.",
+                    comment: "Onboarding profile step subtitle"
+                ))
                     .font(VA.Typography.body)
                     .foregroundStyle(VA.Colors.textSecondary)
             }
 
             VStack(alignment: .leading, spacing: VA.Space.md) {
-                Text("Your name")
+                Text(String(localized: "Your name", comment: "Onboarding profile step — name field label"))
                     .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.textSecondary)
                     .tracking(0.5)
-                TextField("First name", text: $result.name)
+                TextField(
+                    String(localized: "First name", comment: "Onboarding profile step — name field placeholder"),
+                    text: $result.name
+                )
                     .textFieldStyle(.plain)
                     .font(VA.Typography.title2)
                     .padding(VA.Space.md)
@@ -112,13 +121,13 @@ public struct OnboardingView: View {
             }
 
             VStack(alignment: .leading, spacing: VA.Space.md) {
-                Text("Experience level")
+                Text(String(localized: "Experience level", comment: "Onboarding profile step — experience level label"))
                     .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.textSecondary)
                     .tracking(0.5)
                 ForEach(AdvancementLevel.allCases, id: \.self) { level in
                     selectionRow(
-                        title: level.rawValue.capitalized,
+                        title: levelTitle(level),
                         subtitle: levelDescription(level),
                         isSelected: result.advancementLevel == level
                     ) {
@@ -133,16 +142,16 @@ public struct OnboardingView: View {
     private var preferencesStep: some View {
         VStack(alignment: .leading, spacing: VA.Space.xl) {
             VStack(alignment: .leading, spacing: VA.Space.sm) {
-                Text("Training preferences")
+                Text(String(localized: "Training preferences", comment: "Onboarding preferences step title"))
                     .font(VA.Typography.title)
                     .foregroundStyle(VA.Colors.textPrimary)
-                Text("How often can you train?")
+                Text(String(localized: "How often can you train?", comment: "Onboarding preferences step subtitle"))
                     .font(VA.Typography.body)
                     .foregroundStyle(VA.Colors.textSecondary)
             }
 
             VStack(alignment: .leading, spacing: VA.Space.md) {
-                Text("Days per week")
+                Text(String(localized: "Days per week", comment: "Onboarding preferences — days per week field label"))
                     .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.textSecondary)
                     .tracking(0.5)
@@ -167,16 +176,16 @@ public struct OnboardingView: View {
             }
 
             VStack(alignment: .leading, spacing: VA.Space.md) {
-                Text("Session time budget")
+                Text(String(localized: "Session time budget", comment: "Onboarding preferences — session length field label"))
                     .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.textSecondary)
                     .tracking(0.5)
                 Picker("", selection: $result.sessionMinutes) {
-                    Text("30 min").tag(30)
-                    Text("45 min").tag(45)
-                    Text("60 min").tag(60)
-                    Text("75 min").tag(75)
-                    Text("90 min").tag(90)
+                    Text(String(localized: "30 min", comment: "Session length option — 30 minutes")).tag(30)
+                    Text(String(localized: "45 min", comment: "Session length option — 45 minutes")).tag(45)
+                    Text(String(localized: "60 min", comment: "Session length option — 60 minutes")).tag(60)
+                    Text(String(localized: "75 min", comment: "Session length option — 75 minutes")).tag(75)
+                    Text(String(localized: "90 min", comment: "Session length option — 90 minutes")).tag(90)
                 }
                 .pickerStyle(.segmented)
             }
@@ -186,10 +195,13 @@ public struct OnboardingView: View {
     private var coachingStyleStep: some View {
         VStack(alignment: .leading, spacing: VA.Space.xl) {
             VStack(alignment: .leading, spacing: VA.Space.sm) {
-                Text("Pick a coaching voice")
+                Text(String(localized: "Pick a coaching voice", comment: "Onboarding coaching style step title"))
                     .font(VA.Typography.title)
                     .foregroundStyle(VA.Colors.textPrimary)
-                Text("You can change this anytime in settings.")
+                Text(String(
+                    localized: "You can change this anytime in settings.",
+                    comment: "Onboarding coaching style step subtitle"
+                ))
                     .font(VA.Typography.body)
                     .foregroundStyle(VA.Colors.textSecondary)
             }
@@ -197,7 +209,7 @@ public struct OnboardingView: View {
             VStack(spacing: VA.Space.md) {
                 ForEach(CoachingStyle.allCases, id: \.self) { style in
                     selectionRow(
-                        title: style.rawValue.capitalized,
+                        title: styleTitle(style),
                         subtitle: styleDescription(style),
                         isSelected: result.coachingStyle == style
                     ) {
@@ -217,16 +229,30 @@ public struct OnboardingView: View {
                 .vaAppear()
 
             VStack(spacing: VA.Space.md) {
-                Text("You're all set")
+                Text(String(localized: "You're all set", comment: "Onboarding done step title"))
                     .font(VA.Typography.title)
                     .foregroundStyle(VA.Colors.textPrimary)
                     .multilineTextAlignment(.center)
-                Text("\(result.name.isEmpty ? "Let's" : "\(result.name), let's") build your first session.")
+                Text(doneStepSubtitle)
                     .font(VA.Typography.body)
                     .foregroundStyle(VA.Colors.textSecondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 320)
             }
+        }
+    }
+
+    private var doneStepSubtitle: String {
+        if result.name.isEmpty {
+            return String(
+                localized: "Let's build your first session.",
+                comment: "Onboarding done step subtitle when no name was entered"
+            )
+        } else {
+            return String(
+                localized: "\(result.name), let's build your first session.",
+                comment: "Onboarding done step subtitle addressing the user by name"
+            )
         }
     }
 
@@ -273,19 +299,65 @@ public struct OnboardingView: View {
         .buttonStyle(.plain)
     }
 
+    private func levelTitle(_ level: AdvancementLevel) -> String {
+        switch level {
+        case .beginner:
+            return String(localized: "Beginner", comment: "Advancement level — beginner")
+        case .intermediate:
+            return String(localized: "Intermediate", comment: "Advancement level — intermediate")
+        case .advanced:
+            return String(localized: "Advanced", comment: "Advancement level — advanced")
+        }
+    }
+
     private func levelDescription(_ level: AdvancementLevel) -> String {
         switch level {
-        case .beginner: return "Less than 1 year of consistent lifting"
-        case .intermediate: return "1-3 years, comfortable with the major lifts"
-        case .advanced: return "3+ years, refined technique and periodization"
+        case .beginner:
+            return String(
+                localized: "Less than 1 year of consistent lifting",
+                comment: "Advancement level description — beginner"
+            )
+        case .intermediate:
+            return String(
+                localized: "1-3 years, comfortable with the major lifts",
+                comment: "Advancement level description — intermediate"
+            )
+        case .advanced:
+            return String(
+                localized: "3+ years, refined technique and periodization",
+                comment: "Advancement level description — advanced"
+            )
+        }
+    }
+
+    private func styleTitle(_ style: CoachingStyle) -> String {
+        switch style {
+        case .motivational:
+            return String(localized: "Motivational", comment: "Coaching style — motivational")
+        case .analytical:
+            return String(localized: "Analytical", comment: "Coaching style — analytical")
+        case .minimal:
+            return String(localized: "Minimal", comment: "Coaching style — minimal")
         }
     }
 
     private func styleDescription(_ style: CoachingStyle) -> String {
         switch style {
-        case .motivational: return "High energy, keeps you pushing through"
-        case .analytical: return "Data-driven, explains the why behind every call"
-        case .minimal: return "Short and direct, only when it matters"
+        case .motivational:
+            return String(
+                localized: "High energy, keeps you pushing through",
+                comment: "Coaching style description — motivational"
+            )
+        case .analytical:
+            return String(
+                localized: "Data-driven, explains the why behind every call",
+                comment: "Coaching style description — analytical"
+            )
+        case .minimal:
+            return String(
+                localized: "Short and direct, only when it matters",
+                comment: "Coaching style description — minimal"
+            )
         }
     }
 
@@ -294,7 +366,10 @@ public struct OnboardingView: View {
     private var actionRow: some View {
         HStack(spacing: VA.Space.md) {
             if step != .welcome {
-                VAButton("Back", style: .ghost) {
+                VAButton(
+                    String(localized: "Back", comment: "Onboarding back button"),
+                    style: .ghost
+                ) {
                     withAnimation(VAAnimation.standard) {
                         step = Step(rawValue: step.rawValue - 1) ?? .welcome
                     }
@@ -302,7 +377,12 @@ public struct OnboardingView: View {
                 .frame(maxWidth: 100)
             }
 
-            VAButton(step == .done ? "Get Started" : "Continue", style: .primary) {
+            VAButton(
+                step == .done
+                    ? String(localized: "Get Started", comment: "Onboarding final button to finish onboarding")
+                    : String(localized: "Continue", comment: "Onboarding step-forward button"),
+                style: .primary
+            ) {
                 VAHaptics.tap()
                 if step == .done {
                     onComplete(result)

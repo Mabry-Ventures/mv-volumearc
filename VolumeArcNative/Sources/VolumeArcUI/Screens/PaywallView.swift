@@ -41,11 +41,11 @@ public struct PaywallView: View {
                 )
                 .ignoresSafeArea()
             )
-            .navigationTitle("Premium")
+            .navigationTitle(String(localized: "Premium", comment: "Paywall navigation title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Close") {
+                    Button(String(localized: "Close", comment: "Paywall dismiss button")) {
                         VAHaptics.tap()
                         isPresented = false
                     }
@@ -71,12 +71,15 @@ public struct PaywallView: View {
                 .foregroundStyle(VA.Colors.primary)
                 .vaAppear()
 
-            Text("VolumeArc Premium")
+            Text(String(localized: "VolumeArc Premium", comment: "Paywall hero title"))
                 .font(VA.Typography.title)
                 .foregroundStyle(VA.Colors.textPrimary)
                 .multilineTextAlignment(.center)
 
-            Text("Unlock live voice coaching, CloudKit sync across all your devices, and advanced training signals.")
+            Text(String(
+                localized: "Unlock live voice coaching, CloudKit sync across all your devices, and advanced training signals.",
+                comment: "Paywall hero description"
+            ))
                 .font(VA.Typography.body)
                 .foregroundStyle(VA.Colors.textSecondary)
                 .multilineTextAlignment(.center)
@@ -90,7 +93,7 @@ public struct PaywallView: View {
     private var featureComparison: some View {
         VACard(style: .glass) {
             VStack(alignment: .leading, spacing: VA.Space.md) {
-                Text("WHAT'S INCLUDED")
+                Text(String(localized: "WHAT'S INCLUDED", comment: "Paywall feature list section label"))
                     .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.textSecondary)
                     .tracking(0.5)
@@ -117,11 +120,31 @@ public struct PaywallView: View {
 
     private var premiumFeatures: [(icon: String, title: String, description: String)] {
         [
-            ("waveform.and.mic", "Live Voice Coaching", "Talk to your coach hands-free between sets."),
-            ("icloud.fill", "Cloud Sync", "Your training history on every device, always in sync."),
-            ("chart.line.uptrend.xyaxis", "Advanced Signals", "Readiness breakdown, volume trends, progression curves."),
-            ("brain", "Foundation Models", "On-device AI coaching with full privacy."),
-            ("star.circle.fill", "Priority Support", "First in line when you need help."),
+            (
+                "waveform.and.mic",
+                String(localized: "Live Voice Coaching", comment: "Premium feature name — voice coach"),
+                String(localized: "Talk to your coach hands-free between sets.", comment: "Premium feature description — voice coach")
+            ),
+            (
+                "icloud.fill",
+                String(localized: "Cloud Sync", comment: "Premium feature name — CloudKit sync"),
+                String(localized: "Your training history on every device, always in sync.", comment: "Premium feature description — CloudKit sync")
+            ),
+            (
+                "chart.line.uptrend.xyaxis",
+                String(localized: "Advanced Signals", comment: "Premium feature name — advanced signals"),
+                String(localized: "Readiness breakdown, volume trends, progression curves.", comment: "Premium feature description — advanced signals")
+            ),
+            (
+                "brain",
+                String(localized: "Foundation Models", comment: "Premium feature name — on-device AI"),
+                String(localized: "On-device AI coaching with full privacy.", comment: "Premium feature description — on-device AI")
+            ),
+            (
+                "star.circle.fill",
+                String(localized: "Priority Support", comment: "Premium feature name — priority support"),
+                String(localized: "First in line when you need help.", comment: "Premium feature description — priority support")
+            ),
         ]
     }
 
@@ -131,11 +154,14 @@ public struct PaywallView: View {
     private var plans: some View {
         if subscriptionStore.products.isEmpty {
             if case .loading = subscriptionStore.loadingState {
-                VALoadingState(message: "Loading plans…")
-                    .frame(minHeight: 120)
+                VALoadingState(message: String(
+                    localized: "Loading plans…",
+                    comment: "Paywall loading state message"
+                ))
+                .frame(minHeight: 120)
             } else if case let .failed(reason) = subscriptionStore.loadingState {
                 VAErrorState(
-                    title: "Couldn't load plans",
+                    title: String(localized: "Couldn't load plans", comment: "Paywall error title when StoreKit fails"),
                     message: reason,
                     retry: {
                         Task { await subscriptionStore.loadProducts() }
@@ -143,9 +169,12 @@ public struct PaywallView: View {
                 )
             } else {
                 VACard(style: .flat) {
-                    Text("No plans available right now. Try again later.")
-                        .font(VA.Typography.footnote)
-                        .foregroundStyle(VA.Colors.textSecondary)
+                    Text(String(
+                        localized: "No plans available right now. Try again later.",
+                        comment: "Paywall empty-state message when no products are returned"
+                    ))
+                    .font(VA.Typography.footnote)
+                    .foregroundStyle(VA.Colors.textSecondary)
                 }
             }
         } else {
@@ -172,11 +201,13 @@ public struct PaywallView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack {
-                        Text(isYearly ? "Yearly" : "Monthly")
+                        Text(isYearly
+                             ? String(localized: "Yearly", comment: "Paywall yearly plan label")
+                             : String(localized: "Monthly", comment: "Paywall monthly plan label"))
                             .font(VA.Typography.headline)
                             .foregroundStyle(VA.Colors.textPrimary)
                         if isYearly {
-                            Text("SAVE")
+                            Text(String(localized: "SAVE", comment: "Paywall savings badge on the yearly plan"))
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundStyle(Color.white)
                                 .padding(.horizontal, 6)
@@ -185,7 +216,9 @@ public struct PaywallView: View {
                                 .clipShape(Capsule())
                         }
                     }
-                    Text(product.displayPrice + (isYearly ? " / year" : " / month"))
+                    Text(isYearly
+                         ? String(localized: "\(product.displayPrice) / year", comment: "Yearly plan price line")
+                         : String(localized: "\(product.displayPrice) / month", comment: "Monthly plan price line"))
                         .font(VA.Typography.footnote)
                         .foregroundStyle(VA.Colors.textSecondary)
                 }
@@ -215,7 +248,9 @@ public struct PaywallView: View {
     private var actionButtons: some View {
         VStack(spacing: VA.Space.md) {
             VAButton(
-                isPurchasing ? "Processing…" : "Start Premium",
+                isPurchasing
+                    ? String(localized: "Processing…", comment: "Paywall primary button while a purchase is in flight")
+                    : String(localized: "Start Premium", comment: "Paywall primary call-to-action"),
                 icon: "sparkles",
                 style: .primary,
                 isLoading: isPurchasing
@@ -224,7 +259,7 @@ public struct PaywallView: View {
             }
             .disabled(selectedProductID == nil || isPurchasing)
 
-            Button("Restore Purchases") {
+            Button(String(localized: "Restore Purchases", comment: "Paywall restore purchases button")) {
                 Task {
                     VAHaptics.tap()
                     await subscriptionStore.restorePurchases()
@@ -263,15 +298,18 @@ public struct PaywallView: View {
 
     private var legalLinks: some View {
         VStack(spacing: VA.Space.xs) {
-            Text("Subscriptions auto-renew unless cancelled at least 24 hours before the period ends. Manage in Settings → Apple ID → Subscriptions.")
-                .font(VA.Typography.caption)
-                .foregroundStyle(VA.Colors.textTertiary)
-                .multilineTextAlignment(.center)
+            Text(String(
+                localized: "Subscriptions auto-renew unless cancelled at least 24 hours before the period ends. Manage in Settings → Apple ID → Subscriptions.",
+                comment: "App Store required auto-renew disclosure on the paywall"
+            ))
+            .font(VA.Typography.caption)
+            .foregroundStyle(VA.Colors.textTertiary)
+            .multilineTextAlignment(.center)
 
             HStack(spacing: VA.Space.md) {
-                Text("Terms of Service")
+                Text(String(localized: "Terms of Service", comment: "Paywall footer link label"))
                 Text("•")
-                Text("Privacy Policy")
+                Text(String(localized: "Privacy Policy", comment: "Paywall footer link label"))
             }
             .font(VA.Typography.caption)
             .foregroundStyle(VA.Colors.textSecondary)

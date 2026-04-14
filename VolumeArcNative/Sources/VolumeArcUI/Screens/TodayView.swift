@@ -224,12 +224,21 @@ public struct TodayView: View {
 
     private var recentSessionsSection: some View {
         VStack(alignment: .leading, spacing: VA.Space.md) {
-            VASectionHeader("Recent Sessions", subtitle: "\(model.recentSessions.count) this week")
+            VASectionHeader(
+                String(localized: "Recent Sessions", comment: "Section header on Today tab for recent workout history"),
+                subtitle: String(
+                    localized: "\(model.recentSessions.count) this week",
+                    comment: "Subtitle showing how many sessions have been logged this week"
+                )
+            )
             if model.recentSessions.isEmpty {
                 VACard(style: .flat) {
-                    Text("No sessions logged yet. Start your first workout to see your history here.")
-                        .font(VA.Typography.footnote)
-                        .foregroundStyle(VA.Colors.textSecondary)
+                    Text(String(
+                        localized: "No sessions logged yet. Start your first workout to see your history here.",
+                        comment: "Empty-state message when there are no recent sessions"
+                    ))
+                    .font(VA.Typography.footnote)
+                    .foregroundStyle(VA.Colors.textSecondary)
                 }
             } else {
                 ForEach(Array(model.recentSessions.prefix(3).enumerated()), id: \.offset) { _, session in
@@ -240,25 +249,39 @@ public struct TodayView: View {
     }
 
     private func sessionRow(_ session: RecentSession) -> some View {
-        VACard(style: .flat) {
-            HStack(spacing: VA.Space.md) {
-                VStack(alignment: .leading, spacing: VA.Space.xxs) {
-                    Text(session.date.formatted(.dateTime.weekday(.wide).month().day()))
-                        .font(VA.Typography.headline)
-                        .foregroundStyle(VA.Colors.textPrimary)
-                    Text("\(session.completedSetCount) sets • \(session.durationMinutes)min • RPE \(String(format: "%.1f", session.averageRPE))")
-                        .font(VA.Typography.footnote)
-                        .foregroundStyle(VA.Colors.textSecondary)
+        NavigationLink {
+            SessionDetailView(session: session)
+                .navigationTransition(.zoom(sourceID: session.date, in: heroNamespace))
+        } label: {
+            VACard(style: .flat) {
+                HStack(spacing: VA.Space.md) {
+                    VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                        Text(session.date.formatted(.dateTime.weekday(.wide).month().day()))
+                            .font(VA.Typography.headline)
+                            .foregroundStyle(VA.Colors.textPrimary)
+                        Text("\(session.completedSetCount) sets • \(session.durationMinutes)min • RPE \(String(format: "%.1f", session.averageRPE))")
+                            .font(VA.Typography.footnote)
+                            .foregroundStyle(VA.Colors.textSecondary)
+                    }
+                    Spacer()
+                    VAMetricDisplay(
+                        label: "Load",
+                        value: "\(Int(session.totalVolumeLoad))",
+                        unit: "lb",
+                        style: .compact
+                    )
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(VA.Colors.textTertiary)
                 }
-                Spacer()
-                VAMetricDisplay(
-                    label: "Load",
-                    value: "\(Int(session.totalVolumeLoad))",
-                    unit: "lb",
-                    style: .compact
-                )
             }
+            .matchedTransitionSource(id: session.date, in: heroNamespace)
         }
+        .buttonStyle(.plain)
+        .accessibilityHint(String(
+            localized: "Opens this session's details",
+            comment: "Accessibility hint for tapping a recent session row"
+        ))
     }
 
     // MARK: - Signals

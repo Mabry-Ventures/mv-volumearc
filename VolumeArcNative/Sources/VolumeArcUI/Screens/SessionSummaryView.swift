@@ -88,13 +88,16 @@ public struct SessionSummaryView: View {
                     .opacity(hasAppeared ? 1 : 0)
             }
 
-            Text("Session Complete")
+            Text(String(localized: "Session Complete", comment: "Session summary celebration headline"))
                 .font(VA.Typography.title)
                 .foregroundStyle(VA.Colors.textPrimary)
                 .opacity(hasAppeared ? 1 : 0)
                 .offset(y: hasAppeared ? 0 : 10)
 
-            Text("Great work on \(primaryLift).")
+            Text(String(
+                localized: "Great work on \(primaryLift).",
+                comment: "Session summary subtitle congratulating the user on the primary lift"
+            ))
                 .font(VA.Typography.body)
                 .foregroundStyle(VA.Colors.textSecondary)
                 .opacity(hasAppeared ? 1 : 0)
@@ -108,29 +111,29 @@ public struct SessionSummaryView: View {
         VStack(spacing: VA.Space.md) {
             HStack(spacing: VA.Space.md) {
                 metricCard(
-                    label: "SETS",
+                    label: String(localized: "SETS", comment: "Session summary metric label — sets"),
                     value: "\(sets)",
                     icon: "checkmark.circle.fill",
                     color: VA.Colors.success
                 )
                 metricCard(
-                    label: "VOLUME",
+                    label: String(localized: "VOLUME", comment: "Session summary metric label — total volume"),
                     value: "\(Int(totalVolume))",
-                    unit: "lb",
+                    unit: String(localized: "lb", comment: "Weight unit abbreviation — pounds"),
                     icon: "scalemass.fill",
                     color: VA.Colors.primary
                 )
             }
             HStack(spacing: VA.Space.md) {
                 metricCard(
-                    label: "DURATION",
+                    label: String(localized: "DURATION", comment: "Session summary metric label — duration"),
                     value: "\(duration)",
-                    unit: "min",
+                    unit: String(localized: "min", comment: "Duration unit abbreviation — minutes"),
                     icon: "clock.fill",
                     color: VA.Colors.secondary
                 )
                 metricCard(
-                    label: "AVG RPE",
+                    label: String(localized: "AVG RPE", comment: "Session summary metric label — average RPE"),
                     value: String(format: "%.1f", averageRPE),
                     icon: "flame.fill",
                     color: VA.Colors.warning
@@ -178,7 +181,11 @@ public struct SessionSummaryView: View {
     // MARK: - Continue
 
     private var continueButton: some View {
-        VAButton("Done", icon: "arrow.right", style: .primary) {
+        VAButton(
+            String(localized: "Done", comment: "Session summary dismiss button"),
+            icon: "arrow.right",
+            style: .primary
+        ) {
             VAHaptics.tap()
             onContinue()
         }
