@@ -5,8 +5,15 @@ import SwiftData
 #if canImport(StoreKit)
 import StoreKit
 #endif
+#if canImport(Network)
+import Network
+#endif
 import VolumeArcCore
 import VolumeArcUI
+
+extension Notification.Name {
+    static let volumeArcReachabilityChanged = Notification.Name("VolumeArc.ReachabilityChanged")
+}
 
 @main
 struct VolumeArcApp: App {
@@ -152,6 +159,14 @@ struct VolumeArcApp: App {
                 #if canImport(ActivityKit)
                 await liveActivityController.restoreStoredStateIfAvailable()
                 #endif
+                #if canImport(UserNotifications)
+                let scheduler = VolumeArcNotificationScheduler()
+                scheduler.registerCategories()
+                _ = await scheduler.requestPermissionIfNeeded()
+                #endif
+                #if canImport(Network)
+                Self.startNetworkReachabilityMonitor()
+                #endif
             }
             .onOpenURL { url in
                 handle(url: url)
@@ -247,6 +262,21 @@ struct VolumeArcApp: App {
     private static func makeAccountSessionStore() -> AccountSessionStore {
         UserDefaultsAccountSessionStore()
     }
+
+    #if canImport(Network)
+    private static let reachabilityMonitor = NetworkReachabilityMonitor()
+
+    private static func startNetworkReachabilityMonitor() {
+        reachabilityMonitor.start { path in
+            // Post a notification so observers can react to connectivity changes.
+            NotificationCenter.default.post(
+                name: .volumeArcReachabilityChanged,
+                object: nil,
+                userInfo: ["isReachable": path.status == .satisfied]
+            )
+        }
+    }
+    #endif
 
     private static func makeSyncTransport() -> CloudSyncTransport {
         let containerIdentifier = VolumeArcCloudConfiguration.containerIdentifier?
