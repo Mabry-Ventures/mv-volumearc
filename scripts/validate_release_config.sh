@@ -167,6 +167,43 @@ fi
   exit 1
 }
 
+# VOL-56 / VOL-56b (PR #24): App/Info.plist is the only place we can express
+# array-valued keys that INFOPLIST_KEY_* silently drops. If anyone deletes
+# the file, reverts the INFOPLIST_FILE setting, or removes one of the three
+# required keys, production builds silently lose deep-link handling and/or
+# background task scheduling. Hard-fail so the regression is visible.
+APP_INFO_PLIST="App/Info.plist"
+[[ -f "$APP_INFO_PLIST" ]] || {
+  echo "FAIL: Missing $APP_INFO_PLIST (required for CFBundleURLTypes, BGTaskSchedulerPermittedIdentifiers, UIBackgroundModes)" >&2
+  exit 1
+}
+
+for required_key in \
+  "CFBundleURLTypes" \
+  "BGTaskSchedulerPermittedIdentifiers" \
+  "UIBackgroundModes"; do
+  if ! plutil -extract "$required_key" raw -o - "$APP_INFO_PLIST" >/dev/null 2>&1; then
+    echo "FAIL: $APP_INFO_PLIST missing required key: $required_key" >&2
+    exit 1
+  fi
+done
+
+# Confirm the scheme is the one VolumeArcDeepLink expects.
+if ! plutil -extract "CFBundleURLTypes.0.CFBundleURLSchemes.0" raw -o - "$APP_INFO_PLIST" 2>/dev/null | grep -qx "volumearc"; then
+  echo "FAIL: $APP_INFO_PLIST CFBundleURLTypes must register the 'volumearc' scheme" >&2
+  exit 1
+fi
+
+# Confirm both BGTask identifiers are permitted.
+for required_task in \
+  "com.mabryventures.VolumeArc.appRefresh" \
+  "com.mabryventures.VolumeArc.appProcessing"; do
+  if ! plutil -convert xml1 -o - "$APP_INFO_PLIST" 2>/dev/null | grep -qF "<string>$required_task</string>"; then
+    echo "FAIL: $APP_INFO_PLIST BGTaskSchedulerPermittedIdentifiers missing: $required_task" >&2
+    exit 1
+  fi
+done
+
 # Version bump check: if building for a tag, fail when VERSION matches the latest tag.
 # On branch/PR builds this stays a warning since it only matters at release time.
 if git describe --tags --abbrev=0 >/dev/null 2>&1; then
