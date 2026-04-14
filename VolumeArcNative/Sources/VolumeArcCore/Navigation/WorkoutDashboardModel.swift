@@ -35,6 +35,7 @@ public final class WorkoutDashboardModel: ObservableObject {
     @Published public private(set) var isCoachStreaming: Bool = false
 
     @Published public var isOnboardingComplete: Bool = false
+    @Published public private(set) var isNetworkReachable: Bool = true
 
     // MARK: - Dependencies
 
@@ -42,6 +43,7 @@ public final class WorkoutDashboardModel: ObservableObject {
     private let voiceCoach: LiveVoiceCoachOrchestrator
     private let telemetrySink: TelemetrySink
     private let progressionEngine = ProgressionEngine()
+    public let featureFlags: FeatureFlagProvider
 
     #if canImport(SwiftData)
     private let workoutRepository: SwiftDataWorkoutRepository?
@@ -82,6 +84,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.aiProvider = aiProvider
         self.voiceCoach = voiceCoach
         self.telemetrySink = telemetrySink
+        self.featureFlags = LocalFeatureFlagProvider()
         self.workoutRepository = repository
         self.coachMemoryRepository = coachMemoryRepository
         self.userProfileRepository = userProfileRepository
@@ -114,6 +117,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.aiProvider = aiProvider
         self.voiceCoach = voiceCoach
         self.telemetrySink = telemetrySink
+        self.featureFlags = LocalFeatureFlagProvider()
         #if canImport(SwiftData)
         self.workoutRepository = nil
         self.coachMemoryRepository = nil
@@ -142,6 +146,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.aiProvider = aiProvider
         self.voiceCoach = voiceCoach
         self.telemetrySink = telemetrySink
+        self.featureFlags = LocalFeatureFlagProvider()
         #if canImport(SwiftData)
         self.workoutRepository = nil
         self.coachMemoryRepository = nil
@@ -205,6 +210,9 @@ public final class WorkoutDashboardModel: ObservableObject {
             }
 
             self.isOnboardingComplete = try userProfileRepository.isOnboardingComplete()
+
+            // Publish a widget snapshot derived from the freshly loaded state.
+            publishWidgetSnapshot()
 
             telemetrySink.record(TelemetryEvent(
                 category: "dashboard",
@@ -392,6 +400,49 @@ public final class WorkoutDashboardModel: ObservableObject {
     }
 
     // MARK: - Watch & Health handlers
+
+    // MARK: - Widget / Live Activity state publishing
+
+    private func publishWidgetSnapshot() {
+        let snapshot = WidgetSummarySnapshot(
+            nextWorkoutTitle: nextWorkout?.title ?? autopilot?.nextExerciseName ?? "Strength Session",
+            readinessScore: "\(readiness.score)",
+            primaryLiftForecast: autopilot.map { "\($0.nextExerciseName) @ \(Int($0.nextTarget.weight))lb" } ?? "Open to plan your session",
+            nextActionTitle: isSessionActive ? "Continue" : "Start",
+            syncSummary: isSessionActive ? "Session in progress" : "\(recentSessions.count) this week",
+            streakDays: computeStreakDays(),
+            coachPrompt: autopilot?.recommendationReason ?? "What should I do next?"
+        )
+        PlatformSurfaceDefaultsWriter.saveWidgetSnapshot(snapshot)
+
+        if let autopilot, isSessionActive {
+            let state = LiveActivityState(
+                workoutTitle: activeWorkoutTitle ?? "Strength Session",
+                activeExerciseName: autopilot.nextExerciseName,
+                targetSummary: "\(Int(autopilot.nextTarget.weight))lb × \(autopilot.nextTarget.repRange.lowerBound)",
+                restSecondsRemaining: nil
+            )
+            PlatformSurfaceDefaultsWriter.saveLiveActivityState(state)
+        } else if !isSessionActive {
+            PlatformSurfaceDefaultsWriter.clearLiveActivityState()
+        }
+    }
+
+    private func computeStreakDays() -> Int {
+        let calendar = Calendar.current
+        var streak = 0
+        var cursor = Date.now
+        let sortedSessions = recentSessions.sorted { $0.date > $1.date }
+        for session in sortedSessions {
+            if calendar.isDate(session.date, inSameDayAs: cursor) {
+                streak += 1
+                cursor = calendar.date(byAdding: .day, value: -1, to: cursor) ?? cursor
+            } else if session.date < cursor {
+                break
+            }
+        }
+        return streak
+    }
 
     public func handleWatchPayload(_ payload: WatchPayload) async {
         telemetrySink.record(TelemetryEvent(

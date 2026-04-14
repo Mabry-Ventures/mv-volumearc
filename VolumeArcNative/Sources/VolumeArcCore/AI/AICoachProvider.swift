@@ -74,11 +74,76 @@ public struct OpenAIRelayCoachProvider: AICoachProvider {
     }
 }
 
+/// On-device heuristic coach that pattern-matches the user's prompt against
+/// common questions and pulls from the context block for grounding.
+///
+/// This is the offline fallback — rule-based, not generative. A user without
+/// network connectivity still gets a useful, contextual response instead of
+/// canned filler.
 public struct LocalHeuristicAICoachProvider: AICoachProvider {
     public init() {}
 
     public func coachResponse(for prompt: String, context: String) async throws -> String {
-        "Based on your recent training, I'd recommend holding the current load and focusing on rep quality."
+        let lowered = prompt.lowercased()
+
+        if lowered.contains("ready") || lowered.contains("recovery") || lowered.contains("tired") || lowered.contains("fatigue") {
+            return readinessResponse(from: context)
+        }
+        if lowered.contains("heavy") || lowered.contains("heavier") || lowered.contains("more weight") || lowered.contains("add") || lowered.contains(" up") {
+            return progressionResponse(from: context)
+        }
+        if lowered.contains("form") || lowered.contains("cue") || lowered.contains("technique") {
+            return cueResponse(from: context)
+        }
+        if lowered.contains("deload") || lowered.contains("back off") || lowered.contains("easier") {
+            return deloadResponse(from: context)
+        }
+        return defaultResponse(from: context)
+    }
+
+    private func readinessResponse(from context: String) -> String {
+        if let score = extractReadinessScore(from: context) {
+            switch score {
+            case 80...: return "Readiness is \(score) — you're ready to push. Hit your targets and don't second-guess."
+            case 60..<80: return "Readiness is \(score). Moderate recovery. Stick to the plan, skip the heroics."
+            case 40..<60: return "Readiness is \(score) — fatigue is accumulating. Hold load and focus on bar speed."
+            default: return "Readiness is \(score). Strong case for a lighter session today. Move well, don't grind."
+            }
+        }
+        return "Log a set or two and I'll gauge how the bar is moving."
+    }
+
+    private func progressionResponse(from context: String) -> String {
+        if let score = extractReadinessScore(from: context), score >= 75 {
+            return "Green light — if the last set moved cleanly at target RPE, add a small jump. If it was a grind, hold and earn it."
+        }
+        return "Hold the load. Progression needs a clean baseline — own today, push next session."
+    }
+
+    private func cueResponse(from context: String) -> String {
+        "Brace hard before the rep starts. Move with intent. If the last set drifted, dial back 5-10% and rebuild."
+    }
+
+    private func deloadResponse(from context: String) -> String {
+        if let score = extractReadinessScore(from: context), score < 60 {
+            return "Readiness is \(score) — deload makes sense. Drop intensity 10-15% and cut volume in half."
+        }
+        return "You might not need a full deload yet. Try a lighter top set today and reassess tomorrow."
+    }
+
+    private func defaultResponse(from context: String) -> String {
+        if context.contains("Readiness") {
+            return "Based on what I'm seeing, hold the target load and move each rep well. Ask me something specific and I'll give you a sharper read."
+        }
+        return "Log a couple of sets so I have something to work with, then ask me again."
+    }
+
+    private func extractReadinessScore(from context: String) -> Int? {
+        guard let range = context.range(of: "Readiness: ") else { return nil }
+        let remainder = context[range.upperBound...]
+        guard let slashRange = remainder.range(of: "/") else { return nil }
+        let scoreString = String(remainder[remainder.startIndex..<slashRange.lowerBound])
+        return Int(scoreString)
     }
 }
 

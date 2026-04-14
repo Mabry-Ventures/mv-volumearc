@@ -13,7 +13,9 @@ public enum PlatformSurfaceNotifications {
     public static let liveActivityUserInfoKey = "liveActivityState"
 }
 
-public struct LiveActivityState: Sendable {
+// MARK: - LiveActivityState
+
+public struct LiveActivityState: Sendable, Codable {
     public let workoutTitle: String
     public let activeExerciseName: String
     public let targetSummary: String
@@ -51,7 +53,9 @@ public struct ActiveWorkoutAttributes: ActivityAttributes {
 }
 #endif
 
-public struct WidgetSummarySnapshot: Sendable {
+// MARK: - WidgetSummarySnapshot
+
+public struct WidgetSummarySnapshot: Sendable, Codable {
     public let nextWorkoutTitle: String
     public let readinessScore: String
     public let primaryLiftForecast: String
@@ -59,6 +63,7 @@ public struct WidgetSummarySnapshot: Sendable {
     public let syncSummary: String
     public let streakDays: Int
     public let coachPrompt: String
+    public let updatedAt: Date
 
     public init(
         nextWorkoutTitle: String,
@@ -67,7 +72,8 @@ public struct WidgetSummarySnapshot: Sendable {
         nextActionTitle: String,
         syncSummary: String,
         streakDays: Int,
-        coachPrompt: String
+        coachPrompt: String,
+        updatedAt: Date = .now
     ) {
         self.nextWorkoutTitle = nextWorkoutTitle
         self.readinessScore = readinessScore
@@ -76,12 +82,87 @@ public struct WidgetSummarySnapshot: Sendable {
         self.syncSummary = syncSummary
         self.streakDays = streakDays
         self.coachPrompt = coachPrompt
+        self.updatedAt = updatedAt
     }
 }
 
+// MARK: - Shared state bridge
+
+/// App Group identifier shared between the app, watch, and widgets.
+public enum PlatformSurfaceSharedStorage {
+    public static let appGroupID = "group.com.mabryventures.volumearc"
+    public static let widgetSnapshotKey = "widgetSummarySnapshot"
+    public static let liveActivityStateKey = "liveActivityState"
+
+    /// Returns the shared UserDefaults instance for the app group,
+    /// or `.standard` as a fallback if the app group isn't entitled.
+    public static var defaults: UserDefaults {
+        UserDefaults(suiteName: appGroupID) ?? .standard
+    }
+}
+
+/// Reads shared state from the app group container.
 public enum PlatformSurfaceDefaultsReader {
-    public static func loadWidgetSnapshot() -> WidgetSummarySnapshot? { nil }
-    public static func loadLiveActivityState() -> LiveActivityState? { nil }
+    /// Returns the last widget snapshot the app wrote to shared storage, or nil if none.
+    public static func loadWidgetSnapshot() -> WidgetSummarySnapshot? {
+        let defaults = PlatformSurfaceSharedStorage.defaults
+        guard let data = defaults.data(forKey: PlatformSurfaceSharedStorage.widgetSnapshotKey),
+              let decoded = try? JSONDecoder().decode(WidgetSummarySnapshot.self, from: data)
+        else {
+            return nil
+        }
+        return decoded
+    }
+
+    /// Returns the last live activity state the app wrote to shared storage, or nil if none.
+    public static func loadLiveActivityState() -> LiveActivityState? {
+        let defaults = PlatformSurfaceSharedStorage.defaults
+        guard let data = defaults.data(forKey: PlatformSurfaceSharedStorage.liveActivityStateKey),
+              let decoded = try? JSONDecoder().decode(LiveActivityState.self, from: data)
+        else {
+            return nil
+        }
+        return decoded
+    }
+}
+
+/// Writes shared state to the app group container. Call from the main app target
+/// whenever workout state changes.
+public enum PlatformSurfaceDefaultsWriter {
+    /// Persist a widget snapshot and post the change notification.
+    public static func saveWidgetSnapshot(_ snapshot: WidgetSummarySnapshot) {
+        let defaults = PlatformSurfaceSharedStorage.defaults
+        if let data = try? JSONEncoder().encode(snapshot) {
+            defaults.set(data, forKey: PlatformSurfaceSharedStorage.widgetSnapshotKey)
+        }
+        NotificationCenter.default.post(
+            name: PlatformSurfaceNotifications.widgetSnapshotDidChange,
+            object: nil
+        )
+    }
+
+    /// Persist a live activity state and post the change notification.
+    public static func saveLiveActivityState(_ state: LiveActivityState) {
+        let defaults = PlatformSurfaceSharedStorage.defaults
+        if let data = try? JSONEncoder().encode(state) {
+            defaults.set(data, forKey: PlatformSurfaceSharedStorage.liveActivityStateKey)
+        }
+        NotificationCenter.default.post(
+            name: PlatformSurfaceNotifications.liveActivityDidChange,
+            object: nil,
+            userInfo: [PlatformSurfaceNotifications.liveActivityUserInfoKey: state]
+        )
+    }
+
+    /// Clear the live activity state and post the end notification.
+    public static func clearLiveActivityState() {
+        let defaults = PlatformSurfaceSharedStorage.defaults
+        defaults.removeObject(forKey: PlatformSurfaceSharedStorage.liveActivityStateKey)
+        NotificationCenter.default.post(
+            name: PlatformSurfaceNotifications.liveActivityDidEnd,
+            object: nil
+        )
+    }
 }
 
 public enum PlatformSurfaceFactory {
