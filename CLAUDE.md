@@ -6,9 +6,32 @@ AI-powered strength training coach for iOS and watchOS. Tracks workouts, provide
 
 **Owner:** Mabry Ventures (`com.mabryventures.VolumeArc`)
 
+## Implementation Status
+
+> **Status: Pre-production.** The infrastructure layer (build pipeline, CI, secure storage, persistence bootstrap, relay auth, privacy manifests, accessibility, localization) is solid. The product layer (iPhone UI, AI coaching flows, sync, watch connectivity, widgets, Live Activities) is scaffolding -- protocols and types compile and wire correctly, but concrete implementations are stubs returning canned data or no-ops. See the status table below.
+
+| System | Status | What exists | What's missing |
+|--------|--------|-------------|----------------|
+| iPhone UI | Scaffold | `RootDashboardView` placeholder, deep link routing, intent wiring | Real dashboard, navigation, onboarding, workout, coach, signals, settings screens |
+| AI coaching | Scaffold | Provider protocol chain, relay session auth, factory selection | Real prompt templates, structured outputs, streaming, evaluation, recovery UX |
+| Voice coaching | Scaffold | Transport protocol, orchestrator, permission store | Actual voice session implementation, duplex audio, UX flow |
+| Cloud sync | Scaffold | Coordinator, transport protocol, state store, payload codec | Real CloudKit record operations, conflict resolution, shared-state writes |
+| Watch app | Partial | UI with rest timer, decisions, coach cue, accessibility, localized strings | HealthKit workout sessions, real progression inputs, real phone/watch sync |
+| Widgets | Scaffold | Widget views, timeline provider, accessibility labels | Shared-state writes from app (`PlatformSurfaceDefaultsReader` returns nil) |
+| Live Activities | Scaffold | Activity attributes, controller lifecycle | Real state updates from workout sessions |
+| Notifications | Scaffold | Scheduler with categories and actions | Wiring into rest timer and training plan |
+| Persistence | Implemented | Four-tier fallback chain, seed data, schema, migration plan | -- |
+| Secure storage | Implemented | Keychain with fallback, device ID stability | -- |
+| Relay auth | Implemented | Actor-based session provider, token caching, expiration skew | -- |
+| Telemetry | Partial | Fanout architecture, sink protocol, startup signals | Sentry sink wired but sinks themselves are no-op (don't persist/send) |
+| Feature flags | Scaffold | Protocol, UserDefaults provider, flag definitions | Not wired into any feature gates |
+| Subscriptions | Scaffold | Product IDs, StoreKit store type | No paywall UI, no purchase flow, no entitlement checks |
+| Build pipeline | Implemented | Generated Xcode project, CI on self-hosted M4, Fastlane, archive script | SwiftLint not installed on runner |
+| Testing | Partial | 30 tests, mocks, fixtures, persistence/relay/migration tests | Tests validate stubs not real logic; no UI tests, no journey tests, 0% end-to-end coverage |
+
 ## Architecture
 
-This repo contains the Apple-platform host app. Core business logic and UI components live in `VolumeArcNative/` (frameworks `VolumeArcCore` and `VolumeArcUI`), compiled as static libraries and linked into each target by `scripts/generate_xcode_project.rb`.
+This repo contains the full VolumeArc Apple platform. Core business logic and UI components live in `VolumeArcNative/` (frameworks `VolumeArcCore` and `VolumeArcUI`), compiled as static libraries and linked into each target by `scripts/generate_xcode_project.rb`.
 
 ### Targets
 
@@ -34,9 +57,15 @@ This repo contains the Apple-platform host app. Core business logic and UI compo
 2. `OpenAIRelayCoachProvider` (cloud relay)
 3. `LocalHeuristicAICoachProvider` (offline fallback)
 
+> **Note:** All three providers exist as types but return canned/naive responses. Real prompt engineering, structured outputs, streaming, and evaluation are not yet implemented.
+
 **Voice coaching** (`VolumeArcAIRuntimeFactory.swift`): `LiveVoiceCoachOrchestrator` backed by `OpenAIRealtimeVoiceTransport` or `UnavailableRealtimeVoiceTransport` when relay is unconfigured.
 
+> **Note:** `OpenAIRealtimeVoiceTransport` methods are empty stubs. No actual voice session implementation exists.
+
 **Cloud sync** (`VolumeArcCloudConfiguration.swift`): `CloudSyncCoordinator` with `CloudKitSyncTransport` using zone `VolumeArcSyncZone` in container `iCloud.com.mabryventures.VolumeArc`. Falls back to `UnavailableCloudSyncTransport` if unconfigured.
+
+> **Note:** `CloudSyncCoordinator` init stores parameters but all operations are no-ops. No actual CloudKit record operations are implemented.
 
 **Relay auth** (`VolumeArcRelaySessionProvider.swift`): Actor that manages device-ID-based session tokens for the OpenAI relay. Tokens cached in Keychain with ISO8601 expiration and 60-second refresh skew.
 
@@ -44,9 +73,15 @@ This repo contains the Apple-platform host app. Core business logic and UI compo
 
 **Watch app** (`WatchWorkoutView.swift`): `WatchWorkoutModel` manages workout sessions, rest timers (90s default), coach cue requests, and set decisions (increase/hold/decrease). Communicates with iPhone via `WatchConnectivityCoordinator` with offline payload queuing.
 
+> **Note:** Watch UI is the most developed surface but is driven by hardcoded defaults from `ProgressionEngine` (always returns Back Squat 225lb 5-8 reps). `WatchConnectivityCoordinator.send()` is a no-op. HealthKit workout sessions are not integrated.
+
 **Widgets** (`VolumeArcWidgets.swift`): `NextWorkoutWidget` (systemSmall, systemMedium) shows readiness, next session, and lift forecast. `ActiveWorkoutLiveActivity` shows exercise, target, and rest timer on lock screen and Dynamic Island.
 
+> **Note:** `PlatformSurfaceDefaultsReader.loadWidgetSnapshot()` always returns nil. Widgets fall back to canned empty snapshots. No shared-state writes from the app exist.
+
 **App Intents** (`VolumeArcIntents.swift`): Six Siri Shortcuts -- StartNextWorkout, AskCoach, OpenSignals, StartWorkoutSession, LogRecommendedSet, SyncVolumeArc. All open the app via `VolumeArcDeepLink`.
+
+> **Note:** Deep links route correctly but destinations in `RootDashboardView` are not rendered. `DashboardNavigationModel.selectedTab` is updated but never consumed by the UI. Dashboard action methods (`startWorkoutSession`, `logRecommendedSet`, `syncNow`) are empty.
 
 ### Data Models (SwiftData)
 
@@ -57,27 +92,39 @@ Schema: `VolumeArcSchemaV1` with `VolumeArcSchemaMigrationPlan`
 - `TrainingPlanRecord` -- weekly schedule, via `SwiftDataTrainingPlanRepository`
 - `CoachMemoryRecord` -- AI coach context, via `SwiftDataCoachMemoryRepository`
 
+> **Note:** SwiftData models and schema are defined. Repositories exist as types wrapping `ModelContainer` but have no query/write methods beyond what `VolumeArcPersistenceController.seedIfNeeded()` uses.
+
 ### Telemetry
 
 Fanout sink: `InMemoryTelemetrySink` (bootstrap) + `UserDefaultsTelemetrySink` (persistent) + `OSLogTelemetrySink` + `SentryTelemetrySink` (when configured). Startup signals surface degraded persistence, missing AI relay, missing CloudKit config, or missing Sentry DSN.
+
+> **Note:** `UserDefaultsTelemetrySink` and `InMemoryTelemetrySink` accept events but don't persist or surface them. `OSLogTelemetrySink` is the only sink that actually logs. Sentry is wired at the app level but the SDK dependency requires resolution at build time.
 
 ### Notifications
 
 **Notification scheduler** (`VolumeArcNotificationScheduler.swift`): Schedules local notifications for rest timer expiration and workout reminders from the training plan. Registers actionable notification categories (`REST_TIMER` with Dismiss, `WORKOUT_REMINDER` with Start Workout / Dismiss).
 
+> **Note:** Scheduler is implemented but not called from anywhere in the app. No code invokes `scheduleRestTimerNotification` or `scheduleWorkoutReminder`.
+
 ### Feature Flags
 
 `FeatureFlagProvider` protocol in `VolumeArcCore` with `LocalFeatureFlagProvider` (UserDefaults-backed). Flags: `voiceCoaching`, `cloudSync`, `liveActivities`, `foundationModelCoach`. Overridable per-flag for development.
 
+> **Note:** Flag definitions exist but no code checks them. Features are not gated behind flags.
+
 ### Network Reachability
 
 `NetworkReachabilityMonitor` in `VolumeArcCore` wraps `NWPathMonitor` for connectivity detection. Exposes `isReachable`, `isCellular`, and `isConstrained` properties with a `start(onChange:)` callback for path updates.
+
+> **Note:** Monitor exists but is not instantiated or used anywhere in the app.
 
 ### Subscriptions
 
 StoreKit with two products:
 - `com.mabryventures.VolumeArc.premium.monthly`
 - `com.mabryventures.VolumeArc.premium.yearly`
+
+> **Note:** Product IDs are defined and `StoreKitSubscriptionStore` is initialized in `VolumeArcApp`. No paywall UI, purchase flow, or entitlement checks exist.
 
 ## Configuration
 

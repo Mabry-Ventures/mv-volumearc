@@ -1,0 +1,168 @@
+#if canImport(SwiftUI)
+import SwiftUI
+import VolumeArcCore
+
+/// The Coach tab — chat interface with the AI coach.
+public struct CoachView: View {
+    @ObservedObject var model: WorkoutDashboardModel
+    @ObservedObject var navigation: DashboardNavigationModel
+    @State private var draftMessage: String = ""
+    @FocusState private var inputFocused: Bool
+
+    public init(model: WorkoutDashboardModel, navigation: DashboardNavigationModel) {
+        self.model = model
+        self.navigation = navigation
+    }
+
+    public var body: some View {
+        VStack(spacing: 0) {
+            messageList
+            Divider()
+            composer
+        }
+        .background(VA.Colors.surfaceSecondary)
+        .navigationTitle(DashboardTab.coach.title)
+        .navigationBarTitleDisplayMode(.large)
+        .onAppear {
+            if let prompt = navigation.coachPrompt, !prompt.isEmpty {
+                draftMessage = prompt
+                navigation.clearCoachPrompt()
+            }
+        }
+    }
+
+    // MARK: - Message list
+
+    @ViewBuilder
+    private var messageList: some View {
+        if model.coachMessages.isEmpty {
+            ScrollView {
+                VStack(alignment: .leading, spacing: VA.Space.lg) {
+                    welcomeCard
+                    quickPrompts
+                }
+                .padding(VA.Space.lg)
+            }
+        } else {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: VA.Space.md) {
+                        ForEach(model.coachMessages) { message in
+                            VACoachBubble(
+                                sender: message.sender == .user ? .user : .coach,
+                                content: message.content
+                            )
+                            .id(message.id)
+                        }
+                        if model.isCoachStreaming {
+                            VACoachBubble(sender: .coach, content: "Thinking…", isStreaming: true)
+                        }
+                    }
+                    .padding(VA.Space.lg)
+                }
+                .onChange(of: model.coachMessages.count) { _, _ in
+                    withAnimation(VAAnimation.standard) {
+                        proxy.scrollTo(model.coachMessages.last?.id, anchor: .bottom)
+                    }
+                }
+            }
+        }
+    }
+
+    private var welcomeCard: some View {
+        VACard(style: .accent) {
+            VStack(alignment: .leading, spacing: VA.Space.md) {
+                HStack(spacing: VA.Space.sm) {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(VA.Colors.primary)
+                    Text("Your Coach")
+                        .font(VA.Typography.title2)
+                        .foregroundStyle(VA.Colors.textPrimary)
+                }
+                Text("Ask anything about your training — load selection, form cues, recovery, or how last week looks. I'll pull from your recent sessions to give you a grounded answer.")
+                    .font(VA.Typography.body)
+                    .foregroundStyle(VA.Colors.textSecondary)
+            }
+        }
+    }
+
+    private var quickPrompts: some View {
+        VStack(alignment: .leading, spacing: VA.Space.md) {
+            VASectionHeader("Try asking")
+            ForEach(suggestedPrompts, id: \.self) { prompt in
+                Button {
+                    draftMessage = prompt
+                    inputFocused = true
+                    VAHaptics.tap()
+                } label: {
+                    HStack {
+                        Text(prompt)
+                            .font(VA.Typography.body)
+                            .foregroundStyle(VA.Colors.textPrimary)
+                            .multilineTextAlignment(.leading)
+                        Spacer()
+                        Image(systemName: "arrow.up.forward")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(VA.Colors.textTertiary)
+                    }
+                    .padding(VA.Space.md)
+                    .background(.regularMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var suggestedPrompts: [String] {
+        [
+            "Am I ready to push on squats this week?",
+            "Last set felt heavy — should I hold or go up?",
+            "What accessories should I add for bench?",
+            "How does my recent volume look?",
+        ]
+    }
+
+    // MARK: - Composer
+
+    private var composer: some View {
+        HStack(alignment: .bottom, spacing: VA.Space.sm) {
+            TextField("Ask your coach", text: $draftMessage, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(VA.Typography.body)
+                .padding(VA.Space.md)
+                .background(.regularMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+                .lineLimit(1...4)
+                .focused($inputFocused)
+
+            Button {
+                sendMessage()
+            } label: {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 36))
+                    .foregroundStyle(canSend ? VA.Colors.primary : VA.Colors.textTertiary)
+            }
+            .disabled(!canSend)
+            .buttonStyle(.plain)
+        }
+        .padding(VA.Space.md)
+        .background(VA.Colors.surfacePrimary)
+    }
+
+    private var canSend: Bool {
+        !draftMessage.trimmingCharacters(in: .whitespaces).isEmpty && !model.isCoachStreaming
+    }
+
+    private func sendMessage() {
+        let prompt = draftMessage
+        draftMessage = ""
+        VAHaptics.tap()
+        Task {
+            await model.askCoach(prompt)
+            VAHaptics.coachResponse()
+        }
+    }
+}
+#endif
