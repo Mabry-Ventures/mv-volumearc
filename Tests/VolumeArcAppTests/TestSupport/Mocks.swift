@@ -15,7 +15,23 @@ final class MockAICoachProvider: AICoachProvider, @unchecked Sendable {
 
 // MARK: - Cloud Sync
 
-struct MockCloudSyncTransport: CloudSyncTransport {}
+struct MockCloudSyncTransport: CloudSyncTransport {
+    var available: Bool = true
+    var pushedRecords: [CloudSyncRecord] = []
+    var pullResult: CloudSyncPullResult = CloudSyncPullResult(
+        changedRecords: [],
+        deletedRecordIDs: [],
+        nextCursor: nil
+    )
+
+    var isAvailable: Bool { available }
+
+    func pushRecords(_ records: [CloudSyncRecord]) async throws {}
+
+    func pullChanges(since cursor: String?) async throws -> CloudSyncPullResult {
+        pullResult
+    }
+}
 
 // MARK: - Health
 
