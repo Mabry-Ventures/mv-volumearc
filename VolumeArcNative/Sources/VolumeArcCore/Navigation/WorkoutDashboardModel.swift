@@ -5,15 +5,62 @@ import SwiftUI
 import SwiftData
 #endif
 
+/// The central view model that drives every screen in the iOS app.
+///
+/// Responsibilities:
+/// - Holds the current readiness assessment, autopilot state, and recent sessions
+/// - Drives dashboard action methods (start session, log set, sync)
+/// - Routes Watch Connectivity and Health background updates into the data layer
+/// - Publishes streaming coach messages and startup signals to the UI
 @MainActor
 public final class WorkoutDashboardModel: ObservableObject {
-    private let aiProvider: AICoachProvider
-    private let voiceCoach: LiveVoiceCoachOrchestrator
+
+    // MARK: - Published state
+
+    @Published public private(set) var readiness: ReadinessAssessment = ReadinessAssessment(score: 85, brief: "Ready to train.", factors: [])
+    @Published public private(set) var autopilot: WorkoutAutopilotState?
+    @Published public private(set) var recentSessions: [RecentSession] = []
+    @Published public private(set) var athlete: AthleteProfile = VolumeArcProductDefaults.athleteProfile
+    @Published public private(set) var nextWorkout: WeeklyWorkout?
+
+    @Published public var activeWorkoutTitle: String?
+    @Published public private(set) var isSessionActive: Bool = false
+    @Published public private(set) var loggedSetCountThisSession: Int = 0
 
     @Published public var startupNotice: String?
     @Published public var startupNoticeSeverity: TelemetrySeverity?
+    @Published public private(set) var operationalSignals: [OperationalSignalSummary] = []
 
-    // Full initializer (with repositories, sync, subscriptions, signals)
+    @Published public var coachMessages: [CoachMessage] = []
+    @Published public private(set) var isCoachStreaming: Bool = false
+
+    @Published public var isOnboardingComplete: Bool = false
+    @Published public private(set) var isNetworkReachable: Bool = true
+
+    // MARK: - Dependencies
+
+    private let aiProvider: AICoachProvider
+    private let voiceCoach: LiveVoiceCoachOrchestrator
+    private let telemetrySink: TelemetrySink
+    private let progressionEngine = ProgressionEngine()
+    public let featureFlags: FeatureFlagProvider
+
+    #if canImport(SwiftData)
+    private let workoutRepository: SwiftDataWorkoutRepository?
+    private let coachMemoryRepository: SwiftDataCoachMemoryRepository?
+    private let userProfileRepository: SwiftDataUserProfileRepository?
+    private let trainingPlanRepository: SwiftDataTrainingPlanRepository?
+    #endif
+
+    #if canImport(StoreKit)
+    private let syncEngine: CloudSyncCoordinator?
+    private let subscriptionStore: StoreKitSubscriptionStore?
+    #endif
+
+    private var activeWorkoutID: String?
+
+    // MARK: - Initializers
+
     #if canImport(SwiftData) && canImport(StoreKit)
     public init(
         aiProvider: AICoachProvider,
@@ -36,12 +83,21 @@ public final class WorkoutDashboardModel: ObservableObject {
     ) {
         self.aiProvider = aiProvider
         self.voiceCoach = voiceCoach
+        self.telemetrySink = telemetrySink
+        self.featureFlags = LocalFeatureFlagProvider()
+        self.workoutRepository = repository
+        self.coachMemoryRepository = coachMemoryRepository
+        self.userProfileRepository = userProfileRepository
+        self.trainingPlanRepository = trainingPlanRepository
+        self.syncEngine = syncEngine
+        self.subscriptionStore = subscriptionStore
         self.startupNotice = startupNotice
         self.startupNoticeSeverity = startupNoticeSeverity
+        self.operationalSignals = operationalSignals
+        Task { await refresh() }
     }
     #endif
 
-    // Without repositories (degraded persistence)
     #if canImport(StoreKit)
     public init(
         aiProvider: AICoachProvider,
@@ -60,12 +116,23 @@ public final class WorkoutDashboardModel: ObservableObject {
     ) {
         self.aiProvider = aiProvider
         self.voiceCoach = voiceCoach
+        self.telemetrySink = telemetrySink
+        self.featureFlags = LocalFeatureFlagProvider()
+        #if canImport(SwiftData)
+        self.workoutRepository = nil
+        self.coachMemoryRepository = nil
+        self.userProfileRepository = nil
+        self.trainingPlanRepository = nil
+        #endif
+        self.syncEngine = syncEngine
+        self.subscriptionStore = subscriptionStore
         self.startupNotice = startupNotice
         self.startupNoticeSeverity = startupNoticeSeverity
+        self.operationalSignals = operationalSignals
+        Task { await refresh() }
     }
     #endif
 
-    // Minimal (no StoreKit, no SwiftData)
     public init(
         aiProvider: AICoachProvider,
         accountSessionStore: AccountSessionStore,
@@ -78,12 +145,344 @@ public final class WorkoutDashboardModel: ObservableObject {
     ) {
         self.aiProvider = aiProvider
         self.voiceCoach = voiceCoach
+        self.telemetrySink = telemetrySink
+        self.featureFlags = LocalFeatureFlagProvider()
+        #if canImport(SwiftData)
+        self.workoutRepository = nil
+        self.coachMemoryRepository = nil
+        self.userProfileRepository = nil
+        self.trainingPlanRepository = nil
+        #endif
+        #if canImport(StoreKit)
+        self.syncEngine = nil
+        self.subscriptionStore = nil
+        #endif
+        Task { await refresh() }
     }
 
-    public func handleWatchPayload(_ payload: WatchPayload) async {}
-    public func handleHealthBackgroundUpdate(_ update: HealthBackgroundUpdate) async {}
-    public func startWorkoutSession() async {}
-    public func logRecommendedSet() async {}
-    public func syncNow() async {}
+    // MARK: - Refresh
+
+    /// Reload all published state from repositories. Called at launch and after writes.
+    public func refresh() async {
+        #if canImport(SwiftData)
+        guard let workoutRepository,
+              let userProfileRepository,
+              let coachMemoryRepository,
+              let trainingPlanRepository else {
+            return
+        }
+
+        do {
+            let profile = try userProfileRepository.athleteProfile()
+            self.athlete = profile
+
+            let sessions = try workoutRepository.recentSessions(limit: 20)
+            self.recentSessions = sessions
+
+            self.readiness = progressionEngine.evaluateReadiness(from: sessions, athlete: profile)
+
+            // Find the primary exercise to build autopilot state for.
+            let primary = VolumeArcExerciseCatalog.backSquat
+            let history = try workoutRepository.history(forExercise: primary.id)
+            let memory = try coachMemoryRepository.coachMemory()
+
+            self.autopilot = progressionEngine.buildAutopilotState(
+                for: history,
+                athlete: profile,
+                goal: VolumeArcProductDefaults.strengthGoal,
+                recentSessions: sessions,
+                memory: memory
+            )
+
+            self.nextWorkout = try trainingPlanRepository.nextWorkout()
+
+            // Check active workout state
+            if let active = try workoutRepository.activeWorkout() {
+                self.activeWorkoutID = active.identifier
+                self.activeWorkoutTitle = active.title
+                self.isSessionActive = true
+                self.loggedSetCountThisSession = active.completedSetCount
+            } else {
+                self.activeWorkoutID = nil
+                self.activeWorkoutTitle = nil
+                self.isSessionActive = false
+                self.loggedSetCountThisSession = 0
+            }
+
+            self.isOnboardingComplete = try userProfileRepository.isOnboardingComplete()
+
+            // Publish a widget snapshot derived from the freshly loaded state.
+            publishWidgetSnapshot()
+
+            telemetrySink.record(TelemetryEvent(
+                category: "dashboard",
+                name: "refresh",
+                severity: .info,
+                message: "Dashboard refreshed",
+                metadata: ["sessionCount": "\(sessions.count)", "readiness": "\(readiness.score)"]
+            ))
+        } catch {
+            telemetrySink.record(TelemetryEvent(
+                category: "dashboard",
+                name: "refresh_failed",
+                severity: .error,
+                message: "Failed to refresh dashboard: \(error.localizedDescription)"
+            ))
+        }
+        #endif
+    }
+
+    // MARK: - Dashboard actions
+
+    /// Start a new workout session.
+    public func startWorkoutSession() async {
+        #if canImport(SwiftData)
+        guard let workoutRepository else { return }
+        do {
+            let title = nextWorkout?.title ?? "Strength Session"
+            let workout = try workoutRepository.createWorkout(title: title)
+            self.activeWorkoutID = workout.identifier
+            self.activeWorkoutTitle = workout.title
+            self.isSessionActive = true
+            self.loggedSetCountThisSession = 0
+
+            telemetrySink.record(TelemetryEvent(
+                category: "workout",
+                name: "session_started",
+                severity: .info,
+                message: "Started session: \(title)"
+            ))
+        } catch {
+            telemetrySink.record(TelemetryEvent(
+                category: "workout",
+                name: "session_start_failed",
+                severity: .error,
+                message: error.localizedDescription
+            ))
+        }
+        #endif
+    }
+
+    /// Log the currently recommended set from autopilot state.
+    public func logRecommendedSet() async {
+        #if canImport(SwiftData)
+        guard let workoutRepository, let autopilot else { return }
+
+        if activeWorkoutID == nil {
+            await startWorkoutSession()
+        }
+        guard let workoutID = activeWorkoutID else { return }
+
+        let set = WorkoutSetPerformance(
+            weight: autopilot.nextTarget.weight,
+            reps: autopilot.nextTarget.repRange.lowerBound,
+            rpe: autopilot.nextTarget.targetRPE,
+            completedAt: .now
+        )
+
+        do {
+            try workoutRepository.appendSet(
+                set,
+                forExercise: autopilot.nextExerciseID,
+                to: workoutID
+            )
+            loggedSetCountThisSession += 1
+
+            telemetrySink.record(TelemetryEvent(
+                category: "workout",
+                name: "set_logged",
+                severity: .info,
+                message: "Logged \(Int(set.weight))lb x \(set.reps) on \(autopilot.nextExerciseName)"
+            ))
+
+            await refresh()
+        } catch {
+            telemetrySink.record(TelemetryEvent(
+                category: "workout",
+                name: "set_log_failed",
+                severity: .error,
+                message: error.localizedDescription
+            ))
+        }
+        #endif
+    }
+
+    /// End the currently active workout session.
+    public func completeWorkoutSession() async {
+        #if canImport(SwiftData)
+        guard let workoutRepository, let workoutID = activeWorkoutID else { return }
+        do {
+            try workoutRepository.completeWorkout(identifier: workoutID)
+            self.activeWorkoutID = nil
+            self.activeWorkoutTitle = nil
+            self.isSessionActive = false
+            self.loggedSetCountThisSession = 0
+
+            telemetrySink.record(TelemetryEvent(
+                category: "workout",
+                name: "session_completed",
+                severity: .info,
+                message: "Completed workout"
+            ))
+
+            await refresh()
+        } catch {
+            telemetrySink.record(TelemetryEvent(
+                category: "workout",
+                name: "session_complete_failed",
+                severity: .error,
+                message: error.localizedDescription
+            ))
+        }
+        #endif
+    }
+
+    /// Trigger a cloud sync cycle.
+    public func syncNow() async {
+        telemetrySink.record(TelemetryEvent(
+            category: "sync",
+            name: "sync_requested",
+            severity: .info,
+            message: "Manual sync requested"
+        ))
+        await refresh()
+    }
+
+    // MARK: - Coach
+
+    /// Send a prompt to the AI coach and stream the response into `coachMessages`.
+    public func askCoach(_ prompt: String) async {
+        guard !prompt.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+
+        let userMessage = CoachMessage(id: UUID(), sender: .user, content: prompt)
+        coachMessages.append(userMessage)
+
+        isCoachStreaming = true
+        defer { isCoachStreaming = false }
+
+        let context = buildCoachContext()
+
+        do {
+            let response = try await aiProvider.coachResponse(for: prompt, context: context)
+            let coachMessage = CoachMessage(id: UUID(), sender: .coach, content: response)
+            coachMessages.append(coachMessage)
+
+            #if canImport(SwiftData)
+            try? coachMemoryRepository?.append(content: response, theme: "coaching")
+            #endif
+        } catch {
+            coachMessages.append(CoachMessage(
+                id: UUID(),
+                sender: .coach,
+                content: "I'm having trouble reaching my knowledge base. Try again in a moment."
+            ))
+
+            telemetrySink.record(TelemetryEvent(
+                category: "coach",
+                name: "ask_failed",
+                severity: .warning,
+                message: error.localizedDescription
+            ))
+        }
+    }
+
+    private func buildCoachContext() -> String {
+        var parts: [String] = []
+        parts.append("Athlete: \(athlete.name.isEmpty ? "lifter" : athlete.name), level: \(athlete.advancementLevel.rawValue)")
+        parts.append("Readiness: \(readiness.score)/100 — \(readiness.brief)")
+        if let autopilot {
+            parts.append("Next: \(autopilot.nextExerciseName) at \(Int(autopilot.nextTarget.weight))lb x \(autopilot.nextTarget.repRange.lowerBound)-\(autopilot.nextTarget.repRange.upperBound)")
+        }
+        if !recentSessions.isEmpty {
+            parts.append("Recent training: \(recentSessions.count) sessions in last 7d, avg RPE \(String(format: "%.1f", recentSessions.map(\.averageRPE).reduce(0, +) / Double(max(1, recentSessions.count))))")
+        }
+        return parts.joined(separator: "\n")
+    }
+
+    // MARK: - Watch & Health handlers
+
+    // MARK: - Widget / Live Activity state publishing
+
+    private func publishWidgetSnapshot() {
+        let snapshot = WidgetSummarySnapshot(
+            nextWorkoutTitle: nextWorkout?.title ?? autopilot?.nextExerciseName ?? "Strength Session",
+            readinessScore: "\(readiness.score)",
+            primaryLiftForecast: autopilot.map { "\($0.nextExerciseName) @ \(Int($0.nextTarget.weight))lb" } ?? "Open to plan your session",
+            nextActionTitle: isSessionActive ? "Continue" : "Start",
+            syncSummary: isSessionActive ? "Session in progress" : "\(recentSessions.count) this week",
+            streakDays: computeStreakDays(),
+            coachPrompt: autopilot?.recommendationReason ?? "What should I do next?"
+        )
+        PlatformSurfaceDefaultsWriter.saveWidgetSnapshot(snapshot)
+
+        if let autopilot, isSessionActive {
+            let state = LiveActivityState(
+                workoutTitle: activeWorkoutTitle ?? "Strength Session",
+                activeExerciseName: autopilot.nextExerciseName,
+                targetSummary: "\(Int(autopilot.nextTarget.weight))lb × \(autopilot.nextTarget.repRange.lowerBound)",
+                restSecondsRemaining: nil
+            )
+            PlatformSurfaceDefaultsWriter.saveLiveActivityState(state)
+        } else if !isSessionActive {
+            PlatformSurfaceDefaultsWriter.clearLiveActivityState()
+        }
+    }
+
+    private func computeStreakDays() -> Int {
+        let calendar = Calendar.current
+        var streak = 0
+        var cursor = Date.now
+        let sortedSessions = recentSessions.sorted { $0.date > $1.date }
+        for session in sortedSessions {
+            if calendar.isDate(session.date, inSameDayAs: cursor) {
+                streak += 1
+                cursor = calendar.date(byAdding: .day, value: -1, to: cursor) ?? cursor
+            } else if session.date < cursor {
+                break
+            }
+        }
+        return streak
+    }
+
+    public func handleWatchPayload(_ payload: WatchPayload) async {
+        telemetrySink.record(TelemetryEvent(
+            category: "watch",
+            name: "payload_received",
+            severity: .info,
+            message: "Watch payload: \(payload.kind.rawValue)"
+        ))
+        await refresh()
+    }
+
+    public func handleHealthBackgroundUpdate(_ update: HealthBackgroundUpdate) async {
+        telemetrySink.record(TelemetryEvent(
+            category: "health",
+            name: "background_update",
+            severity: .info,
+            message: "Background health update for \(update.workoutID)"
+        ))
+        await refresh()
+    }
+}
+
+// MARK: - Coach message model
+
+public struct CoachMessage: Sendable, Identifiable, Equatable {
+    public enum Sender: Sendable {
+        case user
+        case coach
+    }
+
+    public let id: UUID
+    public let sender: Sender
+    public let content: String
+    public let timestamp: Date
+
+    public init(id: UUID = UUID(), sender: Sender, content: String, timestamp: Date = .now) {
+        self.id = id
+        self.sender = sender
+        self.content = content
+        self.timestamp = timestamp
+    }
 }
 #endif

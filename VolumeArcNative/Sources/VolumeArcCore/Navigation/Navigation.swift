@@ -2,24 +2,61 @@ import Foundation
 #if canImport(SwiftUI)
 import SwiftUI
 
+public enum DashboardTab: String, Sendable, Hashable, CaseIterable {
+    case today
+    case workouts
+    case coach
+    case signals
+    case profile
+
+    public var title: String {
+        switch self {
+        case .today: return "Today"
+        case .workouts: return "Workouts"
+        case .coach: return "Coach"
+        case .signals: return "Signals"
+        case .profile: return "Profile"
+        }
+    }
+
+    public var systemImage: String {
+        switch self {
+        case .today: return "sun.max.fill"
+        case .workouts: return "figure.strengthtraining.traditional"
+        case .coach: return "waveform.and.mic"
+        case .signals: return "chart.line.uptrend.xyaxis"
+        case .profile: return "person.crop.circle"
+        }
+    }
+}
+
 @MainActor
 public final class DashboardNavigationModel: ObservableObject {
-    @Published public var selectedTab: String = "today"
+    @Published public var selectedTab: DashboardTab = .today
     @Published public var coachPrompt: String?
+    @Published public var showOnboarding: Bool = false
 
     public init() {}
 
     public func openToday() {
-        selectedTab = "today"
+        selectedTab = .today
     }
 
     public func openCoach(prompt: String) {
-        selectedTab = "coach"
+        selectedTab = .coach
         coachPrompt = prompt
     }
 
     public func openSignals() {
-        selectedTab = "signals"
+        selectedTab = .signals
+    }
+
+    public func openProfile() {
+        selectedTab = .profile
+    }
+
+    public func clearCoachPrompt() {
+        coachPrompt = nil
     }
 }
 #endif

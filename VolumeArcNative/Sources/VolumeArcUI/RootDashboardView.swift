@@ -12,20 +12,53 @@ public struct RootDashboardView: View {
     }
 
     public var body: some View {
-        VStack {
-            if let notice = model.startupNotice {
-                Text(notice)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding()
+        TabView(selection: $navigation.selectedTab) {
+            NavigationStack {
+                TodayView(model: model, navigation: navigation)
             }
+            .tabItem {
+                Label(DashboardTab.today.title, systemImage: DashboardTab.today.systemImage)
+            }
+            .tag(DashboardTab.today)
 
-            Text("VolumeArc")
-                .font(.largeTitle.bold())
+            NavigationStack {
+                WorkoutsView(model: model)
+            }
+            .tabItem {
+                Label(DashboardTab.workouts.title, systemImage: DashboardTab.workouts.systemImage)
+            }
+            .tag(DashboardTab.workouts)
 
-            Text("Dashboard")
-                .font(.headline)
-                .foregroundStyle(.secondary)
+            NavigationStack {
+                CoachView(model: model, navigation: navigation)
+            }
+            .tabItem {
+                Label(DashboardTab.coach.title, systemImage: DashboardTab.coach.systemImage)
+            }
+            .tag(DashboardTab.coach)
+
+            NavigationStack {
+                SignalsView(model: model)
+            }
+            .tabItem {
+                Label(DashboardTab.signals.title, systemImage: DashboardTab.signals.systemImage)
+            }
+            .tag(DashboardTab.signals)
+
+            NavigationStack {
+                ProfileView(model: model)
+            }
+            .tabItem {
+                Label(DashboardTab.profile.title, systemImage: DashboardTab.profile.systemImage)
+            }
+            .tag(DashboardTab.profile)
+        }
+        .tint(VA.Colors.primary)
+        .task {
+            await model.refresh()
+        }
+        .onChange(of: navigation.selectedTab) { _, _ in
+            VAHaptics.selection()
         }
     }
 }
