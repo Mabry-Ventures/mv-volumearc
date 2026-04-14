@@ -70,7 +70,7 @@ configure_target(app_target, bundle_id: 'com.mabryventures.VolumeArc', extra: {
   'INFOPLIST_KEY_CFBundleURLTypes' => '[{"CFBundleURLName":"com.mabryventures.VolumeArc","CFBundleURLSchemes":["volumearc"]}]',
   'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc reads your workout and recovery data to personalize progression, readiness, and session planning.',
   'INFOPLIST_KEY_NSHealthUpdateUsageDescription' => 'VolumeArc writes completed workouts so your training history stays in sync with Apple Health.',
-  'INFOPLIST_KEY_NSMicrophoneUsageDescription' => 'VolumeArc uses the microphone for live duplex coaching and voice workout logging.',
+  'INFOPLIST_KEY_NSMicrophoneUsageDescription' => 'VolumeArc uses the microphone for voice coaching requests and voice workout logging.',
   'INFOPLIST_KEY_NSSpeechRecognitionUsageDescription' => 'VolumeArc uses speech recognition to understand live coaching requests and voice workout notes.',
   'INFOPLIST_KEY_VolumeArcCloudKitContainer' => 'iCloud.com.mabryventures.VolumeArc',
   'INFOPLIST_KEY_VolumeArcOpenAIBaseURL' => '',
