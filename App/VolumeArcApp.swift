@@ -325,10 +325,31 @@ struct VolumeArcApp: App {
             )
         }
 
+        // VOL-59 fixup: under XCTest the host process has no
+        // `com.apple.developer.icloud-services` entitlement, so
+        // instantiating `CKContainer(identifier:)` asynchronously
+        // crashes the test runner. `VolumeArcPersistenceController`
+        // already gates the SwiftData side; mirror the same gate here
+        // so any test that ends up constructing `VolumeArcApp` (or
+        // calls this helper transitively from a preview / integration
+        // harness) stays stable.
+        if isRunningInXCTest {
+            return UnavailableCloudSyncTransport(
+                reason: "Cloud sync is disabled under XCTest (no CloudKit entitlement)."
+            )
+        }
+
         return CloudKitSyncTransport(
             containerIdentifier: containerIdentifier,
             zoneName: VolumeArcCloudConfiguration.syncZoneName
         )
+    }
+
+    /// `true` when the current process was launched by XCTest. Mirrors
+    /// the same check used in `VolumeArcPersistenceController` so both
+    /// layers stay consistent.
+    private static var isRunningInXCTest: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
     }
 
     #if canImport(SwiftData)
