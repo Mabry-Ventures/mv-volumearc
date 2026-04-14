@@ -325,17 +325,20 @@ struct VolumeArcApp: App {
             )
         }
 
-        // VOL-59 fixup: under XCTest the host process has no
-        // `com.apple.developer.icloud-services` entitlement, so
-        // instantiating `CKContainer(identifier:)` asynchronously
-        // crashes the test runner. `VolumeArcPersistenceController`
-        // already gates the SwiftData side; mirror the same gate here
-        // so any test that ends up constructing `VolumeArcApp` (or
-        // calls this helper transitively from a preview / integration
-        // harness) stays stable.
-        if isRunningInXCTest {
+        // VOL-59 fixup: `CKContainer(identifier:)` traps the process
+        // (SIGTRAP / brk 1) if the caller's effective entitlements don't
+        // grant access to the requested container. On simulator Debug
+        // builds with `CODE_SIGNING_ALLOWED = NO`, the binary is ad-hoc
+        // signed without any entitlements, so the CloudKit attach path
+        // crashes the app on launch during `VolumeArcApp.init()`. Gate
+        // the transport on the runtime entitlement check so the app
+        // degrades to `UnavailableCloudSyncTransport` in unsigned /
+        // unentitled builds instead of crashing. This also covers the
+        // XCTest-hosted app process where the xctest runner inherits
+        // no entitlements.
+        guard VolumeArcCloudConfiguration.hasCloudKitEntitlement else {
             return UnavailableCloudSyncTransport(
-                reason: "Cloud sync is disabled under XCTest (no CloudKit entitlement)."
+                reason: "Cloud sync is unavailable because this build does not carry a CloudKit entitlement."
             )
         }
 
@@ -343,13 +346,6 @@ struct VolumeArcApp: App {
             containerIdentifier: containerIdentifier,
             zoneName: VolumeArcCloudConfiguration.syncZoneName
         )
-    }
-
-    /// `true` when the current process was launched by XCTest. Mirrors
-    /// the same check used in `VolumeArcPersistenceController` so both
-    /// layers stay consistent.
-    private static var isRunningInXCTest: Bool {
-        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
     }
 
     #if canImport(SwiftData)

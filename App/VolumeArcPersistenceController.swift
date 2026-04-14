@@ -173,17 +173,19 @@ final class VolumeArcPersistenceController {
         // empty check is strictly a guard against future configuration
         // flexibility (e.g., reading from a .env file).
         //
-        // VOL-59 fixup: test bundles cannot carry the
-        // `com.apple.developer.icloud-services` entitlement because
-        // `CODE_SIGNING_ALLOWED=NO`. If we attach CloudKit in that
-        // context, `CKContainer` asynchronously kills the xctest process
-        // after the try/catch around `ModelContainer(...)` returns,
-        // turning green test runs into phantom crashes. Skip CloudKit
-        // whenever we detect XCTest in the process environment — the
-        // local fallback is the correct primary configuration for tests.
+        // VOL-59 fixup: SwiftData's `cloudKitDatabase: .private(...)`
+        // internally constructs a `CKContainer(identifier:)`. That call
+        // traps the process (SIGTRAP / brk 1) whenever the caller's
+        // effective entitlements don't include the requested container
+        // — which is the case for anything built with
+        // `CODE_SIGNING_ALLOWED = NO`, including the CI test host, the
+        // XCTest runner, and every local simulator debug build. Gate
+        // CloudKit attachment on `hasCloudKitEntitlement` so both the
+        // test process AND the real app process (when unsigned) fall
+        // back to the local store instead of crashing.
         let cloudDatabase: ModelConfiguration.CloudKitDatabase
         let containerIdentifier = VolumeArcCloudConfiguration.containerIdentifier
-        if !containerIdentifier.isEmpty && !isRunningInXCTest() {
+        if !containerIdentifier.isEmpty && VolumeArcCloudConfiguration.hasCloudKitEntitlement {
             cloudDatabase = .private(containerIdentifier)
         } else if !containerIdentifier.isEmpty {
             cloudDatabase = .none
@@ -198,10 +200,6 @@ final class VolumeArcPersistenceController {
             allowsSave: true,
             cloudKitDatabase: cloudDatabase
         )
-    }
-
-    private static func isRunningInXCTest() -> Bool {
-        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
     }
 
     private static func fallbackLocalConfiguration(schema: Schema) -> ModelConfiguration {
