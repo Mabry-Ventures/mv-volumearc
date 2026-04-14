@@ -204,9 +204,15 @@ public struct TodayView: View {
             VACard(style: .flat) {
                 VAEmptyState(
                     icon: "sparkles",
-                    title: "No workout queued",
-                    message: "Complete onboarding to get your first recommendation.",
-                    action: (label: "Get Started", handler: { navigation.openProfile() })
+                    title: String(localized: "No workout queued", comment: "Empty-state title when no autopilot recommendation is available"),
+                    message: String(
+                        localized: "Complete onboarding to get your first recommendation.",
+                        comment: "Empty-state message when no autopilot recommendation is available"
+                    ),
+                    action: (
+                        label: String(localized: "Get Started", comment: "Empty-state action — open onboarding"),
+                        handler: { navigation.openProfile() }
+                    )
                 )
                 .frame(minHeight: 180)
             }
