@@ -21,16 +21,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Checkout VolumeArcNative
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.repository_owner }}/VolumeArcNative
-          path: VolumeArcNative
-          token: ${{ secrets.VOLUMEARC_PAT }}
-
-      - name: Symlink VolumeArcNative to sibling path
-        run: ln -sfn "$GITHUB_WORKSPACE/VolumeArcNative" "../VolumeArcNative"
-
       - name: Set up Ruby gem path
         run: |
           echo "GEM_HOME=$HOME/.gem" >> "$GITHUB_ENV"
@@ -73,16 +63,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Checkout VolumeArcNative
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.repository_owner }}/VolumeArcNative
-          path: VolumeArcNative
-          token: ${{ secrets.VOLUMEARC_PAT }}
-
-      - name: Symlink VolumeArcNative to sibling path
-        run: ln -sfn "$GITHUB_WORKSPACE/VolumeArcNative" "../VolumeArcNative"
 
       - name: Install dependencies
         run: bundle install
