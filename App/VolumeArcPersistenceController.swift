@@ -172,10 +172,21 @@ final class VolumeArcPersistenceController {
         // VOL-55: containerIdentifier is a compile-time constant so the
         // empty check is strictly a guard against future configuration
         // flexibility (e.g., reading from a .env file).
+        //
+        // VOL-59 fixup: test bundles cannot carry the
+        // `com.apple.developer.icloud-services` entitlement because
+        // `CODE_SIGNING_ALLOWED=NO`. If we attach CloudKit in that
+        // context, `CKContainer` asynchronously kills the xctest process
+        // after the try/catch around `ModelContainer(...)` returns,
+        // turning green test runs into phantom crashes. Skip CloudKit
+        // whenever we detect XCTest in the process environment — the
+        // local fallback is the correct primary configuration for tests.
         let cloudDatabase: ModelConfiguration.CloudKitDatabase
         let containerIdentifier = VolumeArcCloudConfiguration.containerIdentifier
-        if !containerIdentifier.isEmpty {
+        if !containerIdentifier.isEmpty && !isRunningInXCTest() {
             cloudDatabase = .private(containerIdentifier)
+        } else if !containerIdentifier.isEmpty {
+            cloudDatabase = .none
         } else {
             cloudDatabase = .automatic
         }
@@ -187,6 +198,10 @@ final class VolumeArcPersistenceController {
             allowsSave: true,
             cloudKitDatabase: cloudDatabase
         )
+    }
+
+    private static func isRunningInXCTest() -> Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
     }
 
     private static func fallbackLocalConfiguration(schema: Schema) -> ModelConfiguration {
