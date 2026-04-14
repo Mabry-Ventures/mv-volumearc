@@ -35,9 +35,7 @@ struct VolumeArcApp: App {
         #if canImport(BackgroundTasks) && !os(watchOS)
         // Must happen before the app finishes launching. The model holder
         // is populated below once the dashboardModel is constructed.
-        VolumeArcBackgroundTasks.registerHandlers {
-            VolumeArcBackgroundTasks.sharedModel
-        }
+        VolumeArcBackgroundTasks.registerHandlers()
         #endif
         #if canImport(SwiftData)
         let persistence = VolumeArcPersistenceController.shared

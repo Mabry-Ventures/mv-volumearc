@@ -20,16 +20,18 @@ enum VolumeArcBackgroundTasks {
 
     /// Register handlers for both task identifiers. Must be called before
     /// `UIApplication` finishes launching (from `VolumeArcApp.init`).
-    static func registerHandlers(model: @escaping @MainActor () -> WorkoutDashboardModel?) {
+    static func registerHandlers() {
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: appRefreshIdentifier,
             using: nil
         ) { task in
+            // BGTask is not Sendable; run handler synchronously on the system
+            // queue and dispatch the actual work to MainActor.
             guard let refreshTask = task as? BGAppRefreshTask else {
                 task.setTaskCompleted(success: false)
                 return
             }
-            handleAppRefresh(refreshTask, model: model)
+            Self.handleAppRefresh(refreshTask)
         }
 
         BGTaskScheduler.shared.register(
@@ -40,7 +42,7 @@ enum VolumeArcBackgroundTasks {
                 task.setTaskCompleted(success: false)
                 return
             }
-            handleAppProcessing(processingTask, model: model)
+            Self.handleAppProcessing(processingTask)
         }
     }
 
@@ -52,7 +54,6 @@ enum VolumeArcBackgroundTasks {
 
     static func scheduleAppRefresh() {
         let request = BGAppRefreshTaskRequest(identifier: appRefreshIdentifier)
-        // Earliest begin: 30 minutes from now.
         request.earliestBeginDate = Date(timeIntervalSinceNow: 30 * 60)
         try? BGTaskScheduler.shared.submit(request)
     }
@@ -61,62 +62,46 @@ enum VolumeArcBackgroundTasks {
         let request = BGProcessingTaskRequest(identifier: appProcessingIdentifier)
         request.requiresNetworkConnectivity = true
         request.requiresExternalPower = false
-        // Earliest begin: 2 hours from now.
         request.earliestBeginDate = Date(timeIntervalSinceNow: 2 * 60 * 60)
         try? BGTaskScheduler.shared.submit(request)
     }
 
     // MARK: - Handlers
 
-    private static func handleAppRefresh(
-        _ task: BGAppRefreshTask,
-        model: @escaping @MainActor () -> WorkoutDashboardModel?
-    ) {
+    @preconcurrency
+    private static func handleAppRefresh(_ task: BGAppRefreshTask) {
         // Reschedule the next refresh immediately so the chain continues.
         scheduleAppRefresh()
 
-        let work = Task {
-            await MainActor.run {
-                if let model = model() {
-                    Task {
-                        await model.refresh()
-                        task.setTaskCompleted(success: true)
-                    }
-                } else {
-                    task.setTaskCompleted(success: false)
-                }
-            }
+        task.expirationHandler = {
+            task.setTaskCompleted(success: false)
         }
 
-        task.expirationHandler = {
-            work.cancel()
-            task.setTaskCompleted(success: false)
+        Task { @MainActor in
+            if let model = sharedModel {
+                await model.refresh()
+                task.setTaskCompleted(success: true)
+            } else {
+                task.setTaskCompleted(success: false)
+            }
         }
     }
 
-    private static func handleAppProcessing(
-        _ task: BGProcessingTask,
-        model: @escaping @MainActor () -> WorkoutDashboardModel?
-    ) {
-        // Reschedule the next processing task.
+    @preconcurrency
+    private static func handleAppProcessing(_ task: BGProcessingTask) {
         scheduleAppProcessing()
 
-        let work = Task {
-            await MainActor.run {
-                if let model = model() {
-                    Task {
-                        await model.syncNow()
-                        task.setTaskCompleted(success: true)
-                    }
-                } else {
-                    task.setTaskCompleted(success: false)
-                }
-            }
+        task.expirationHandler = {
+            task.setTaskCompleted(success: false)
         }
 
-        task.expirationHandler = {
-            work.cancel()
-            task.setTaskCompleted(success: false)
+        Task { @MainActor in
+            if let model = sharedModel {
+                await model.syncNow()
+                task.setTaskCompleted(success: true)
+            } else {
+                task.setTaskCompleted(success: false)
+            }
         }
     }
 }
