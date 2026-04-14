@@ -28,7 +28,6 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 > **Status: Pre-production — multiple launch blockers.** A post-95/95 independent audit (2026-04-14) found that several systems claimed as Implemented have broken end-to-end wiring. The product surface is real, the design system is real, and the test infrastructure exists, but key integration points are not connected. **Do not ship until the launch-blocker tickets close.**
 >
 > ### Active launch blockers
-> - **VOL-54 (Urgent)** — Schema migration plan is empty; existing-user upgrades will fail
 > - **VOL-55 (Urgent)** — Built `Info.plist` is missing `VolumeArcCloudKitContainer` — CloudKit silently misconfigured
 > - **VOL-56 (Urgent)** — Built `Info.plist` is missing background task identifiers; BG refresh rejected at runtime
 > - **VOL-57 (Urgent)** — `OnboardingView` is never reachable from `RootDashboardView`
@@ -57,7 +56,7 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 | Live Activities | Implemented | `ActiveWorkoutLiveActivity` with real updates from workout session state, Dynamic Island layouts |
 | Notifications | Implemented | Scheduler wired into rest timer completion and training plan reminders, actionable categories (REST_TIMER, WORKOUT_REMINDER) |
 | Background tasks | Broken (VOL-56) | `App/VolumeArcBackgroundTasks.swift` registers `appRefresh` + `appProcessing`, but the built `Info.plist` is missing `BGTaskSchedulerPermittedIdentifiers` and `UIBackgroundModes` — iOS rejects the registration at runtime |
-| Persistence | Implemented (no migration plan — VOL-54) | Four-tier fallback chain, seed data, schema, real repository CRUD all work for fresh installs. The `VolumeArcSchemaMigrationPlan` is empty, so existing-user upgrades that change record shapes will fail |
+| Persistence | Implemented | Four-tier fallback chain, seed data, schema, real repository CRUD all work. `VolumeArcSchemaMigrationPlan` now bridges the legacy V1 training-plan shape through a backfill schema and into the current schema, with an on-disk round-trip migration test covering record survival |
 | Secure storage | Implemented | Keychain with fallback, device ID stability |
 | Relay auth | Implemented | Actor-based session provider, token caching, expiration skew, real test coverage against production types |
 | Telemetry | Implemented | Fanout sink architecture. `SentryTelemetrySink` forwards events as breadcrumbs and captures `.error` severity as Sentry messages. `UserDefaultsTelemetrySink` and `OSLogTelemetrySink` persist/log for diagnostics |
@@ -108,7 +107,7 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 
 ## Data Models (SwiftData)
 
-Schema: `VolumeArcSchemaV1` with `VolumeArcSchemaMigrationPlan` (migration-tested).
+Schema: current `VolumeArcSchemaV3` with `VolumeArcSchemaMigrationPlan` bridging `VolumeArcSchemaV1 -> VolumeArcSchemaV2 -> VolumeArcSchemaV3` (migration-tested).
 
 - `UserProfileRecord` -- coaching style, privacy mode, advancement level, equipment, rep ranges, time budget, training days, via `SwiftDataUserProfileRepository`
 - `WorkoutRecord` -- via `SwiftDataWorkoutRepository` (create, append set with aggregate update, complete, fetch recent, history projection)

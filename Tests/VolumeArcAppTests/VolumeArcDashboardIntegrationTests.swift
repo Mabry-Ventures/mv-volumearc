@@ -17,7 +17,7 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
     private var trainingPlanRepository: SwiftDataTrainingPlanRepository!
 
     override func setUp() async throws {
-        let schema = Schema(VolumeArcSchemaV1.models)
+        let schema = Schema(VolumeArcSchemaV3.models)
         let config = ModelConfiguration(
             "IntegrationTest-\(UUID().uuidString)",
             schema: schema,

@@ -29,7 +29,7 @@ final class VolumeArcPersistenceController {
     let bootstrapStatus: BootstrapStatus
 
     private init() {
-        let schema = Schema(VolumeArcSchemaV1.models)
+        let schema = Schema(VolumeArcSchemaV3.models)
         let bootstrap = Self.makeContainer(for: schema)
         container = bootstrap.container
         bootstrapStatus = bootstrap.status
