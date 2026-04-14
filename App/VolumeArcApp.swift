@@ -73,12 +73,27 @@ struct VolumeArcApp: App {
         #if canImport(SwiftData)
         let persistence = VolumeArcPersistenceController.shared
         if let container = persistence.container {
-            try? VolumeArcLaunchBootstrapper.applyLaunchArguments(
-                to: container,
-                isUITestMode: VolumeArcLaunchArguments.isUITestMode,
-                skipOnboarding: VolumeArcLaunchArguments.skipOnboarding,
-                seedFixtures: VolumeArcLaunchArguments.seedFixtures
-            )
+            do {
+                try VolumeArcLaunchBootstrapper.applyLaunchArguments(
+                    to: container,
+                    isUITestMode: VolumeArcLaunchArguments.isUITestMode,
+                    skipOnboarding: VolumeArcLaunchArguments.skipOnboarding,
+                    seedFixtures: VolumeArcLaunchArguments.seedFixtures
+                )
+            } catch {
+                // Surface bootstrap failure rather than silently swallowing
+                // it with `try?`. A broken deterministic-mode seed will
+                // otherwise cause flaky, non-reproducible test behavior and
+                // hide the root cause.
+                NSLog(
+                    "[VolumeArc] Launch bootstrap failed: %@ (isUITestMode=%@, skipOnboarding=%@, seedFixtures=%@)",
+                    error.localizedDescription,
+                    String(describing: VolumeArcLaunchArguments.isUITestMode),
+                    String(describing: VolumeArcLaunchArguments.skipOnboarding),
+                    String(describing: VolumeArcLaunchArguments.seedFixtures)
+                )
+                assertionFailure("Launch bootstrap failed: \(error)")
+            }
         }
         #endif
         let aiProvider = VolumeArcAIRuntimeFactory.makeCoachProvider()

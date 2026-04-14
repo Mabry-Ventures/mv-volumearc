@@ -13,7 +13,16 @@ enum VolumeArcLaunchBootstrapper {
     ) throws {
         guard isUITestMode || skipOnboarding || seedFixtures else { return }
 
-        if isUITestMode {
+        // Reset persisted state before applying any deterministic seed. The
+        // seed path (`seedDeterministicFixtures`) inserts new workouts and
+        // coach memories on every call, so without a reset, running with
+        // `-SeedFixtures 1` across multiple launches would accumulate
+        // duplicate fixture rows and the "deterministic" state would drift.
+        //
+        // `isUITestMode` alone also resets, for any test setup that doesn't
+        // need fixtures but still wants a clean slate (e.g., the onboarding
+        // gate test that verifies first-launch behavior).
+        if isUITestMode || seedFixtures {
             try resetState(in: container)
         }
 

@@ -91,12 +91,15 @@ final class VolumeArcAppUITests: XCTestCase {
         XCTAssertTrue(profileTab.waitForExistence(timeout: 10), "Profile tab should be available")
         profileTab.tap()
 
-        // SwiftUI Form rows wrap the Button as a Cell with combined
-        // accessibility. Try buttons → cells → any descendant in order so
-        // the test is robust across SwiftUI runtime revisions.
-        let upgradeRow = firstUpgradeElement(in: app)
-        XCTAssertTrue(upgradeRow.waitForExistence(timeout: 15), "Upgrade row should appear on the profile screen")
-        upgradeRow.tap()
+        // The upgrade row is a SwiftUI Form `Button`. Accessibility
+        // identifiers attached to a Button inside a Form can be swallowed
+        // by the row's cell wrapping across SwiftUI revisions, so query by
+        // the visible "Upgrade" label text — that's what the user sees and
+        // the test runner can reliably find across runtimes. `firstMatch`
+        // avoids disambiguation against the Premium section header.
+        let upgradeLabel = app.staticTexts["Upgrade"].firstMatch
+        XCTAssertTrue(upgradeLabel.waitForExistence(timeout: 15), "Upgrade row should appear on the profile screen")
+        upgradeLabel.tap()
 
         let paywall = app.descendants(matching: .any)
             .matching(identifier: "paywall.root")
@@ -109,21 +112,23 @@ final class VolumeArcAppUITests: XCTestCase {
         XCTAssertTrue(closeButton.waitForExistence(timeout: 10), "Paywall close button should be visible")
         closeButton.tap()
 
-        // The cover dismisses and we should be back on the profile row.
-        XCTAssertTrue(firstUpgradeElement(in: app).waitForExistence(timeout: 10), "Profile screen should still be visible after dismissing the paywall")
-    }
+        // Wait on `exists == false` via an NSPredicate expectation rather
+        // than negating `waitForExistence`. The latter is an appearance
+        // wait and can flake on slow runners during the dismissal animation
+        // (it returns true while the cover is still on-screen). This
+        // explicitly waits for the cover to actually disappear.
+        let disappearance = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == false"),
+            object: paywall
+        )
+        XCTAssertEqual(
+            XCTWaiter().wait(for: [disappearance], timeout: 10),
+            .completed,
+            "Paywall should dismiss after tapping close"
+        )
 
-    /// Best-effort lookup for the Profile → Upgrade row across SwiftUI
-    /// runtime revisions. Tries `buttons`, then `cells`, then any descendant
-    /// matching the `profile.upgrade` accessibility identifier.
-    private func firstUpgradeElement(in app: XCUIApplication) -> XCUIElement {
-        let asButton = app.buttons["profile.upgrade"]
-        if asButton.exists { return asButton }
-        let asCell = app.cells["profile.upgrade"]
-        if asCell.exists { return asCell }
-        return app.descendants(matching: .any)
-            .matching(identifier: "profile.upgrade")
-            .firstMatch
+        // And the profile row is back in place.
+        XCTAssertTrue(app.staticTexts["Upgrade"].firstMatch.waitForExistence(timeout: 10), "Profile screen should still be visible after dismissing the paywall")
     }
 
     // MARK: - Performance
