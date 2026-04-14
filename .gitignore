@@ -9,6 +9,10 @@ xcuserdata/
 *.xcuserstate
 *.xcarchive
 
+# xcodebuild-generated workspace data (Package.resolved, etc.)
+# The project is Ruby-generated, so this directory is rebuilt by xcodebuild on every run.
+VolumeArcApple.xcodeproj/project.xcworkspace/
+
 # Signing & credentials
 *.mobileprovision
 *.p8
@@ -31,3 +35,6 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/
 fastlane/test_output/
+
+# Claude Code local session state
+.claude/

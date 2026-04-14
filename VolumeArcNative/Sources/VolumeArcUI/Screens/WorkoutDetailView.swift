@@ -30,7 +30,7 @@ struct WorkoutDetailView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: VA.Space.xs) {
-            Text("FOCUS")
+            Text(String(localized: "FOCUS", comment: "Workout detail header label for the main lift"))
                 .font(VA.Typography.caption)
                 .foregroundStyle(VA.Colors.textSecondary)
                 .tracking(0.5)
@@ -43,7 +43,7 @@ struct WorkoutDetailView: View {
     private var targetCard: some View {
         VACard(style: .accent) {
             VStack(alignment: .leading, spacing: VA.Space.sm) {
-                Text("TARGET")
+                Text(String(localized: "TARGET", comment: "Workout detail target card label"))
                     .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.primary)
                     .tracking(0.5)
@@ -61,7 +61,7 @@ struct WorkoutDetailView: View {
                 HStack(spacing: VA.Space.xs) {
                     Image(systemName: "quote.opening")
                         .foregroundStyle(VA.Colors.primary)
-                    Text("CUE")
+                    Text(String(localized: "CUE", comment: "Workout detail coach cue card label"))
                         .font(VA.Typography.caption)
                         .foregroundStyle(VA.Colors.textSecondary)
                         .tracking(0.5)
@@ -77,7 +77,7 @@ struct WorkoutDetailView: View {
     private var reasonCard: some View {
         VACard(style: .flat) {
             VStack(alignment: .leading, spacing: VA.Space.sm) {
-                Text("WHY THIS PROGRESSION")
+                Text(String(localized: "WHY THIS PROGRESSION", comment: "Workout detail reasoning card label"))
                     .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.textSecondary)
                     .tracking(0.5)

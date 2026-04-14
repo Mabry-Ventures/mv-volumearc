@@ -94,19 +94,28 @@ public struct TodayView: View {
                             .font(VA.Typography.display)
                             .foregroundStyle(VA.Colors.textPrimary)
                             .contentTransition(.numericText())
-                        Text("READY")
-                            .font(VA.Typography.caption)
-                            .foregroundStyle(VA.Colors.textSecondary)
-                            .tracking(1)
-                    }
-                }
-                .accessibilityLabel("Readiness score \(model.readiness.score) out of 100")
-
-                VStack(alignment: .leading, spacing: VA.Space.xs) {
-                    Text("READINESS")
+                        Text(String(
+                            localized: "READY",
+                            comment: "Caption inside the readiness ring"
+                        ))
                         .font(VA.Typography.caption)
                         .foregroundStyle(VA.Colors.textSecondary)
-                        .tracking(0.5)
+                        .tracking(1)
+                    }
+                }
+                .accessibilityLabel(String(
+                    localized: "Readiness score \(model.readiness.score) out of 100",
+                    comment: "VoiceOver label describing the readiness score value"
+                ))
+
+                VStack(alignment: .leading, spacing: VA.Space.xs) {
+                    Text(String(
+                        localized: "READINESS",
+                        comment: "Label next to the readiness ring"
+                    ))
+                    .font(VA.Typography.caption)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                    .tracking(0.5)
                     Text(model.readiness.brief)
                         .font(VA.Typography.body)
                         .foregroundStyle(VA.Colors.textPrimary)
@@ -121,11 +130,19 @@ public struct TodayView: View {
     @ViewBuilder
     private var nextWorkoutCard: some View {
         if let autopilot = model.autopilot {
+            let workoutTitle = model.nextWorkout?.title ?? String(
+                localized: "Strength Session",
+                comment: "Default workout title when no plan name is available"
+            )
+            let targetLine = String(
+                localized: "\(Int(autopilot.nextTarget.weight))\(autopilot.nextTarget.unit) × \(autopilot.nextTarget.repRange.lowerBound)-\(autopilot.nextTarget.repRange.upperBound) @ RPE \(String(format: "%.1f", autopilot.nextTarget.targetRPE))",
+                comment: "Target line: weight × rep range @ target RPE for the next set"
+            )
             NavigationLink {
                 WorkoutDetailView(
-                    title: model.nextWorkout?.title ?? "Strength Session",
+                    title: workoutTitle,
                     exerciseName: autopilot.nextExerciseName,
-                    target: "\(Int(autopilot.nextTarget.weight))\(autopilot.nextTarget.unit) × \(autopilot.nextTarget.repRange.lowerBound)-\(autopilot.nextTarget.repRange.upperBound) @ RPE \(String(format: "%.1f", autopilot.nextTarget.targetRPE))",
+                    target: targetLine,
                     cue: autopilot.bestCue,
                     reason: autopilot.recommendationReason,
                     heroNamespace: heroNamespace
@@ -136,11 +153,14 @@ public struct TodayView: View {
                     VStack(alignment: .leading, spacing: VA.Space.md) {
                         HStack {
                             VStack(alignment: .leading, spacing: VA.Space.xxs) {
-                                Text("NEXT WORKOUT")
-                                    .font(VA.Typography.caption)
-                                    .foregroundStyle(VA.Colors.textSecondary)
-                                    .tracking(0.5)
-                                Text(model.nextWorkout?.title ?? "Strength Session")
+                                Text(String(
+                                    localized: "NEXT WORKOUT",
+                                    comment: "Section label above the hero next-workout card"
+                                ))
+                                .font(VA.Typography.caption)
+                                .foregroundStyle(VA.Colors.textSecondary)
+                                .tracking(0.5)
+                                Text(workoutTitle)
                                     .font(VA.Typography.title2)
                                     .foregroundStyle(VA.Colors.textPrimary)
                             }
@@ -153,16 +173,22 @@ public struct TodayView: View {
                         Divider()
 
                         VStack(alignment: .leading, spacing: VA.Space.sm) {
-                            Text("Starting lift")
-                                .font(VA.Typography.caption)
-                                .foregroundStyle(VA.Colors.textSecondary)
-                                .tracking(0.5)
+                            Text(String(
+                                localized: "Starting lift",
+                                comment: "Label above the first exercise of the next workout"
+                            ))
+                            .font(VA.Typography.caption)
+                            .foregroundStyle(VA.Colors.textSecondary)
+                            .tracking(0.5)
                             Text(autopilot.nextExerciseName)
                                 .font(VA.Typography.headline)
                                 .foregroundStyle(VA.Colors.textPrimary)
-                            Text("\(Int(autopilot.nextTarget.weight))\(autopilot.nextTarget.unit) × \(autopilot.nextTarget.repRange.lowerBound)-\(autopilot.nextTarget.repRange.upperBound) @ RPE \(String(format: "%.1f", autopilot.nextTarget.targetRPE))")
-                                .font(VA.Typography.monoDigit)
-                                .foregroundStyle(VA.Colors.primary)
+                            Text(String(
+                                localized: "\(Int(autopilot.nextTarget.weight))\(autopilot.nextTarget.unit) × \(autopilot.nextTarget.repRange.lowerBound)-\(autopilot.nextTarget.repRange.upperBound) @ RPE \(String(format: "%.1f", autopilot.nextTarget.targetRPE))",
+                                comment: "Target line: weight × rep range @ target RPE for the next set"
+                            ))
+                            .font(VA.Typography.monoDigit)
+                            .foregroundStyle(VA.Colors.primary)
                         }
 
                         Text(autopilot.recommendationReason)
@@ -224,12 +250,21 @@ public struct TodayView: View {
 
     private var recentSessionsSection: some View {
         VStack(alignment: .leading, spacing: VA.Space.md) {
-            VASectionHeader("Recent Sessions", subtitle: "\(model.recentSessions.count) this week")
+            VASectionHeader(
+                String(localized: "Recent Sessions", comment: "Section header on Today tab for recent workout history"),
+                subtitle: String(
+                    localized: "\(model.recentSessions.count) this week",
+                    comment: "Subtitle showing how many sessions have been logged this week"
+                )
+            )
             if model.recentSessions.isEmpty {
                 VACard(style: .flat) {
-                    Text("No sessions logged yet. Start your first workout to see your history here.")
-                        .font(VA.Typography.footnote)
-                        .foregroundStyle(VA.Colors.textSecondary)
+                    Text(String(
+                        localized: "No sessions logged yet. Start your first workout to see your history here.",
+                        comment: "Empty-state message when there are no recent sessions"
+                    ))
+                    .font(VA.Typography.footnote)
+                    .foregroundStyle(VA.Colors.textSecondary)
                 }
             } else {
                 ForEach(Array(model.recentSessions.prefix(3).enumerated()), id: \.offset) { _, session in
@@ -240,32 +275,52 @@ public struct TodayView: View {
     }
 
     private func sessionRow(_ session: RecentSession) -> some View {
-        VACard(style: .flat) {
-            HStack(spacing: VA.Space.md) {
-                VStack(alignment: .leading, spacing: VA.Space.xxs) {
-                    Text(session.date.formatted(.dateTime.weekday(.wide).month().day()))
-                        .font(VA.Typography.headline)
-                        .foregroundStyle(VA.Colors.textPrimary)
-                    Text("\(session.completedSetCount) sets • \(session.durationMinutes)min • RPE \(String(format: "%.1f", session.averageRPE))")
+        NavigationLink {
+            SessionDetailView(session: session)
+                .navigationTransition(.zoom(sourceID: session.date, in: heroNamespace))
+        } label: {
+            VACard(style: .flat) {
+                HStack(spacing: VA.Space.md) {
+                    VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                        Text(session.date.formatted(.dateTime.weekday(.wide).month().day()))
+                            .font(VA.Typography.headline)
+                            .foregroundStyle(VA.Colors.textPrimary)
+                        Text(String(
+                            localized: "\(session.completedSetCount) sets • \(session.durationMinutes)min • RPE \(String(format: "%.1f", session.averageRPE))",
+                            comment: "Session summary metrics showing sets, duration, and average RPE"
+                        ))
                         .font(VA.Typography.footnote)
                         .foregroundStyle(VA.Colors.textSecondary)
+                    }
+                    Spacer()
+                    VAMetricDisplay(
+                        label: String(localized: "Load", comment: "Metric label for total weight lifted in a session"),
+                        value: "\(Int(session.totalVolumeLoad))",
+                        unit: String(localized: "lb", comment: "Weight unit abbreviation — pounds"),
+                        style: .compact
+                    )
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(VA.Colors.textTertiary)
                 }
-                Spacer()
-                VAMetricDisplay(
-                    label: "Load",
-                    value: "\(Int(session.totalVolumeLoad))",
-                    unit: "lb",
-                    style: .compact
-                )
             }
+            .matchedTransitionSource(id: session.date, in: heroNamespace)
         }
+        .buttonStyle(.plain)
+        .accessibilityHint(String(
+            localized: "Opens this session's details",
+            comment: "Accessibility hint for tapping a recent session row"
+        ))
     }
 
     // MARK: - Signals
 
     private var signalsSection: some View {
         VStack(alignment: .leading, spacing: VA.Space.md) {
-            VASectionHeader("System status")
+            VASectionHeader(String(
+                localized: "System status",
+                comment: "Section header on Today tab for operational signals"
+            ))
             ForEach(model.operationalSignals, id: \.id) { signal in
                 signalRow(signal)
             }
