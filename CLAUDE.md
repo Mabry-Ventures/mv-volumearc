@@ -8,7 +8,7 @@ AI-powered strength training coach for iOS and watchOS. Tracks workouts, provide
 
 ## Architecture
 
-This repo contains the Apple-platform host app. Core business logic and UI components live in a sibling package at `../VolumeArcNative` (frameworks `VolumeArcCore` and `VolumeArcUI`), compiled as static libraries and linked into each target by `scripts/generate_xcode_project.rb`.
+This repo contains the Apple-platform host app. Core business logic and UI components live in `VolumeArcNative/` (frameworks `VolumeArcCore` and `VolumeArcUI`), compiled as static libraries and linked into each target by `scripts/generate_xcode_project.rb`.
 
 ### Targets
 
@@ -18,8 +18,8 @@ This repo contains the Apple-platform host app. Core business logic and UI compo
 | VolumeArcWatch | watchOS Application | watchOS 26.4 | `com.mabryventures.VolumeArc.watchkitapp` |
 | VolumeArcWidgets | Widget Extension | iOS 26.0 | `com.mabryventures.VolumeArc.widgets` |
 | VolumeArcAppTests | Unit Test Bundle | iOS 26.0 | `com.mabryventures.VolumeArc.tests` |
-| VolumeArcCore | Static Library | iOS 26.0 | -- (from `../VolumeArcNative`) |
-| VolumeArcUI | Static Library | iOS 26.0 | -- (from `../VolumeArcNative`) |
+| VolumeArcCore | Static Library | iOS 26.0 | -- (from `VolumeArcNative/`) |
+| VolumeArcUI | Static Library | iOS 26.0 | -- (from `VolumeArcNative/`) |
 
 **Dependency graph:** `VolumeArcUI -> VolumeArcCore`. All app targets depend on `VolumeArcCore`. The iOS app and tests also depend on `VolumeArcUI`. The watch and widget targets depend only on `VolumeArcCore`.
 
@@ -59,7 +59,19 @@ Schema: `VolumeArcSchemaV1` with `VolumeArcSchemaMigrationPlan`
 
 ### Telemetry
 
-Fanout sink: `InMemoryTelemetrySink` (bootstrap) + `UserDefaultsTelemetrySink` (persistent) + `OSLogTelemetrySink`. Startup signals surface degraded persistence, missing AI relay, or missing CloudKit config.
+Fanout sink: `InMemoryTelemetrySink` (bootstrap) + `UserDefaultsTelemetrySink` (persistent) + `OSLogTelemetrySink` + `SentryTelemetrySink` (when configured). Startup signals surface degraded persistence, missing AI relay, missing CloudKit config, or missing Sentry DSN.
+
+### Notifications
+
+**Notification scheduler** (`VolumeArcNotificationScheduler.swift`): Schedules local notifications for rest timer expiration and workout reminders from the training plan. Registers actionable notification categories (`REST_TIMER` with Dismiss, `WORKOUT_REMINDER` with Start Workout / Dismiss).
+
+### Feature Flags
+
+`FeatureFlagProvider` protocol in `VolumeArcCore` with `LocalFeatureFlagProvider` (UserDefaults-backed). Flags: `voiceCoaching`, `cloudSync`, `liveActivities`, `foundationModelCoach`. Overridable per-flag for development.
+
+### Network Reachability
+
+`NetworkReachabilityMonitor` in `VolumeArcCore` wraps `NWPathMonitor` for connectivity detection. Exposes `isReachable`, `isCellular`, and `isConstrained` properties with a `start(onChange:)` callback for path updates.
 
 ### Subscriptions
 
@@ -85,7 +97,7 @@ Sentry (`sentry-cocoa`) is integrated via `VolumeArcSentryConfiguration`. It fol
 
 ### Entitlements
 
-**iOS App:** HealthKit, CloudKit, iCloud Containers (`iCloud.com.mabryventures.VolumeArc`), App Groups (`group.com.mabryventures.volumearc`)
+**iOS App:** HealthKit, CloudKit, iCloud Containers (`iCloud.com.mabryventures.VolumeArc`), App Groups (`group.com.mabryventures.volumearc`), Push Notifications (`aps-environment`)
 
 **watchOS:** HealthKit, App Groups (`group.com.mabryventures.volumearc`)
 
@@ -122,6 +134,24 @@ The Xcode project is **generated** -- do not edit `project.pbxproj` by hand. Run
 
 All build scripts call `generate_xcode_project.rb` first, so the project is always fresh.
 
+### CI / CD
+
+GitHub Actions CI runs on a self-hosted M4 Mac Mini runner (`runs-on: self-hosted`). The workflow (`.github/workflows/ci.yml`) triggers on pushes to `main`, pull requests, and version tags (`v*`).
+
+**CI pipeline:** Checkout → Generate Xcode project → Build all targets → Run tests → SwiftLint → Validate release config.
+
+**TestFlight deploy:** On version tags (`v*`), a second job runs `fastlane ios beta` to archive, sign, and upload to TestFlight. Requires `DEVELOPMENT_TEAM` and `APP_STORE_CONNECT_API_KEY_PATH` secrets.
+
+**Fastlane:** `Gemfile` + `fastlane/Fastfile` with three lanes: `test` (run tests with coverage), `beta` (build + upload to TestFlight), `release` (submit to App Store review).
+
+### Privacy Manifests
+
+Each target includes a `PrivacyInfo.xcprivacy` declaring required reason API usage (UserDefaults, FileTimestamp). These are added to targets by `generate_xcode_project.rb` and validated by `validate_release_config.sh`.
+
+### Localization
+
+User-facing strings use `String(localized:comment:)` for localization readiness. Currently English-only, but all strings are extractable to a String Catalog for future translation without code changes.
+
 ### Building
 
 ```bash
@@ -144,4 +174,7 @@ DEVELOPMENT_TEAM=A886EMZZW6 ./scripts/archive_for_distribution.sh
 - **Factory pattern for runtime dependencies:** Platform-specific implementations chosen at init time via static factory methods on the app or model types.
 - **Unavailable stubs:** Each integration has an `Unavailable*` fallback (e.g., `UnavailableHealthStore`, `UnavailableCloudSyncTransport`, `UnavailableRealtimeVoiceTransport`) so the app always launches.
 - **Actor isolation:** Network-bound providers (`VolumeArcRelaySessionProvider`, `VolumeArcVoicePermissionStore`) use Swift actors for thread safety.
-- **No Package.swift in this repo:** The Xcode project is Ruby-generated, not SPM-based. The sibling `VolumeArcNative` package provides the Swift package structure.
+- **No Package.swift at root:** The Xcode project is Ruby-generated, not SPM-based. `VolumeArcNative/` contains the Swift package structure for shared frameworks.
+- **Localized strings:** All user-facing strings use `String(localized:comment:)` for future translation support.
+- **Accessibility:** All interactive and data-display elements in Watch and Widget views have VoiceOver labels, hints, and values.
+- **Codable payloads:** Watch-to-phone payloads use `Codable` structs encoded via `SyncPayloadCodec` rather than ad-hoc string formatting.
