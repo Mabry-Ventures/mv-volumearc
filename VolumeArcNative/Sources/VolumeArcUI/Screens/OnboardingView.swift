@@ -127,7 +127,7 @@ public struct OnboardingView: View {
                     .tracking(0.5)
                 ForEach(AdvancementLevel.allCases, id: \.self) { level in
                     selectionRow(
-                        title: levelTitle(level),
+                        title: level.displayName,
                         subtitle: levelDescription(level),
                         isSelected: result.advancementLevel == level
                     ) {
@@ -209,8 +209,8 @@ public struct OnboardingView: View {
             VStack(spacing: VA.Space.md) {
                 ForEach(CoachingStyle.allCases, id: \.self) { style in
                     selectionRow(
-                        title: styleTitle(style),
-                        subtitle: styleDescription(style),
+                        title: style.displayName,
+                        subtitle: style.displayDescription,
                         isSelected: result.coachingStyle == style
                     ) {
                         result.coachingStyle = style
@@ -299,17 +299,6 @@ public struct OnboardingView: View {
         .buttonStyle(.plain)
     }
 
-    private func levelTitle(_ level: AdvancementLevel) -> String {
-        switch level {
-        case .beginner:
-            return String(localized: "Beginner", comment: "Advancement level — beginner")
-        case .intermediate:
-            return String(localized: "Intermediate", comment: "Advancement level — intermediate")
-        case .advanced:
-            return String(localized: "Advanced", comment: "Advancement level — advanced")
-        }
-    }
-
     private func levelDescription(_ level: AdvancementLevel) -> String {
         switch level {
         case .beginner:
@@ -326,37 +315,6 @@ public struct OnboardingView: View {
             return String(
                 localized: "3+ years, refined technique and periodization",
                 comment: "Advancement level description — advanced"
-            )
-        }
-    }
-
-    private func styleTitle(_ style: CoachingStyle) -> String {
-        switch style {
-        case .motivational:
-            return String(localized: "Motivational", comment: "Coaching style — motivational")
-        case .analytical:
-            return String(localized: "Analytical", comment: "Coaching style — analytical")
-        case .minimal:
-            return String(localized: "Minimal", comment: "Coaching style — minimal")
-        }
-    }
-
-    private func styleDescription(_ style: CoachingStyle) -> String {
-        switch style {
-        case .motivational:
-            return String(
-                localized: "High energy, keeps you pushing through",
-                comment: "Coaching style description — motivational"
-            )
-        case .analytical:
-            return String(
-                localized: "Data-driven, explains the why behind every call",
-                comment: "Coaching style description — analytical"
-            )
-        case .minimal:
-            return String(
-                localized: "Short and direct, only when it matters",
-                comment: "Coaching style description — minimal"
             )
         }
     }

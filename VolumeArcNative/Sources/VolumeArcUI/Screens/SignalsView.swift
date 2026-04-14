@@ -42,7 +42,7 @@ public struct SignalsView: View {
                         Text("\(model.readiness.score)")
                             .font(VA.Typography.display)
                             .foregroundStyle(VA.Colors.textPrimary)
-                        Text("READY")
+                        Text(String(localized: "READY", comment: "Caption inside the readiness ring"))
                             .font(VA.Typography.caption)
                             .foregroundStyle(VA.Colors.textSecondary)
                             .tracking(1)
@@ -50,7 +50,7 @@ public struct SignalsView: View {
                 }
 
                 VStack(alignment: .leading, spacing: VA.Space.sm) {
-                    Text("STATUS")
+                    Text(String(localized: "STATUS", comment: "Label above the readiness brief on Signals tab"))
                         .font(VA.Typography.caption)
                         .foregroundStyle(VA.Colors.textSecondary)
                         .tracking(0.5)
@@ -61,7 +61,10 @@ public struct SignalsView: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Readiness score: \(model.readiness.score). \(model.readiness.brief)")
+        .accessibilityLabel(String(
+            localized: "Readiness score: \(model.readiness.score). \(model.readiness.brief)",
+            comment: "VoiceOver label for the readiness hero on Signals tab"
+        ))
     }
 
     private var readinessColor: Color {
@@ -78,7 +81,10 @@ public struct SignalsView: View {
     private var readinessFactors: some View {
         if !model.readiness.factors.isEmpty {
             VStack(alignment: .leading, spacing: VA.Space.md) {
-                VASectionHeader("Contributing Factors")
+                VASectionHeader(String(
+                    localized: "Contributing Factors",
+                    comment: "Section header for readiness breakdown factors"
+                ))
                 ForEach(model.readiness.factors) { factor in
                     factorRow(factor)
                 }
@@ -119,17 +125,20 @@ public struct SignalsView: View {
     private var volumeCard: some View {
         VACard(style: .elevated) {
             VStack(alignment: .leading, spacing: VA.Space.md) {
-                VASectionHeader("Training Volume", subtitle: "Last 7 days")
+                VASectionHeader(
+                    String(localized: "Training Volume", comment: "Section header on Signals tab for volume card"),
+                    subtitle: String(localized: "Last 7 days", comment: "Subtitle — last 7 days timeframe")
+                )
                 HStack(spacing: VA.Space.xl) {
                     VAMetricDisplay(
-                        label: "Total Load",
+                        label: String(localized: "Total Load", comment: "Metric label — total training volume load"),
                         value: "\(Int(totalVolume))",
-                        unit: "lb",
+                        unit: String(localized: "lb", comment: "Weight unit abbreviation — pounds"),
                         style: .hero
                     )
                     Spacer()
                     VAMetricDisplay(
-                        label: "Sessions",
+                        label: String(localized: "Sessions", comment: "Metric label — number of sessions"),
                         value: "\(model.recentSessions.count)",
                         style: .standard
                     )
@@ -147,15 +156,21 @@ public struct SignalsView: View {
     private var trainingFrequencyCard: some View {
         VACard(style: .flat) {
             VStack(alignment: .leading, spacing: VA.Space.md) {
-                VASectionHeader("Training Frequency")
+                VASectionHeader(String(
+                    localized: "Training Frequency",
+                    comment: "Section header on Signals tab for frequency card"
+                ))
                 HStack(spacing: VA.Space.md) {
                     ForEach(0..<7, id: \.self) { dayIndex in
                         dayCircle(for: dayIndex)
                     }
                 }
-                Text("\(model.recentSessions.count) of \(model.athlete.weeklyTrainingDays) weekly sessions")
-                    .font(VA.Typography.footnote)
-                    .foregroundStyle(VA.Colors.textSecondary)
+                Text(String(
+                    localized: "\(model.recentSessions.count) of ^[\(model.athlete.weeklyTrainingDays) weekly sessions](inflect: true)",
+                    comment: "Frequency summary — actual vs target weekly sessions, with plural agreement on the target"
+                ))
+                .font(VA.Typography.footnote)
+                .foregroundStyle(VA.Colors.textSecondary)
             }
         }
     }

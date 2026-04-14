@@ -26,41 +26,28 @@ enum VolumeArcAIRuntimeFactory {
     }
 
     static func makeVoiceCoach() -> LiveVoiceCoachOrchestrator {
+        // Voice coaching is a single-turn text relay wrapped in an
+        // orchestrator. Live duplex audio against the OpenAI Realtime API is a
+        // planned future feature — the current path covers the "ask a
+        // question by voice, hear a text-to-speech reply" loop, which the UI
+        // can hand off to `AVSpeechSynthesizer` for playback.
         let transport: RealtimeVoiceTransport
-        if let relayConfiguration = VolumeArcAIConfiguration.relayConfiguration {
-            transport = OpenAIRealtimeVoiceTransport(
-                configuration: relayConfiguration,
-                credentialsProvider: VolumeArcRelaySessionProvider(
-                    baseURL: relayConfiguration.baseURL,
-                    applicationID: relayConfiguration.applicationID
-                )
-            )
+        if VolumeArcAIConfiguration.relayConfiguration != nil {
+            transport = OpenAIRelayVoiceTransport(provider: makeCoachProvider())
         } else {
-            transport = UnavailableRealtimeVoiceTransport()
+            transport = UnavailableVoiceTransport()
         }
 
         return LiveVoiceCoachOrchestrator(transport: transport)
     }
 }
 
-private actor UnavailableRealtimeVoiceTransport: RealtimeVoiceTransport {
-    func connect(model: AIModelIdentifier, policy: VoiceSessionPolicy) async throws {
-        _ = model
-        _ = policy
-        throw AIRuntimeIntegrationError.relayUnavailable(
-            reason: "Live voice relay is not configured for this build."
-        )
-    }
-
+private actor UnavailableVoiceTransport: RealtimeVoiceTransport {
     func send(context: String, userText: String) async throws -> String {
         _ = context
         _ = userText
         throw AIRuntimeIntegrationError.relayUnavailable(
-            reason: "Live voice relay is not configured for this build."
+            reason: "Voice coaching relay is not configured for this build."
         )
     }
-
-    func interrupt() async {}
-
-    func disconnect() async {}
 }
