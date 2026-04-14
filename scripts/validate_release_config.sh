@@ -52,14 +52,6 @@ if ! grep -F 'static let containerIdentifier: String = "iCloud.com.mabryventures
   exit 1
 fi
 
-# NOTE: VOL-56 (`BGTaskSchedulerPermittedIdentifiers` / `UIBackgroundModes`)
-# is intentionally not validated against the built bundle here. Neither
-# `INFOPLIST_KEY_*` nor a checked-in Info.plist nor a Run Script Build
-# Phase produced a working result (see generate_xcode_project.rb comments
-# for the full investigation). VOL-56 stays open and the background task
-# registration code in `App/VolumeArcBackgroundTasks.swift` fails
-# gracefully at runtime when iOS rejects the unregistered identifiers.
-
 tmp_settings="$(mktemp)"
 trap 'rm -f "$tmp_settings"' EXIT
 
@@ -69,9 +61,17 @@ xcodebuild \
   -configuration Release \
   -showBuildSettings >"$tmp_settings"
 
+# VOL-56 (PR #24): `INFOPLIST_FILE = App/Info.plist` must stay wired so
+# the plist on disk is actually merged into the built bundle. Without
+# this assertion, removing the `INFOPLIST_FILE` line from
+# `generate_xcode_project.rb` would silently fall back to the generated
+# plist, drop CFBundleURLTypes/BGTaskSchedulerPermittedIdentifiers/
+# UIBackgroundModes, and ship a broken app even though the source
+# file on disk still has every key.
 required_build_settings=(
   "PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc"
   "CODE_SIGN_ENTITLEMENTS = App/VolumeArc.entitlements"
+  "INFOPLIST_FILE = App/Info.plist"
   "INFOPLIST_KEY_NSHealthShareUsageDescription = VolumeArc reads your workout and recovery data to personalize progression, readiness, and session planning."
   "INFOPLIST_KEY_NSHealthUpdateUsageDescription = VolumeArc writes completed workouts so your training history stays in sync with Apple Health."
   "INFOPLIST_KEY_NSMicrophoneUsageDescription = VolumeArc uses the microphone for voice coaching requests and voice workout logging."
