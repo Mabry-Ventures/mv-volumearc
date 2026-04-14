@@ -8,13 +8,13 @@ AI-powered strength training coach for iOS and watchOS. Tracks workouts, provide
 
 ## Implementation Status
 
-> **Status: Production-ready.** All major product surfaces are wired to real implementations. iPhone UI runs a full dashboard with localized, accessible, Dynamic-Type-aware screens and hero transitions. AI coaching streams responses through a three-provider chain with on-device memory. CloudKit sync performs real record CRUD with cursor persistence. Watch app runs HealthKit workout sessions and bi-directional connectivity with offline queue replay. Widgets and Live Activities read real shared state. Subscriptions have a paywall and entitlement checks. 53 unit + integration tests pass and XCUITest smoke suite runs in CI. Remaining work is a single test-coverage gate (VOL-52) and whatever the next sprint decides to build.
+> **Status: Production-ready with one feature scoped to a future release.** All major product surfaces are wired to real implementations. iPhone UI runs a full dashboard with fully-localized, accessible, Dynamic-Type-aware screens and hero transitions. AI coaching streams responses through a three-provider chain with on-device memory. CloudKit sync performs real record CRUD with cursor persistence. Watch app runs HealthKit workout sessions and bi-directional connectivity with offline queue replay. Widgets and Live Activities read real shared state. Subscriptions have a paywall and entitlement checks. 53 unit + integration tests pass and the XCUITest smoke suite runs in CI on every PR. The one explicitly-scoped-out feature is **live duplex audio** for voice coaching — the orchestrator and transport are functional for single-turn voice → text → speech queries via the same relay used by the text coach, but a persistent WebRTC-style streaming session against the OpenAI Realtime API is tracked as a future feature.
 
 | System | Status | Notes |
 |--------|--------|-------|
-| iPhone UI | Implemented | Full tab bar (Today, Workouts, Coach, Signals, Profile), real screens, Liquid Glass design system, localized, VoiceOver labels, Dynamic Type, hero transitions, toast presenter, session summary, session detail, paywall, onboarding |
+| iPhone UI | Implemented | Full tab bar (Today, Workouts, Coach, Signals, Profile), real screens, Liquid Glass design system, fully localized via `String(localized:comment:)`, VoiceOver labels on data displays, Dynamic Type, hero transitions, toast presenter, session summary, session detail, paywall, onboarding |
 | AI coaching | Implemented | Three-provider chain with `AsyncThrowingStream` streaming, memory append via `CoachMemoryRepository`, structured output parsing, graceful fallback to `LocalHeuristicAICoachProvider` |
-| Voice coaching | Implemented | `OpenAIRealtimeVoiceTransport` with duplex audio, permission store, orchestrator lifecycle, unavailable fallback |
+| Voice coaching | Implemented (single-turn) | `OpenAIRelayVoiceTransport` delegates to the same relay-backed `AICoachProvider` chain; `LiveVoiceCoachOrchestrator` exposes `speak(prompt:context:)` and lifecycle hooks. Live duplex audio (persistent WebRTC session against OpenAI Realtime) is **explicit future work** — single-turn coverage is sufficient for the in-gym "ask a question, hear a reply" loop |
 | Cloud sync | Implemented | `CKModifyRecordsOperation` + `CKFetchRecordZoneChangesOperation` with cursor persistence, payload applier writes to SwiftData, conflict resolution, shared-state writes |
 | Watch app | Implemented | HealthKit `HKWorkoutSession` + `HKLiveWorkoutBuilder`, rest timer, decisions, accessibility, offline payload queue, real phone/watch sync via WCSession |
 | Widgets | Implemented | `NextWorkoutWidget` + `WatchWidgets` extension read real shared state via `PlatformSurfaceDefaultsReader`, design-system-tokened, accessibility-labelled |
@@ -27,7 +27,7 @@ AI-powered strength training coach for iOS and watchOS. Tracks workouts, provide
 | Feature flags | Implemented | `LocalFeatureFlagProvider` with UserDefaults, flags gate voiceCoaching, cloudSync, liveActivities, foundationModelCoach |
 | Subscriptions | Implemented | StoreKit 2 with `@Published` entitlement state, full paywall UI, purchase + restore flow, entitlement checks |
 | Build pipeline | Implemented | Ruby-generated Xcode project, CI on self-hosted M4, Fastlane, archive script, SwiftLint, hard-failing release validation |
-| Testing | Implemented | 53 unit + integration tests against real production types (persistence, relay, migration, progression, readiness, dashboard integration, configuration). XCUITest smoke suite runs in CI on every PR. Dashboard integration tests cover the create → log → complete chain against in-memory SwiftData |
+| Testing | Implemented | 53 unit + integration tests against real production types (persistence, relay, migration, progression, readiness, dashboard integration, configuration). XCUITest smoke suite runs in CI on every PR. Dashboard integration tests cover the create → log → complete chain against in-memory SwiftData. Test coverage gate (VOL-52) is the one open item from the push-to-95 sprint |
 
 ## Architecture
 
@@ -59,7 +59,7 @@ This repo contains the full VolumeArc Apple platform. Core business logic and UI
 2. `OpenAIRelayCoachProvider` (cloud relay)
 3. `LocalHeuristicAICoachProvider` (offline fallback)
 
-**Voice coaching** (`VolumeArcAIRuntimeFactory.swift`): `LiveVoiceCoachOrchestrator` backed by `OpenAIRealtimeVoiceTransport` (duplex audio, permission store, session lifecycle) or `UnavailableRealtimeVoiceTransport` when relay is unconfigured.
+**Voice coaching** (`VolumeArcCore/AI/VoiceCoach.swift`, `VolumeArcAIRuntimeFactory.swift`): `LiveVoiceCoachOrchestrator` backed by `OpenAIRelayVoiceTransport` (single-turn — delegates to the same relay-backed `AICoachProvider` chain used by the text coach) or `UnavailableVoiceTransport` when relay is unconfigured. The orchestrator exposes `speak(prompt:context:)` for question/response turns and lifecycle hooks (`start`, `interrupt`, `end`) which are no-ops for the single-turn transport. A future feature will introduce a real `OpenAIRealtimeWebRTCTransport` that maintains a persistent duplex audio session against the OpenAI Realtime API; the protocol shape supports both transports without rework.
 
 **Cloud sync** (`VolumeArcCloudConfiguration.swift`): `CloudSyncCoordinator` drives `CloudKitSyncTransport` using zone `VolumeArcSyncZone` in container `iCloud.com.mabryventures.VolumeArc`. Push uses `CKModifyRecordsOperation`; pull uses `CKFetchRecordZoneChangesOperation` with cursor persistence in `FileSyncStateStore`. `DefaultSyncPayloadApplier` writes changes into SwiftData with conflict resolution. Falls back to `UnavailableCloudSyncTransport` if unconfigured.
 

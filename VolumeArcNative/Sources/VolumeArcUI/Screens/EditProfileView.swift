@@ -42,30 +42,43 @@ public struct EditProfileView: View {
     public var body: some View {
         NavigationStack {
             Form {
-                Section("About You") {
-                    TextField("Name", text: $name)
-                    Picker("Experience", selection: $advancementLevel) {
+                Section(String(localized: "About You", comment: "Edit profile section header — personal info")) {
+                    TextField(
+                        String(localized: "Name", comment: "Edit profile name field placeholder"),
+                        text: $name
+                    )
+                    Picker(
+                        String(localized: "Experience", comment: "Edit profile experience level picker"),
+                        selection: $advancementLevel
+                    ) {
                         ForEach(AdvancementLevel.allCases, id: \.self) { level in
-                            Text(level.rawValue.capitalized).tag(level)
+                            Text(advancementLevelLabel(level)).tag(level)
                         }
                     }
                 }
 
-                Section("Training Schedule") {
-                    Stepper("Days per week: \(weeklyDays)", value: $weeklyDays, in: 1...7)
-                    Picker("Session length", selection: $sessionMinutes) {
-                        Text("30 min").tag(30)
-                        Text("45 min").tag(45)
-                        Text("60 min").tag(60)
-                        Text("75 min").tag(75)
-                        Text("90 min").tag(90)
+                Section(String(localized: "Training Schedule", comment: "Edit profile section header — schedule")) {
+                    Stepper(
+                        String(localized: "Days per week: \(weeklyDays)", comment: "Edit profile days-per-week stepper label"),
+                        value: $weeklyDays,
+                        in: 1...7
+                    )
+                    Picker(
+                        String(localized: "Session length", comment: "Edit profile session length picker"),
+                        selection: $sessionMinutes
+                    ) {
+                        Text(String(localized: "30 min", comment: "Session length option")).tag(30)
+                        Text(String(localized: "45 min", comment: "Session length option")).tag(45)
+                        Text(String(localized: "60 min", comment: "Session length option")).tag(60)
+                        Text(String(localized: "75 min", comment: "Session length option")).tag(75)
+                        Text(String(localized: "90 min", comment: "Session length option")).tag(90)
                     }
                     .pickerStyle(.segmented)
                 }
 
-                Section("Equipment") {
+                Section(String(localized: "Equipment", comment: "Edit profile section header — available equipment")) {
                     ForEach(Equipment.allCases, id: \.self) { equipment in
-                        Toggle(equipment.rawValue.capitalized, isOn: Binding(
+                        Toggle(equipmentLabel(equipment), isOn: Binding(
                             get: { selectedEquipment.contains(equipment) },
                             set: { isOn in
                                 if isOn {
@@ -79,37 +92,43 @@ public struct EditProfileView: View {
                     }
                 }
 
-                Section("Coach") {
-                    Picker("Coaching style", selection: $coachingStyle) {
+                Section(String(localized: "Coach", comment: "Edit profile section header — coaching preferences")) {
+                    Picker(
+                        String(localized: "Coaching style", comment: "Edit profile coaching style picker"),
+                        selection: $coachingStyle
+                    ) {
                         ForEach(CoachingStyle.allCases, id: \.self) { style in
-                            Text(style.rawValue.capitalized).tag(style)
+                            Text(coachingStyleLabel(style)).tag(style)
                         }
                     }
                 }
 
                 Section {
-                    Picker("Privacy mode", selection: $privacyMode) {
-                        Text("Standard").tag(PrivacyMode.standard)
-                        Text("Strict").tag(PrivacyMode.strict)
+                    Picker(
+                        String(localized: "Privacy mode", comment: "Edit profile privacy mode picker"),
+                        selection: $privacyMode
+                    ) {
+                        Text(String(localized: "Standard", comment: "Privacy mode — standard")).tag(PrivacyMode.standard)
+                        Text(String(localized: "Strict", comment: "Privacy mode — strict")).tag(PrivacyMode.strict)
                     }
                 } header: {
-                    Text("Privacy")
+                    Text(String(localized: "Privacy", comment: "Edit profile section header — privacy"))
                 } footer: {
                     Text(privacyFooter)
                         .font(.caption)
                 }
             }
-            .navigationTitle("Edit Profile")
+            .navigationTitle(String(localized: "Edit Profile", comment: "Edit profile screen navigation title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") {
+                    Button(String(localized: "Cancel", comment: "Edit profile cancel button")) {
                         VAHaptics.tap()
                         isPresented = false
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Save") {
+                    Button(String(localized: "Save", comment: "Edit profile save button")) {
                         VAHaptics.setLogged()
                         save()
                     }
@@ -122,9 +141,43 @@ public struct EditProfileView: View {
     private var privacyFooter: String {
         switch privacyMode {
         case .standard:
-            return "Your name and training history are included in coach prompts for personalized responses."
+            return String(
+                localized: "Your name and training history are included in coach prompts for personalized responses.",
+                comment: "Edit profile privacy footer — standard mode"
+            )
         case .strict:
-            return "Strict mode strips your name and anonymizes history before sending to the AI coach."
+            return String(
+                localized: "Strict mode strips your name and anonymizes history before sending to the AI coach.",
+                comment: "Edit profile privacy footer — strict mode"
+            )
+        }
+    }
+
+    private func advancementLevelLabel(_ level: AdvancementLevel) -> String {
+        switch level {
+        case .beginner: return String(localized: "Beginner", comment: "Advancement level — beginner")
+        case .intermediate: return String(localized: "Intermediate", comment: "Advancement level — intermediate")
+        case .advanced: return String(localized: "Advanced", comment: "Advancement level — advanced")
+        }
+    }
+
+    private func coachingStyleLabel(_ style: CoachingStyle) -> String {
+        switch style {
+        case .motivational: return String(localized: "Motivational", comment: "Coaching style — motivational")
+        case .analytical: return String(localized: "Analytical", comment: "Coaching style — analytical")
+        case .minimal: return String(localized: "Minimal", comment: "Coaching style — minimal")
+        }
+    }
+
+    private func equipmentLabel(_ equipment: Equipment) -> String {
+        switch equipment {
+        case .barbell: return String(localized: "Barbell", comment: "Equipment type — barbell")
+        case .dumbbell: return String(localized: "Dumbbell", comment: "Equipment type — dumbbell")
+        case .machine: return String(localized: "Machine", comment: "Equipment type — machine")
+        case .bodyweight: return String(localized: "Bodyweight", comment: "Equipment type — bodyweight")
+        case .cable: return String(localized: "Cable", comment: "Equipment type — cable")
+        case .kettlebell: return String(localized: "Kettlebell", comment: "Equipment type — kettlebell")
+        case .band: return String(localized: "Resistance band", comment: "Equipment type — band")
         }
     }
 

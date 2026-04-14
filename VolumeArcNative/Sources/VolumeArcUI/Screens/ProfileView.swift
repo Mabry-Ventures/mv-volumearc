@@ -21,52 +21,89 @@ public struct ProfileView: View {
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets())
 
-            Section("Training") {
-                row(label: "Advancement", value: model.athlete.advancementLevel.rawValue.capitalized, icon: "chart.line.uptrend.xyaxis")
-                row(label: "Weekly days", value: "\(model.athlete.weeklyTrainingDays)", icon: "calendar")
-                row(label: "Rep range", value: "\(model.athlete.preferredRepRange.lowerBound)-\(model.athlete.preferredRepRange.upperBound)", icon: "number")
-                row(label: "Equipment", value: "\(model.athlete.availableEquipment.count) types", icon: "dumbbell.fill")
+            Section(String(localized: "Training", comment: "Profile tab section header — training settings")) {
+                row(
+                    label: String(localized: "Advancement", comment: "Profile row — advancement level"),
+                    value: advancementLabel(model.athlete.advancementLevel),
+                    icon: "chart.line.uptrend.xyaxis"
+                )
+                row(
+                    label: String(localized: "Weekly days", comment: "Profile row — weekly training days"),
+                    value: "\(model.athlete.weeklyTrainingDays)",
+                    icon: "calendar"
+                )
+                row(
+                    label: String(localized: "Rep range", comment: "Profile row — preferred rep range"),
+                    value: "\(model.athlete.preferredRepRange.lowerBound)-\(model.athlete.preferredRepRange.upperBound)",
+                    icon: "number"
+                )
+                row(
+                    label: String(localized: "Equipment", comment: "Profile row — equipment count"),
+                    value: String(
+                        localized: "\(model.athlete.availableEquipment.count) types",
+                        comment: "Profile row value — number of equipment types"
+                    ),
+                    icon: "dumbbell.fill"
+                )
                 Button {
                     VAHaptics.tap()
                     isEditingProfile = true
                 } label: {
-                    Label("Edit profile", systemImage: "pencil")
-                        .foregroundStyle(VA.Colors.primary)
+                    Label(
+                        String(localized: "Edit profile", comment: "Profile button — open edit profile sheet"),
+                        systemImage: "pencil"
+                    )
+                    .foregroundStyle(VA.Colors.primary)
                 }
             }
 
-            Section("Premium") {
+            Section(String(localized: "Premium", comment: "Profile tab section header — subscription")) {
                 Button {
                     VAHaptics.tap()
                     isShowingPaywall = true
                 } label: {
                     HStack {
-                        Label("Upgrade", systemImage: "sparkles")
-                            .foregroundStyle(VA.Colors.primary)
+                        Label(
+                            String(localized: "Upgrade", comment: "Profile button — open the paywall"),
+                            systemImage: "sparkles"
+                        )
+                        .foregroundStyle(VA.Colors.primary)
                         Spacer()
-                        Text("Monthly / Yearly")
-                            .font(.caption)
-                            .foregroundStyle(VA.Colors.textSecondary)
+                        Text(String(
+                            localized: "Monthly / Yearly",
+                            comment: "Profile upgrade row subtitle — available billing periods"
+                        ))
+                        .font(.caption)
+                        .foregroundStyle(VA.Colors.textSecondary)
                     }
                 }
             }
 
-            Section("App") {
+            Section(String(localized: "App", comment: "Profile tab section header — app-level settings")) {
                 NavigationLink {
                     DiagnosticsView()
                 } label: {
-                    Label("Diagnostics", systemImage: "stethoscope")
+                    Label(
+                        String(localized: "Diagnostics", comment: "Profile row — open diagnostics screen"),
+                        systemImage: "stethoscope"
+                    )
                 }
                 NavigationLink {
-                    Text("About VolumeArc")
-                        .padding()
+                    Text(String(
+                        localized: "About VolumeArc",
+                        comment: "About VolumeArc screen placeholder title"
+                    ))
+                    .padding()
                 } label: {
-                    Label("About", systemImage: "info.circle")
+                    Label(
+                        String(localized: "About", comment: "Profile row — open about screen"),
+                        systemImage: "info.circle"
+                    )
                 }
             }
 
             if !model.operationalSignals.isEmpty {
-                Section("Status") {
+                Section(String(localized: "Status", comment: "Profile tab section header — operational status signals")) {
                     ForEach(model.operationalSignals, id: \.id) { signal in
                         Label(signal.title, systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(VA.Colors.warning)
@@ -106,12 +143,17 @@ public struct ProfileView: View {
                 }
 
                 VStack(alignment: .leading, spacing: VA.Space.xxs) {
-                    Text(model.athlete.name.isEmpty ? "Set up your profile" : model.athlete.name)
+                    Text(model.athlete.name.isEmpty
+                         ? String(localized: "Set up your profile", comment: "Profile header when no name is set")
+                         : model.athlete.name)
                         .font(VA.Typography.title2)
                         .foregroundStyle(VA.Colors.textPrimary)
-                    Text(model.athlete.advancementLevel.rawValue.capitalized + " lifter")
-                        .font(VA.Typography.footnote)
-                        .foregroundStyle(VA.Colors.textSecondary)
+                    Text(String(
+                        localized: "\(advancementLabel(model.athlete.advancementLevel)) lifter",
+                        comment: "Profile header subtitle — e.g. 'Intermediate lifter'"
+                    ))
+                    .font(VA.Typography.footnote)
+                    .foregroundStyle(VA.Colors.textSecondary)
                 }
                 Spacer()
             }
@@ -123,6 +165,14 @@ public struct ProfileView: View {
         let parts = model.athlete.name.split(separator: " ").prefix(2)
         if parts.isEmpty { return "VA" }
         return parts.compactMap { $0.first }.map(String.init).joined()
+    }
+
+    private func advancementLabel(_ level: AdvancementLevel) -> String {
+        switch level {
+        case .beginner: return String(localized: "Beginner", comment: "Advancement level — beginner")
+        case .intermediate: return String(localized: "Intermediate", comment: "Advancement level — intermediate")
+        case .advanced: return String(localized: "Advanced", comment: "Advancement level — advanced")
+        }
     }
 
     private func row(label: String, value: String, icon: String) -> some View {

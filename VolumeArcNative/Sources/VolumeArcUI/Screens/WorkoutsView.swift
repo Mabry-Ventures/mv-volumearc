@@ -30,7 +30,9 @@ public struct WorkoutsView: View {
             .padding(VA.Space.lg)
         }
         .background(VA.Colors.surfaceSecondary)
-        .navigationTitle(model.isSessionActive ? "Session" : "Workouts")
+        .navigationTitle(model.isSessionActive
+                         ? String(localized: "Session", comment: "Workouts tab title during an active session")
+                         : String(localized: "Workouts", comment: "Workouts tab title when idle"))
         .navigationBarTitleDisplayMode(.large)
         .fullScreenCover(item: $summary) { snapshot in
             SessionSummaryView(
@@ -63,14 +65,20 @@ public struct WorkoutsView: View {
         VACard(style: .accent) {
             HStack {
                 VStack(alignment: .leading, spacing: VA.Space.xxs) {
-                    Text("LIVE SESSION")
+                    Text(String(localized: "LIVE SESSION", comment: "Label above the active session card"))
                         .font(VA.Typography.caption)
                         .foregroundStyle(VA.Colors.primary)
                         .tracking(0.5)
-                    Text(model.activeWorkoutTitle ?? "Strength Session")
+                    Text(model.activeWorkoutTitle ?? String(
+                        localized: "Strength Session",
+                        comment: "Default title when no workout title is set"
+                    ))
                         .font(VA.Typography.title2)
                         .foregroundStyle(VA.Colors.textPrimary)
-                    Text("\(model.loggedSetCountThisSession) sets logged")
+                    Text(String(
+                        localized: "\(model.loggedSetCountThisSession) sets logged",
+                        comment: "Active session subtitle showing how many sets have been logged"
+                    ))
                         .font(VA.Typography.footnote)
                         .foregroundStyle(VA.Colors.textSecondary)
                 }
@@ -88,25 +96,25 @@ public struct WorkoutsView: View {
         if let autopilot = model.autopilot {
             VACard(style: .elevated) {
                 VStack(alignment: .leading, spacing: VA.Space.md) {
-                    VASectionHeader("Next Set")
+                    VASectionHeader(String(localized: "Next Set", comment: "Section header above the upcoming set card"))
                     Text(autopilot.nextExerciseName)
                         .font(VA.Typography.title)
                         .foregroundStyle(VA.Colors.textPrimary)
 
                     HStack(spacing: VA.Space.xl) {
                         VAMetricDisplay(
-                            label: "Weight",
+                            label: String(localized: "Weight", comment: "Metric label — target weight"),
                             value: "\(Int(autopilot.nextTarget.weight))",
                             unit: autopilot.nextTarget.unit,
                             style: .standard
                         )
                         VAMetricDisplay(
-                            label: "Reps",
+                            label: String(localized: "Reps", comment: "Metric label — target rep range"),
                             value: "\(autopilot.nextTarget.repRange.lowerBound)-\(autopilot.nextTarget.repRange.upperBound)",
                             style: .standard
                         )
                         VAMetricDisplay(
-                            label: "RPE",
+                            label: String(localized: "RPE", comment: "Metric label — target rate of perceived exertion"),
                             value: String(format: "%.1f", autopilot.nextTarget.targetRPE),
                             style: .standard
                         )
@@ -132,13 +140,13 @@ public struct WorkoutsView: View {
         VACard(style: .glass) {
             VStack(spacing: VA.Space.md) {
                 HStack {
-                    Text("REST TIMER")
+                    Text(String(localized: "REST TIMER", comment: "Label above the rest timer"))
                         .font(VA.Typography.caption)
                         .foregroundStyle(VA.Colors.textSecondary)
                         .tracking(0.5)
                     Spacer()
                     if restActive {
-                        Button("Reset") {
+                        Button(String(localized: "Reset", comment: "Rest timer reset button")) {
                             restEndsAt = .now.addingTimeInterval(90)
                             VAHaptics.tap()
                         }
@@ -154,7 +162,11 @@ public struct WorkoutsView: View {
                 )
 
                 if !restActive {
-                    VAButton("Start Rest (90s)", icon: "timer", style: .secondary) {
+                    VAButton(
+                        String(localized: "Start Rest (90s)", comment: "Button to start a 90-second rest timer"),
+                        icon: "timer",
+                        style: .secondary
+                    ) {
                         restEndsAt = .now.addingTimeInterval(90)
                         restActive = true
                         VAHaptics.tap()
@@ -187,7 +199,11 @@ public struct WorkoutsView: View {
     }
 
     private var completeButton: some View {
-        VAButton("Complete Workout", icon: "flag.checkered", style: .secondary) {
+        VAButton(
+            String(localized: "Complete Workout", comment: "Button to finish the current workout session"),
+            icon: "flag.checkered",
+            style: .secondary
+        ) {
             Task {
                 VAHaptics.workoutComplete()
 
@@ -198,7 +214,10 @@ public struct WorkoutsView: View {
                 let capturedVolume = model.recentSessions.first?.totalVolumeLoad ?? 0
                 let capturedDuration = model.recentSessions.first?.durationMinutes ?? 0
                 let capturedRPE = model.autopilot?.nextTarget.targetRPE ?? 7.5
-                let capturedLift = model.autopilot?.nextExerciseName ?? "your workout"
+                let capturedLift = model.autopilot?.nextExerciseName ?? String(
+                    localized: "your workout",
+                    comment: "Fallback phrase for the primary lift when none is identified"
+                )
 
                 await model.completeWorkoutSession()
 
@@ -219,34 +238,46 @@ public struct WorkoutsView: View {
         VStack(spacing: VA.Space.lg) {
             VAEmptyState(
                 icon: "figure.strengthtraining.traditional",
-                title: "No Active Session",
-                message: "Ready to train? Start a workout from the Today tab or begin one now.",
-                action: (label: "Start Workout", handler: {
-                    Task {
-                        VAHaptics.sessionStart()
-                        await model.startWorkoutSession()
+                title: String(localized: "No Active Session", comment: "Empty state title on Workouts tab"),
+                message: String(
+                    localized: "Ready to train? Start a workout from the Today tab or begin one now.",
+                    comment: "Empty state message on Workouts tab"
+                ),
+                action: (
+                    label: String(localized: "Start Workout", comment: "Empty state action — begin a workout"),
+                    handler: {
+                        Task {
+                            VAHaptics.sessionStart()
+                            await model.startWorkoutSession()
+                        }
                     }
-                })
+                )
             )
             .frame(minHeight: 300)
 
             if !model.recentSessions.isEmpty {
                 VStack(alignment: .leading, spacing: VA.Space.md) {
-                    VASectionHeader("Recent History")
+                    VASectionHeader(String(localized: "Recent History", comment: "Section header listing recent sessions"))
                     ForEach(Array(model.recentSessions.prefix(5).enumerated()), id: \.offset) { _, session in
                         VACard(style: .flat) {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(session.date.formatted(.dateTime.month().day()))
                                         .font(VA.Typography.headline)
-                                    Text("\(session.completedSetCount) sets")
-                                        .font(VA.Typography.footnote)
-                                        .foregroundStyle(VA.Colors.textSecondary)
+                                    Text(String(
+                                        localized: "\(session.completedSetCount) sets",
+                                        comment: "Recent history row — set count"
+                                    ))
+                                    .font(VA.Typography.footnote)
+                                    .foregroundStyle(VA.Colors.textSecondary)
                                 }
                                 Spacer()
-                                Text("\(Int(session.totalVolumeLoad)) lb load")
-                                    .font(VA.Typography.monoDigit)
-                                    .foregroundStyle(VA.Colors.primary)
+                                Text(String(
+                                    localized: "\(Int(session.totalVolumeLoad)) lb load",
+                                    comment: "Recent history row — total volume load"
+                                ))
+                                .font(VA.Typography.monoDigit)
+                                .foregroundStyle(VA.Colors.primary)
                             }
                         }
                     }
