@@ -66,7 +66,7 @@ public struct SessionDetailView: View {
                         Text("\(Int(session.totalVolumeLoad))")
                             .font(VA.Typography.display)
                             .foregroundStyle(VA.Colors.textPrimary)
-                        Text("lb")
+                        Text(String(localized: "lb", comment: "Weight unit abbreviation — pounds"))
                             .font(VA.Typography.footnote)
                             .foregroundStyle(VA.Colors.textSecondary)
                     }
