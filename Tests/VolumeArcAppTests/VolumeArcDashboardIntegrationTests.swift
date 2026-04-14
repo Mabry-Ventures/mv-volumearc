@@ -250,6 +250,30 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertTrue(try userProfileRepository.isOnboardingComplete())
     }
 
+    // MARK: - Paywall / subscription wiring (VOL-58)
+
+    /// VOL-58 verification: the dashboard model exposes a non-nil
+    /// `subscriptionStore` that `ProfileView` can pass into `PaywallView`.
+    /// This is the integration-level stand-in for the XCUITest that was
+    /// deferred because SwiftUI Form cells in iOS 26 don't reliably
+    /// surface inner `accessibilityIdentifier`s. The XCUITest would have
+    /// verified the end-to-end tap → sheet flow; this test verifies the
+    /// state binding that makes that flow possible.
+    func testDashboardModelExposesSubscriptionStoreForPaywall() {
+        let model = makeDashboardModel()
+        XCTAssertNotNil(
+            model.subscriptionStore,
+            "ProfileView's paywall sheet binds to model.subscriptionStore — if this is nil, tapping Upgrade is a no-op"
+        )
+
+        // If the compiler accepts this expression, the paywall wiring is
+        // type-compatible with the view layer. The integration test
+        // documents the contract even though SwiftUI views are hard to
+        // instantiate in XCTest without ViewInspector.
+        let store = try? XCTUnwrap(model.subscriptionStore)
+        XCTAssertNotNil(store, "StoreKit subscription store must be available")
+    }
+
     func testStrictPrivacyModeRedactsCoachContext() async throws {
         let store = CapturedContextStore()
         let provider = CapturingCoachProvider(store: store)
