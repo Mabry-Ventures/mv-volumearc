@@ -91,15 +91,16 @@ final class VolumeArcAppUITests: XCTestCase {
         XCTAssertTrue(profileTab.waitForExistence(timeout: 10), "Profile tab should be available")
         profileTab.tap()
 
-        // The upgrade row is a SwiftUI Form `Button`. Accessibility
-        // identifiers attached to a Button inside a Form can be swallowed
-        // by the row's cell wrapping across SwiftUI revisions, so query by
-        // the visible "Upgrade" label text — that's what the user sees and
-        // the test runner can reliably find across runtimes. `firstMatch`
-        // avoids disambiguation against the Premium section header.
-        let upgradeLabel = app.staticTexts["Upgrade"].firstMatch
-        XCTAssertTrue(upgradeLabel.waitForExistence(timeout: 15), "Upgrade row should appear on the profile screen")
-        upgradeLabel.tap()
+        // The upgrade row in ProfileView is now an HStack with onTapGesture
+        // (not a Button) so the accessibility identifier lives directly on
+        // the tap target and is reliably queryable. Match across any element
+        // type for robustness against SwiftUI exposing it as a Button, Cell,
+        // or Other.
+        let upgradeRow = app.descendants(matching: .any)
+            .matching(identifier: "profile.upgrade")
+            .firstMatch
+        XCTAssertTrue(upgradeRow.waitForExistence(timeout: 15), "Upgrade row should appear on the profile screen")
+        upgradeRow.tap()
 
         let paywall = app.descendants(matching: .any)
             .matching(identifier: "paywall.root")
@@ -128,7 +129,10 @@ final class VolumeArcAppUITests: XCTestCase {
         )
 
         // And the profile row is back in place.
-        XCTAssertTrue(app.staticTexts["Upgrade"].firstMatch.waitForExistence(timeout: 10), "Profile screen should still be visible after dismissing the paywall")
+        let upgradeRowAfterDismiss = app.descendants(matching: .any)
+            .matching(identifier: "profile.upgrade")
+            .firstMatch
+        XCTAssertTrue(upgradeRowAfterDismiss.waitForExistence(timeout: 10), "Profile screen should still be visible after dismissing the paywall")
     }
 
     // MARK: - Performance

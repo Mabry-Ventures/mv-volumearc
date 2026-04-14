@@ -58,41 +58,44 @@ public struct ProfileView: View {
             }
 
             Section(String(localized: "Premium", comment: "Profile tab section header — subscription")) {
-                Button {
+                // Intentionally NOT a SwiftUI Button. Button inside Form
+                // wraps itself as a cell with combined accessibility, and
+                // across SwiftUI runtime revisions the inner
+                // `accessibilityIdentifier` gets swallowed by the cell,
+                // which made the Upgrade row unqueryable from XCUITest.
+                // Using an HStack with `onTapGesture` keeps the row tappable
+                // with the exact same UX but lets us pin the accessibility
+                // identifier and label directly on the tap target.
+                HStack {
+                    Label(
+                        String(localized: "Upgrade", comment: "Profile button — open the paywall"),
+                        systemImage: "sparkles"
+                    )
+                    .foregroundStyle(VA.Colors.primary)
+                    Spacer()
+                    Text(String(
+                        localized: "Monthly / Yearly",
+                        comment: "Profile upgrade row subtitle — available billing periods"
+                    ))
+                    .font(.caption)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
                     VAHaptics.tap()
                     isShowingPaywall = true
-                } label: {
-                    HStack {
-                        Label(
-                            String(localized: "Upgrade", comment: "Profile button — open the paywall"),
-                            systemImage: "sparkles"
-                        )
-                        .foregroundStyle(VA.Colors.primary)
-                        Spacer()
-                        Text(String(
-                            localized: "Monthly / Yearly",
-                            comment: "Profile upgrade row subtitle — available billing periods"
-                        ))
-                        .font(.caption)
-                        .foregroundStyle(VA.Colors.textSecondary)
-                    }
-                    // Combine the row contents into a single accessibility
-                    // element with a stable label and identifier. SwiftUI Form
-                    // wraps the Button as a Cell in the XCUITest hierarchy, and
-                    // identifiers attached only to the Button can fail to
-                    // propagate to the cell. Combining the children inside the
-                    // Button label and pinning the identifier here makes the
-                    // element reachable via app.buttons["profile.upgrade"] and
-                    // app.cells["profile.upgrade"] regardless of which type
-                    // SwiftUI exposes it as.
-                    .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier("profile.upgrade")
-                    .accessibilityLabel(String(
-                        localized: "Upgrade to Premium",
-                        comment: "VoiceOver label for the upgrade row"
-                    ))
-                    .accessibilityAddTraits(.isButton)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("profile.upgrade")
+                .accessibilityLabel(String(
+                    localized: "Upgrade to Premium",
+                    comment: "VoiceOver label for the upgrade row"
+                ))
+                .accessibilityHint(String(
+                    localized: "Opens the paywall to start a Premium subscription",
+                    comment: "VoiceOver hint for the upgrade row"
+                ))
+                .accessibilityAddTraits(.isButton)
             }
 
             Section(String(localized: "App", comment: "Profile tab section header — app-level settings")) {
