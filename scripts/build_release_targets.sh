@@ -29,3 +29,11 @@ xcodebuild \
   -configuration Release \
   CODE_SIGNING_ALLOWED=NO \
   build
+
+xcodebuild \
+  -project "VolumeArcApple.xcodeproj" \
+  -target "VolumeArcWatchWidgets" \
+  -sdk watchsimulator \
+  -configuration Release \
+  CODE_SIGNING_ALLOWED=NO \
+  build

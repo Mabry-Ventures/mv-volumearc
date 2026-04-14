@@ -20,6 +20,7 @@ public struct RootDashboardView: View {
                 Label(DashboardTab.today.title, systemImage: DashboardTab.today.systemImage)
             }
             .tag(DashboardTab.today)
+            .accessibilityIdentifier("tab.today")
 
             NavigationStack {
                 WorkoutsView(model: model)
@@ -28,6 +29,7 @@ public struct RootDashboardView: View {
                 Label(DashboardTab.workouts.title, systemImage: DashboardTab.workouts.systemImage)
             }
             .tag(DashboardTab.workouts)
+            .accessibilityIdentifier("tab.workouts")
 
             NavigationStack {
                 CoachView(model: model, navigation: navigation)
@@ -36,6 +38,7 @@ public struct RootDashboardView: View {
                 Label(DashboardTab.coach.title, systemImage: DashboardTab.coach.systemImage)
             }
             .tag(DashboardTab.coach)
+            .accessibilityIdentifier("tab.coach")
 
             NavigationStack {
                 SignalsView(model: model)
@@ -44,6 +47,7 @@ public struct RootDashboardView: View {
                 Label(DashboardTab.signals.title, systemImage: DashboardTab.signals.systemImage)
             }
             .tag(DashboardTab.signals)
+            .accessibilityIdentifier("tab.signals")
 
             NavigationStack {
                 ProfileView(model: model)
@@ -52,8 +56,10 @@ public struct RootDashboardView: View {
                 Label(DashboardTab.profile.title, systemImage: DashboardTab.profile.systemImage)
             }
             .tag(DashboardTab.profile)
+            .accessibilityIdentifier("tab.profile")
         }
         .tint(VA.Colors.primary)
+        .accessibilityIdentifier("root.dashboard")
         .task {
             await model.refresh()
         }

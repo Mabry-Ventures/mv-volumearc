@@ -11,6 +11,7 @@ PROJECT="VolumeArcApple.xcodeproj/project.pbxproj"
 for path in \
   "App/VolumeArc.entitlements" \
   "Watch/VolumeArcWatch.entitlements" \
+  "WatchWidgets/VolumeArcWatchWidgets.entitlements" \
   "Widgets/VolumeArcWidgets.entitlements"; do
   [[ -f "$path" ]] || {
     echo "Missing required entitlement file: $path" >&2
@@ -21,6 +22,7 @@ done
 for path in \
   "App/PrivacyInfo.xcprivacy" \
   "Watch/PrivacyInfo.xcprivacy" \
+  "WatchWidgets/PrivacyInfo.xcprivacy" \
   "Widgets/PrivacyInfo.xcprivacy"; do
   [[ -f "$path" ]] || {
     echo "Missing required privacy manifest: $path" >&2

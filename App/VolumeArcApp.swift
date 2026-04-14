@@ -15,6 +15,27 @@ extension Notification.Name {
     static let volumeArcReachabilityChanged = Notification.Name("VolumeArc.ReachabilityChanged")
 }
 
+/// Launch argument flags the app respects at startup. XCUITests set these
+/// to produce deterministic state.
+enum VolumeArcLaunchArguments {
+    /// `-UITestMode 1` — disables analytics, skips permission prompts, seeds
+    /// deterministic state, and exposes accessibility identifiers on UI.
+    static var isUITestMode: Bool {
+        ProcessInfo.processInfo.arguments.contains("-UITestMode") &&
+            ProcessInfo.processInfo.environment["UITestMode"] != "0"
+    }
+
+    /// `-SkipOnboarding 1` — skips the onboarding flow and seeds defaults.
+    static var skipOnboarding: Bool {
+        ProcessInfo.processInfo.arguments.contains("-SkipOnboarding")
+    }
+
+    /// `-SeedFixtures 1` — seeds the persistence layer with demo fixture data.
+    static var seedFixtures: Bool {
+        ProcessInfo.processInfo.arguments.contains("-SeedFixtures")
+    }
+}
+
 @main
 struct VolumeArcApp: App {
     @StateObject private var navigation = DashboardNavigationModel()
