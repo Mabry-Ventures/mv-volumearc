@@ -25,26 +25,46 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 
 ## Implementation Status
 
-> **Status: Production-ready with one feature scoped to a future release.** All major product surfaces are wired to real implementations. iPhone UI runs a full dashboard with fully-localized, accessible, Dynamic-Type-aware screens and hero transitions. AI coaching streams responses through a three-provider chain with on-device memory. CloudKit sync performs real record CRUD with cursor persistence. Watch app runs HealthKit workout sessions and bi-directional connectivity with offline queue replay. Widgets and Live Activities read real shared state. Subscriptions have a paywall and entitlement checks. 53 unit + integration tests pass and the XCUITest smoke suite runs in CI on every PR. The one explicitly-scoped-out feature is **live duplex audio** for voice coaching — the orchestrator and transport are functional for single-turn voice → text → speech queries via the same relay used by the text coach, but a persistent WebRTC-style streaming session against the OpenAI Realtime API is tracked as a future feature.
+> **Status: Pre-production — multiple launch blockers.** A post-95/95 independent audit (2026-04-14) found that several systems claimed as Implemented have broken end-to-end wiring. The product surface is real, the design system is real, and the test infrastructure exists, but key integration points are not connected. **Do not ship until the launch-blocker tickets close.**
+>
+> ### Active launch blockers
+> - **VOL-54 (Urgent)** — Schema migration plan is empty; existing-user upgrades will fail
+> - **VOL-55 (Urgent)** — Built `Info.plist` is missing `VolumeArcCloudKitContainer` — CloudKit silently misconfigured
+> - **VOL-56 (Urgent)** — Built `Info.plist` is missing background task identifiers; BG refresh rejected at runtime
+> - **VOL-57 (Urgent)** — `OnboardingView` is never reachable from `RootDashboardView`
+> - **VOL-58 (Urgent)** — `PaywallView` is never reachable from `ProfileView`
+> - **VOL-67 (Urgent)** — Cloud sync outbound payloads are not generated for local writes
+>
+> ### High-priority gaps
+> - **VOL-59 (High)** — Switch from `INFOPLIST_KEY_*` build settings to a checked-in `App/Info.plist` (umbrella for VOL-55/56)
+> - **VOL-60 (High)** — `validate_release_config.sh` checks project settings, not the built bundle
+> - **VOL-61 (High)** — `FeatureFlagProvider` is dead code; no `.isEnabled()` call sites
+> - **VOL-62 (High)** — `VolumeArcLaunchArguments` are dead; UI test seeding is broken
+>
+> ### Medium / refinement
+> - **VOL-63** privacy mode hardcoded to `.standard`, **VOL-64** `CoachPromptTemplate` unused, **VOL-65** workout summary shows stale metrics, **VOL-66** AI streaming is synthetic word-chunking
+>
+> The status table below now reflects the post-audit reality. Rows that were over-claimed have been downgraded to "Implemented (broken wiring — see VOL-XX)".
 
 | System | Status | Notes |
 |--------|--------|-------|
-| iPhone UI | Implemented | Full tab bar (Today, Workouts, Coach, Signals, Profile), real screens, Liquid Glass design system, fully localized via `String(localized:comment:)`, VoiceOver labels on data displays, Dynamic Type, hero transitions, toast presenter, session summary, session detail, paywall, onboarding |
-| AI coaching | Implemented | Three-provider chain with `AsyncThrowingStream` streaming, memory append via `CoachMemoryRepository`, structured output parsing, graceful fallback to `LocalHeuristicAICoachProvider` |
-| Voice coaching | Implemented (single-turn) | `OpenAIRelayVoiceTransport` delegates to the same relay-backed `AICoachProvider` chain; `LiveVoiceCoachOrchestrator` exposes `speak(prompt:context:)` and lifecycle hooks. Live duplex audio (persistent WebRTC session against OpenAI Realtime) is **explicit future work** — single-turn coverage is sufficient for the in-gym "ask a question, hear a reply" loop |
-| Cloud sync | Implemented | `CKModifyRecordsOperation` + `CKFetchRecordZoneChangesOperation` with cursor persistence, payload applier writes to SwiftData, conflict resolution, shared-state writes |
+| iPhone UI | Implemented (broken first-launch + paywall wiring — VOL-57, VOL-58) | Full tab bar (Today, Workouts, Coach, Signals, Profile) and screens render, but `RootDashboardView` never presents `OnboardingView` and `ProfileView` never presents `PaywallView`. Localized, accessible, Dynamic Type, hero transitions, toast presenter all working |
+| AI coaching | Implemented (synthetic streaming, dead templates — VOL-64, VOL-66) | Three-provider chain works for non-streaming responses. `streamCoachResponse` is synthetic word-chunking, not real progressive streaming. `CoachPromptTemplate` is defined but unused — coach builds prompts ad-hoc |
+| Voice coaching | Implemented (single-turn) | `OpenAIRelayVoiceTransport` delegates to the same relay-backed `AICoachProvider` chain; `LiveVoiceCoachOrchestrator` exposes `speak(prompt:context:)` and lifecycle hooks. Live duplex audio is explicit future work |
+| Cloud sync | Broken (VOL-55, VOL-67) | `CKModifyRecordsOperation` + `CKFetchRecordZoneChangesOperation` code paths exist, but the built `Info.plist` is missing the container ID so CloudKit is unconfigured at runtime. Local writes don't generate outbound payloads. Inbound apply is partial (omits sets/RPE/aggregates) |
 | Watch app | Implemented | HealthKit `HKWorkoutSession` + `HKLiveWorkoutBuilder`, rest timer, decisions, accessibility, offline payload queue, real phone/watch sync via WCSession |
 | Widgets | Implemented | `NextWorkoutWidget` + `WatchWidgets` extension read real shared state via `PlatformSurfaceDefaultsReader`, design-system-tokened, accessibility-labelled |
 | Live Activities | Implemented | `ActiveWorkoutLiveActivity` with real updates from workout session state, Dynamic Island layouts |
 | Notifications | Implemented | Scheduler wired into rest timer completion and training plan reminders, actionable categories (REST_TIMER, WORKOUT_REMINDER) |
-| Persistence | Implemented | Four-tier fallback chain, seed data, schema, migration plan, migration tests, real repository CRUD |
+| Background tasks | Broken (VOL-56) | `App/VolumeArcBackgroundTasks.swift` registers `appRefresh` + `appProcessing`, but the built `Info.plist` is missing `BGTaskSchedulerPermittedIdentifiers` and `UIBackgroundModes` — iOS rejects the registration at runtime |
+| Persistence | Implemented (no migration plan — VOL-54) | Four-tier fallback chain, seed data, schema, real repository CRUD all work for fresh installs. The `VolumeArcSchemaMigrationPlan` is empty, so existing-user upgrades that change record shapes will fail |
 | Secure storage | Implemented | Keychain with fallback, device ID stability |
 | Relay auth | Implemented | Actor-based session provider, token caching, expiration skew, real test coverage against production types |
 | Telemetry | Implemented | Fanout sink architecture. `SentryTelemetrySink` forwards events as breadcrumbs and captures `.error` severity as Sentry messages. `UserDefaultsTelemetrySink` and `OSLogTelemetrySink` persist/log for diagnostics |
-| Feature flags | Implemented | `LocalFeatureFlagProvider` with UserDefaults, flags gate voiceCoaching, cloudSync, liveActivities, foundationModelCoach |
-| Subscriptions | Implemented | StoreKit 2 with `@Published` entitlement state, full paywall UI, purchase + restore flow, entitlement checks |
-| Build pipeline | Implemented | Ruby-generated Xcode project, CI on self-hosted M4, Fastlane, archive script, SwiftLint, hard-failing release validation |
-| Testing | Implemented | 53 unit + integration tests against real production types (persistence, relay, migration, progression, readiness, dashboard integration, configuration). XCUITest smoke suite runs in CI on every PR. Dashboard integration tests cover the create → log → complete chain against in-memory SwiftData. Test coverage gate (VOL-52) is the one open item from the push-to-95 sprint |
+| Feature flags | Defined but unused (VOL-61) | `LocalFeatureFlagProvider` ships and is stored on `WorkoutDashboardModel`, but no code anywhere calls `.isEnabled()`. Flags gate nothing |
+| Subscriptions | Defined but unreachable (VOL-58) | StoreKit 2 store and `PaywallView` are fully built, but the paywall sheet is never presented from `ProfileView`. Tapping Upgrade is a no-op |
+| Build pipeline | Partial (VOL-59, VOL-60) | Ruby-generated Xcode project, CI on self-hosted M4, Fastlane, archive script, SwiftLint, hard-failing release validation. `INFOPLIST_KEY_*` build settings drop custom keys and array values; `validate_release_config.sh` checks project settings instead of built bundle, masking the failures |
+| Testing | Partial (XCUITest seeding broken — VOL-62) | 53 unit + integration tests pass. XCUITest smoke suite exists but `VolumeArcLaunchArguments` are defined and unused, so seeded/skip-onboarding modes don't work. Dashboard integration tests cover the create → log → complete chain against in-memory SwiftData. Test coverage gate (VOL-52) still open |
 
 ## Targets
 
