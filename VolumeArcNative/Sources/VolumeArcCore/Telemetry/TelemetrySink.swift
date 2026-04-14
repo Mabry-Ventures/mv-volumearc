@@ -92,10 +92,14 @@ public final class InMemoryTelemetrySink: TelemetrySink, @unchecked Sendable {
 
 /// Persistent telemetry sink backed by UserDefaults (rolling buffer of the last N events).
 /// Used for diagnostics the user or support can inspect without a network call.
-public struct UserDefaultsTelemetrySink: TelemetrySink {
+///
+/// UserDefaults itself is thread-safe but not declared `Sendable`, so we wrap it
+/// in an `@unchecked Sendable` struct with internal locking.
+public struct UserDefaultsTelemetrySink: TelemetrySink, @unchecked Sendable {
     private let defaults: UserDefaults
     private let key: String
     private let maxEvents: Int
+    private let lock = NSLock()
 
     public init(
         defaults: UserDefaults = .standard,
@@ -108,7 +112,9 @@ public struct UserDefaultsTelemetrySink: TelemetrySink {
     }
 
     public func record(_ event: TelemetryEvent) {
-        var events = loadEvents()
+        lock.lock()
+        defer { lock.unlock() }
+        var events = unsafeLoadEvents()
         events.append(event)
         if events.count > maxEvents {
             events.removeFirst(events.count - maxEvents)
@@ -118,8 +124,7 @@ public struct UserDefaultsTelemetrySink: TelemetrySink {
         }
     }
 
-    /// Load all persisted events.
-    public func loadEvents() -> [TelemetryEvent] {
+    private func unsafeLoadEvents() -> [TelemetryEvent] {
         guard let data = defaults.data(forKey: key),
               let decoded = try? JSONDecoder().decode([TelemetryEvent].self, from: data)
         else {
@@ -128,8 +133,17 @@ public struct UserDefaultsTelemetrySink: TelemetrySink {
         return decoded
     }
 
+    /// Load all persisted events.
+    public func loadEvents() -> [TelemetryEvent] {
+        lock.lock()
+        defer { lock.unlock() }
+        return unsafeLoadEvents()
+    }
+
     /// Clear all persisted events.
     public func clear() {
+        lock.lock()
+        defer { lock.unlock() }
         defaults.removeObject(forKey: key)
     }
 }
