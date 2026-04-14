@@ -37,6 +37,11 @@ public struct UserProfileDefaults: Sendable {
 public struct WeeklyWorkout: Codable, Sendable {
     public let dayOfWeek: Int
     public let title: String
+
+    public init(dayOfWeek: Int, title: String) {
+        self.dayOfWeek = dayOfWeek
+        self.title = title
+    }
 }
 
 public enum VolumeArcProductDefaults {
