@@ -1,6 +1,6 @@
 import Foundation
 
-public enum WorkoutAction: String, Sendable, CaseIterable {
+public enum WorkoutAction: String, Sendable, CaseIterable, Codable {
     case increase
     case hold
     case decrease

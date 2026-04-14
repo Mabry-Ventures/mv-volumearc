@@ -176,32 +176,28 @@ public protocol WatchPendingPayloadStore: Sendable {
     func count() async -> Int
 }
 
-public final class UserDefaultsWatchPendingPayloadStore: WatchPendingPayloadStore, @unchecked Sendable {
+public actor UserDefaultsWatchPendingPayloadStore: WatchPendingPayloadStore {
     private let defaults: UserDefaults
     private let key = "com.mabryventures.VolumeArc.watch.pendingPayloads"
-    private let lock = NSLock()
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
     }
 
     public func enqueue(_ payload: WatchPayload) async {
-        lock.lock(); defer { lock.unlock() }
         var current = loadUnsafe()
         current.append(payload)
         save(current)
     }
 
     public func dequeueAll() async -> [WatchPayload] {
-        lock.lock(); defer { lock.unlock() }
         let current = loadUnsafe()
         save([])
         return current
     }
 
     public func count() async -> Int {
-        lock.lock(); defer { lock.unlock() }
-        return loadUnsafe().count
+        loadUnsafe().count
     }
 
     private func loadUnsafe() -> [WatchPayload] {
