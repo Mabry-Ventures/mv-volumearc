@@ -45,37 +45,44 @@ public enum VA {
     }
 
     // MARK: - Typography
+    //
+    // All tokens use `Font.system(size:weight:design:)` paired with an implicit
+    // relative text style via `Font.system(_:design:weight:)` so Dynamic Type
+    // scaling works out of the box. The `relativeTo:` initializer lets the OS
+    // scale each token against a paired text style while preserving our
+    // rounded/default/monospaced design choice.
 
     public enum Typography {
-        /// 34pt bold — hero numbers (readiness score, weight)
-        public static let display = Font.system(size: 34, weight: .bold, design: .rounded)
+        /// Hero numbers (readiness score, weight). Scales with .largeTitle.
+        public static let display = Font.system(.largeTitle, design: .rounded, weight: .bold)
 
-        /// 28pt bold — screen titles
-        public static let title = Font.system(size: 28, weight: .bold, design: .rounded)
+        /// Screen titles. Scales with .title.
+        public static let title = Font.system(.title, design: .rounded, weight: .bold)
 
-        /// 22pt semibold — section titles, card headers
-        public static let title2 = Font.system(size: 22, weight: .semibold, design: .rounded)
+        /// Section titles, card headers. Scales with .title2.
+        public static let title2 = Font.system(.title2, design: .rounded, weight: .semibold)
 
-        /// 17pt semibold — card titles, prominent labels
-        public static let headline = Font.system(size: 17, weight: .semibold, design: .default)
+        /// Card titles, prominent labels. Scales with .headline.
+        public static let headline = Font.system(.headline, design: .default, weight: .semibold)
 
-        /// 17pt regular — body text, descriptions
-        public static let body = Font.system(size: 17, weight: .regular, design: .default)
+        /// Body text, descriptions. Scales with .body.
+        public static let body = Font.system(.body, design: .default, weight: .regular)
 
-        /// 15pt medium — buttons, interactive labels
-        public static let button = Font.system(size: 15, weight: .semibold, design: .default)
+        /// Buttons, interactive labels. Scales with .subheadline.
+        public static let button = Font.system(.subheadline, design: .default, weight: .semibold)
 
-        /// 13pt medium — supporting text, metadata
-        public static let footnote = Font.system(size: 13, weight: .medium, design: .default)
+        /// Supporting text, metadata. Scales with .footnote.
+        public static let footnote = Font.system(.footnote, design: .default, weight: .medium)
 
-        /// 11pt semibold — captions, badges, timestamps
-        public static let caption = Font.system(size: 11, weight: .semibold, design: .default)
+        /// Captions, badges, timestamps. Scales with .caption2.
+        public static let caption = Font.system(.caption2, design: .default, weight: .semibold)
 
-        /// Monospaced variant for numbers that should align vertically
+        /// Monospaced variant for numbers that should align vertically. Scales with .body.
         public static let monoDigit = Font.system(.body, design: .monospaced).monospacedDigit()
 
-        /// Display with monospaced digits for rest timer
-        public static let timerDisplay = Font.system(size: 44, weight: .bold, design: .rounded).monospacedDigit()
+        /// Display with monospaced digits for rest timer. Scales with .largeTitle.
+        public static let timerDisplay = Font.system(.largeTitle, design: .rounded, weight: .bold)
+            .monospacedDigit()
     }
 
     // MARK: - Spacing (4pt grid)

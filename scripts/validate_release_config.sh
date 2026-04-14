@@ -122,7 +122,7 @@ for required in "${test_required[@]}"; do
   fi
 done
 
-# --- Deep release checks (added by audit VOL-14) ---
+# --- Deep release checks (hard-failing per VOL-45) ---
 
 # Re-read app Release build settings for deeper checks
 xcodebuild \
@@ -131,29 +131,37 @@ xcodebuild \
   -configuration Release \
   -showBuildSettings >"$tmp_settings"
 
-# ENABLE_TESTABILITY should be NO in Release (allows debugger injection if YES)
+# ENABLE_TESTABILITY must be NO in Release (allows debugger injection if YES).
 if grep -F "ENABLE_TESTABILITY = YES" "$tmp_settings" >/dev/null 2>&1; then
-  echo "WARNING: ENABLE_TESTABILITY is YES in Release — consider setting to NO for production" >&2
+  echo "FAIL: ENABLE_TESTABILITY is YES in Release — production builds cannot enable testability" >&2
+  exit 1
 fi
 
-# Verify dSYM generation for crash reporting
+# Verify dSYM generation for crash reporting.
 if ! grep -F "DEBUG_INFORMATION_FORMAT = dwarf-with-dsym" "$tmp_settings" >/dev/null 2>&1; then
-  echo "WARNING: DEBUG_INFORMATION_FORMAT should be dwarf-with-dsym in Release for crash reporting" >&2
+  echo "FAIL: DEBUG_INFORMATION_FORMAT must be dwarf-with-dsym in Release for crash reporting" >&2
+  exit 1
 fi
 
-# VERSION file should exist
+# VERSION file must exist
 [[ -f "VERSION" ]] || {
-  echo "Missing VERSION file at repo root" >&2
+  echo "FAIL: Missing VERSION file at repo root" >&2
   exit 1
 }
 
-# Version bump check: if git tags exist, verify VERSION differs from latest tag
+# Version bump check: if building for a tag, fail when VERSION matches the latest tag.
+# On branch/PR builds this stays a warning since it only matters at release time.
 if git describe --tags --abbrev=0 >/dev/null 2>&1; then
   latest_tag="$(git describe --tags --abbrev=0)"
   current_version="$(cat VERSION | tr -d '[:space:]')"
   tag_version="${latest_tag#v}"
   if [[ "$current_version" == "$tag_version" ]]; then
-    echo "WARNING: VERSION ($current_version) matches latest tag ($latest_tag) — bump VERSION before release" >&2
+    if [[ "${CI_TAG_BUILD:-0}" == "1" ]]; then
+      echo "FAIL: VERSION ($current_version) matches latest tag ($latest_tag) — bump VERSION before shipping a tag build" >&2
+      exit 1
+    else
+      echo "WARNING: VERSION ($current_version) matches latest tag ($latest_tag) — bump VERSION before tagging" >&2
+    fi
   fi
 fi
 
