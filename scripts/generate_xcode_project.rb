@@ -21,7 +21,9 @@ project = Xcodeproj::Project.new(PROJECT_PATH)
 app_group = project.main_group.new_group('App', 'App')
 watch_group = project.main_group.new_group('Watch', 'Watch')
 widgets_group = project.main_group.new_group('Widgets', 'Widgets')
-tests_group = project.main_group.new_group('Tests', 'Tests')
+tests_root_group = project.main_group.new_group('Tests', 'Tests')
+tests_group = tests_root_group.new_group('VolumeArcAppTests', 'VolumeArcAppTests')
+ui_tests_group = tests_root_group.new_group('VolumeArcAppUITests', 'VolumeArcAppUITests')
 shared_group = project.main_group.new_group('Shared Native Package Sources')
 core_group = shared_group.new_group('VolumeArcCore', PACKAGE_ROOT.join('Sources/VolumeArcCore').relative_path_from(ROOT).to_s)
 ui_group = shared_group.new_group('VolumeArcUI', PACKAGE_ROOT.join('Sources/VolumeArcUI').relative_path_from(ROOT).to_s)
@@ -32,6 +34,7 @@ app_target = project.new_target(:application, 'VolumeArcApp', :ios, IOS_DEPLOYME
 watch_target = project.new_target(:application, 'VolumeArcWatch', :watchos, WATCHOS_DEPLOYMENT_TARGET, nil, :swift, 'VolumeArcWatch')
 widget_target = project.new_target(:app_extension, 'VolumeArcWidgets', :ios, IOS_DEPLOYMENT_TARGET, nil, :swift, 'VolumeArcWidgets')
 app_tests_target = project.new_target(:unit_test_bundle, 'VolumeArcAppTests', :ios, IOS_DEPLOYMENT_TARGET, nil, :swift, 'VolumeArcAppTests')
+app_ui_tests_target = project.new_target(:ui_test_bundle, 'VolumeArcAppUITests', :ios, IOS_DEPLOYMENT_TARGET, nil, :swift, 'VolumeArcAppUITests')
 
 def configure_target(target, bundle_id: nil, extra: {})
   target.build_configurations.each do |config|
@@ -69,6 +72,8 @@ configure_target(app_target, bundle_id: 'com.mabryventures.VolumeArc', extra: {
   'INFOPLIST_KEY_NSSpeechRecognitionUsageDescription' => 'VolumeArc uses speech recognition to understand live coaching requests and voice workout notes.',
   'INFOPLIST_KEY_VolumeArcCloudKitContainer' => 'iCloud.com.mabryventures.VolumeArc',
   'INFOPLIST_KEY_VolumeArcOpenAIBaseURL' => '',
+  'INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers' => '["com.mabryventures.VolumeArc.appRefresh","com.mabryventures.VolumeArc.appProcessing"]',
+  'INFOPLIST_KEY_UIBackgroundModes' => '["fetch","processing"]',
   'CODE_SIGN_ENTITLEMENTS' => 'App/VolumeArc.entitlements',
 })
 configure_target(watch_target, bundle_id: 'com.mabryventures.VolumeArc.watchkitapp', extra: {
@@ -96,6 +101,14 @@ configure_target(app_tests_target, bundle_id: 'com.mabryventures.VolumeArc.tests
   'CODE_SIGNING_REQUIRED' => 'NO',
   'SKIP_INSTALL' => 'YES',
 })
+configure_target(app_ui_tests_target, bundle_id: 'com.mabryventures.VolumeArc.uitests', extra: {
+  'PRODUCT_NAME' => 'VolumeArcAppUITests',
+  'GENERATE_INFOPLIST_FILE' => 'YES',
+  'CODE_SIGNING_ALLOWED' => 'NO',
+  'CODE_SIGNING_REQUIRED' => 'NO',
+  'SKIP_INSTALL' => 'YES',
+  'TEST_TARGET_NAME' => 'VolumeArcApp',
+})
 
 ui_target.add_dependency(core_target)
 ui_target.frameworks_build_phase.add_file_reference(core_target.product_reference, true)
@@ -113,6 +126,7 @@ app_tests_target.add_dependency(core_target)
 app_tests_target.add_dependency(ui_target)
 app_tests_target.frameworks_build_phase.add_file_reference(core_target.product_reference, true)
 app_tests_target.frameworks_build_phase.add_file_reference(ui_target.product_reference, true)
+app_ui_tests_target.add_dependency(app_target)
 
 widget_target.add_system_framework('WidgetKit')
 widget_target.add_system_framework('AppIntents')
@@ -130,6 +144,7 @@ app_tests_target.add_system_framework('AuthenticationServices')
 app_tests_target.add_system_framework('Security')
 app_tests_target.add_system_framework('AppIntents')
 app_tests_target.add_system_framework('ActivityKit')
+app_ui_tests_target.add_system_framework('XCTest')
 
 def add_swift_sources(group, target, base_dir)
   refs = Dir[base_dir.join('**/*.swift').to_s].sort.map do |file|
@@ -156,7 +171,8 @@ add_swift_sources(ui_group, ui_target, PACKAGE_ROOT.join('Sources/VolumeArcUI'))
 add_swift_sources(app_group, app_target, ROOT.join('App'))
 add_swift_sources(watch_group, watch_target, ROOT.join('Watch'))
 add_swift_sources(widgets_group, widget_target, ROOT.join('Widgets'))
-add_swift_sources(tests_group, app_tests_target, ROOT.join('Tests'))
+add_swift_sources(tests_group, app_tests_target, ROOT.join('Tests/VolumeArcAppTests'))
+add_swift_sources(ui_tests_group, app_ui_tests_target, ROOT.join('Tests/VolumeArcAppUITests'))
 add_resource(app_group, app_target, 'PrivacyInfo.xcprivacy')
 add_resource(watch_group, watch_target, 'PrivacyInfo.xcprivacy')
 add_resource(widgets_group, widget_target, 'PrivacyInfo.xcprivacy')
@@ -201,4 +217,9 @@ app_scheme.save_as(PROJECT_PATH, 'VolumeArcApp', true)
 test_scheme = Xcodeproj::XCScheme.new
 test_scheme.configure_with_targets(nil, app_tests_target)
 test_scheme.save_as(PROJECT_PATH, 'VolumeArcAppTests', true)
+
+ui_test_scheme = Xcodeproj::XCScheme.new
+ui_test_scheme.configure_with_targets(app_target, app_ui_tests_target)
+ui_test_scheme.save_as(PROJECT_PATH, 'VolumeArcAppUITests', true)
+
 puts "Generated #{PROJECT_PATH}"

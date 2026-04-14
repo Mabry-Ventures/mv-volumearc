@@ -28,7 +28,7 @@ public struct ProfileView: View {
 
             Section("App") {
                 NavigationLink {
-                    SignalsDetailPlaceholder()
+                    DiagnosticsView()
                 } label: {
                     Label("Diagnostics", systemImage: "stethoscope")
                 }
