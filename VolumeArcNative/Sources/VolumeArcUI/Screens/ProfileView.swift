@@ -5,6 +5,8 @@ import VolumeArcCore
 /// The Profile tab — user settings, preferences, subscription status.
 public struct ProfileView: View {
     @ObservedObject var model: WorkoutDashboardModel
+    @State private var isEditingProfile = false
+    @State private var isShowingPaywall = false
 
     public init(model: WorkoutDashboardModel) {
         self.model = model
@@ -24,6 +26,29 @@ public struct ProfileView: View {
                 row(label: "Weekly days", value: "\(model.athlete.weeklyTrainingDays)", icon: "calendar")
                 row(label: "Rep range", value: "\(model.athlete.preferredRepRange.lowerBound)-\(model.athlete.preferredRepRange.upperBound)", icon: "number")
                 row(label: "Equipment", value: "\(model.athlete.availableEquipment.count) types", icon: "dumbbell.fill")
+                Button {
+                    VAHaptics.tap()
+                    isEditingProfile = true
+                } label: {
+                    Label("Edit profile", systemImage: "pencil")
+                        .foregroundStyle(VA.Colors.primary)
+                }
+            }
+
+            Section("Premium") {
+                Button {
+                    VAHaptics.tap()
+                    isShowingPaywall = true
+                } label: {
+                    HStack {
+                        Label("Upgrade", systemImage: "sparkles")
+                            .foregroundStyle(VA.Colors.primary)
+                        Spacer()
+                        Text("Monthly / Yearly")
+                            .font(.caption)
+                            .foregroundStyle(VA.Colors.textSecondary)
+                    }
+                }
             }
 
             Section("App") {
@@ -52,6 +77,16 @@ public struct ProfileView: View {
         .listStyle(.insetGrouped)
         .navigationTitle(DashboardTab.profile.title)
         .navigationBarTitleDisplayMode(.large)
+        .sheet(isPresented: $isEditingProfile) {
+            EditProfileView(
+                isPresented: $isEditingProfile,
+                athlete: model.athlete
+            ) { defaults in
+                Task {
+                    await model.updateProfile(defaults)
+                }
+            }
+        }
     }
 
     private var profileHeader: some View {
@@ -98,17 +133,6 @@ public struct ProfileView: View {
             Text(value)
                 .foregroundStyle(VA.Colors.textSecondary)
         }
-    }
-}
-
-private struct SignalsDetailPlaceholder: View {
-    var body: some View {
-        VAEmptyState(
-            icon: "chart.xyaxis.line",
-            title: "Diagnostics",
-            message: "Detailed system diagnostics will appear here."
-        )
-        .navigationTitle("Diagnostics")
     }
 }
 #endif

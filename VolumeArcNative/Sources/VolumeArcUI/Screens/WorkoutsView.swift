@@ -7,6 +7,7 @@ public struct WorkoutsView: View {
     @ObservedObject var model: WorkoutDashboardModel
     @State private var restEndsAt: Date = .now.addingTimeInterval(90)
     @State private var restActive: Bool = false
+    @State private var summary: CompletedSessionSnapshot?
 
     public init(model: WorkoutDashboardModel) {
         self.model = model
@@ -30,6 +31,29 @@ public struct WorkoutsView: View {
         .background(VA.Colors.surfaceSecondary)
         .navigationTitle(model.isSessionActive ? "Session" : "Workouts")
         .navigationBarTitleDisplayMode(.large)
+        .fullScreenCover(item: $summary) { snapshot in
+            SessionSummaryView(
+                sets: snapshot.sets,
+                totalVolume: snapshot.totalVolume,
+                duration: snapshot.duration,
+                averageRPE: snapshot.averageRPE,
+                primaryLift: snapshot.primaryLift
+            ) {
+                summary = nil
+            }
+        }
+    }
+
+    /// Captured snapshot of the session state at completion time.
+    /// Held locally so the summary sheet can display metrics even after
+    /// the model has cleared its `isSessionActive` state.
+    struct CompletedSessionSnapshot: Identifiable {
+        let id = UUID()
+        let sets: Int
+        let totalVolume: Double
+        let duration: Int
+        let averageRPE: Double
+        let primaryLift: String
     }
 
     // MARK: - Active session
@@ -154,7 +178,25 @@ public struct WorkoutsView: View {
         VAButton("Complete Workout", icon: "flag.checkered", style: .secondary) {
             Task {
                 VAHaptics.workoutComplete()
+
+                // Capture the session snapshot before completing, so the
+                // summary sheet has values to display after the model clears
+                // its active-session state.
+                let capturedSets = model.loggedSetCountThisSession
+                let capturedVolume = model.recentSessions.first?.totalVolumeLoad ?? 0
+                let capturedDuration = model.recentSessions.first?.durationMinutes ?? 0
+                let capturedRPE = model.autopilot?.nextTarget.targetRPE ?? 7.5
+                let capturedLift = model.autopilot?.nextExerciseName ?? "your workout"
+
                 await model.completeWorkoutSession()
+
+                summary = CompletedSessionSnapshot(
+                    sets: max(1, capturedSets),
+                    totalVolume: max(capturedVolume, 1),
+                    duration: max(capturedDuration, 1),
+                    averageRPE: capturedRPE,
+                    primaryLift: capturedLift
+                )
             }
         }
     }

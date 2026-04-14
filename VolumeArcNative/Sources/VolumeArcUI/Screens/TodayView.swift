@@ -6,6 +6,7 @@ import VolumeArcCore
 public struct TodayView: View {
     @ObservedObject var model: WorkoutDashboardModel
     @ObservedObject var navigation: DashboardNavigationModel
+    @Namespace private var heroNamespace
 
     public init(model: WorkoutDashboardModel, navigation: DashboardNavigationModel) {
         self.model = model
@@ -16,12 +17,20 @@ public struct TodayView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: VA.Space.lg) {
                 greeting
-                readinessCard
-                nextWorkoutCard
-                quickActionsRow
-                recentSessionsSection
-                if !model.operationalSignals.isEmpty {
-                    signalsSection
+                if model.hasLoadedInitialData {
+                    readinessCard
+                    nextWorkoutCard
+                    quickActionsRow
+                    recentSessionsSection
+                    if !model.operationalSignals.isEmpty {
+                        signalsSection
+                    }
+                } else {
+                    // Skeleton loading state for first load — shows while
+                    // repositories are fetched on appear.
+                    VASkeletonCard()
+                    VASkeletonCard()
+                    VASkeletonList(count: 2)
                 }
             }
             .padding(VA.Space.lg)
@@ -101,45 +110,59 @@ public struct TodayView: View {
     @ViewBuilder
     private var nextWorkoutCard: some View {
         if let autopilot = model.autopilot {
-            VACard(style: .elevated) {
-                VStack(alignment: .leading, spacing: VA.Space.md) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: VA.Space.xxs) {
-                            Text("NEXT WORKOUT")
+            NavigationLink {
+                WorkoutDetailView(
+                    title: model.nextWorkout?.title ?? "Strength Session",
+                    exerciseName: autopilot.nextExerciseName,
+                    target: "\(Int(autopilot.nextTarget.weight))\(autopilot.nextTarget.unit) × \(autopilot.nextTarget.repRange.lowerBound)-\(autopilot.nextTarget.repRange.upperBound) @ RPE \(String(format: "%.1f", autopilot.nextTarget.targetRPE))",
+                    cue: autopilot.bestCue,
+                    reason: autopilot.recommendationReason,
+                    heroNamespace: heroNamespace
+                )
+                .navigationTransition(.zoom(sourceID: "next-workout-hero", in: heroNamespace))
+            } label: {
+                VACard(style: .elevated) {
+                    VStack(alignment: .leading, spacing: VA.Space.md) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                                Text("NEXT WORKOUT")
+                                    .font(VA.Typography.caption)
+                                    .foregroundStyle(VA.Colors.textSecondary)
+                                    .tracking(0.5)
+                                Text(model.nextWorkout?.title ?? "Strength Session")
+                                    .font(VA.Typography.title2)
+                                    .foregroundStyle(VA.Colors.textPrimary)
+                            }
+                            Spacer()
+                            Image(systemName: "figure.strengthtraining.traditional")
+                                .font(.system(size: 28, weight: .medium))
+                                .foregroundStyle(VA.Colors.primary)
+                        }
+
+                        Divider()
+
+                        VStack(alignment: .leading, spacing: VA.Space.sm) {
+                            Text("Starting lift")
                                 .font(VA.Typography.caption)
                                 .foregroundStyle(VA.Colors.textSecondary)
                                 .tracking(0.5)
-                            Text(model.nextWorkout?.title ?? "Strength Session")
-                                .font(VA.Typography.title2)
+                            Text(autopilot.nextExerciseName)
+                                .font(VA.Typography.headline)
                                 .foregroundStyle(VA.Colors.textPrimary)
+                            Text("\(Int(autopilot.nextTarget.weight))\(autopilot.nextTarget.unit) × \(autopilot.nextTarget.repRange.lowerBound)-\(autopilot.nextTarget.repRange.upperBound) @ RPE \(String(format: "%.1f", autopilot.nextTarget.targetRPE))")
+                                .font(VA.Typography.monoDigit)
+                                .foregroundStyle(VA.Colors.primary)
                         }
-                        Spacer()
-                        Image(systemName: "figure.strengthtraining.traditional")
-                            .font(.system(size: 28, weight: .medium))
-                            .foregroundStyle(VA.Colors.primary)
-                    }
 
-                    Divider()
-
-                    VStack(alignment: .leading, spacing: VA.Space.sm) {
-                        Text("Starting lift")
-                            .font(VA.Typography.caption)
+                        Text(autopilot.recommendationReason)
+                            .font(VA.Typography.footnote)
                             .foregroundStyle(VA.Colors.textSecondary)
-                            .tracking(0.5)
-                        Text(autopilot.nextExerciseName)
-                            .font(VA.Typography.headline)
-                            .foregroundStyle(VA.Colors.textPrimary)
-                        Text("\(Int(autopilot.nextTarget.weight))\(autopilot.nextTarget.unit) × \(autopilot.nextTarget.repRange.lowerBound)-\(autopilot.nextTarget.repRange.upperBound) @ RPE \(String(format: "%.1f", autopilot.nextTarget.targetRPE))")
-                            .font(VA.Typography.monoDigit)
-                            .foregroundStyle(VA.Colors.primary)
+                            .padding(.top, VA.Space.xs)
                     }
-
-                    Text(autopilot.recommendationReason)
-                        .font(VA.Typography.footnote)
-                        .foregroundStyle(VA.Colors.textSecondary)
-                        .padding(.top, VA.Space.xs)
                 }
+                .matchedTransitionSource(id: "next-workout-hero", in: heroNamespace)
             }
+            .buttonStyle(.plain)
         } else {
             VACard(style: .flat) {
                 VAEmptyState(

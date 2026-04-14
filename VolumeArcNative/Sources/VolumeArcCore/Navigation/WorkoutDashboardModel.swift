@@ -36,6 +36,7 @@ public final class WorkoutDashboardModel: ObservableObject {
 
     @Published public var isOnboardingComplete: Bool = false
     @Published public private(set) var isNetworkReachable: Bool = true
+    @Published public private(set) var hasLoadedInitialData: Bool = false
 
     // MARK: - Dependencies
 
@@ -210,6 +211,7 @@ public final class WorkoutDashboardModel: ObservableObject {
             }
 
             self.isOnboardingComplete = try userProfileRepository.isOnboardingComplete()
+            self.hasLoadedInitialData = true
 
             // Publish a widget snapshot derived from the freshly loaded state.
             publishWidgetSnapshot()
@@ -330,6 +332,31 @@ public final class WorkoutDashboardModel: ObservableObject {
             telemetrySink.record(TelemetryEvent(
                 category: "workout",
                 name: "session_complete_failed",
+                severity: .error,
+                message: error.localizedDescription
+            ))
+        }
+        #endif
+    }
+
+    /// Persist profile updates from the edit screen or onboarding.
+    public func updateProfile(_ defaults: UserProfileDefaults) async {
+        #if canImport(SwiftData)
+        guard let userProfileRepository else { return }
+        do {
+            try userProfileRepository.upsertProfile(defaults)
+            try userProfileRepository.markOnboardingComplete()
+            telemetrySink.record(TelemetryEvent(
+                category: "profile",
+                name: "profile_updated",
+                severity: .info,
+                message: "Profile updated for \(defaults.name.isEmpty ? "athlete" : defaults.name)"
+            ))
+            await refresh()
+        } catch {
+            telemetrySink.record(TelemetryEvent(
+                category: "profile",
+                name: "profile_update_failed",
                 severity: .error,
                 message: error.localizedDescription
             ))
