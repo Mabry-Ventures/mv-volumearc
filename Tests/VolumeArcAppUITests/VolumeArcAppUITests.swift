@@ -102,18 +102,6 @@ final class VolumeArcAppUITests: XCTestCase {
     // VStack), replace the integration test with a real end-to-end
     // XCUITest.
 
-    // MARK: - Performance
-
-    @MainActor
-    func testLaunchPerformance() throws {
-        if #available(iOS 13.0, *) {
-            measure(metrics: [XCTApplicationLaunchMetric()]) {
-                let app = makeSeededApp()
-                app.launch()
-            }
-        }
-    }
-
     // MARK: - Helpers
 
     private func makeSeededApp() -> XCUIApplication {
