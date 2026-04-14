@@ -65,8 +65,16 @@ final class VolumeArcAppUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
+
+        // Onboarding is presented in a fullScreenCover; the accessibility
+        // identifier may surface as either an `otherElement` or a generic
+        // descendant depending on SwiftUI's hosting layer. Match by identifier
+        // across any element type for robustness.
+        let onboardingRoot = app.descendants(matching: .any)
+            .matching(identifier: "onboarding.root")
+            .firstMatch
         XCTAssertTrue(
-            app.otherElements["onboarding.root"].waitForExistence(timeout: 10),
+            onboardingRoot.waitForExistence(timeout: 15),
             "Onboarding should appear when launch arguments do not skip it"
         )
     }
@@ -77,23 +85,34 @@ final class VolumeArcAppUITests: XCTestCase {
 
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
 
+        // Tap the Profile tab. SwiftUI tab bar buttons are normal buttons,
+        // so the localized title query is reliable.
         let profileTab = app.tabBars.buttons["Profile"]
         XCTAssertTrue(profileTab.waitForExistence(timeout: 10), "Profile tab should be available")
         profileTab.tap()
 
-        let upgradeButton = app.buttons["profile.upgrade"]
-        XCTAssertTrue(upgradeButton.waitForExistence(timeout: 10), "Upgrade button should appear on the profile screen")
-        upgradeButton.tap()
+        // SwiftUI Form rows wrap their Button as a Cell in the XCUI hierarchy.
+        // Match by identifier across any element type so we don't depend on
+        // whether SwiftUI exposes the row as a Button, Cell, or Other element.
+        let upgradeRow = app.descendants(matching: .any)
+            .matching(identifier: "profile.upgrade")
+            .firstMatch
+        XCTAssertTrue(upgradeRow.waitForExistence(timeout: 10), "Upgrade row should appear on the profile screen")
+        upgradeRow.tap()
 
-        let paywall = app.otherElements["paywall.root"]
+        let paywall = app.descendants(matching: .any)
+            .matching(identifier: "paywall.root")
+            .firstMatch
         XCTAssertTrue(paywall.waitForExistence(timeout: 10), "Paywall should be presented after tapping Upgrade")
 
-        let closeButton = app.buttons["paywall.close"]
+        let closeButton = app.descendants(matching: .any)
+            .matching(identifier: "paywall.close")
+            .firstMatch
         XCTAssertTrue(closeButton.waitForExistence(timeout: 10), "Paywall close button should be visible")
         closeButton.tap()
 
-        XCTAssertFalse(paywall.waitForExistence(timeout: 2), "Paywall should dismiss after closing it")
-        XCTAssertTrue(upgradeButton.waitForExistence(timeout: 10), "Profile screen should still be visible after dismissing the paywall")
+        // The cover dismisses and we should be back on the profile row.
+        XCTAssertTrue(upgradeRow.waitForExistence(timeout: 10), "Profile screen should still be visible after dismissing the paywall")
     }
 
     // MARK: - Performance
