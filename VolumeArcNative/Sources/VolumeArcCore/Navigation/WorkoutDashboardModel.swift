@@ -350,7 +350,7 @@ public final class WorkoutDashboardModel: ObservableObject {
 
     // MARK: - Coach
 
-    /// Send a prompt to the AI coach and stream the response into `coachMessages`.
+    /// Send a prompt to the AI coach and stream the response into `coachMessages` token-by-token.
     public func askCoach(_ prompt: String) async {
         guard !prompt.trimmingCharacters(in: .whitespaces).isEmpty else { return }
 
@@ -362,20 +362,50 @@ public final class WorkoutDashboardModel: ObservableObject {
 
         let context = buildCoachContext()
 
-        do {
-            let response = try await aiProvider.coachResponse(for: prompt, context: context)
-            let coachMessage = CoachMessage(id: UUID(), sender: .coach, content: response)
-            coachMessages.append(coachMessage)
+        // Create a placeholder message we'll append tokens to as they arrive.
+        let streamingID = UUID()
+        coachMessages.append(CoachMessage(id: streamingID, sender: .coach, content: ""))
 
+        var accumulated = ""
+        do {
+            let stream = aiProvider.streamCoachResponse(for: prompt, context: context)
+            for try await chunk in stream {
+                accumulated += chunk
+                if let index = coachMessages.firstIndex(where: { $0.id == streamingID }) {
+                    coachMessages[index] = CoachMessage(
+                        id: streamingID,
+                        sender: .coach,
+                        content: accumulated,
+                        timestamp: coachMessages[index].timestamp
+                    )
+                }
+            }
+
+            // Persist the full response as a coach memory for future prompt grounding.
             #if canImport(SwiftData)
-            try? coachMemoryRepository?.append(content: response, theme: "coaching")
+            if !accumulated.isEmpty {
+                try? coachMemoryRepository?.append(
+                    content: "User asked: \(prompt)\nCoach said: \(accumulated)",
+                    theme: inferTheme(from: prompt)
+                )
+            }
             #endif
-        } catch {
-            coachMessages.append(CoachMessage(
-                id: UUID(),
-                sender: .coach,
-                content: "I'm having trouble reaching my knowledge base. Try again in a moment."
+
+            telemetrySink.record(TelemetryEvent(
+                category: "coach",
+                name: "ask_complete",
+                severity: .info,
+                message: "Coach responded (\(accumulated.count) chars)"
             ))
+        } catch {
+            // Replace the placeholder with a user-visible error and keep the conversation alive.
+            if let index = coachMessages.firstIndex(where: { $0.id == streamingID }) {
+                coachMessages[index] = CoachMessage(
+                    id: streamingID,
+                    sender: .coach,
+                    content: "I'm having trouble reaching my knowledge base. Try again in a moment."
+                )
+            }
 
             telemetrySink.record(TelemetryEvent(
                 category: "coach",
@@ -386,17 +416,58 @@ public final class WorkoutDashboardModel: ObservableObject {
         }
     }
 
+    /// Build the grounded context block for coach prompts using real dashboard state and
+    /// recent coach memories for continuity across conversations.
     private func buildCoachContext() -> String {
-        var parts: [String] = []
-        parts.append("Athlete: \(athlete.name.isEmpty ? "lifter" : athlete.name), level: \(athlete.advancementLevel.rawValue)")
-        parts.append("Readiness: \(readiness.score)/100 — \(readiness.brief)")
-        if let autopilot {
-            parts.append("Next: \(autopilot.nextExerciseName) at \(Int(autopilot.nextTarget.weight))lb x \(autopilot.nextTarget.repRange.lowerBound)-\(autopilot.nextTarget.repRange.upperBound)")
+        let athleteName = athlete.name.isEmpty ? "the athlete" : athlete.name
+        let avgRPE = recentSessions.isEmpty
+            ? 0
+            : recentSessions.map(\.averageRPE).reduce(0, +) / Double(recentSessions.count)
+
+        let lastSessionSummary: String? = recentSessions
+            .sorted { $0.date > $1.date }
+            .first
+            .map { session in
+                "\(session.completedSetCount) sets, \(Int(session.totalVolumeLoad))lb total, RPE \(String(format: "%.1f", session.averageRPE))"
+            }
+
+        var memories: [String] = []
+        #if canImport(SwiftData)
+        if let coachMemoryRepository, let memory = try? coachMemoryRepository.coachMemory() {
+            memories = memory.mostRecent.map(\.summary)
         }
-        if !recentSessions.isEmpty {
-            parts.append("Recent training: \(recentSessions.count) sessions in last 7d, avg RPE \(String(format: "%.1f", recentSessions.map(\.averageRPE).reduce(0, +) / Double(max(1, recentSessions.count))))")
-        }
-        return parts.joined(separator: "\n")
+        #endif
+
+        let nextExercise = autopilot?.nextExerciseName
+        let nextTarget = autopilot.map { "\(Int($0.nextTarget.weight))lb × \($0.nextTarget.repRange.lowerBound)-\($0.nextTarget.repRange.upperBound)" }
+
+        let context = CoachContext(
+            athleteName: athleteName,
+            advancementLevel: athlete.advancementLevel.rawValue,
+            readinessScore: readiness.score,
+            readinessBrief: readiness.brief,
+            nextExercise: nextExercise,
+            nextTarget: nextTarget,
+            recentSessionCount: recentSessions.count,
+            averageRPE: avgRPE,
+            lastSessionSummary: lastSessionSummary,
+            recentMemories: memories
+        )
+
+        return context.asPromptBlock(privacyMode: .standard)
+    }
+
+    /// Pattern-match the user's prompt to infer a memory theme for organization.
+    private func inferTheme(from prompt: String) -> String {
+        let lowered = prompt.lowercased()
+        if lowered.contains("squat") { return "squat" }
+        if lowered.contains("bench") { return "bench" }
+        if lowered.contains("dead") { return "deadlift" }
+        if lowered.contains("press") { return "overhead_press" }
+        if lowered.contains("ready") || lowered.contains("recovery") { return "readiness" }
+        if lowered.contains("deload") || lowered.contains("back off") { return "deload" }
+        if lowered.contains("form") || lowered.contains("technique") { return "form" }
+        return "general"
     }
 
     // MARK: - Watch & Health handlers
