@@ -253,8 +253,8 @@ public struct TodayView: View {
             VASectionHeader(
                 String(localized: "Recent Sessions", comment: "Section header on Today tab for recent workout history"),
                 subtitle: String(
-                    localized: "\(model.recentSessions.count) this week",
-                    comment: "Subtitle showing how many sessions have been logged this week"
+                    localized: "^[\(model.recentSessions.count) this week](inflect: true)",
+                    comment: "Subtitle showing how many sessions have been logged this week, with plural agreement"
                 )
             )
             if model.recentSessions.isEmpty {
@@ -286,8 +286,8 @@ public struct TodayView: View {
                             .font(VA.Typography.headline)
                             .foregroundStyle(VA.Colors.textPrimary)
                         Text(String(
-                            localized: "\(session.completedSetCount) sets • \(session.durationMinutes)min • RPE \(String(format: "%.1f", session.averageRPE))",
-                            comment: "Session summary metrics showing sets, duration, and average RPE"
+                            localized: "^[\(session.completedSetCount) sets](inflect: true) • \(session.durationMinutes)min • RPE \(String(format: "%.1f", session.averageRPE))",
+                            comment: "Session summary metrics showing sets, duration, and average RPE — sets uses plural agreement"
                         ))
                         .font(VA.Typography.footnote)
                         .foregroundStyle(VA.Colors.textSecondary)

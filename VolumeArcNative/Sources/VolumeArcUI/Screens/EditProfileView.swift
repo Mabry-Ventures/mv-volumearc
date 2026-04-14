@@ -52,7 +52,7 @@ public struct EditProfileView: View {
                         selection: $advancementLevel
                     ) {
                         ForEach(AdvancementLevel.allCases, id: \.self) { level in
-                            Text(advancementLevelLabel(level)).tag(level)
+                            Text(level.displayName).tag(level)
                         }
                     }
                 }
@@ -78,7 +78,7 @@ public struct EditProfileView: View {
 
                 Section(String(localized: "Equipment", comment: "Edit profile section header — available equipment")) {
                     ForEach(Equipment.allCases, id: \.self) { equipment in
-                        Toggle(equipmentLabel(equipment), isOn: Binding(
+                        Toggle(equipment.displayName, isOn: Binding(
                             get: { selectedEquipment.contains(equipment) },
                             set: { isOn in
                                 if isOn {
@@ -98,7 +98,7 @@ public struct EditProfileView: View {
                         selection: $coachingStyle
                     ) {
                         ForEach(CoachingStyle.allCases, id: \.self) { style in
-                            Text(coachingStyleLabel(style)).tag(style)
+                            Text(style.displayName).tag(style)
                         }
                     }
                 }
@@ -108,13 +108,14 @@ public struct EditProfileView: View {
                         String(localized: "Privacy mode", comment: "Edit profile privacy mode picker"),
                         selection: $privacyMode
                     ) {
-                        Text(String(localized: "Standard", comment: "Privacy mode — standard")).tag(PrivacyMode.standard)
-                        Text(String(localized: "Strict", comment: "Privacy mode — strict")).tag(PrivacyMode.strict)
+                        ForEach(PrivacyMode.allCases, id: \.self) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
                     }
                 } header: {
                     Text(String(localized: "Privacy", comment: "Edit profile section header — privacy"))
                 } footer: {
-                    Text(privacyFooter)
+                    Text(privacyMode.footerDescription)
                         .font(.caption)
                 }
             }
@@ -135,49 +136,6 @@ public struct EditProfileView: View {
                     .fontWeight(.semibold)
                 }
             }
-        }
-    }
-
-    private var privacyFooter: String {
-        switch privacyMode {
-        case .standard:
-            return String(
-                localized: "Your name and training history are included in coach prompts for personalized responses.",
-                comment: "Edit profile privacy footer — standard mode"
-            )
-        case .strict:
-            return String(
-                localized: "Strict mode strips your name and anonymizes history before sending to the AI coach.",
-                comment: "Edit profile privacy footer — strict mode"
-            )
-        }
-    }
-
-    private func advancementLevelLabel(_ level: AdvancementLevel) -> String {
-        switch level {
-        case .beginner: return String(localized: "Beginner", comment: "Advancement level — beginner")
-        case .intermediate: return String(localized: "Intermediate", comment: "Advancement level — intermediate")
-        case .advanced: return String(localized: "Advanced", comment: "Advancement level — advanced")
-        }
-    }
-
-    private func coachingStyleLabel(_ style: CoachingStyle) -> String {
-        switch style {
-        case .motivational: return String(localized: "Motivational", comment: "Coaching style — motivational")
-        case .analytical: return String(localized: "Analytical", comment: "Coaching style — analytical")
-        case .minimal: return String(localized: "Minimal", comment: "Coaching style — minimal")
-        }
-    }
-
-    private func equipmentLabel(_ equipment: Equipment) -> String {
-        switch equipment {
-        case .barbell: return String(localized: "Barbell", comment: "Equipment type — barbell")
-        case .dumbbell: return String(localized: "Dumbbell", comment: "Equipment type — dumbbell")
-        case .machine: return String(localized: "Machine", comment: "Equipment type — machine")
-        case .bodyweight: return String(localized: "Bodyweight", comment: "Equipment type — bodyweight")
-        case .cable: return String(localized: "Cable", comment: "Equipment type — cable")
-        case .kettlebell: return String(localized: "Kettlebell", comment: "Equipment type — kettlebell")
-        case .band: return String(localized: "Resistance band", comment: "Equipment type — band")
         }
     }
 

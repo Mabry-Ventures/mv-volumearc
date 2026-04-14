@@ -24,7 +24,7 @@ public struct ProfileView: View {
             Section(String(localized: "Training", comment: "Profile tab section header — training settings")) {
                 row(
                     label: String(localized: "Advancement", comment: "Profile row — advancement level"),
-                    value: advancementLabel(model.athlete.advancementLevel),
+                    value: model.athlete.advancementLevel.displayName,
                     icon: "chart.line.uptrend.xyaxis"
                 )
                 row(
@@ -40,8 +40,8 @@ public struct ProfileView: View {
                 row(
                     label: String(localized: "Equipment", comment: "Profile row — equipment count"),
                     value: String(
-                        localized: "\(model.athlete.availableEquipment.count) types",
-                        comment: "Profile row value — number of equipment types"
+                        localized: "^[\(model.athlete.availableEquipment.count) types](inflect: true)",
+                        comment: "Profile row value — pluralized count of equipment types"
                     ),
                     icon: "dumbbell.fill"
                 )
@@ -148,12 +148,9 @@ public struct ProfileView: View {
                          : model.athlete.name)
                         .font(VA.Typography.title2)
                         .foregroundStyle(VA.Colors.textPrimary)
-                    Text(String(
-                        localized: "\(advancementLabel(model.athlete.advancementLevel)) lifter",
-                        comment: "Profile header subtitle — e.g. 'Intermediate lifter'"
-                    ))
-                    .font(VA.Typography.footnote)
-                    .foregroundStyle(VA.Colors.textSecondary)
+                    Text(model.athlete.advancementLevel.lifterPhrase)
+                        .font(VA.Typography.footnote)
+                        .foregroundStyle(VA.Colors.textSecondary)
                 }
                 Spacer()
             }
@@ -165,14 +162,6 @@ public struct ProfileView: View {
         let parts = model.athlete.name.split(separator: " ").prefix(2)
         if parts.isEmpty { return "VA" }
         return parts.compactMap { $0.first }.map(String.init).joined()
-    }
-
-    private func advancementLabel(_ level: AdvancementLevel) -> String {
-        switch level {
-        case .beginner: return String(localized: "Beginner", comment: "Advancement level — beginner")
-        case .intermediate: return String(localized: "Intermediate", comment: "Advancement level — intermediate")
-        case .advanced: return String(localized: "Advanced", comment: "Advancement level — advanced")
-        }
     }
 
     private func row(label: String, value: String, icon: String) -> some View {

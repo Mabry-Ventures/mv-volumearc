@@ -166,8 +166,8 @@ public struct SignalsView: View {
                     }
                 }
                 Text(String(
-                    localized: "\(model.recentSessions.count) of \(model.athlete.weeklyTrainingDays) weekly sessions",
-                    comment: "Frequency summary — actual vs target weekly sessions"
+                    localized: "\(model.recentSessions.count) of ^[\(model.athlete.weeklyTrainingDays) weekly sessions](inflect: true)",
+                    comment: "Frequency summary — actual vs target weekly sessions, with plural agreement on the target"
                 ))
                 .font(VA.Typography.footnote)
                 .foregroundStyle(VA.Colors.textSecondary)
