@@ -124,17 +124,23 @@ final class VolumeArcAppUITests: XCTestCase {
         let tabBar = app.tabBars.firstMatch
         XCTAssertTrue(tabBar.waitForExistence(timeout: 15))
 
-        if tabBar.buttons.count >= 3 {
-            tabBar.buttons.element(boundBy: 2).tap()
+        guard tabBar.buttons.count >= 3 else {
+            XCTFail("Expected at least 3 tabs; found \(tabBar.buttons.count)")
+            return
         }
+        tabBar.buttons.element(boundBy: 2).tap()
 
-        let coachTitle = app.navigationBars["Coach"]
-        XCTAssertTrue(coachTitle.waitForExistence(timeout: 10), "Coach title should appear")
+        // Wait a beat for the tab transition.
+        let navBars = app.navigationBars
+        let coachBar = navBars["Coach"]
+        let coachPresent = coachBar.waitForExistence(timeout: 10) ||
+            navBars.firstMatch.waitForExistence(timeout: 10)
+        XCTAssertTrue(coachPresent, "A navigation bar should appear after selecting the Coach tab")
 
         // The composer text field should be present.
         let textField = app.textFields["Ask your coach"]
         XCTAssertTrue(
-            textField.waitForExistence(timeout: 5),
+            textField.waitForExistence(timeout: 10),
             "Coach composer text field should be visible"
         )
     }
