@@ -207,25 +207,20 @@ public struct WorkoutsView: View {
             Task {
                 VAHaptics.workoutComplete()
 
-                // Capture the session snapshot before completing, so the
-                // summary sheet has values to display after the model clears
-                // its active-session state.
                 let capturedSets = model.loggedSetCountThisSession
-                let capturedVolume = model.recentSessions.first?.totalVolumeLoad ?? 0
-                let capturedDuration = model.recentSessions.first?.durationMinutes ?? 0
                 let capturedRPE = model.autopilot?.nextTarget.targetRPE ?? 7.5
                 let capturedLift = model.autopilot?.nextExerciseName ?? String(
                     localized: "your workout",
                     comment: "Fallback phrase for the primary lift when none is identified"
                 )
 
-                await model.completeWorkoutSession()
+                let completedSession = await model.completeWorkoutSession()
 
                 summary = CompletedSessionSnapshot(
-                    sets: max(1, capturedSets),
-                    totalVolume: max(capturedVolume, 1),
-                    duration: max(capturedDuration, 1),
-                    averageRPE: capturedRPE,
+                    sets: completedSession?.completedSetCount ?? max(1, capturedSets),
+                    totalVolume: max(completedSession?.totalVolumeLoad ?? 0, 1),
+                    duration: max(completedSession?.durationMinutes ?? 0, 1),
+                    averageRPE: completedSession?.averageRPE ?? capturedRPE,
                     primaryLift: capturedLift
                 )
             }

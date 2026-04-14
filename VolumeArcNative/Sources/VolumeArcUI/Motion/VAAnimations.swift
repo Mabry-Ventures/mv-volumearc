@@ -1,23 +1,38 @@
 #if canImport(SwiftUI)
 import SwiftUI
+import VolumeArcCore
 
 /// Standard animation tokens for VolumeArc.
 /// Use these instead of ad-hoc `.animation()` calls.
 public enum VAAnimation {
     /// Quick spring for button presses, taps, selection state.
-    public static let quick = Animation.spring(response: 0.25, dampingFraction: 0.8)
+    public static var quick: Animation {
+        deterministicAnimation(Animation.spring(response: 0.25, dampingFraction: 0.8))
+    }
 
     /// Standard spring for most UI transitions (default).
-    public static let standard = Animation.spring(response: 0.35, dampingFraction: 0.8)
+    public static var standard: Animation {
+        deterministicAnimation(Animation.spring(response: 0.35, dampingFraction: 0.8))
+    }
 
     /// Slow spring for hero transitions, card expansions.
-    public static let slow = Animation.spring(response: 0.55, dampingFraction: 0.85)
+    public static var slow: Animation {
+        deterministicAnimation(Animation.spring(response: 0.55, dampingFraction: 0.85))
+    }
 
     /// Bouncy spring for celebration moments (workout complete).
-    public static let bouncy = Animation.spring(response: 0.4, dampingFraction: 0.6)
+    public static var bouncy: Animation {
+        deterministicAnimation(Animation.spring(response: 0.4, dampingFraction: 0.6))
+    }
 
     /// Linear for continuous updates (timer countdown).
-    public static let linear = Animation.linear(duration: 0.3)
+    public static var linear: Animation {
+        deterministicAnimation(Animation.linear(duration: 0.3))
+    }
+
+    private static func deterministicAnimation(_ animation: Animation) -> Animation {
+        VolumeArcRuntimeFlags.isDeterministicMode ? .linear(duration: 0) : animation
+    }
 }
 
 // MARK: - View extensions
@@ -43,6 +58,10 @@ private struct VAAppearModifier: ViewModifier {
             .scaleEffect(hasAppeared || reduceMotion ? 1 : 0.96)
             .opacity(hasAppeared || reduceMotion ? 1 : 0)
             .onAppear {
+                guard !VolumeArcRuntimeFlags.isDeterministicMode else {
+                    hasAppeared = true
+                    return
+                }
                 withAnimation(VAAnimation.standard) {
                     hasAppeared = true
                 }

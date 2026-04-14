@@ -2,9 +2,10 @@ import XCTest
 
 /// XCUITest journey suite for VolumeArc iOS.
 ///
-/// All tests launch the app with `-UITestMode 1 -SkipOnboarding 1
+/// Most tests launch the app with `-UITestMode 1 -SkipOnboarding 1
 /// -SeedFixtures 1` so the dashboard is pre-populated with deterministic
-/// state and no permission prompts interrupt the flow.
+/// state and no permission prompts interrupt the flow. The onboarding
+/// coverage intentionally launches with only `-UITestMode 1`.
 ///
 /// Strategy: validate the app boots and reaches a runnable foreground
 /// state. These smoke-level tests don't attempt to traverse the full UI
@@ -19,7 +20,7 @@ final class VolumeArcAppUITests: XCTestCase {
     // MARK: - Launch smoke
 
     func testAppReachesForegroundOnLaunch() throws {
-        let app = makeApp()
+        let app = makeSeededApp()
         app.launch()
 
         XCTAssertTrue(
@@ -29,7 +30,7 @@ final class VolumeArcAppUITests: XCTestCase {
     }
 
     func testAppStaysRunningForOneSecondAfterLaunch() throws {
-        let app = makeApp()
+        let app = makeSeededApp()
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
 
@@ -43,7 +44,7 @@ final class VolumeArcAppUITests: XCTestCase {
     }
 
     func testRootDashboardIdentifierExists() throws {
-        let app = makeApp()
+        let app = makeSeededApp()
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
 
@@ -59,13 +60,49 @@ final class VolumeArcAppUITests: XCTestCase {
         )
     }
 
+    func testOnboardingAppearsWhenLaunchDoesNotSkipIt() throws {
+        let app = makeOnboardingApp()
+        app.launch()
+
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
+        XCTAssertTrue(
+            app.otherElements["onboarding.root"].waitForExistence(timeout: 10),
+            "Onboarding should appear when launch arguments do not skip it"
+        )
+    }
+
+    func testUpgradePresentsPaywallAndDismissesBackToProfile() throws {
+        let app = makeSeededApp()
+        app.launch()
+
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
+
+        let profileTab = app.tabBars.buttons["Profile"]
+        XCTAssertTrue(profileTab.waitForExistence(timeout: 10), "Profile tab should be available")
+        profileTab.tap()
+
+        let upgradeButton = app.buttons["profile.upgrade"]
+        XCTAssertTrue(upgradeButton.waitForExistence(timeout: 10), "Upgrade button should appear on the profile screen")
+        upgradeButton.tap()
+
+        let paywall = app.otherElements["paywall.root"]
+        XCTAssertTrue(paywall.waitForExistence(timeout: 10), "Paywall should be presented after tapping Upgrade")
+
+        let closeButton = app.buttons["paywall.close"]
+        XCTAssertTrue(closeButton.waitForExistence(timeout: 10), "Paywall close button should be visible")
+        closeButton.tap()
+
+        XCTAssertFalse(paywall.waitForExistence(timeout: 2), "Paywall should dismiss after closing it")
+        XCTAssertTrue(upgradeButton.waitForExistence(timeout: 10), "Profile screen should still be visible after dismissing the paywall")
+    }
+
     // MARK: - Performance
 
     @MainActor
     func testLaunchPerformance() throws {
         if #available(iOS 13.0, *) {
             measure(metrics: [XCTApplicationLaunchMetric()]) {
-                let app = makeApp()
+                let app = makeSeededApp()
                 app.launch()
             }
         }
@@ -73,12 +110,20 @@ final class VolumeArcAppUITests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func makeApp() -> XCUIApplication {
+    private func makeSeededApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments += [
             "-UITestMode", "1",
             "-SkipOnboarding", "1",
             "-SeedFixtures", "1",
+        ]
+        return app
+    }
+
+    private func makeOnboardingApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "-UITestMode", "1",
         ]
         return app
     }

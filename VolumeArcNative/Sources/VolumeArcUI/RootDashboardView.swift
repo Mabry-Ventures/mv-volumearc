@@ -65,6 +65,19 @@ public struct RootDashboardView: View {
         .vaToastOverlay(toastPresenter)
         .task {
             await model.refresh()
+            navigation.showOnboarding = model.hasLoadedInitialData && !model.isOnboardingComplete
+        }
+        .fullScreenCover(isPresented: $navigation.showOnboarding) {
+            OnboardingView(isPresented: $navigation.showOnboarding) { result in
+                Task {
+                    await model.updateProfile(result.toDefaults())
+                    navigation.showOnboarding = false
+                }
+            }
+        }
+        .onChange(of: model.isOnboardingComplete) { _, isComplete in
+            guard model.hasLoadedInitialData else { return }
+            navigation.showOnboarding = !isComplete
         }
         .onChange(of: navigation.selectedTab) { _, _ in
             VAHaptics.selection()

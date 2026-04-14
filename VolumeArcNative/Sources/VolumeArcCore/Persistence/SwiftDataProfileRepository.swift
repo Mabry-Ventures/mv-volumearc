@@ -85,8 +85,11 @@ public struct SwiftDataUserProfileRepository: Sendable {
         )
         return AthleteProfile(
             name: record.name,
+            coachingStyle: CoachingStyle(rawValue: record.coachingStyle) ?? .motivational,
+            privacyMode: PrivacyMode(rawValue: record.privacyMode) ?? .standard,
             advancementLevel: AdvancementLevel(rawValue: record.advancementLevel) ?? .intermediate,
             availableEquipment: equipment.isEmpty ? [.barbell, .dumbbell, .machine, .bodyweight] : equipment,
+            sessionTimeBudgetMinutes: record.sessionTimeBudgetMinutes,
             weeklyTrainingDays: record.weeklyTrainingDays,
             preferredRepRange: record.preferredRepRangeLower...record.preferredRepRangeUpper
         )

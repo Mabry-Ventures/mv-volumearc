@@ -43,12 +43,14 @@ public struct PaywallView: View {
             )
             .navigationTitle(String(localized: "Premium", comment: "Paywall navigation title"))
             .navigationBarTitleDisplayMode(.inline)
+            .accessibilityIdentifier("paywall.root")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(String(localized: "Close", comment: "Paywall dismiss button")) {
                         VAHaptics.tap()
                         isPresented = false
                     }
+                    .accessibilityIdentifier("paywall.close")
                 }
             }
             .task {

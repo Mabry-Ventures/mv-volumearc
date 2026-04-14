@@ -77,6 +77,7 @@ public struct ProfileView: View {
                         .foregroundStyle(VA.Colors.textSecondary)
                     }
                 }
+                .accessibilityIdentifier("profile.upgrade")
             }
 
             Section(String(localized: "App", comment: "Profile tab section header — app-level settings")) {
@@ -117,10 +118,23 @@ public struct ProfileView: View {
         .sheet(isPresented: $isEditingProfile) {
             EditProfileView(
                 isPresented: $isEditingProfile,
-                athlete: model.athlete
+                athlete: model.athlete,
+                coachingStyle: model.athlete.coachingStyle,
+                privacyMode: model.athlete.privacyMode,
+                sessionMinutes: model.athlete.sessionTimeBudgetMinutes
             ) { defaults in
                 Task {
                     await model.updateProfile(defaults)
+                }
+            }
+        }
+        .sheet(isPresented: $isShowingPaywall) {
+            Group {
+                if let subscriptionStore = model.subscriptionStore {
+                    PaywallView(
+                        subscriptionStore: subscriptionStore,
+                        isPresented: $isShowingPaywall
+                    )
                 }
             }
         }
