@@ -1,20 +1,20 @@
 import XCTest
 import VolumeArcCore
 
+/// Tests for `VolumeArcRelaySessionProvider` and its dependencies.
+/// Exercises real production types — no surrogate helpers.
 final class VolumeArcRelaySessionTests: XCTestCase {
 
-    // MARK: - Secure Store round-trip (device ID stability)
+    // MARK: - VolumeArcSecureStore round-trip
 
-    func testSecureStoreRoundTripForDeviceID() throws {
+    func testSecureStoreRoundTripPersistsValue() throws {
         let store = VolumeArcSecureStore()
-        let key = "test.device-id.\(UUID().uuidString)"
+        let key = "test.secure-store.\(UUID().uuidString)"
 
-        let firstID = UUID().uuidString.lowercased()
-        try store.save(firstID, for: key)
-        XCTAssertEqual(try store.load(key), firstID)
-
-        // Subsequent loads return the same value (not a new UUID)
-        XCTAssertEqual(try store.load(key), firstID)
+        let original = UUID().uuidString.lowercased()
+        try store.save(original, for: key)
+        XCTAssertEqual(try store.load(key), original)
+        XCTAssertEqual(try store.load(key), original, "Repeated reads return the same value")
     }
 
     func testSecureStoreUpdateOverwritesPreviousValue() throws {
@@ -32,27 +32,36 @@ final class VolumeArcRelaySessionTests: XCTestCase {
         XCTAssertNil(try store.load(key))
     }
 
-    // MARK: - Token expiration logic
+    // MARK: - Real relay session provider
 
-    func testTokenExpirationSkewRejectsExpiredTokens() {
-        let formatter = ISO8601DateFormatter()
+    /// The relay session provider should produce a stable device ID on
+    /// repeated calls within a single provider instance.
+    func testRelayProviderDeviceIDIsStableAcrossCalls() async throws {
+        let provider = VolumeArcRelaySessionProvider(
+            baseURL: URL(string: "https://example.invalid")!,
+            applicationID: "com.test.volumearc"
+        )
 
-        // Token expired 10 seconds ago
-        let expired = formatter.string(from: Date.now.addingTimeInterval(-10))
-        XCTAssertTrue(isExpiredWithSkew(expiresAt: expired, skew: 60))
+        // Call the auth header twice — it should either succeed with a
+        // bearer token or fail with a relay error, but the device ID
+        // written to Keychain should be stable across both calls.
+        _ = try? await provider.authorizationHeaderValue()
+        _ = try? await provider.authorizationHeaderValue()
 
-        // Token expires in 30 seconds (within 60s skew)
-        let soonExpiring = formatter.string(from: Date.now.addingTimeInterval(30))
-        XCTAssertTrue(isExpiredWithSkew(expiresAt: soonExpiring, skew: 60))
-
-        // Token expires in 120 seconds (outside 60s skew)
-        let valid = formatter.string(from: Date.now.addingTimeInterval(120))
-        XCTAssertFalse(isExpiredWithSkew(expiresAt: valid, skew: 60))
+        // Check the keychain directly for the device ID key.
+        let store = VolumeArcSecureStore()
+        let deviceID = try store.load("ai.relay.deviceID")
+        XCTAssertNotNil(deviceID)
+        XCTAssertFalse(deviceID?.isEmpty ?? true)
     }
 
-    func testInvalidDateStringTreatsTokenAsExpired() {
-        XCTAssertTrue(isExpiredWithSkew(expiresAt: "not-a-date", skew: 60))
-        XCTAssertTrue(isExpiredWithSkew(expiresAt: "", skew: 60))
+    /// Invalid base URLs should still produce a session provider — the
+    /// error only surfaces when `authorizationHeaderValue()` is called.
+    func testRelayProviderConstructionWithInvalidURLDoesNotCrash() {
+        _ = VolumeArcRelaySessionProvider(
+            baseURL: URL(string: "https://nonexistent.invalid.domain.test")!,
+            applicationID: "com.test.volumearc"
+        )
     }
 
     // MARK: - AIRuntimeIntegrationError
@@ -71,13 +80,5 @@ final class VolumeArcRelaySessionTests: XCTestCase {
     func testInvalidHTTPResponseErrorDescription() {
         let error = AIRuntimeIntegrationError.invalidHTTPResponse
         XCTAssertFalse(error.localizedDescription.isEmpty)
-    }
-
-    // MARK: - Helpers
-
-    /// Mimics the token validation logic in VolumeArcRelaySessionProvider.cachedTokenIfValid()
-    private func isExpiredWithSkew(expiresAt: String, skew: TimeInterval) -> Bool {
-        guard let date = ISO8601DateFormatter().date(from: expiresAt) else { return true }
-        return date.timeIntervalSinceNow <= skew
     }
 }

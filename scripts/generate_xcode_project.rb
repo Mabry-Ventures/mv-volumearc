@@ -195,10 +195,12 @@ add_resource(widgets_group, widget_target, 'PrivacyInfo.xcprivacy')
 
 add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   'Intents/VolumeArcIntents.swift',
+  'VolumeArcAIConfiguration.swift',
   'VolumeArcCloudConfiguration.swift',
   'VolumeArcLiveActivityController.swift',
   'VolumeArcPersistenceController.swift',
   'VolumeArcPremiumCatalog.swift',
+  'VolumeArcRelaySessionProvider.swift',
   'VolumeArcSecureStore.swift',
   'VolumeArcWidgetController.swift',
 ])
