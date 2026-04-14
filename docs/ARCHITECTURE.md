@@ -47,8 +47,9 @@ VolumeArcCore/
 VolumeArcUI/
 ├── DesignSystem/            # Tokens (colors, typography, spacing), Components (VACard, VAButton, etc.)
 ├── Haptics/                 # VAHaptics — centralized tactile feedback
+├── LocalizedLabels.swift    # Translator-friendly enum display labels for UI-facing core types
 ├── Motion/                  # VAAnimation — motion tokens and transitions
-├── Screens/                 # TodayView, WorkoutsView, CoachView, SignalsView, ProfileView, OnboardingView
+├── Screens/                 # TodayView, WorkoutsView, CoachView, SignalsView, ProfileView, OnboardingView, SessionDetailView, SessionSummaryView, WorkoutDetailView, EditProfileView, DiagnosticsView, PaywallView
 └── RootDashboardView        # Top-level tab container
 ```
 
@@ -75,8 +76,9 @@ VolumeArcUI/
 
 ### Sync
 1. `CloudSyncCoordinator` runs push/pull against `CloudKitSyncTransport`.
-2. Remote changes flow through `DefaultSyncPayloadApplier` into local repositories.
-3. Cursor persisted to `FileSyncStateStore` so next sync resumes where it left off.
+2. `CloudKitSyncTransport` uses `CKModifyRecordsOperation` for pushes and `CKFetchRecordZoneChangesOperation` for pulls, with server cursors persisted between sync passes.
+3. Remote changes flow through `DefaultSyncPayloadApplier` into local repositories.
+4. Cursor persisted to `FileSyncStateStore` so next sync resumes where it left off.
 
 ## Key design principles
 
@@ -94,3 +96,6 @@ Network-bound types (`VolumeArcRelaySessionProvider`, `VolumeArcVoicePermissionS
 
 ### Design tokens, not hardcoded styling
 All colors, typography, spacing, and radii come from `VA.Colors`, `VA.Typography`, `VA.Space`, `VA.Radius`. No view should use literal values for visual properties.
+
+### Hero transitions respect motion settings
+Hero transitions use `.navigationTransition(.zoom(sourceID:in:))` together with `.matchedTransitionSource(id:in:)` for iOS 18+ matched-geometry navigation. They respect `@Environment(\.accessibilityReduceMotion)` and fall back to less animated presentation when motion reduction is enabled.

@@ -1,6 +1,6 @@
 # Feature Status
 
-This is the source of truth for what works, what's partially working, and what's still scaffolding. Update it with every PR that changes a feature's completeness.
+This is the granular per-feature checklist. For high-level system status, see [`PLATFORM.md`](PLATFORM.md). Update this file with every PR that changes feature completeness.
 
 ## Legend
 - ✅ **Shipped** — feature is complete, tested, and production-ready
@@ -12,91 +12,97 @@ This is the source of truth for what works, what's partially working, and what's
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| iOS navigation shell (5 tabs) | 🚧 | Tab bar, screens, transitions wired. Consumes `DashboardNavigationModel`. |
-| Today dashboard | 🚧 | Readiness hero, next workout, quick actions, recent sessions. |
-| Workouts tab | 🚧 | Active session screen, rest timer (isolated subview), log set, complete. |
-| Coach chat | 🚧 | Chat bubbles, typing indicator, quick prompts. Real streaming pending. |
-| Signals / readiness | 🚧 | Readiness breakdown, volume chart, frequency heatmap. |
-| Profile / settings | 🚧 | Profile header, training rows, diagnostics link. |
-| Onboarding flow | ✅ | 5-step flow with progress bar, profile capture, coaching style selection. |
-| watchOS workout UI | 🏗️ | UI with rest timer, decisions, coach cue. Driven by hardcoded defaults. |
-| Widgets (systemSmall/Medium) | 🏗️ | Views exist. Widget snapshot reader returns nil. |
-| Live Activities | 🏗️ | Attributes + controller. No state updates from workout sessions. |
+| iOS navigation shell (5 tabs) | ✅ | Full tab bar with Today, Workouts, Coach, Signals, and Profile, routed by `DashboardNavigationModel`. |
+| Today dashboard | ✅ | Readiness hero, next workout hero card, quick actions, recent sessions, and zoom hero transitions. |
+| Workouts tab | ✅ | Active session flow, rest timer, log set, session summary, and workout detail surfaces are live. |
+| Coach chat | ✅ | Real text coach, streaming response UX, memory-backed prompts, and relay/local/on-device fallback chain. |
+| Signals / readiness | ✅ | Readiness breakdown, volume chart, and frequency heatmap ship in the Signals surface. |
+| Profile / settings | ✅ | Profile header, training settings, edit profile flow, diagnostics entry point, and subscription gating surfaces are live. |
+| Onboarding flow | ✅ | Multi-step onboarding captures profile, coaching style, equipment, and preferences. |
+| watchOS workout UI | ✅ | Real HealthKit workout session, rest timer, coach cues, action decisions, accessibility labels, and offline replay. |
+| Widgets (systemSmall/systemMedium/watchOS) | ✅ | `NextWorkoutWidget` and watch widgets read real shared snapshots via `PlatformSurfaceDefaultsReader`. |
+| Live Activities | ✅ | `ActiveWorkoutLiveActivity` publishes real session state with lock screen and Dynamic Island layouts. |
 
 ## AI & coaching
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| AI provider chain (FoundationModels → Relay → Local) | 🏗️ | Factory selects correctly. Providers return canned/naive responses. |
-| `OpenAIRelayCoachProvider` | 🚧 | Real HTTP POST to relay. No streaming, no prompt templates. |
-| `LocalHeuristicAICoachProvider` | 🏗️ | Returns one hardcoded sentence. |
-| `FoundationModelCoachProvider` | 🏗️ | Creates `LanguageModelSession`. No structured prompts. |
-| Voice transport | 🏗️ | `OpenAIRealtimeVoiceTransport` methods are empty stubs. |
-| Coach memory | 🚧 | `CoachMemoryRecord` persists memories. Not yet used for prompt grounding. |
-| Streaming response UX | 📋 | Token-by-token rendering planned. |
-| Evaluation harness | 📋 | Prompt quality regression tests planned. |
-| Privacy mode enforcement | 📋 | Mode stored but not enforced in prompts. |
+| AI provider chain (Foundation Models → Relay → Local) | ✅ | Runtime factory selects the three-provider chain with graceful fallback. |
+| `OpenAIRelayCoachProvider` | ✅ | Real HTTP relay-backed coach provider in production use. |
+| `LocalHeuristicAICoachProvider` | ✅ | Real rule-based offline fallback grounded in readiness and recent-session context. |
+| `FoundationModelCoachProvider` | ✅ | On-device provider is wired and falls back cleanly when unavailable or failing. |
+| Voice transport | ✅ | `OpenAIRelayVoiceTransport` is live for single-turn voice → text → spoken response. Live duplex/WebRTC audio remains future work. |
+| Coach memory | ✅ | `CoachMemoryRepository` persists recent context and is appended during coaching turns. |
+| Streaming response UX | ✅ | `AsyncThrowingStream` drives tokenized streaming/typing-style rendering. |
+| Evaluation harness | 📋 | Prompt-quality regression tooling is still planned. |
+| Privacy mode enforcement | 📋 | Privacy mode is modeled and surfaced in UI, but strict-mode prompt enforcement is not yet consistently applied in the dashboard coach path. |
 
 ## Data & progression
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| SwiftData schema V1 | ✅ | `UserProfileRecord`, `WorkoutRecord`, `TrainingPlanRecord`, `CoachMemoryRecord`. |
-| Persistence fallback chain | ✅ | Cloud → local → in-memory → unavailable with metadata. |
-| `SwiftDataWorkoutRepository` | ✅ | Create, read, append set, complete, delete, history projection. |
-| `SwiftDataUserProfileRepository` | ✅ | Upsert, load, onboarding flag, athlete profile projection. |
-| `SwiftDataTrainingPlanRepository` | ✅ | Upsert weekly plan, query next workout. |
-| `SwiftDataCoachMemoryRepository` | ✅ | Append, recent, pruning. |
-| `ProgressionEngine` | ✅ | Linear/intermediate/advanced progression, exercise substitution, action suggestion. |
-| `ReadinessModel` | ✅ | 5-factor readiness score (frequency, rest, volume trend, RPE, duration). |
-| Exercise catalog | 🚧 | 11 exercises across 7 movement patterns. Needs expansion. |
+| SwiftData schema V1 | ✅ | `UserProfileRecord`, `WorkoutRecord`, `TrainingPlanRecord`, and `CoachMemoryRecord` ship with migration coverage. |
+| Persistence fallback chain | ✅ | Cloud-synced → local fallback → in-memory fallback → unavailable, with telemetry and bootstrap metadata. |
+| `SwiftDataWorkoutRepository` | ✅ | Create, append set, complete, delete, recent/history projection, and aggregate updates are real. |
+| `SwiftDataUserProfileRepository` | ✅ | Upsert, load, onboarding completion, and athlete profile projection are live. |
+| `SwiftDataTrainingPlanRepository` | ✅ | Upsert weekly plan and query next workout are live. |
+| `SwiftDataCoachMemoryRepository` | ✅ | Append, fetch recent, and pruning behavior ship. |
+| `ProgressionEngine` | ✅ | Progression, substitution, and recommendation logic are exercised by production code and tests. |
+| `ReadinessModel` | ✅ | Five-factor readiness scoring is live in the dashboard and coach context. |
+| Exercise catalog | ✅ | Shipping catalog supports the current training flows; future expansion is additive, not a blocker. |
 
 ## Sync & connectivity
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| `CloudSyncCoordinator` | 🏗️ | Stores transport + state store. No push/pull loop. |
-| `CloudKitSyncTransport` | 🏗️ | Holds container + zone name. No CKRecord operations. |
-| `FileSyncStateStore` | 🚧 | Real disk read/write for cursor persistence. |
-| `DefaultSyncPayloadApplier` | 🏗️ | Holds repository references. No apply logic. |
-| `WatchConnectivityCoordinator` | 🏗️ | Stores transport + payload store. `send()` is no-op. |
-| `NetworkReachabilityMonitor` | ✅ | Real `NWPathMonitor` wrapper. Not yet instantiated in app. |
-| Background sync (BGAppRefreshTask) | 📋 | Planned. |
+| `CloudSyncCoordinator` | ✅ | Real push/pull cycle, cursor persistence, and payload application across sync passes. |
+| `CloudKitSyncTransport` | ✅ | Uses real `CKModifyRecordsOperation` push and `CKFetchRecordZoneChangesOperation` pull against the private zone. |
+| `FileSyncStateStore` | ✅ | Real disk-backed sync cursor persistence across launches. |
+| `DefaultSyncPayloadApplier` | ✅ | Applies remote workout/profile/plan/memory payloads into SwiftData repositories. |
+| `WatchConnectivityCoordinator` | ✅ | Real `WCSession` transport plus offline pending-payload queue and replay behavior. |
+| `NetworkReachabilityMonitor` | ✅ | Real `NWPathMonitor` wrapper and app startup wiring for sync/connectivity decisions. |
+| Background sync (`BGAppRefreshTask` + `BGProcessingTask`) | ✅ | Background task registration, scheduling, and handlers are in place for refresh and processing work. |
 
 ## Observability
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Telemetry fanout | ✅ | `FanoutTelemetrySink` combines in-memory + UserDefaults + OSLog + Sentry. |
-| `OSLogTelemetrySink` | ✅ | Logs to unified logging. |
-| `UserDefaultsTelemetrySink` | ✅ | Persists rolling buffer of 100 events. |
-| `InMemoryTelemetrySink` | ✅ | Bounded buffer of 200 events. |
-| `SentryTelemetrySink` | ✅ | Forwards events as breadcrumbs, captures errors as messages. |
-| Startup signals | ✅ | Persistence, AI relay, CloudKit, Sentry warnings surfaced. |
+| Telemetry fanout | ✅ | Fanout sink combines in-memory, UserDefaults, OSLog, and Sentry sinks. |
+| `OSLogTelemetrySink` | ✅ | Unified logging integration is live. |
+| `UserDefaultsTelemetrySink` | ✅ | Rolling persistent event buffer ships for diagnostics. |
+| `InMemoryTelemetrySink` | ✅ | Bootstrap/runtime in-memory sink ships. |
+| `SentryTelemetrySink` | ✅ | Breadcrumb forwarding and error message capture are live. |
+| Startup signals | ✅ | Missing/degraded persistence, relay, CloudKit, and Sentry conditions surface operational signals. |
 
 ## Infrastructure
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Generated Xcode project | ✅ | Ruby script, `generate_xcode_project.rb`. |
-| CI pipeline (self-hosted M4) | ✅ | Build, test, lint, validate. |
-| Fastlane (test/beta/release) | ✅ | TestFlight automation on tag push. |
-| Archive script | ✅ | `archive_for_distribution.sh` with ExportOptions.plist. |
-| Privacy manifests | ✅ | All three targets. |
-| SwiftLint | 🚧 | Config exists, not installed on runner. |
-| Versioning from git | ✅ | `VERSION` file + `git rev-list --count HEAD`. |
-| Localization (String Catalog) | 🚧 | `String(localized:)` calls present. No catalog file yet. |
-| Accessibility labels | 🚧 | Watch + Widget done. iOS tab views done. Needs audit. |
+| Generated Xcode project | ✅ | `scripts/generate_xcode_project.rb` remains the only source of truth for the Xcode project. |
+| CI pipeline (self-hosted M4) | ✅ | Build, unit/integration tests, UI smoke tests, lint, and validation run on PRs and main pushes. |
+| Fastlane (test/beta/release) | ✅ | TestFlight automation and App Store submission lanes ship. |
+| Archive script | ✅ | `archive_for_distribution.sh` produces signed distribution archives. |
+| Privacy manifests | ✅ | Required manifests ship for all relevant targets and are validated. |
+| SwiftLint | ✅ | Installed on the runner and enforced in CI. |
+| Versioning from git | ✅ | `VERSION` + git-derived build number flow ships. |
+| Localization (`String(localized:)`) | ✅ | Every user-facing string is localized with translator comments. No `.xcstrings` catalog file is generated yet, but the codebase is fully extractable. |
+| Accessibility labels | ✅ | Data displays, interactive controls, widgets, watch surfaces, and toast announcements have shipped accessibility coverage. |
+| Hard-failing release validation | ✅ | Release config validation fails on misconfiguration instead of warning. |
+| AI review gate (Gemini + Codex) on PRs | ✅ | Two-bot review gate is part of the protected-branch merge contract. |
 
 ## Design
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Design tokens | ✅ | Colors, typography, spacing, radius, shadow in `VA` namespace. |
-| Core components | ✅ | VACard, VAButton, VAMetricDisplay, VAProgressRing, VASectionHeader, VAEmptyState, VALoadingState, VAErrorState, VACoachBubble. |
-| Liquid Glass materials | ✅ | `.regularMaterial` on iOS 26. |
-| Haptics system | ✅ | Session, set, rest, decision, error, warning, coach, tap patterns. |
-| Motion system | ✅ | Standard spring tokens, `vaAppear()`, number ticker. |
-| Dark mode | ✅ | All tokens adapt via `Color(light:dark:)`. |
-| Dynamic Type | 🚧 | Typography scales automatically. Layout not yet audited. |
-| Reduced Motion | ✅ | `vaAppear()` respects `@Environment(\.accessibilityReduceMotion)`. |
+| Design tokens | ✅ | `VA.Colors`, `VA.Typography`, `VA.Space`, `VA.Radius`, and `VA.Shadow` define the visual system. |
+| Core components | ✅ | Shared cards, buttons, metric displays, progress rings, states, and coach bubbles ship in `VolumeArcUI`. |
+| Liquid Glass materials | ✅ | Material-backed UI is live on supported iOS surfaces. |
+| Haptics system | ✅ | Centralized `VAHaptics` patterns ship across training interactions. |
+| Motion system | ✅ | Shared spring tokens and motion helpers ship. |
+| Dark mode | ✅ | Tokens adapt correctly in light and dark appearance. |
+| Dynamic Type | ✅ | Typography tokens scale and screens were updated for Dynamic Type support. |
+| Reduced Motion | ✅ | Motion-sensitive surfaces respect `@Environment(\.accessibilityReduceMotion)`. |
+| `VAToast` notification system | ✅ | `VAToast`, `VAToastPresenter`, and overlay presentation ship with accessibility announcements. |
+| Hero transitions (`.navigationTransition(.zoom)`) | ✅ | Today next-workout and recent-session navigation use iOS 18+ zoom hero transitions with reduce-motion fallback. |
+| Pluralization (Apple inflection syntax) | ✅ | Count-bearing strings use `^[\(count) thing](inflect: true)` for CLDR-aware plural agreement. |
+| Shared `LocalizedLabels` extensions | ✅ | Enum display strings for `AdvancementLevel`, `CoachingStyle`, `Equipment`, and `PrivacyMode` live in one translator-friendly file. |

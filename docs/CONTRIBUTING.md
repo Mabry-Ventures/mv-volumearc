@@ -51,18 +51,21 @@
 - Use design tokens (`VA.Colors`, `VA.Typography`, etc.) — never hardcode visual values
 - Use `VAHaptics.*` for all tactile feedback
 - Use `String(localized:comment:)` for all user-facing strings
+- Pluralized strings use `^[\(count) thing](inflect: true)` for CLDR plural agreement. Enum display labels live in `LocalizedLabels.swift`, not inline in views.
 - Add accessibility labels to interactive elements
 - Respect `@Environment(\.accessibilityReduceMotion)` for animations
 
 ## Testing
 
 - Unit tests for business logic
-- XCUITests for critical user journeys (when VOL-42 lands)
-- Tests live in `Tests/VolumeArcAppTests/`
-- Run locally with `./scripts/test_apple_targets.sh`
+- XCUITest smoke tests for launch stability and root-dashboard visibility
+- Tests live in `Tests/VolumeArcAppTests/` and `Tests/VolumeArcAppUITests/`
+- `./scripts/test_apple_targets.sh` runs both `VolumeArcAppTests` and `VolumeArcAppUITests`
+- CI runs both schemes on every PR
 
 ## Documentation
 
+- `docs/PLATFORM.md` — **canonical platform reference** (start here)
 - Architecture decisions: `docs/ARCHITECTURE.md`
 - Feature status: `docs/FEATURES.md` (update with every PR that changes feature state)
 - Design system: `docs/DESIGN_SYSTEM.md`
