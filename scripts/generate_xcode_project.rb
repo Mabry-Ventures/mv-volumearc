@@ -67,15 +67,43 @@ configure_target(app_target, bundle_id: 'com.mabryventures.VolumeArc', extra: {
   'PRODUCT_NAME' => 'VolumeArc',
   'TARGETED_DEVICE_FAMILY' => '1,2',
   'INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents' => 'YES',
-  'INFOPLIST_KEY_CFBundleURLTypes' => '[{"CFBundleURLName":"com.mabryventures.VolumeArc","CFBundleURLSchemes":["volumearc"]}]',
   'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc reads your workout and recovery data to personalize progression, readiness, and session planning.',
   'INFOPLIST_KEY_NSHealthUpdateUsageDescription' => 'VolumeArc writes completed workouts so your training history stays in sync with Apple Health.',
   'INFOPLIST_KEY_NSMicrophoneUsageDescription' => 'VolumeArc uses the microphone for voice coaching requests and voice workout logging.',
   'INFOPLIST_KEY_NSSpeechRecognitionUsageDescription' => 'VolumeArc uses speech recognition to understand live coaching requests and voice workout notes.',
-  'INFOPLIST_KEY_VolumeArcCloudKitContainer' => 'iCloud.com.mabryventures.VolumeArc',
-  'INFOPLIST_KEY_VolumeArcOpenAIBaseURL' => '',
-  'INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers' => '["com.mabryventures.VolumeArc.appRefresh","com.mabryventures.VolumeArc.appProcessing"]',
-  'INFOPLIST_KEY_UIBackgroundModes' => '["fetch","processing"]',
+  # VOL-55: `VolumeArcCloudKitContainer` used to live in the Info.plist
+  # for runtime lookup. `INFOPLIST_KEY_*` silently drops custom
+  # (non-Apple-recognized) keys, so the bundle never had it. It now lives
+  # as a compile-time constant in `App/VolumeArcCloudConfiguration.swift`
+  # (the value is bound to the app bundle ID anyway and never varies at
+  # runtime).
+  #
+  # VOL-56 (deferred): `BGTaskSchedulerPermittedIdentifiers` and
+  # `UIBackgroundModes` need to be arrays. `INFOPLIST_KEY_*` claims to
+  # accept space-separated values for array-typed keys but empirically
+  # drops them on iOS 26 + Xcode 26.4 (verified: the built bundle never
+  # contains the keys regardless of JSON-string or space-separated
+  # syntax). Alternative approaches tried:
+  #   - Checked-in `App/Info.plist` via `INFOPLIST_FILE` + `GENERATE_INFOPLIST_FILE = NO`:
+  #     forfeits every Apple auto-injected key (UIDeviceFamily,
+  #     MinimumOSVersion, CFBundleSupportedPlatforms, etc.) and the
+  #     SwiftUI @main App runtime crashes at launch.
+  #   - Run Script Build Phase that invokes `plutil -replace` after
+  #     `ProcessInfoPlistFile`: works locally, but causes unexplained
+  #     "crashed in <external symbol>" at app launch on the CI
+  #     self-hosted M4 runner. Verified the script runs and the patched
+  #     plist is valid binary1 format. Root cause undetermined.
+  #
+  # Deferred to a future PR that ships a complete checked-in Info.plist
+  # (including every auto-injected key snapshotted from a working build)
+  # and wires it into the target via `INFOPLIST_FILE`. That's a larger
+  # structural change than PR #24's scope.
+  #
+  # VOL-56b (deferred): `CFBundleURLTypes` is a dict-array which
+  # `INFOPLIST_KEY_*` cannot express at all. The `volumearc://` deep-link
+  # scheme stays broken until we migrate to a checked-in plist. App
+  # Intents / Siri shortcut routing still works because it uses App
+  # Intents, not URL launching.
   'CODE_SIGN_ENTITLEMENTS' => 'App/VolumeArc.entitlements',
 })
 configure_target(watch_target, bundle_id: 'com.mabryventures.VolumeArc.watchkitapp', extra: {

@@ -169,8 +169,12 @@ final class VolumeArcPersistenceController {
     }
 
     private static func primaryConfiguration(schema: Schema) -> ModelConfiguration {
+        // VOL-55: containerIdentifier is a compile-time constant so the
+        // empty check is strictly a guard against future configuration
+        // flexibility (e.g., reading from a .env file).
         let cloudDatabase: ModelConfiguration.CloudKitDatabase
-        if let containerIdentifier = VolumeArcCloudConfiguration.containerIdentifier, !containerIdentifier.isEmpty {
+        let containerIdentifier = VolumeArcCloudConfiguration.containerIdentifier
+        if !containerIdentifier.isEmpty {
             cloudDatabase = .private(containerIdentifier)
         } else {
             cloudDatabase = .automatic

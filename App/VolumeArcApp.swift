@@ -311,10 +311,14 @@ struct VolumeArcApp: App {
     #endif
 
     private static func makeSyncTransport() -> CloudSyncTransport {
-        let containerIdentifier = VolumeArcCloudConfiguration.containerIdentifier?
+        // VOL-55: containerIdentifier is now a compile-time constant, so
+        // this always has a valid value. We keep the emptiness check for
+        // future flexibility in case the constant ever needs to be read
+        // from a different source.
+        let containerIdentifier = VolumeArcCloudConfiguration.containerIdentifier
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard let containerIdentifier, containerIdentifier.isEmpty == false else {
+        guard containerIdentifier.isEmpty == false else {
             return UnavailableCloudSyncTransport(
                 reason: VolumeArcCloudConfiguration.startupWarning
                     ?? "Cloud sync is unavailable on this build."

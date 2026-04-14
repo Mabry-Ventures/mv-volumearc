@@ -35,11 +35,30 @@ if ! grep -q "aps-environment" "App/VolumeArc.entitlements"; then
 fi
 
 for forbidden in "DemoFixtures" "DemoServices" "VolumeArcDemoSupport"; do
-  if rg -n "$forbidden" "$PROJECT" >/dev/null; then
+  if grep -F -n "$forbidden" "$PROJECT" >/dev/null; then
     echo "Generated Xcode project unexpectedly references demo-only symbol: $forbidden" >&2
     exit 1
   fi
 done
+
+# VOL-55: the CloudKit container identifier now lives as a compile-time
+# constant in `App/VolumeArcCloudConfiguration.swift` instead of an
+# Info.plist key. `INFOPLIST_KEY_*` silently drops custom keys that
+# aren't Apple-recognized, so the plist-based approach never worked.
+# Confirm the constant is present so no one silently deletes it.
+if ! grep -F 'static let containerIdentifier: String = "iCloud.com.mabryventures.VolumeArc"' \
+  App/VolumeArcCloudConfiguration.swift >/dev/null; then
+  echo "FAIL: VolumeArcCloudConfiguration.containerIdentifier constant is missing or changed" >&2
+  exit 1
+fi
+
+# NOTE: VOL-56 (`BGTaskSchedulerPermittedIdentifiers` / `UIBackgroundModes`)
+# is intentionally not validated against the built bundle here. Neither
+# `INFOPLIST_KEY_*` nor a checked-in Info.plist nor a Run Script Build
+# Phase produced a working result (see generate_xcode_project.rb comments
+# for the full investigation). VOL-56 stays open and the background task
+# registration code in `App/VolumeArcBackgroundTasks.swift` fails
+# gracefully at runtime when iOS rejects the unregistered identifiers.
 
 tmp_settings="$(mktemp)"
 trap 'rm -f "$tmp_settings"' EXIT
@@ -57,7 +76,6 @@ required_build_settings=(
   "INFOPLIST_KEY_NSHealthUpdateUsageDescription = VolumeArc writes completed workouts so your training history stays in sync with Apple Health."
   "INFOPLIST_KEY_NSMicrophoneUsageDescription = VolumeArc uses the microphone for voice coaching requests and voice workout logging."
   "INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = VolumeArc uses speech recognition to understand live coaching requests and voice workout notes."
-  "INFOPLIST_KEY_VolumeArcCloudKitContainer = iCloud.com.mabryventures.VolumeArc"
 )
 
 for required in "${required_build_settings[@]}"; do
