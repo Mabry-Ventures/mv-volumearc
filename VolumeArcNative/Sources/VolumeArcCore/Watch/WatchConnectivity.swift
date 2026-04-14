@@ -1,6 +1,6 @@
 import Foundation
 
-public enum WatchPayloadKind: String, Sendable {
+public enum WatchPayloadKind: String, Sendable, Codable {
     case restTimer
     case liveState
     case startSession
@@ -9,7 +9,7 @@ public enum WatchPayloadKind: String, Sendable {
     case completedWorkout
 }
 
-public struct WatchPayload: Sendable {
+public struct WatchPayload: Sendable, Codable {
     public let kind: WatchPayloadKind
     public let workoutID: String
     public let createdAt: Date
@@ -28,6 +28,27 @@ public struct WatchPayload: Sendable {
         self.createdAt = createdAt
         self.body = body
     }
+
+    /// Encode the payload to a `[String: Any]` dictionary for WCSession message passing.
+    public func asDictionary() -> [String: Any] {
+        [
+            "kind": kind.rawValue,
+            "workoutID": workoutID,
+            "createdAt": createdAt.timeIntervalSince1970,
+            "body": body,
+        ]
+    }
+
+    /// Decode a WCSession message dictionary into a WatchPayload.
+    public init?(dictionary: [String: Any]) {
+        guard let kindRaw = dictionary["kind"] as? String,
+              let kind = WatchPayloadKind(rawValue: kindRaw),
+              let workoutID = dictionary["workoutID"] as? String,
+              let body = dictionary["body"] as? String
+        else { return nil }
+        let createdAt = (dictionary["createdAt"] as? TimeInterval).map(Date.init(timeIntervalSince1970:)) ?? .now
+        self.init(kind: kind, workoutID: workoutID, createdAt: createdAt, body: body)
+    }
 }
 
 public enum WatchConnectivityNotifications {
@@ -35,7 +56,7 @@ public enum WatchConnectivityNotifications {
     public static let payloadUserInfoKey = "watchPayload"
 }
 
-public struct WatchSessionSnapshot: Sendable {
+public struct WatchSessionSnapshot: Sendable, Codable {
     public let selectedAction: WorkoutAction
     public let restEndsAt: Date
     public let coachPrompt: String
@@ -51,23 +72,153 @@ public struct WatchSessionSnapshot: Sendable {
     }
 }
 
-public protocol WatchSessionTransport: Sendable {}
+public protocol WatchSessionTransport: Sendable {
+    func activate() async
+    func isReachable() async -> Bool
+    func send(_ payload: WatchPayload) async throws
+}
 
 #if canImport(WatchConnectivity) && (os(iOS) || os(watchOS))
-public struct WatchConnectivitySessionTransport: WatchSessionTransport {
-    public init() {}
+import WatchConnectivity
+
+/// Real WCSession-backed transport.
+/// Activates the default session, sends messages via transferUserInfo for
+/// reliability (guaranteed delivery even if the peer isn't reachable), and
+/// posts received payloads via NotificationCenter so the app can respond.
+public final class WatchConnectivitySessionTransport: NSObject, WatchSessionTransport, WCSessionDelegate, @unchecked Sendable {
+    private let session: WCSession
+
+    public override init() {
+        self.session = WCSession.default
+        super.init()
+        session.delegate = self
+    }
+
+    public func activate() async {
+        guard WCSession.isSupported() else { return }
+        if session.activationState != .activated {
+            session.activate()
+        }
+    }
+
+    public func isReachable() async -> Bool {
+        session.isReachable
+    }
+
+    public func send(_ payload: WatchPayload) async throws {
+        guard session.activationState == .activated else {
+            session.activate()
+            throw WatchTransportError.notActivated
+        }
+        // transferUserInfo queues reliably — survives app restarts on both sides.
+        session.transferUserInfo(payload.asDictionary())
+    }
+
+    // MARK: - WCSessionDelegate
+
+    public func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: Error?) {}
+
+    #if os(iOS)
+    public func sessionDidBecomeInactive(_ session: WCSession) {}
+    public func sessionDidDeactivate(_ session: WCSession) {
+        session.activate()
+    }
+    #endif
+
+    public func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
+        if let payload = WatchPayload(dictionary: userInfo) {
+            NotificationCenter.default.post(
+                name: WatchConnectivityNotifications.payloadDidArrive,
+                object: nil,
+                userInfo: [WatchConnectivityNotifications.payloadUserInfoKey: payload]
+            )
+        }
+    }
+
+    public func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        if let payload = WatchPayload(dictionary: message) {
+            NotificationCenter.default.post(
+                name: WatchConnectivityNotifications.payloadDidArrive,
+                object: nil,
+                userInfo: [WatchConnectivityNotifications.payloadUserInfoKey: payload]
+            )
+        }
+    }
 }
 #endif
 
+public enum WatchTransportError: Error, LocalizedError {
+    case notActivated
+    case notReachable
+
+    public var errorDescription: String? {
+        switch self {
+        case .notActivated: return "Watch connectivity session is not activated."
+        case .notReachable: return "Paired device is not reachable right now."
+        }
+    }
+}
+
 public struct UnavailableWatchSessionTransport: WatchSessionTransport {
     public init() {}
+    public func activate() async {}
+    public func isReachable() async -> Bool { false }
+    public func send(_ payload: WatchPayload) async throws {
+        throw WatchTransportError.notReachable
+    }
 }
 
-public protocol WatchPendingPayloadStore: Sendable {}
+// MARK: - Pending payload store
 
-public struct UserDefaultsWatchPendingPayloadStore: WatchPendingPayloadStore {
-    public init() {}
+public protocol WatchPendingPayloadStore: Sendable {
+    func enqueue(_ payload: WatchPayload) async
+    func dequeueAll() async -> [WatchPayload]
+    func count() async -> Int
 }
+
+public final class UserDefaultsWatchPendingPayloadStore: WatchPendingPayloadStore, @unchecked Sendable {
+    private let defaults: UserDefaults
+    private let key = "com.mabryventures.VolumeArc.watch.pendingPayloads"
+    private let lock = NSLock()
+
+    public init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    public func enqueue(_ payload: WatchPayload) async {
+        lock.lock(); defer { lock.unlock() }
+        var current = loadUnsafe()
+        current.append(payload)
+        save(current)
+    }
+
+    public func dequeueAll() async -> [WatchPayload] {
+        lock.lock(); defer { lock.unlock() }
+        let current = loadUnsafe()
+        save([])
+        return current
+    }
+
+    public func count() async -> Int {
+        lock.lock(); defer { lock.unlock() }
+        return loadUnsafe().count
+    }
+
+    private func loadUnsafe() -> [WatchPayload] {
+        guard let data = defaults.data(forKey: key),
+              let decoded = try? JSONDecoder().decode([WatchPayload].self, from: data)
+        else { return [] }
+        return decoded
+    }
+
+    private func save(_ payloads: [WatchPayload]) {
+        if let data = try? JSONEncoder().encode(payloads) {
+            defaults.set(data, forKey: key)
+        }
+    }
+}
+
+// MARK: - Session state store
 
 public protocol WatchSessionStateStore: Sendable {
     func load() async -> WatchSessionSnapshot?
@@ -75,22 +226,75 @@ public protocol WatchSessionStateStore: Sendable {
     func clear() async
 }
 
-public struct UserDefaultsWatchSessionStateStore: WatchSessionStateStore {
-    public init() {}
-    public func load() async -> WatchSessionSnapshot? { nil }
-    public func save(_ snapshot: WatchSessionSnapshot) async {}
-    public func clear() async {}
+public final class UserDefaultsWatchSessionStateStore: WatchSessionStateStore, @unchecked Sendable {
+    private let defaults: UserDefaults
+    private let key = "com.mabryventures.VolumeArc.watch.sessionSnapshot"
+
+    public init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    public func load() async -> WatchSessionSnapshot? {
+        guard let data = defaults.data(forKey: key),
+              let decoded = try? JSONDecoder().decode(WatchSessionSnapshot.self, from: data)
+        else { return nil }
+        return decoded
+    }
+
+    public func save(_ snapshot: WatchSessionSnapshot) async {
+        if let data = try? JSONEncoder().encode(snapshot) {
+            defaults.set(data, forKey: key)
+        }
+    }
+
+    public func clear() async {
+        defaults.removeObject(forKey: key)
+    }
 }
 
-public struct WatchConnectivityCoordinator: Sendable {
+// MARK: - Coordinator
+
+public actor WatchConnectivityCoordinator {
     private let transport: WatchSessionTransport
+    private let payloadStore: WatchPendingPayloadStore
 
     public init(transport: WatchSessionTransport, payloadStore: WatchPendingPayloadStore) {
         self.transport = transport
+        self.payloadStore = payloadStore
+        Task { await transport.activate() }
     }
 
-    public func isReachable() async -> Bool { false }
-    public func flushPendingIfReachable() async throws {}
-    public func pendingPayloadCount() async -> Int { 0 }
-    public func send(_ payload: WatchPayload) async throws {}
+    public func isReachable() async -> Bool {
+        await transport.isReachable()
+    }
+
+    public func pendingPayloadCount() async -> Int {
+        await payloadStore.count()
+    }
+
+    /// Send a payload. If the transport fails or the peer isn't reachable,
+    /// enqueue the payload for replay on the next successful send.
+    public func send(_ payload: WatchPayload) async throws {
+        do {
+            try await transport.send(payload)
+        } catch {
+            await payloadStore.enqueue(payload)
+            throw error
+        }
+    }
+
+    /// Flush any pending payloads if the peer is now reachable.
+    public func flushPendingIfReachable() async throws {
+        guard await transport.isReachable() else { return }
+        let pending = await payloadStore.dequeueAll()
+        for payload in pending {
+            do {
+                try await transport.send(payload)
+            } catch {
+                // Put it back in the queue if sending still fails.
+                await payloadStore.enqueue(payload)
+                throw error
+            }
+        }
+    }
 }
