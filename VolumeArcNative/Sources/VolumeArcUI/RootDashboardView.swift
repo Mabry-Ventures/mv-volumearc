@@ -5,6 +5,7 @@ import VolumeArcCore
 public struct RootDashboardView: View {
     @ObservedObject private var navigation: DashboardNavigationModel
     @ObservedObject private var model: WorkoutDashboardModel
+    @StateObject private var toastPresenter = VAToastPresenter()
 
     public init(navigation: DashboardNavigationModel, model: WorkoutDashboardModel) {
         self.navigation = navigation
@@ -60,6 +61,8 @@ public struct RootDashboardView: View {
         }
         .tint(VA.Colors.primary)
         .accessibilityIdentifier("root.dashboard")
+        .environmentObject(toastPresenter)
+        .vaToastOverlay(toastPresenter)
         .task {
             await model.refresh()
         }

@@ -70,6 +70,7 @@ public struct VAButton: View {
     private let icon: String?
     private let style: Style
     private let isLoading: Bool
+    private let accessibilityHintText: String?
     private let action: () -> Void
 
     @State private var isPressed = false
@@ -80,12 +81,14 @@ public struct VAButton: View {
         icon: String? = nil,
         style: Style = .primary,
         isLoading: Bool = false,
+        accessibilityHint: String? = nil,
         action: @escaping () -> Void
     ) {
         self.title = title
         self.icon = icon
         self.style = style
         self.isLoading = isLoading
+        self.accessibilityHintText = accessibilityHint
         self.action = action
     }
 
@@ -99,6 +102,7 @@ public struct VAButton: View {
                 } else if let icon {
                     Image(systemName: icon)
                         .font(.system(size: 15, weight: .semibold))
+                        .accessibilityHidden(true)
                 }
                 Text(title)
                     .font(VA.Typography.button)
@@ -120,6 +124,10 @@ public struct VAButton: View {
                 .onChanged { _ in isPressed = true }
                 .onEnded { _ in isPressed = false }
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(isLoading ? "\(title), loading" : title)
+        .accessibilityHint(accessibilityHintText ?? "")
+        .accessibilityAddTraits(.isButton)
     }
 
     @ViewBuilder
@@ -466,6 +474,15 @@ public struct VACoachBubble: View {
                 Spacer(minLength: 40)
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabelText)
+        .accessibilityAddTraits(.isStaticText)
+    }
+
+    private var accessibilityLabelText: String {
+        let prefix = sender == .user ? "You said" : "Coach said"
+        let suffix = isStreaming ? ", still typing" : ""
+        return "\(prefix): \(content)\(suffix)"
     }
 
     private var coachAvatar: some View {
