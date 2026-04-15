@@ -535,6 +535,36 @@ public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
                 )
             }
 
+            // VOL-67 Codex P1 fixup #17: clamp migrated singleton
+            // `updatedAt` to `Date.distantPast`. Pre-fixup-#10 `seedIfNeeded`
+            // set profile/plan defaults with a launch-time `Date()` value,
+            // which then looks newer than older-but-authoritative cloud
+            // data. `DefaultSyncPayloadApplier.shouldApply` uses strict
+            // `localTimestamp > inboundTimestamp` for its "local newer"
+            // branch, so the seeded defaults would win conflict
+            // resolution against real cloud singletons that happened to
+            // be written before the local install. Clamping to
+            // `distantPast` makes the migrated local record lose every
+            // shouldApply comparison against a real cloud record, so
+            // any pull with real data overwrites the stale defaults.
+            // Per-record kinds (workouts, memories) keep their real
+            // timestamps because they reflect concrete user actions
+            // and carry stable identifiers that don't collide across
+            // devices. This mirrors the distantPast clamp already
+            // applied to the outbound-queue backfill payload in
+            // `OutboundQueueBackfill.performIfNeeded` (fixup #13) —
+            // both layers must agree that migrated singletons are
+            // lowest-priority state.
+            let migratedProfiles = try context.fetch(FetchDescriptor<UserProfileRecord>())
+            for profile in migratedProfiles {
+                profile.updatedAt = .distantPast
+            }
+
+            let migratedPlans = try context.fetch(FetchDescriptor<TrainingPlanRecord>())
+            for plan in migratedPlans {
+                plan.updatedAt = .distantPast
+            }
+
             try context.save()
 
             // VOL-67 Copilot (fixup #13): the outbound queue lives in
@@ -559,17 +589,40 @@ public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
     /// same logical memory, so delete tombstones and queue
     /// invalidation can target the same record across devices after
     /// upgrade. VOL-67 Codex P2 (fixup #8).
+    ///
+    /// VOL-67 Codex P2 fixup #17: the hash input is length-prefixed
+    /// so that different field values always produce different
+    /// canonical strings. The original newline-delimited format was
+    /// ambiguous when content/theme contained newlines — e.g.,
+    /// `(content: "", theme: "foo\nbar")` and
+    /// `(content: "\nfoo", theme: "bar")` both serialized to
+    /// `"<millis>\n\nfoo\nbar"`, producing the same identifier for
+    /// different memories. Length-prefixed encoding (`<bytes>:<data>`)
+    /// eliminates every such collision because the parser always
+    /// knows how many bytes belong to each field, so different
+    /// inputs always produce different canonical strings.
+    ///
+    /// Also uses microsecond precision (`%.6f` format) instead of
+    /// integer milliseconds to reduce the chance that two memories
+    /// created within the same ms hash to the same identifier. The
+    /// fixed-format string avoids `Int64(Double * N)` rounding drift
+    /// that can produce different integers on different devices for
+    /// the same `Date`.
+    ///
+    /// This hash scheme is a BREAKING change from fixup #8's format,
+    /// but fixup #8 has never shipped to production — the migration
+    /// lives on `sprint/phase3b-cloudkit-fresh` which hasn't merged.
+    /// Both hashes land together in this PR, so no user ever sees
+    /// the old-format identifier.
     fileprivate static func deterministicLegacyMemoryIdentifier(
         createdAt: Date,
         content: String,
         theme: String
     ) -> String {
-        // Use milliseconds since 1970 (integer) to avoid FP drift
-        // across devices. Content and theme are newline-separated so
-        // a memory with `"foo\nbar"` content can't collide with one
-        // whose content is `"foo"` and theme is `"bar"`.
-        let millis = Int64(createdAt.timeIntervalSince1970 * 1000)
-        let canonical = "\(millis)\n\(content)\n\(theme)"
+        let timestamp = String(format: "%.6f", createdAt.timeIntervalSince1970)
+        let contentBytes = content.utf8.count
+        let themeBytes = theme.utf8.count
+        let canonical = "ts=\(timestamp)|c=\(contentBytes):\(content)|t=\(themeBytes):\(theme)"
         let digest = SHA256.hash(data: Data(canonical.utf8))
         return "legacy-" + digest.map { String(format: "%02x", $0) }.joined()
     }

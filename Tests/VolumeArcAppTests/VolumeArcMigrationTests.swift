@@ -110,10 +110,18 @@ final class VolumeArcMigrationTests: XCTestCase {
         XCTAssertEqual(migratedWorkouts.first?.identifier, "legacy-workout")
         XCTAssertEqual(migratedCoachMemories.first?.content, "Legacy coaching note")
 
-        XCTAssertLessThan(
-            abs(migratedPlans[0].updatedAt.timeIntervalSinceNow),
-            600,
-            "Migrated V1 training plans should backfill updatedAt with a sensible default"
+        // VOL-67 Codex P1 (fixup #17): after the full V1→V2→V3→V4 chain,
+        // the V3→V4 stage intentionally clamps singleton (plan / profile)
+        // `updatedAt` to `.distantPast` so the applier's `shouldApply`
+        // check can't let a seeded/legacy local record beat real
+        // authoritative cloud data. The V1→V2 stage's "backfill with
+        // Date()" intermediate write is overwritten by the V3→V4 clamp,
+        // and that's the intended final state.
+        XCTAssertEqual(
+            migratedPlans[0].updatedAt.timeIntervalSince1970,
+            Date.distantPast.timeIntervalSince1970,
+            accuracy: 1.0,
+            "After the full V1→V4 chain, singleton updatedAt must be clamped to distantPast (see fixup #17)"
         )
     }
 
@@ -288,6 +296,150 @@ final class VolumeArcMigrationTests: XCTestCase {
             memoryRow.queuedAt.timeIntervalSince1970,
             0,
             "Memory queue row's queuedAt should be a real timestamp, not distantPast"
+        )
+    }
+
+    /// VOL-67 Codex P1 (fixup #17): the V3→V4 migration must clamp the
+    /// migrated singleton records' OWN `updatedAt` fields to
+    /// `Date.distantPast`, not just the backfilled queue-row payload.
+    /// `DefaultSyncPayloadApplier.shouldApply` compares the LOCAL
+    /// record's `updatedAt` against inbound, so a record that still
+    /// carries a pre-migration launch-time timestamp would win
+    /// conflict resolution against older-but-authoritative cloud data
+    /// (even though fixup #13 correctly clamps the queue-row payload,
+    /// that's a separate code path from the applier's comparison).
+    /// Per-record kinds (workouts, memories) must keep real timestamps.
+    @MainActor
+    func testV3ToV4MigrationClampsSingletonRecordUpdatedAtDirectly() throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let storeURL = temporaryDirectory.appendingPathComponent("VolumeArcMigrationRecordClamp.sqlite")
+        let fixtureDate = Date(timeIntervalSince1970: 1_715_350_000)
+        try writeV3FixtureStoreWithAllEntities(at: storeURL, startedAt: fixtureDate)
+
+        let migratedContainer = try makeDiskBackedCurrentContainer(at: storeURL)
+        let migratedContext = ModelContext(migratedContainer)
+
+        // Profile record: updatedAt must be distantPast after migration.
+        let profile = try XCTUnwrap(migratedContext.fetch(FetchDescriptor<UserProfileRecord>()).first)
+        XCTAssertEqual(
+            profile.updatedAt.timeIntervalSince1970,
+            Date.distantPast.timeIntervalSince1970,
+            accuracy: 1.0,
+            "Migrated UserProfileRecord.updatedAt must be clamped to distantPast so the applier's shouldApply check can't make seeded defaults beat older authoritative cloud data"
+        )
+
+        // Plan record: updatedAt must be distantPast after migration.
+        let plan = try XCTUnwrap(migratedContext.fetch(FetchDescriptor<TrainingPlanRecord>()).first)
+        XCTAssertEqual(
+            plan.updatedAt.timeIntervalSince1970,
+            Date.distantPast.timeIntervalSince1970,
+            accuracy: 1.0,
+            "Migrated TrainingPlanRecord.updatedAt must be clamped to distantPast"
+        )
+
+        // Workout record: updatedAt must still reflect the real action
+        // time (completedAt or startedAt), not distantPast. Workouts
+        // carry per-record identifiers so cross-device reconciliation
+        // works without the clamp.
+        let workout = try XCTUnwrap(migratedContext.fetch(FetchDescriptor<WorkoutRecord>()).first)
+        XCTAssertGreaterThan(
+            workout.updatedAt.timeIntervalSince1970,
+            0,
+            "Migrated WorkoutRecord.updatedAt should be a real timestamp (per-record kinds reflect real user actions)"
+        )
+        XCTAssertNotEqual(
+            workout.updatedAt.timeIntervalSince1970,
+            Date.distantPast.timeIntervalSince1970,
+            "Migrated WorkoutRecord.updatedAt should NOT be clamped to distantPast"
+        )
+
+        // Memory record: same story as workouts.
+        let memory = try XCTUnwrap(migratedContext.fetch(FetchDescriptor<CoachMemoryRecord>()).first)
+        XCTAssertGreaterThan(
+            memory.createdAt.timeIntervalSince1970,
+            0,
+            "Migrated CoachMemoryRecord.createdAt should be a real timestamp"
+        )
+    }
+
+    /// VOL-67 Codex P2 (fixup #17): the deterministic legacy memory
+    /// identifier must be collision-resistant to delimiter confusion.
+    /// The original newline-delimited format could produce the same
+    /// canonical string for different field pairs — e.g.,
+    /// `(content: "", theme: "foo\nbar")` and
+    /// `(content: "\nfoo", theme: "bar")` both serialized to
+    /// `"<millis>\n\nfoo\nbar"`, producing the same identifier for
+    /// logically distinct memories. The fix uses length-prefixed
+    /// canonical form so different inputs always hash to different IDs.
+    ///
+    /// This test re-opens the V4 migration twice with two different
+    /// CoachMemoryRecord fixtures that would collide under the old
+    /// format, and verifies the migrated identifiers differ.
+    func testDeterministicLegacyMemoryIdentifierResistsDelimiterCollisions() throws {
+        let fixtureDate = Date(timeIntervalSince1970: 1_715_600_000)
+        let tempRoot = FileManager.default.temporaryDirectory
+
+        func migrateAndReturnMemoryIdentifier(
+            storeName: String,
+            content: String,
+            theme: String
+        ) throws -> String {
+            let directory = tempRoot.appendingPathComponent("\(storeName)-\(UUID().uuidString)", isDirectory: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: directory) }
+
+            let storeURL = directory.appendingPathComponent("\(storeName).sqlite")
+            try writeV3FixtureStoreWithCustomMemory(
+                at: storeURL,
+                memoryCreatedAt: fixtureDate,
+                memoryContent: content,
+                memoryTheme: theme
+            )
+
+            let migrated = try makeDiskBackedCurrentContainer(at: storeURL)
+            let context = ModelContext(migrated)
+            let memory = try XCTUnwrap(context.fetch(FetchDescriptor<CoachMemoryRecord>()).first)
+            return memory.identifier
+        }
+
+        // Pair A: collision-prone inputs that the old newline-delimited
+        // format would have hashed to the same string.
+        let idA1 = try migrateAndReturnMemoryIdentifier(
+            storeName: "A1",
+            content: "",
+            theme: "foo\nbar"
+        )
+        let idA2 = try migrateAndReturnMemoryIdentifier(
+            storeName: "A2",
+            content: "\nfoo",
+            theme: "bar"
+        )
+        XCTAssertNotEqual(
+            idA1,
+            idA2,
+            "Memories with different (content, theme) pairs must hash to different IDs even when the old newline-delimited encoding would have collided"
+        )
+
+        // Pair B: another delimiter-collision case — content ends in
+        // newline vs theme starts with content continuation.
+        let idB1 = try migrateAndReturnMemoryIdentifier(
+            storeName: "B1",
+            content: "hello",
+            theme: "world"
+        )
+        let idB2 = try migrateAndReturnMemoryIdentifier(
+            storeName: "B2",
+            content: "hello\nworld",
+            theme: ""
+        )
+        XCTAssertNotEqual(
+            idB1,
+            idB2,
+            "Memories with the same total delimiter-joined bytes but different field boundaries must hash differently"
         )
     }
 
@@ -703,6 +855,41 @@ final class VolumeArcMigrationTests: XCTestCase {
                 theme: "squat",
                 createdAt: startedAt
             ))
+
+            try context.save()
+        }
+    }
+
+    /// Write a V3 fixture store containing a single `CoachMemoryRecord`
+    /// with caller-specified `content`/`theme`. Used by the
+    /// deterministic-ID collision-resistance tests (fixup #17) to
+    /// materialize memories with delimiter-ambiguous field values that
+    /// the old newline-joined hash would have collided on.
+    private func writeV3FixtureStoreWithCustomMemory(
+        at storeURL: URL,
+        memoryCreatedAt: Date,
+        memoryContent: String,
+        memoryTheme: String
+    ) throws {
+        let schema = Schema(VolumeArcSchemaV3.models)
+        let config = ModelConfiguration(
+            "MigrationFixtureCustomMemoryV3",
+            schema: schema,
+            url: storeURL,
+            allowsSave: true,
+            cloudKitDatabase: .none
+        )
+        try autoreleasepool {
+            let container = try ModelContainer(for: schema, configurations: [config])
+            let context = ModelContext(container)
+
+            context.insert(
+                VolumeArcSchemaV3.CoachMemoryRecord(
+                    content: memoryContent,
+                    theme: memoryTheme,
+                    createdAt: memoryCreatedAt
+                )
+            )
 
             try context.save()
         }

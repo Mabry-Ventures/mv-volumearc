@@ -120,8 +120,15 @@ final class VolumeArcPersistenceTests: XCTestCase {
     /// backfill a new store after a mode-recovery.
     @MainActor
     func testBackfillRunsAfterModeRecoveryWhenFlagIsScopedByMode() throws {
-        let ephemeralDefaults = UserDefaults(suiteName: "test.\(UUID().uuidString)")!
-        defer { ephemeralDefaults.removePersistentDomain(forName: "test") }
+        // VOL-67 Copilot (fixup #17): the suite name is randomized per
+        // test and the cleanup MUST remove that same suite name, not a
+        // static "test" domain. The previous `forName: "test"` was a
+        // no-op — it left the per-test suite persisted on disk where
+        // it could accumulate across runs and leak state into any
+        // future test that happened to pick the same UUID.
+        let suiteName = "test.\(UUID().uuidString)"
+        let ephemeralDefaults = UserDefaults(suiteName: suiteName)!
+        defer { ephemeralDefaults.removePersistentDomain(forName: suiteName) }
 
         // Simulate: local-fallback backfill already ran and marked its
         // flag complete.
