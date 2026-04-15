@@ -431,6 +431,10 @@ public actor CloudSyncCoordinator {
         var records = additionalRecords
         var drainedChanges: [QueuedOutboundSyncChange] = []
         var quarantinedIDs: [UUID] = []
+        // VOL-67 Codex P1 (fixup #14): tracks the coalesce keys whose
+        // representative row failed to parse. See the per-key cleanup
+        // comment below for why we track keys separately from IDs.
+        var quarantinedKeys: Set<String> = []
 
         if let outboundQueue {
             drainedChanges = try await MainActor.run {
@@ -475,15 +479,22 @@ public actor CloudSyncCoordinator {
             // a failed partial write, a schema drift, or a test
             // fixture) could permanently block all outbound sync
             // until the user reinstalled. Now bad rows are logged
-            // to telemetry and added to the delete list alongside
-            // drained rows — they're dropped from the queue on the
-            // post-push cleanup and the valid rows still get pushed.
+            // to telemetry and routed into the per-key cleanup below.
+            //
+            // VOL-67 Codex P1 (fixup #14): also track which coalesce
+            // keys got quarantined, so the post-push cleanup can
+            // preserve older valid siblings for those keys. Without
+            // this, a single malformed *latest* row for a key would
+            // silently delete every older valid row for that same
+            // key — losing the user's last known good state.
             var queuedRecords: [CloudSyncRecord] = []
             for change in coalescedChanges {
+                let key = Self.coalesceKey(for: change)
                 do {
                     queuedRecords.append(try Self.makeCloudSyncRecord(from: change))
                 } catch {
                     quarantinedIDs.append(change.id)
+                    quarantinedKeys.insert(key)
                     telemetrySink?.record(TelemetryEvent(
                         category: "sync",
                         name: "outbound_row_quarantined",
@@ -500,26 +511,42 @@ public actor CloudSyncCoordinator {
             records.append(contentsOf: queuedRecords)
         }
 
-        guard !records.isEmpty else {
-            // Even when there's nothing valid to push, drop any
-            // quarantined rows so they don't re-poison future cycles.
-            if let outboundQueue, !quarantinedIDs.isEmpty {
-                try await MainActor.run {
-                    try outboundQueue.delete(ids: quarantinedIDs)
-                }
-            }
-            return 0
+        // Only call the transport when we have something to send.
+        // Quarantine-only batches (and batches where every coalesced
+        // row was quarantined) still need to run the cleanup below to
+        // drop the unparseable rows — otherwise they'd be drained
+        // forever and jam the queue.
+        if !records.isEmpty {
+            try await transport.pushRecords(records)
         }
 
-        try await transport.pushRecords(records)
-
-        // Drop every drained row, including the ones that were
-        // superseded by a later mutation and never made it into the
-        // pushed batch — they're resolved on the server now. Also
-        // drop any quarantined (unparseable) rows so they can't
-        // block future pushes.
+        // VOL-67 Codex P1 (fixup #14): per-key cleanup. For keys whose
+        // coalesced representative was successfully pushed, drop every
+        // drained row sharing that key — the pushed record reflects
+        // the newest intent, older siblings are resolved. For keys
+        // whose coalesced representative was quarantined, drop ONLY
+        // the specific unparseable row; older valid siblings stay in
+        // the queue so the next push cycle can fall back to the last
+        // known good state for that key. This preserves the "latest
+        // wins + quarantine unparseable" semantics without silently
+        // wiping older-but-valid state.
         if let outboundQueue {
-            let idsToDelete = drainedChanges.map(\.id) + quarantinedIDs
+            let quarantinedIDSet = Set(quarantinedIDs)
+            var idsToDelete: [UUID] = []
+            for change in drainedChanges {
+                let key = Self.coalesceKey(for: change)
+                if quarantinedKeys.contains(key) {
+                    // Quarantined key: only delete the specific
+                    // unparseable row, keep older siblings as fallback.
+                    if quarantinedIDSet.contains(change.id) {
+                        idsToDelete.append(change.id)
+                    }
+                } else {
+                    // Pushed key: every drained row for this key is
+                    // resolved, delete it.
+                    idsToDelete.append(change.id)
+                }
+            }
             if !idsToDelete.isEmpty {
                 try await MainActor.run {
                     try outboundQueue.delete(ids: idsToDelete)
@@ -600,11 +627,27 @@ public actor CloudSyncCoordinator {
         // user's delete intent. For upserts we still prefer the payload's
         // embedded timestamp since that reflects the exact snapshot we
         // captured at enqueue.
+        //
+        // VOL-67 Codex P2 (fixup #14): reject upserts whose `payloadJSON`
+        // can't be decoded BEFORE they reach the transport. Previously
+        // we fell back to `change.queuedAt` as the modified timestamp
+        // and sent the malformed payload anyway. Downstream appliers on
+        // other devices then drop the record (decode fails there too),
+        // but the server cursor still advances — so the mutation is
+        // silently lost cross-device. Throwing here routes the row into
+        // the push() quarantine path: it's never sent, it's deleted
+        // from the local queue so it can't re-poison future cycles, and
+        // the quarantine telemetry event surfaces it for diagnosis.
         let modifiedAt: Date
         if operation == .delete {
             modifiedAt = change.queuedAt
         } else {
-            modifiedAt = SyncPayloadCodec.modifiedAt(for: kind, payloadJSON: change.payloadJSON) ?? change.queuedAt
+            guard let decoded = SyncPayloadCodec.modifiedAt(for: kind, payloadJSON: change.payloadJSON) else {
+                throw CloudSyncError.invalidQueuedRecord(
+                    reason: "Unparseable upsert payload for \(kind.rawValue): modifiedAt decode failed"
+                )
+            }
+            modifiedAt = decoded
         }
 
         // VOL-67 Codex P2 (fixup #10): also normalize the outbound

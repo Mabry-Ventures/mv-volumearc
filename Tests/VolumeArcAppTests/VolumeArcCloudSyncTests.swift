@@ -1133,6 +1133,167 @@ final class VolumeArcCloudSyncTests: XCTestCase {
         XCTAssertNil(CloudSyncRecord.Kind.parse(""))
     }
 
+    // MARK: - VOL-67 Codex P1/P2 (fixup #14): quarantine siblings + unparseable upserts
+
+    /// Codex P1 (fixup #14): when the newest row for a coalesce key
+    /// fails to parse and gets quarantined, OLDER valid rows for the
+    /// same key must stay in the queue. Before this fix, the post-push
+    /// cleanup deleted EVERY drained row for the batch — including the
+    /// older valid siblings for a quarantined key — so a single
+    /// corrupted latest row would silently wipe the last known good
+    /// state for that key.
+    ///
+    /// Setup: two rows for workout-X (older valid, newer unparseable
+    /// operation) + one row for workout-Y (valid, different key).
+    /// Expected after push: workout-Y pushed, workout-X's unparseable
+    /// row deleted, workout-X's older valid row STAYS in queue.
+    func testPushPreservesOlderSiblingWhenNewestSiblingQuarantined() async throws {
+        // Create a throwaway workout just to synthesize a valid
+        // envelope-wrapped payloadJSON for the "older valid" row.
+        let validOlder = WorkoutRecord(
+            identifier: "workout-X",
+            title: "Older Valid State",
+            startedAt: Date(timeIntervalSince1970: 1_720_100_000),
+            updatedAt: Date(timeIntervalSince1970: 1_720_100_000)
+        )
+        let validPayloadJSON = try XCTUnwrap(SyncPayloadCodec.encodeWorkoutPayload(from: validOlder))
+
+        let validOther = WorkoutRecord(
+            identifier: "workout-Y",
+            title: "Unrelated Valid",
+            startedAt: Date(timeIntervalSince1970: 1_720_100_500),
+            updatedAt: Date(timeIntervalSince1970: 1_720_100_500)
+        )
+        let validOtherPayloadJSON = try XCTUnwrap(SyncPayloadCodec.encodeWorkoutPayload(from: validOther))
+
+        // Row 1: older valid row for workout-X (enqueuedAt = 1_720_100_000).
+        try outboundQueue.enqueue(
+            recordType: CloudSyncRecord.Kind.workout.rawValue,
+            recordIdentifier: "workout-X",
+            operation: CloudSyncRecord.Operation.upsert.rawValue,
+            payloadJSON: validPayloadJSON,
+            queuedAt: Date(timeIntervalSince1970: 1_720_100_000)
+        )
+
+        // Row 2: newer row for SAME workout-X with a bogus operation
+        // string — `Operation(rawValue: "bogus")` returns nil so
+        // makeCloudSyncRecord throws and the row gets quarantined.
+        // This exercises fixup #11 F5 (quarantine-on-parse-failure)
+        // and fixup #14 finding #1 (preserve sibling).
+        try outboundQueue.enqueue(
+            recordType: CloudSyncRecord.Kind.workout.rawValue,
+            recordIdentifier: "workout-X",
+            operation: "bogus",
+            payloadJSON: validPayloadJSON,
+            queuedAt: Date(timeIntervalSince1970: 1_720_100_100)
+        )
+
+        // Row 3: valid unrelated row for workout-Y (different key).
+        try outboundQueue.enqueue(
+            recordType: CloudSyncRecord.Kind.workout.rawValue,
+            recordIdentifier: "workout-Y",
+            operation: CloudSyncRecord.Operation.upsert.rawValue,
+            payloadJSON: validOtherPayloadJSON,
+            queuedAt: Date(timeIntervalSince1970: 1_720_100_500)
+        )
+
+        XCTAssertEqual(try outboundQueue.pendingRecords().count, 3)
+
+        let telemetry = InMemoryTelemetrySink()
+        let transport = RecordingCloudSyncTransport()
+        let coordinator = CloudSyncCoordinator(
+            transport: transport,
+            stateStore: FileSyncStateStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+            outboundQueue: outboundQueue,
+            telemetrySink: telemetry
+        )
+
+        let pushedCount = try await coordinator.push()
+
+        // Only workout-Y actually reached the transport.
+        XCTAssertEqual(pushedCount, 1, "Only the valid unrelated row should be pushed")
+        let pushed = await transport.pushedRecords
+        XCTAssertEqual(pushed.count, 1)
+        XCTAssertEqual(pushed[0].identifier, "workout-Y")
+
+        // Quarantine telemetry was emitted for the bogus-operation row.
+        XCTAssertTrue(
+            telemetry.currentEvents.contains { $0.name == "outbound_row_quarantined" },
+            "Expected outbound_row_quarantined telemetry for the bogus-operation row"
+        )
+
+        // Queue state after push:
+        //   - workout-X's OLDER valid row (row 1) must STAY (fallback for quarantined key)
+        //   - workout-X's unparseable newer row (row 2) must be DELETED
+        //   - workout-Y (row 3) must be DELETED (pushed successfully)
+        let remaining = try outboundQueue.pendingRecords()
+        let remainingForX = remaining.filter { $0.recordIdentifier == "workout-X" }
+        XCTAssertEqual(remainingForX.count, 1,
+                       "Exactly one workout-X row should remain (the older valid sibling)")
+        XCTAssertEqual(remainingForX.first?.operation, CloudSyncRecord.Operation.upsert.rawValue,
+                       "Remaining workout-X row must be the valid-operation sibling, not the bogus one")
+        XCTAssertEqual(remainingForX.first?.queuedAt, Date(timeIntervalSince1970: 1_720_100_000),
+                       "Remaining workout-X row must be the OLDER one")
+
+        XCTAssertTrue(
+            remaining.filter { $0.recordIdentifier == "workout-Y" }.isEmpty,
+            "workout-Y should be deleted after successful push"
+        )
+    }
+
+    /// Codex P2 (fixup #14): `makeCloudSyncRecord` must throw when an
+    /// upsert's `payloadJSON` can't be decoded — before this fix it
+    /// fell back to `change.queuedAt` and sent the malformed payload
+    /// to the transport, where downstream appliers would silently drop
+    /// it while the cursor advanced (cross-device data loss).
+    ///
+    /// Setup: single queue row with valid JSON that is NOT a valid
+    /// envelope — `SyncPayloadCodec.modifiedAt` returns nil, so the
+    /// pre-transport decode must reject it and route to quarantine.
+    func testPushQuarantinesUpsertWithUnparseablePayloadBeforeTransport() async throws {
+        // "{}" is valid JSON but does not contain the
+        // `{ "workout": { ... } }` envelope, so `decodeWorkoutPayload`
+        // returns nil and `SyncPayloadCodec.modifiedAt` returns nil.
+        // Pre-fixup-#14, the push code fell back to `queuedAt` and sent
+        // this record anyway. Post-fixup-#14, it must throw → quarantine.
+        try outboundQueue.enqueue(
+            recordType: CloudSyncRecord.Kind.workout.rawValue,
+            recordIdentifier: "workout-unparseable",
+            operation: CloudSyncRecord.Operation.upsert.rawValue,
+            payloadJSON: "{}",
+            queuedAt: Date(timeIntervalSince1970: 1_720_200_000)
+        )
+        XCTAssertEqual(try outboundQueue.pendingRecords().count, 1)
+
+        let telemetry = InMemoryTelemetrySink()
+        let transport = RecordingCloudSyncTransport()
+        let coordinator = CloudSyncCoordinator(
+            transport: transport,
+            stateStore: FileSyncStateStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+            outboundQueue: outboundQueue,
+            telemetrySink: telemetry
+        )
+
+        let pushedCount = try await coordinator.push()
+
+        // Nothing reached the transport.
+        XCTAssertEqual(pushedCount, 0, "Unparseable upsert must NOT be sent to the transport")
+        let pushed = await transport.pushedRecords
+        XCTAssertTrue(pushed.isEmpty, "Transport must not receive records with undecodable payloadJSON")
+
+        // Quarantine telemetry was emitted.
+        let quarantineEvent = telemetry.currentEvents.first { $0.name == "outbound_row_quarantined" }
+        XCTAssertNotNil(quarantineEvent,
+                        "Expected outbound_row_quarantined telemetry for the unparseable upsert")
+
+        // The row has been deleted from the queue so it can't re-poison
+        // subsequent pushes.
+        XCTAssertTrue(
+            try outboundQueue.pendingRecords().isEmpty,
+            "Quarantined unparseable row must be deleted from the queue"
+        )
+    }
+
     // MARK: - Helpers
 
     private func makeApplier(
