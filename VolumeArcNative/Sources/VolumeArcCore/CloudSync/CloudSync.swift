@@ -356,39 +356,49 @@ public struct FileSyncStateStore: Sendable {
     }
 }
 
+// VOL-67 Copilot P2 (fixup #11): `CloudSyncCoordinator` references
+// `OutboundSyncQueue` and `DefaultSyncPayloadApplier`, both of
+// which are defined under `#if canImport(SwiftData)`. Without
+// this wrap the whole actor would fail to compile on any
+// platform where SwiftData is unavailable. Our current targets
+// (iOS 26 + watchOS 26.4) both ship SwiftData, so in practice
+// the guard is protective — if Apple ever adds a platform where
+// SwiftData isn't present, the coordinator cleanly drops out
+// instead of breaking the build.
+#if canImport(SwiftData)
 /// Coordinates push/pull cycles between local repositories and the cloud transport.
 public actor CloudSyncCoordinator {
     private let transport: CloudSyncTransport
     private let stateStore: FileSyncStateStore
     private let outboundQueue: (any OutboundSyncQueue)?
-
-    #if canImport(SwiftData)
+    private let telemetrySink: (any TelemetrySink)?
     private let payloadApplier: DefaultSyncPayloadApplier?
 
     public init(
         transport: CloudSyncTransport,
         payloadApplier: DefaultSyncPayloadApplier,
         stateStore: FileSyncStateStore,
-        outboundQueue: (any OutboundSyncQueue)? = nil
+        outboundQueue: (any OutboundSyncQueue)? = nil,
+        telemetrySink: (any TelemetrySink)? = nil
     ) {
         self.transport = transport
         self.payloadApplier = payloadApplier
         self.stateStore = stateStore
         self.outboundQueue = outboundQueue
+        self.telemetrySink = telemetrySink
     }
-    #endif
 
     public init(
         transport: CloudSyncTransport,
         stateStore: FileSyncStateStore,
-        outboundQueue: (any OutboundSyncQueue)? = nil
+        outboundQueue: (any OutboundSyncQueue)? = nil,
+        telemetrySink: (any TelemetrySink)? = nil
     ) {
         self.transport = transport
         self.stateStore = stateStore
         self.outboundQueue = outboundQueue
-        #if canImport(SwiftData)
+        self.telemetrySink = telemetrySink
         self.payloadApplier = nil
-        #endif
     }
 
     /// Whether the transport is capable of syncing.
@@ -420,6 +430,7 @@ public actor CloudSyncCoordinator {
 
         var records = additionalRecords
         var drainedChanges: [QueuedOutboundSyncChange] = []
+        var quarantinedIDs: [UUID] = []
 
         if let outboundQueue {
             drainedChanges = try await MainActor.run {
@@ -454,20 +465,65 @@ public actor CloudSyncCoordinator {
             // Preserve the latest-value-wins ordering in a stable sequence
             // so tests and transports see a predictable push order.
             let coalescedChanges = orderedKeys.compactMap { coalesced[$0] }
-            let queuedRecords = try coalescedChanges.map(Self.makeCloudSyncRecord(from:))
+
+            // VOL-67 Copilot P2 (fixup #11): quarantine unparseable
+            // rows instead of aborting the whole push. Previously,
+            // `makeCloudSyncRecord(from:)` threw on an unsupported
+            // `recordType` or `operation` string, which aborted
+            // `push()` entirely and left every drained row in the
+            // queue for the next cycle. A single corrupted row (from
+            // a failed partial write, a schema drift, or a test
+            // fixture) could permanently block all outbound sync
+            // until the user reinstalled. Now bad rows are logged
+            // to telemetry and added to the delete list alongside
+            // drained rows — they're dropped from the queue on the
+            // post-push cleanup and the valid rows still get pushed.
+            var queuedRecords: [CloudSyncRecord] = []
+            for change in coalescedChanges {
+                do {
+                    queuedRecords.append(try Self.makeCloudSyncRecord(from: change))
+                } catch {
+                    quarantinedIDs.append(change.id)
+                    telemetrySink?.record(TelemetryEvent(
+                        category: "sync",
+                        name: "outbound_row_quarantined",
+                        severity: .warning,
+                        message: "Dropped unparseable outbound queue row \(change.id): \(error)",
+                        metadata: [
+                            "recordType": change.recordType,
+                            "recordIdentifier": change.recordIdentifier,
+                            "operation": change.operation,
+                        ]
+                    ))
+                }
+            }
             records.append(contentsOf: queuedRecords)
         }
 
-        guard !records.isEmpty else { return 0 }
+        guard !records.isEmpty else {
+            // Even when there's nothing valid to push, drop any
+            // quarantined rows so they don't re-poison future cycles.
+            if let outboundQueue, !quarantinedIDs.isEmpty {
+                try await MainActor.run {
+                    try outboundQueue.delete(ids: quarantinedIDs)
+                }
+            }
+            return 0
+        }
 
         try await transport.pushRecords(records)
 
         // Drop every drained row, including the ones that were
         // superseded by a later mutation and never made it into the
-        // pushed batch — they're resolved on the server now.
-        if let outboundQueue, !drainedChanges.isEmpty {
-            try await MainActor.run {
-                try outboundQueue.delete(ids: drainedChanges.map(\.id))
+        // pushed batch — they're resolved on the server now. Also
+        // drop any quarantined (unparseable) rows so they can't
+        // block future pushes.
+        if let outboundQueue {
+            let idsToDelete = drainedChanges.map(\.id) + quarantinedIDs
+            if !idsToDelete.isEmpty {
+                try await MainActor.run {
+                    try outboundQueue.delete(ids: idsToDelete)
+                }
             }
         }
 
@@ -498,11 +554,9 @@ public actor CloudSyncCoordinator {
         //    bound to @MainActor via ModelContext thread affinity). The
         //    applier also invalidates stale queued entries whose state
         //    is older than the inbound timestamp.
-        #if canImport(SwiftData)
         if let payloadApplier {
             try await payloadApplier.apply(result: result)
         }
-        #endif
 
         // 3) Persist the new cursor before pushing so a push failure
         //    can't force us to re-pull the same window twice.
@@ -568,6 +622,7 @@ public actor CloudSyncCoordinator {
         )
     }
 }
+#endif // canImport(SwiftData) — CloudSyncCoordinator
 
 #if canImport(SwiftData)
 /// Applies remote sync records to local SwiftData repositories.

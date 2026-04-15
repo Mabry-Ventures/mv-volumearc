@@ -132,6 +132,44 @@ public enum SyncPayloadCodec {
         return try? decoder.decode(type, from: data)
     }
 
+    public static func decodeUserProfilePayload(from string: String) -> UserProfilePayload? {
+        decode(UserProfileEnvelope.self, from: string)?.profile
+    }
+
+    public static func decodeWorkoutPayload(from string: String) -> WorkoutPayload? {
+        decode(WorkoutEnvelope.self, from: string)?.workout
+    }
+
+    public static func decodeTrainingPlanPayload(from string: String) -> TrainingPlanPayload? {
+        decode(TrainingPlanEnvelope.self, from: string)?.plan
+    }
+
+    public static func decodeCoachMemoryPayload(from string: String) -> CoachMemoryPayload? {
+        decode(CoachMemoryEnvelope.self, from: string)?.memory
+    }
+
+    public static func modifiedAt(for kind: CloudSyncRecord.Kind, payloadJSON: String) -> Date? {
+        switch kind {
+        case .workout:
+            return decodeWorkoutPayload(from: payloadJSON)?.updatedAt
+        case .userProfile:
+            return decodeUserProfilePayload(from: payloadJSON)?.updatedAt
+        case .trainingPlan:
+            return decodeTrainingPlanPayload(from: payloadJSON)?.updatedAt
+        case .coachMemory:
+            return decodeCoachMemoryPayload(from: payloadJSON)?.createdAt
+        }
+    }
+
+    // VOL-67 Copilot P2 (fixup #11): helpers that take SwiftData
+    // `@Model` record types are gated on `canImport(SwiftData)` so
+    // this file still compiles on platforms where SwiftData isn't
+    // available. Everything above — the payload structs, the
+    // generic encode/decode helpers, the per-kind decoders, the
+    // `modifiedAt(for:)` helper, and the legacy-field synthesis
+    // helper below — is pure JSON/Foundation and compiles
+    // unconditionally.
+    #if canImport(SwiftData)
     public static func encodeUserProfilePayload(from record: UserProfileRecord) -> String? {
         encode(UserProfileEnvelope(profile: UserProfilePayload(
             name: record.name,
@@ -146,10 +184,6 @@ public enum SyncPayloadCodec {
             onboardingCompleted: record.onboardingCompleted,
             updatedAt: record.updatedAt
         )))
-    }
-
-    public static func decodeUserProfilePayload(from string: String) -> UserProfilePayload? {
-        decode(UserProfileEnvelope.self, from: string)?.profile
     }
 
     public static func encodeWorkoutPayload(from record: WorkoutRecord) -> String? {
@@ -168,19 +202,11 @@ public enum SyncPayloadCodec {
         )))
     }
 
-    public static func decodeWorkoutPayload(from string: String) -> WorkoutPayload? {
-        decode(WorkoutEnvelope.self, from: string)?.workout
-    }
-
     public static func encodeTrainingPlanPayload(from record: TrainingPlanRecord) -> String? {
         encode(TrainingPlanEnvelope(plan: TrainingPlanPayload(
             workoutsJSON: record.workoutsJSON,
             updatedAt: record.updatedAt
         )))
-    }
-
-    public static func decodeTrainingPlanPayload(from string: String) -> TrainingPlanPayload? {
-        decode(TrainingPlanEnvelope.self, from: string)?.plan
     }
 
     public static func encodeCoachMemoryPayload(from record: CoachMemoryRecord) -> String? {
@@ -189,23 +215,6 @@ public enum SyncPayloadCodec {
             theme: record.theme,
             createdAt: record.createdAt
         )))
-    }
-
-    public static func decodeCoachMemoryPayload(from string: String) -> CoachMemoryPayload? {
-        decode(CoachMemoryEnvelope.self, from: string)?.memory
-    }
-
-    public static func modifiedAt(for kind: CloudSyncRecord.Kind, payloadJSON: String) -> Date? {
-        switch kind {
-        case .workout:
-            return decodeWorkoutPayload(from: payloadJSON)?.updatedAt
-        case .userProfile:
-            return decodeUserProfilePayload(from: payloadJSON)?.updatedAt
-        case .trainingPlan:
-            return decodeTrainingPlanPayload(from: payloadJSON)?.updatedAt
-        case .coachMemory:
-            return decodeCoachMemoryPayload(from: payloadJSON)?.createdAt
-        }
     }
 
     public static func makeRecord(
@@ -263,6 +272,7 @@ public enum SyncPayloadCodec {
             modifiedAt: memory.createdAt
         )
     }
+    #endif // canImport(SwiftData) — SwiftData-model-dependent helpers
 
     /// VOL-67 Codex P2 fixup: synthesize a canonical payloadJSON from
     /// the individual-field format used by pre-VOL-67 CloudKit records.

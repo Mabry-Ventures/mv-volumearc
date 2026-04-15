@@ -208,10 +208,21 @@ public struct SwiftDataOutboundSyncQueue: OutboundSyncQueue, Sendable {
         guard !ids.isEmpty else { return }
 
         let context = ModelContext(container)
-        let allRecords = try context.fetch(FetchDescriptor<OutboundSyncQueueRecord>())
-        let idsToDelete = Set(ids)
+        // VOL-67 Copilot perf P2 (fixup #11): narrow via a
+        // `#Predicate` that matches the target ID set directly
+        // instead of scanning every queued row. Called on every
+        // successful push; scanning the whole queue on each push
+        // turns O(1) deletes into O(n) work on offline-backlog
+        // devices.
+        let idsToDelete = ids
+        let descriptor = FetchDescriptor<OutboundSyncQueueRecord>(
+            predicate: #Predicate<OutboundSyncQueueRecord> { record in
+                idsToDelete.contains(record.id)
+            }
+        )
+        let recordsToDelete = try context.fetch(descriptor)
 
-        for record in allRecords where idsToDelete.contains(record.id) {
+        for record in recordsToDelete {
             context.delete(record)
         }
 
@@ -235,20 +246,43 @@ public struct SwiftDataOutboundSyncQueue: OutboundSyncQueue, Sendable {
     ) throws {
         let context = ModelContext(container)
 
-        // VOL-67 Copilot perf P2: narrow the fetch via a SwiftData
-        // `#Predicate` on `recordIdentifier` instead of scanning every
-        // queued row. The applier calls this during inbound pull apply,
-        // and an offline device may have accumulated a large backlog —
-        // previously we loaded the whole table and filtered in memory.
-        // The identifier match alone eliminates the vast majority of
-        // rows; the secondary recordType alias resolution stays in
-        // memory because SwiftData's `#Predicate` can't express
-        // multi-value OR against a String column without exploding
-        // the query shape.
-        let targetIdentifier = recordIdentifier
+        // VOL-67 Copilot P2 (fixup #11): fetch rows whose
+        // `recordIdentifier` matches ANY known alias form for the
+        // target kind, not just the canonical passed-in identifier.
+        //
+        // Fixup #9 added a `#Predicate` narrowing the fetch by
+        // `row.recordIdentifier == targetIdentifier` to avoid the
+        // O(n) scan. But the applier calls this with the canonical
+        // short form ("profile" / "plan") while legacy queue rows
+        // may be stored with long-form identifiers ("userProfile" /
+        // "trainingPlan"). The narrowed predicate silently missed
+        // those rows, leaving stale legacy-form entries in the
+        // queue to be pushed on the next sync.
+        //
+        // Build a set of candidate identifiers: the passed identifier
+        // plus every known alias for the resolved kind's singleton
+        // forms. For per-record (non-singleton) kinds we only need
+        // the passed identifier because workout / memory IDs are
+        // UUID-style and don't have canonical aliases.
+        let targetKind = CloudSyncRecord.Kind.parse(recordType)
+        let candidateIdentifiers: Set<String> = {
+            var set: Set<String> = [recordIdentifier]
+            guard let kind = targetKind, kind.isSingleton else { return set }
+            set.insert(kind.defaultIdentifier)
+            switch kind {
+            case .userProfile:
+                set.insert("userProfile")
+            case .trainingPlan:
+                set.insert("trainingPlan")
+            case .workout, .coachMemory:
+                break
+            }
+            return set
+        }()
+
         let candidatesDescriptor = FetchDescriptor<OutboundSyncQueueRecord>(
             predicate: #Predicate<OutboundSyncQueueRecord> { row in
-                row.recordIdentifier == targetIdentifier
+                candidateIdentifiers.contains(row.recordIdentifier)
             }
         )
         let rows = try context.fetch(candidatesDescriptor)
@@ -262,7 +296,6 @@ public struct SwiftDataOutboundSyncQueue: OutboundSyncQueue, Sendable {
         // (`"userProfile"`). Without this, legacy rows would never be
         // invalidated and the next push would resend stale payloads
         // over newer server state.
-        let targetKind = CloudSyncRecord.Kind.parse(recordType)
 
         var removed = 0
         for row in rows {
