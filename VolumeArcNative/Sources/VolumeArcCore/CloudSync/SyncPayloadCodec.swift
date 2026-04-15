@@ -429,6 +429,21 @@ public enum SyncPayloadCodec {
     /// direct `Date` values (what `CKRecord` returns for date fields)
     /// as well as `TimeInterval` / numeric types for defensive
     /// compatibility with older wire formats.
+    ///
+    /// VOL-67 Codex P2 (fixup #32): also accept string forms. The
+    /// pre-`payloadJSON` transport stored some CKRecord field values
+    /// as `NSString` (particularly on early builds that serialized
+    /// through plist / JSON intermediates), so legacy records with
+    /// string timestamps would otherwise fail `synthesizeLegacyPayloadJSON`
+    /// and get dropped by the pull path. Fixup #21/#30's cursor-
+    /// reset behavior then traps affected devices in an infinite
+    /// re-fetch loop: pull → skip malformed → reset cursor → pull →
+    /// skip again → forever, without ever applying those records.
+    ///
+    /// Accept both ISO 8601 (`"2024-01-15T12:34:56Z"`) and numeric
+    /// string (`"1705321096"` / `"1705321096.5"`) forms. Numeric
+    /// strings are interpreted as Unix timestamps in seconds since
+    /// 1970, matching the `TimeInterval`/`NSNumber` branches above.
     private static func readDate(_ raw: Any?) -> Date? {
         if let date = raw as? Date {
             return date
@@ -439,7 +454,44 @@ public enum SyncPayloadCodec {
         if let number = raw as? NSNumber {
             return Date(timeIntervalSince1970: number.doubleValue)
         }
+        if let string = raw as? String {
+            // Try numeric string first (e.g., "1705321096" from a
+            // plist/JSON that preserved the epoch as a string).
+            if let seconds = TimeInterval(string) {
+                return Date(timeIntervalSince1970: seconds)
+            }
+            // Fall back to ISO 8601 for well-formed timestamp strings.
+            if let parsed = Self.iso8601Formatter.date(from: string) {
+                return parsed
+            }
+            // Also accept the ISO 8601 variant without fractional
+            // seconds (the default for `ISO8601DateFormatter` without
+            // options), in case the upstream producer omitted the
+            // `.withFractionalSeconds` flag.
+            if let parsed = Self.iso8601FormatterNoFraction.date(from: string) {
+                return parsed
+            }
+        }
         return nil
+    }
+
+    /// ISO 8601 parsers for legacy timestamp strings. Computed
+    /// properties (not `static let`) because Swift 6 strict
+    /// concurrency treats `ISO8601DateFormatter` as non-`Sendable`
+    /// and rejects shared static instances. Same pattern as the
+    /// `encoder`/`decoder` properties below (fixup #29) — allocating
+    /// a fresh formatter per call is cheap compared to the parse
+    /// work itself.
+    private static var iso8601Formatter: ISO8601DateFormatter {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }
+
+    private static var iso8601FormatterNoFraction: ISO8601DateFormatter {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
     }
 
     // VOL-67 Copilot (fixup #29): `JSONEncoder` and `JSONDecoder` are

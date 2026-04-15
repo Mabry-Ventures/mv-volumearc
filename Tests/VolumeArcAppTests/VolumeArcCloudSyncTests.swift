@@ -1146,6 +1146,67 @@ final class VolumeArcCloudSyncTests: XCTestCase {
         XCTAssertEqual(decoded.updatedAt.timeIntervalSince1970, startedAtSeconds + 600, accuracy: 0.001)
     }
 
+    /// VOL-67 Codex P2 (fixup #32): `synthesizeLegacyPayloadJSON`
+    /// must accept string timestamps from legacy CKRecord fields.
+    /// The pre-`payloadJSON` transport on early builds stored some
+    /// field values as `NSString` (via plist/JSON intermediates), so
+    /// a legacy workout record with `startedAt: "1720140000"` or
+    /// `updatedAt: "2024-07-04T12:00:00Z"` must synthesize
+    /// successfully. Before this fix, string timestamps were rejected
+    /// by `readDate`, synthesis returned nil, and the pull path
+    /// (fixup #21/#30) then cleared `nextCursor` — trapping the
+    /// device in an infinite re-fetch loop without ever applying
+    /// those records.
+    func testSynthesizeLegacyPayloadAcceptsStringTimestamps() throws {
+        // Numeric string (epoch seconds) — most common legacy form.
+        let numericStringSeconds: TimeInterval = 1_720_140_000
+        let numericFields: [String: Any] = [
+            "title": "Numeric String Dates",
+            "startedAt": "\(numericStringSeconds)",
+            "updatedAt": "\(numericStringSeconds + 1_200)",
+            "setsJSON": "[]",
+        ]
+        let numericJSON = try XCTUnwrap(
+            SyncPayloadCodec.synthesizeLegacyPayloadJSON(kind: .workout, fields: numericFields),
+            "Synthesis must succeed with string epoch timestamps"
+        )
+        let numericDecoded = try XCTUnwrap(SyncPayloadCodec.decodeWorkoutPayload(from: numericJSON))
+        XCTAssertEqual(
+            numericDecoded.startedAt.timeIntervalSince1970,
+            numericStringSeconds,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            numericDecoded.updatedAt.timeIntervalSince1970,
+            numericStringSeconds + 1_200,
+            accuracy: 0.001
+        )
+
+        // ISO 8601 strings (with and without fractional seconds).
+        let iso8601Fields: [String: Any] = [
+            "title": "ISO 8601 Dates",
+            "startedAt": "2024-07-04T12:00:00.000Z",
+            "updatedAt": "2024-07-04T12:30:00Z",
+            "setsJSON": "[]",
+        ]
+        let iso8601JSON = try XCTUnwrap(
+            SyncPayloadCodec.synthesizeLegacyPayloadJSON(kind: .workout, fields: iso8601Fields),
+            "Synthesis must succeed with ISO 8601 string timestamps (both fractional and non-fractional variants)"
+        )
+        let iso8601Decoded = try XCTUnwrap(SyncPayloadCodec.decodeWorkoutPayload(from: iso8601JSON))
+        // 2024-07-04T12:00:00Z = 1720094400
+        XCTAssertEqual(
+            iso8601Decoded.startedAt.timeIntervalSince1970,
+            1_720_094_400,
+            accuracy: 1.0
+        )
+        XCTAssertEqual(
+            iso8601Decoded.updatedAt.timeIntervalSince1970,
+            1_720_094_400 + 1_800,
+            accuracy: 1.0
+        )
+    }
+
     // MARK: - VOL-67 Codex P2 (fixup #7): canonicalize singleton IDs
 
     /// Singleton kinds (`userProfile`, `trainingPlan`) always enqueue
