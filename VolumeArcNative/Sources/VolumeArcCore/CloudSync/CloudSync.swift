@@ -175,6 +175,13 @@ public final class CloudKitSyncTransport: CloudSyncTransport, @unchecked Sendabl
         var changedRecords: [CloudSyncRecord] = []
         var deletedRecordIDs: [String] = []
         var nextCursor: String? = cursor
+        // VOL-67 Copilot (fixup #21): count records that we had to skip
+        // because `SyncPayloadCodec.synthesizeLegacyPayloadJSON` returned
+        // nil (missing required fields on a legacy CKRecord). If ANY
+        // records are skipped, we clear `nextCursor` before returning so
+        // the next `syncCycle` re-fetches the whole window instead of
+        // advancing past un-applied changes. See the skip branch below.
+        var legacySynthesisSkips = 0
 
         let token: CKServerChangeToken?
         if let cursor,
@@ -206,10 +213,21 @@ public final class CloudKitSyncTransport: CloudSyncTransport, @unchecked Sendabl
                 // pre-rename CKRecords may have stored individual field
                 // keys instead. If `payloadJSON` is missing, synthesize
                 // one by reading the known per-kind fields directly off
-                // the CKRecord. Falling back to an empty string (the
-                // previous behavior) caused the applier to silently
-                // drop the record while the sync cursor still advanced,
-                // effectively losing existing cloud data on upgrade.
+                // the CKRecord.
+                //
+                // VOL-67 Copilot (fixup #21): if synthesis returns nil
+                // (legacy record is missing required fields), SKIP the
+                // record entirely AND increment the skip counter.
+                // Previously we fell back to an empty payloadJSON and
+                // still appended the record — the applier then silently
+                // dropped it on decode-failure while the cursor advanced
+                // past it, losing the mutation permanently. Now we
+                // neither produce a junk record nor advance the cursor
+                // past it: the whole window gets re-fetched on the next
+                // sync cycle. Successfully-synthesized records in the
+                // same window still get applied by the coordinator —
+                // they're idempotent on re-fetch because shouldApply
+                // rejects equal-timestamp re-applies.
                 let payloadJSON: String
                 if let explicit = record["payloadJSON"] as? String, !explicit.isEmpty {
                     payloadJSON = explicit
@@ -220,10 +238,14 @@ public final class CloudKitSyncTransport: CloudSyncTransport, @unchecked Sendabl
                             fields[key] = value
                         }
                     }
-                    payloadJSON = SyncPayloadCodec.synthesizeLegacyPayloadJSON(
+                    guard let synthesized = SyncPayloadCodec.synthesizeLegacyPayloadJSON(
                         kind: kind,
                         fields: fields
-                    ) ?? ""
+                    ) else {
+                        legacySynthesisSkips += 1
+                        return
+                    }
+                    payloadJSON = synthesized
                 }
 
                 changedRecords.append(CloudSyncRecord(
@@ -262,6 +284,16 @@ public final class CloudKitSyncTransport: CloudSyncTransport, @unchecked Sendabl
                 }
             }
             database.add(operation)
+        }
+
+        // VOL-67 Copilot (fixup #21): if the legacy-payload synthesis
+        // had to skip any records, force the next pull to re-fetch the
+        // whole window by dropping the advanced cursor. The applier
+        // still processes whatever records DID synthesize — the
+        // re-apply is idempotent because shouldApply rejects equal or
+        // older timestamps on the second round.
+        if legacySynthesisSkips > 0 {
+            nextCursor = nil
         }
 
         return CloudSyncPullResult(

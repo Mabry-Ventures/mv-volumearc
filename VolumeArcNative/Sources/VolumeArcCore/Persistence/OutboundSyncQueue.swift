@@ -95,12 +95,22 @@ public protocol OutboundSyncQueue: Sendable {
     func pendingRecords() throws -> [QueuedOutboundSyncChange]
 
     /// Remove queued entries for a given `recordType` + `recordIdentifier`
-    /// that were enqueued strictly before `olderThan`. Used by the sync
-    /// applier to invalidate stale queued writes when an inbound pull
-    /// delivers a newer server version. Pass `nil` for `olderThan` to
-    /// remove every entry for the record regardless of timestamp — the
-    /// applier uses this path on inbound deletes so a stale queued upsert
-    /// can't resurrect a record deleted on another device.
+    /// whose `queuedAt` is `<=` `olderThan`. Ties (`queuedAt == olderThan`)
+    /// ARE invalidated so the queue's tie-breaking semantics match
+    /// `DefaultSyncPayloadApplier.shouldApply`, which uses strict `>` for
+    /// its "local newer" branch (i.e., inbound wins on equal timestamps).
+    /// See fixup #6 regression test
+    /// `testInvalidateEntriesDropsRowsOnExactTimestampTies` — a
+    /// same-timestamp queue row that survives invalidation would be
+    /// re-sent on the next push and clobber the freshly-applied inbound
+    /// state.
+    ///
+    /// Used by the sync applier to invalidate stale queued writes when
+    /// an inbound pull delivers a newer server version. Pass `nil` for
+    /// `olderThan` to remove every entry for the record regardless of
+    /// timestamp — the applier uses this path on inbound deletes so a
+    /// stale queued upsert can't resurrect a record deleted on another
+    /// device.
     @MainActor
     func invalidateEntries(
         recordType: String,
