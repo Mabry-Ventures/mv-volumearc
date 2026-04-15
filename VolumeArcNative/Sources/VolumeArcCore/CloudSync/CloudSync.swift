@@ -168,11 +168,37 @@ public final class CloudKitSyncTransport: CloudSyncTransport, @unchecked Sendabl
                 let operation = CloudSyncRecord.Operation(
                     rawValue: (record["operation"] as? String) ?? CloudSyncRecord.Operation.upsert.rawValue
                 ) ?? .upsert
+
+                // VOL-67 Codex P2 fixup: the modern wire format stores
+                // the entire payload in a single `payloadJSON` key, but
+                // pre-rename CKRecords may have stored individual field
+                // keys instead. If `payloadJSON` is missing, synthesize
+                // one by reading the known per-kind fields directly off
+                // the CKRecord. Falling back to an empty string (the
+                // previous behavior) caused the applier to silently
+                // drop the record while the sync cursor still advanced,
+                // effectively losing existing cloud data on upgrade.
+                let payloadJSON: String
+                if let explicit = record["payloadJSON"] as? String, !explicit.isEmpty {
+                    payloadJSON = explicit
+                } else {
+                    var fields: [String: Any] = [:]
+                    for key in record.allKeys() {
+                        if let value = record[key] {
+                            fields[key] = value
+                        }
+                    }
+                    payloadJSON = SyncPayloadCodec.synthesizeLegacyPayloadJSON(
+                        kind: kind,
+                        fields: fields
+                    ) ?? ""
+                }
+
                 changedRecords.append(CloudSyncRecord(
                     kind: kind,
                     identifier: record.recordID.recordName,
                     operation: operation,
-                    payloadJSON: (record["payloadJSON"] as? String) ?? "",
+                    payloadJSON: payloadJSON,
                     modifiedAt: modifiedAt
                 ))
             }

@@ -201,6 +201,121 @@ public enum SyncPayloadCodec {
         )
     }
 
+    /// VOL-67 Codex P2 fixup: synthesize a canonical payloadJSON from
+    /// the individual-field format used by pre-VOL-67 CloudKit records.
+    ///
+    /// The modern wire format stores the entire payload under a single
+    /// `payloadJSON` CKRecord key. But earlier (unshipped) iterations
+    /// of this sync code wrote each field directly to the CKRecord
+    /// (`title`, `startedAt`, `updatedAt`, etc.). After upgrading to
+    /// the new transport, the pull path used to fall back to an empty
+    /// string when `payloadJSON` was missing, which caused the applier
+    /// to silently drop the record while the sync cursor advanced —
+    /// effectively losing any existing cloud data.
+    ///
+    /// The transport now calls this helper when `payloadJSON` is
+    /// absent. Caller constructs a `[String: Any]` dict from the
+    /// CKRecord's field values; this helper reads the fields for the
+    /// given `kind`, builds the matching payload struct, and encodes
+    /// it via the canonical JSON encoder. Returns `nil` if the
+    /// dictionary is missing fields required by the payload struct
+    /// (truly unrecoverable — caller drops the record, same as
+    /// before).
+    ///
+    /// Dates can come in as `Date` or as `TimeInterval`/`Double`
+    /// (CloudKit may return either). The reader accepts both forms.
+    public static func synthesizeLegacyPayloadJSON(
+        kind: CloudSyncRecord.Kind,
+        fields: [String: Any]
+    ) -> String? {
+        switch kind {
+        case .workout:
+            guard
+                let title = fields["title"] as? String,
+                let startedAt = Self.readDate(fields["startedAt"]),
+                let updatedAt = Self.readDate(fields["updatedAt"])
+            else { return nil }
+
+            let payload = WorkoutPayload(
+                title: title,
+                startedAt: startedAt,
+                completedAt: Self.readDate(fields["completedAt"]),
+                durationMinutes: (fields["durationMinutes"] as? Int) ?? (fields["durationMinutes"] as? NSNumber)?.intValue ?? 0,
+                exerciseIDsCSV: (fields["exerciseIDsCSV"] as? String) ?? "",
+                setsJSON: (fields["setsJSON"] as? String) ?? "[]",
+                totalVolumeLoad: (fields["totalVolumeLoad"] as? Double) ?? (fields["totalVolumeLoad"] as? NSNumber)?.doubleValue ?? 0,
+                averageRPE: (fields["averageRPE"] as? Double) ?? (fields["averageRPE"] as? NSNumber)?.doubleValue ?? 0,
+                completedSetCount: (fields["completedSetCount"] as? Int) ?? (fields["completedSetCount"] as? NSNumber)?.intValue ?? 0,
+                summary: (fields["summary"] as? String) ?? "",
+                updatedAt: updatedAt
+            )
+            return encode(WorkoutEnvelope(workout: payload))
+
+        case .userProfile:
+            guard
+                let name = fields["name"] as? String,
+                let updatedAt = Self.readDate(fields["updatedAt"])
+            else { return nil }
+
+            let payload = UserProfilePayload(
+                name: name,
+                coachingStyle: (fields["coachingStyle"] as? String) ?? "motivational",
+                privacyMode: (fields["privacyMode"] as? String) ?? "standard",
+                advancementLevel: (fields["advancementLevel"] as? String) ?? "intermediate",
+                availableEquipmentCSV: (fields["availableEquipmentCSV"] as? String) ?? "",
+                preferredRepRangeLower: (fields["preferredRepRangeLower"] as? Int) ?? (fields["preferredRepRangeLower"] as? NSNumber)?.intValue ?? 5,
+                preferredRepRangeUpper: (fields["preferredRepRangeUpper"] as? Int) ?? (fields["preferredRepRangeUpper"] as? NSNumber)?.intValue ?? 8,
+                sessionTimeBudgetMinutes: (fields["sessionTimeBudgetMinutes"] as? Int) ?? (fields["sessionTimeBudgetMinutes"] as? NSNumber)?.intValue ?? 60,
+                weeklyTrainingDays: (fields["weeklyTrainingDays"] as? Int) ?? (fields["weeklyTrainingDays"] as? NSNumber)?.intValue ?? 4,
+                onboardingCompleted: (fields["onboardingCompleted"] as? Bool) ?? (fields["onboardingCompleted"] as? NSNumber)?.boolValue ?? false,
+                updatedAt: updatedAt
+            )
+            return encode(UserProfileEnvelope(profile: payload))
+
+        case .trainingPlan:
+            guard
+                let workoutsJSON = fields["workoutsJSON"] as? String,
+                let updatedAt = Self.readDate(fields["updatedAt"])
+            else { return nil }
+
+            let payload = TrainingPlanPayload(
+                workoutsJSON: workoutsJSON,
+                updatedAt: updatedAt
+            )
+            return encode(TrainingPlanEnvelope(plan: payload))
+
+        case .coachMemory:
+            guard
+                let content = fields["content"] as? String,
+                let createdAt = Self.readDate(fields["createdAt"])
+            else { return nil }
+
+            let payload = CoachMemoryPayload(
+                content: content,
+                theme: (fields["theme"] as? String) ?? "",
+                createdAt: createdAt
+            )
+            return encode(CoachMemoryEnvelope(memory: payload))
+        }
+    }
+
+    /// Coerce an arbitrary `Any?` field value into a `Date`. Supports
+    /// direct `Date` values (what `CKRecord` returns for date fields)
+    /// as well as `TimeInterval` / numeric types for defensive
+    /// compatibility with older wire formats.
+    private static func readDate(_ raw: Any?) -> Date? {
+        if let date = raw as? Date {
+            return date
+        }
+        if let seconds = raw as? TimeInterval {
+            return Date(timeIntervalSince1970: seconds)
+        }
+        if let number = raw as? NSNumber {
+            return Date(timeIntervalSince1970: number.doubleValue)
+        }
+        return nil
+    }
+
     private static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .millisecondsSince1970

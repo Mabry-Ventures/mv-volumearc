@@ -263,7 +263,14 @@ public struct SwiftDataOutboundSyncQueue: OutboundSyncQueue, Sendable {
             }
             guard matches else { continue }
 
-            if let olderThan, row.queuedAt >= olderThan {
+            // VOL-67 Codex P2 fixup: strict greater-than matches the
+            // applier's `shouldApply` semantics (inbound wins on ties).
+            // With `>=` we'd keep same-timestamp rows even though the
+            // applier just applied the inbound record — the row would
+            // then be resent on the next push and overwrite the freshly
+            // applied state. Strict `>` drops the row on equal
+            // timestamps, consistent with "inbound wins ties".
+            if let olderThan, row.queuedAt > olderThan {
                 continue
             }
             context.delete(row)

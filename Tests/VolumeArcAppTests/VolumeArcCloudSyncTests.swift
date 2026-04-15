@@ -684,6 +684,156 @@ final class VolumeArcCloudSyncTests: XCTestCase {
 
     // MARK: - VOL-67 Codex P2: legacy record type aliases
 
+    /// Codex P2 (fixup #6): `shouldApply` treats equal timestamps as
+    /// inbound-wins (strict `>` for the reject branch), but
+    /// `invalidateEntries` was keeping rows where `queuedAt >= olderThan`.
+    /// On tied timestamps the applier would apply the inbound record
+    /// while the same-timestamp queue row survived, then the next push
+    /// would resend the stale payload and overwrite the freshly-applied
+    /// state. Fix: strict `>` so ties drop the queue row, matching the
+    /// applier.
+    func testInvalidateEntriesDropsRowsOnExactTimestampTies() throws {
+        let tiedTimestamp = Date(timeIntervalSince1970: 1_720_090_000)
+        try outboundQueue.enqueue(
+            recordType: CloudSyncRecord.Kind.workout.rawValue,
+            recordIdentifier: "tied-workout",
+            operation: CloudSyncRecord.Operation.upsert.rawValue,
+            payloadJSON: "{}",
+            queuedAt: tiedTimestamp
+        )
+        XCTAssertEqual(try outboundQueue.pendingRecords().count, 1)
+
+        // Invalidate with the EXACT same timestamp — the row should be
+        // dropped (inbound wins ties, matching shouldApply semantics).
+        try outboundQueue.invalidateEntries(
+            recordType: CloudSyncRecord.Kind.workout.rawValue,
+            recordIdentifier: "tied-workout",
+            olderThan: tiedTimestamp
+        )
+        XCTAssertTrue(try outboundQueue.pendingRecords().isEmpty,
+                      "Queue row with queuedAt == olderThan must be invalidated (inbound wins ties)")
+    }
+
+    /// Complement: a row strictly NEWER than the inbound timestamp
+    /// should NOT be invalidated (local is newer, the push is still
+    /// meaningful and should survive).
+    func testInvalidateEntriesKeepsRowsStrictlyNewerThanOlderThan() throws {
+        let older = Date(timeIntervalSince1970: 1_720_090_000)
+        let newer = older.addingTimeInterval(1)
+        try outboundQueue.enqueue(
+            recordType: CloudSyncRecord.Kind.workout.rawValue,
+            recordIdentifier: "newer-workout",
+            operation: CloudSyncRecord.Operation.upsert.rawValue,
+            payloadJSON: "{}",
+            queuedAt: newer
+        )
+
+        try outboundQueue.invalidateEntries(
+            recordType: CloudSyncRecord.Kind.workout.rawValue,
+            recordIdentifier: "newer-workout",
+            olderThan: older
+        )
+        XCTAssertEqual(try outboundQueue.pendingRecords().count, 1,
+                       "Queue row with queuedAt > olderThan must NOT be invalidated")
+    }
+
+    // MARK: - VOL-67 Codex P2 #6: synthesize legacy field-based payloads
+
+    /// Pre-VOL-67 CKRecords may have stored each payload field as an
+    /// individual CKRecord key (e.g., `title`, `startedAt`, `updatedAt`)
+    /// instead of a single `payloadJSON` blob. The applier requires a
+    /// canonical `payloadJSON`, so the transport synthesizes one via
+    /// `SyncPayloadCodec.synthesizeLegacyPayloadJSON(kind:fields:)`
+    /// when `payloadJSON` is missing. Without this, pre-rename
+    /// records would silently decode-fail while the sync cursor
+    /// advanced, losing the cloud data.
+    func testSynthesizeLegacyPayloadForWorkoutFields() throws {
+        let startedAt = Date(timeIntervalSince1970: 1_720_100_000)
+        let updatedAt = startedAt.addingTimeInterval(1_800)
+        let fields: [String: Any] = [
+            "title": "Legacy Workout",
+            "startedAt": startedAt,
+            "completedAt": startedAt.addingTimeInterval(1_800),
+            "durationMinutes": 30,
+            "exerciseIDsCSV": "back-squat,bench-press",
+            "setsJSON": "[]",
+            "totalVolumeLoad": 2_250.0,
+            "averageRPE": 7.5,
+            "completedSetCount": 5,
+            "summary": "From a pre-VOL-67 record",
+            "updatedAt": updatedAt,
+        ]
+
+        let json = try XCTUnwrap(
+            SyncPayloadCodec.synthesizeLegacyPayloadJSON(kind: .workout, fields: fields),
+            "Legacy field-based workout record must synthesize a canonical payloadJSON"
+        )
+
+        let decoded = try XCTUnwrap(SyncPayloadCodec.decodeWorkoutPayload(from: json))
+        XCTAssertEqual(decoded.title, "Legacy Workout")
+        XCTAssertEqual(decoded.startedAt.timeIntervalSince1970, startedAt.timeIntervalSince1970, accuracy: 0.001)
+        XCTAssertEqual(decoded.durationMinutes, 30)
+        XCTAssertEqual(decoded.totalVolumeLoad, 2_250.0, accuracy: 0.001)
+        XCTAssertEqual(decoded.completedSetCount, 5)
+        XCTAssertEqual(decoded.updatedAt.timeIntervalSince1970, updatedAt.timeIntervalSince1970, accuracy: 0.001)
+    }
+
+    func testSynthesizeLegacyPayloadForUserProfileFields() throws {
+        let updatedAt = Date(timeIntervalSince1970: 1_720_110_000)
+        let fields: [String: Any] = [
+            "name": "Legacy Athlete",
+            "coachingStyle": "methodical",
+            "privacyMode": "strict",
+            "advancementLevel": "advanced",
+            "availableEquipmentCSV": "barbell,dumbbell",
+            "preferredRepRangeLower": 6,
+            "preferredRepRangeUpper": 10,
+            "sessionTimeBudgetMinutes": 75,
+            "weeklyTrainingDays": 5,
+            "onboardingCompleted": true,
+            "updatedAt": updatedAt,
+        ]
+
+        let json = try XCTUnwrap(
+            SyncPayloadCodec.synthesizeLegacyPayloadJSON(kind: .userProfile, fields: fields)
+        )
+        let decoded = try XCTUnwrap(SyncPayloadCodec.decodeUserProfilePayload(from: json))
+        XCTAssertEqual(decoded.name, "Legacy Athlete")
+        XCTAssertEqual(decoded.advancementLevel, "advanced")
+        XCTAssertEqual(decoded.preferredRepRangeLower, 6)
+        XCTAssertEqual(decoded.preferredRepRangeUpper, 10)
+        XCTAssertTrue(decoded.onboardingCompleted)
+    }
+
+    func testSynthesizeLegacyPayloadReturnsNilWhenRequiredFieldsMissing() {
+        // Missing `title` (required) → nil.
+        let fields: [String: Any] = [
+            "startedAt": Date(timeIntervalSince1970: 1_720_120_000),
+            "updatedAt": Date(timeIntervalSince1970: 1_720_120_000),
+        ]
+        XCTAssertNil(SyncPayloadCodec.synthesizeLegacyPayloadJSON(kind: .workout, fields: fields))
+    }
+
+    /// Date fields can come in as `TimeInterval` (double) from some
+    /// legacy encodings — the synthesis helper accepts both `Date`
+    /// and numeric forms.
+    func testSynthesizeLegacyPayloadAcceptsNumericDateEncoding() throws {
+        let startedAtSeconds: TimeInterval = 1_720_130_000
+        let fields: [String: Any] = [
+            "title": "Numeric Dates",
+            "startedAt": startedAtSeconds,
+            "updatedAt": NSNumber(value: startedAtSeconds + 600),
+            "setsJSON": "[]",
+        ]
+
+        let json = try XCTUnwrap(
+            SyncPayloadCodec.synthesizeLegacyPayloadJSON(kind: .workout, fields: fields)
+        )
+        let decoded = try XCTUnwrap(SyncPayloadCodec.decodeWorkoutPayload(from: json))
+        XCTAssertEqual(decoded.startedAt.timeIntervalSince1970, startedAtSeconds, accuracy: 0.001)
+        XCTAssertEqual(decoded.updatedAt.timeIntervalSince1970, startedAtSeconds + 600, accuracy: 0.001)
+    }
+
     /// Codex P2 (fixup #5): the queue's `invalidateEntries` must
     /// collapse legacy long-form row recordTypes (`userProfile`,
     /// `trainingPlan`, `coachMemory`) and current short-form call
