@@ -566,25 +566,40 @@ public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
             // `localTimestamp > inboundTimestamp` for its "local newer"
             // branch, so the seeded defaults would win conflict
             // resolution against real cloud singletons that happened to
-            // be written before the local install. Clamping to
-            // `distantPast` makes the migrated local record lose every
-            // shouldApply comparison against a real cloud record, so
-            // any pull with real data overwrites the stale defaults.
+            // be written before the local install.
+            //
+            // VOL-67 Copilot fixup #25: clamping UNCONDITIONALLY would
+            // discard real last-modified timestamps on user-customized
+            // profiles/plans and make any inbound server state appear
+            // newer after upgrade — overwriting the user's edits with
+            // whatever CloudKit happens to have. Gate the clamp on a
+            // field-match heuristic: a migrated singleton is clamped
+            // only if EVERY field matches the seeded-default values in
+            // `VolumeArcProductDefaults`. Any divergence (user edited
+            // their name, picked a coaching style, added equipment,
+            // reorganized their weekly plan, etc.) means the record
+            // represents real user intent and keeps its real
+            // `updatedAt`. Untouched seeded defaults still get clamped
+            // so they lose conflict resolution against older
+            // authoritative cloud data as Codex intended.
+            //
             // Per-record kinds (workouts, memories) keep their real
-            // timestamps because they reflect concrete user actions
-            // and carry stable identifiers that don't collide across
-            // devices. This mirrors the distantPast clamp already
-            // applied to the outbound-queue backfill payload in
-            // `OutboundQueueBackfill.performIfNeeded` (fixup #13) —
-            // both layers must agree that migrated singletons are
-            // lowest-priority state.
+            // timestamps because they always reflect concrete user
+            // actions and carry stable identifiers that don't collide
+            // across devices. The outbound-queue backfill still clamps
+            // singleton payloads to `.distantPast` unconditionally
+            // (fixup #13) — that's a safe lower priority for
+            // first-time cross-device pushes, and any real local edits
+            // get their real timestamp via the normal repository write
+            // path post-migration.
             let migratedProfiles = try context.fetch(FetchDescriptor<UserProfileRecord>())
-            for profile in migratedProfiles {
+            for profile in migratedProfiles where Self.isSeededDefaultProfile(profile) {
                 profile.updatedAt = .distantPast
             }
 
             let migratedPlans = try context.fetch(FetchDescriptor<TrainingPlanRecord>())
-            for plan in migratedPlans {
+            let defaultPlanJSON = SyncPayloadCodec.encode(VolumeArcProductDefaults.weeklySchedule) ?? "[]"
+            for plan in migratedPlans where plan.workoutsJSON == defaultPlanJSON {
                 plan.updatedAt = .distantPast
             }
 
@@ -605,6 +620,37 @@ public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
             // context that has both configs visible.
         }
     )
+
+    /// VOL-67 Copilot fixup #25: field-match heuristic for detecting
+    /// "untouched seeded default" `UserProfileRecord` instances during
+    /// V3→V4 migration. Returns `true` only when EVERY field matches
+    /// the current `VolumeArcProductDefaults.userProfile` values AND
+    /// `onboardingCompleted` is still false. Any divergence (custom
+    /// name, different coaching style, tweaked equipment list,
+    /// adjusted rep range, etc.) signals a real user edit and causes
+    /// the caller to preserve the migrated `updatedAt` timestamp
+    /// rather than clamping it to `.distantPast`.
+    ///
+    /// The equipment check sorts and joins the default values the
+    /// same way `seedIfNeeded` does, so the comparison is stable
+    /// regardless of how the underlying `Set`/`Array` iterates.
+    fileprivate static func isSeededDefaultProfile(_ profile: UserProfileRecord) -> Bool {
+        let defaults = VolumeArcProductDefaults.userProfile
+        let defaultEquipmentCSV = defaults.availableEquipment
+            .map(\.rawValue)
+            .sorted()
+            .joined(separator: ",")
+        return profile.name == defaults.name
+            && profile.coachingStyle == defaults.coachingStyle.rawValue
+            && profile.privacyMode == defaults.privacyMode.rawValue
+            && profile.advancementLevel == defaults.advancementLevel.rawValue
+            && profile.availableEquipmentCSV == defaultEquipmentCSV
+            && profile.preferredRepRangeLower == defaults.preferredRepRangeLower
+            && profile.preferredRepRangeUpper == defaults.preferredRepRangeUpper
+            && profile.sessionTimeBudgetMinutes == defaults.sessionTimeBudgetMinutes
+            && profile.weeklyTrainingDays == defaults.weeklyTrainingDays
+            && profile.onboardingCompleted == false
+    }
 
     /// Produce a stable identifier for a legacy coach memory based on
     /// its `(createdAt, content, theme)` triple. SHA256 gives the same

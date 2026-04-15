@@ -110,18 +110,20 @@ final class VolumeArcMigrationTests: XCTestCase {
         XCTAssertEqual(migratedWorkouts.first?.identifier, "legacy-workout")
         XCTAssertEqual(migratedCoachMemories.first?.content, "Legacy coaching note")
 
-        // VOL-67 Codex P1 (fixup #17): after the full V1→V2→V3→V4 chain,
-        // the V3→V4 stage intentionally clamps singleton (plan / profile)
-        // `updatedAt` to `.distantPast` so the applier's `shouldApply`
-        // check can't let a seeded/legacy local record beat real
-        // authoritative cloud data. The V1→V2 stage's "backfill with
-        // Date()" intermediate write is overwritten by the V3→V4 clamp,
-        // and that's the intended final state.
-        XCTAssertEqual(
-            migratedPlans[0].updatedAt.timeIntervalSince1970,
-            Date.distantPast.timeIntervalSince1970,
-            accuracy: 1.0,
-            "After the full V1→V4 chain, singleton updatedAt must be clamped to distantPast (see fixup #17)"
+        // VOL-67 Copilot (fixup #25): the V3→V4 singleton clamp is
+        // now CONDITIONAL. It only fires for records whose fields
+        // match `VolumeArcProductDefaults` exactly. This V1 fixture
+        // uses a customized workoutsJSON (`[{"dayOfWeek":1,"title":
+        // "Migration Upper"}]`), so the heuristic recognizes it as
+        // a real user edit and preserves the V1→V2 backfill's
+        // `Date()` value rather than clamping to `.distantPast`.
+        // Fixup #17's Codex concern (seeded defaults beating older
+        // authoritative cloud data) is separately covered by
+        // `testV3ToV4MigrationClampsSeededDefaultSingletonRecords`.
+        XCTAssertLessThan(
+            abs(migratedPlans[0].updatedAt.timeIntervalSinceNow),
+            600,
+            "Customized V1 training plan's updatedAt should retain the V1→V2 backfill Date() value (close to now) — the conditional clamp preserves user edits"
         )
     }
 
@@ -299,52 +301,56 @@ final class VolumeArcMigrationTests: XCTestCase {
         )
     }
 
-    /// VOL-67 Codex P1 (fixup #17): the V3→V4 migration must clamp the
-    /// migrated singleton records' OWN `updatedAt` fields to
-    /// `Date.distantPast`, not just the backfilled queue-row payload.
-    /// `DefaultSyncPayloadApplier.shouldApply` compares the LOCAL
-    /// record's `updatedAt` against inbound, so a record that still
-    /// carries a pre-migration launch-time timestamp would win
-    /// conflict resolution against older-but-authoritative cloud data
-    /// (even though fixup #13 correctly clamps the queue-row payload,
-    /// that's a separate code path from the applier's comparison).
-    /// Per-record kinds (workouts, memories) must keep real timestamps.
+    /// VOL-67 Codex P1 fixup #17 + Copilot fixup #25: the V3→V4
+    /// migration clamps migrated singleton records' `updatedAt` to
+    /// `.distantPast` ONLY when every field matches the current
+    /// `VolumeArcProductDefaults`. Seeded untouched defaults lose
+    /// conflict resolution against older-but-authoritative cloud
+    /// data (addressing fixup #17's Codex P1 concern), but
+    /// user-customized records keep their real timestamps so
+    /// genuine local edits aren't erased on upgrade (addressing
+    /// fixup #25's Copilot concern).
+    ///
+    /// This test validates the clamp branch: uses a V3 fixture whose
+    /// profile and plan exactly match the current seeded defaults,
+    /// then asserts the migration clamps both to `.distantPast`.
+    /// Per-record kinds (workouts, memories) are unaffected.
     @MainActor
-    func testV3ToV4MigrationClampsSingletonRecordUpdatedAtDirectly() throws {
+    func testV3ToV4MigrationClampsSeededDefaultSingletonRecords() throws {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
 
-        let storeURL = temporaryDirectory.appendingPathComponent("VolumeArcMigrationRecordClamp.sqlite")
+        let storeURL = temporaryDirectory.appendingPathComponent("VolumeArcMigrationSeededDefaultClamp.sqlite")
         let fixtureDate = Date(timeIntervalSince1970: 1_715_350_000)
-        try writeV3FixtureStoreWithAllEntities(at: storeURL, startedAt: fixtureDate)
+        try writeV3FixtureStoreWithSeededDefaults(at: storeURL, startedAt: fixtureDate)
 
         let migratedContainer = try makeDiskBackedCurrentContainer(at: storeURL)
         let migratedContext = ModelContext(migratedContainer)
 
-        // Profile record: updatedAt must be distantPast after migration.
+        // Profile record: every field matches defaults, so it's an
+        // untouched seed — clamp should fire.
         let profile = try XCTUnwrap(migratedContext.fetch(FetchDescriptor<UserProfileRecord>()).first)
         XCTAssertEqual(
             profile.updatedAt.timeIntervalSince1970,
             Date.distantPast.timeIntervalSince1970,
             accuracy: 1.0,
-            "Migrated UserProfileRecord.updatedAt must be clamped to distantPast so the applier's shouldApply check can't make seeded defaults beat older authoritative cloud data"
+            "Seeded-default UserProfileRecord.updatedAt must be clamped to distantPast"
         )
 
-        // Plan record: updatedAt must be distantPast after migration.
+        // Plan record: workoutsJSON matches the encoded default
+        // weekly schedule, so it's an untouched seed — clamp fires.
         let plan = try XCTUnwrap(migratedContext.fetch(FetchDescriptor<TrainingPlanRecord>()).first)
         XCTAssertEqual(
             plan.updatedAt.timeIntervalSince1970,
             Date.distantPast.timeIntervalSince1970,
             accuracy: 1.0,
-            "Migrated TrainingPlanRecord.updatedAt must be clamped to distantPast"
+            "Seeded-default TrainingPlanRecord.updatedAt must be clamped to distantPast"
         )
 
-        // Workout record: updatedAt must still reflect the real action
-        // time (completedAt or startedAt), not distantPast. Workouts
-        // carry per-record identifiers so cross-device reconciliation
-        // works without the clamp.
+        // Per-record kinds keep real timestamps regardless of clamp
+        // heuristic.
         let workout = try XCTUnwrap(migratedContext.fetch(FetchDescriptor<WorkoutRecord>()).first)
         XCTAssertGreaterThan(
             workout.updatedAt.timeIntervalSince1970,
@@ -357,12 +363,67 @@ final class VolumeArcMigrationTests: XCTestCase {
             "Migrated WorkoutRecord.updatedAt should NOT be clamped to distantPast"
         )
 
-        // Memory record: same story as workouts.
         let memory = try XCTUnwrap(migratedContext.fetch(FetchDescriptor<CoachMemoryRecord>()).first)
         XCTAssertGreaterThan(
             memory.createdAt.timeIntervalSince1970,
             0,
             "Migrated CoachMemoryRecord.createdAt should be a real timestamp"
+        )
+    }
+
+    /// VOL-67 Copilot fixup #25: complement to the clamp test —
+    /// verifies the PRESERVATION branch. When the V3 fixture's
+    /// profile or plan has any field diverging from
+    /// `VolumeArcProductDefaults`, the field-match heuristic
+    /// recognizes real user edits and leaves the migrated
+    /// `updatedAt` alone. Without this branch, fixup #17's
+    /// unconditional clamp would discard genuine user edits on
+    /// upgrade and let any inbound server state overwrite local
+    /// customizations.
+    @MainActor
+    func testV3ToV4MigrationPreservesCustomizedSingletonRecordUpdatedAt() throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let storeURL = temporaryDirectory.appendingPathComponent("VolumeArcMigrationCustomizedPreserve.sqlite")
+        let fixtureDate = Date(timeIntervalSince1970: 1_715_350_000)
+        // The "AllEntities" fixture seeds profile with name="V3 Athlete"
+        // (differs from default "") and plan with workoutsJSON="[]"
+        // (differs from the encoded default weekly schedule), so both
+        // are "customized" per the heuristic.
+        try writeV3FixtureStoreWithAllEntities(at: storeURL, startedAt: fixtureDate)
+
+        let migratedContainer = try makeDiskBackedCurrentContainer(at: storeURL)
+        let migratedContext = ModelContext(migratedContainer)
+
+        // Customized profile: migrated updatedAt must NOT be distantPast.
+        // It should retain a real timestamp (either the V1→V2 backfill
+        // or the fixture's original value, depending on migration path).
+        let profile = try XCTUnwrap(migratedContext.fetch(FetchDescriptor<UserProfileRecord>()).first)
+        XCTAssertNotEqual(
+            profile.updatedAt.timeIntervalSince1970,
+            Date.distantPast.timeIntervalSince1970,
+            "Customized UserProfileRecord (name != default) must NOT be clamped — preserves real user-edit timestamps"
+        )
+        XCTAssertGreaterThan(
+            profile.updatedAt.timeIntervalSince1970,
+            0,
+            "Customized UserProfileRecord.updatedAt should be a real timestamp post-migration"
+        )
+
+        // Customized plan (workoutsJSON != encoded defaults): same.
+        let plan = try XCTUnwrap(migratedContext.fetch(FetchDescriptor<TrainingPlanRecord>()).first)
+        XCTAssertNotEqual(
+            plan.updatedAt.timeIntervalSince1970,
+            Date.distantPast.timeIntervalSince1970,
+            "Customized TrainingPlanRecord (workoutsJSON != default) must NOT be clamped"
+        )
+        XCTAssertGreaterThan(
+            plan.updatedAt.timeIntervalSince1970,
+            0,
+            "Customized TrainingPlanRecord.updatedAt should be a real timestamp post-migration"
         )
     }
 
@@ -915,6 +976,78 @@ final class VolumeArcMigrationTests: XCTestCase {
                     createdAt: memoryCreatedAt
                 )
             )
+
+            try context.save()
+        }
+    }
+
+    /// VOL-67 Copilot (fixup #25): write a V3 fixture whose profile
+    /// and plan EXACTLY match `VolumeArcProductDefaults` so that the
+    /// V3→V4 migration's field-match heuristic recognizes them as
+    /// seeded defaults and clamps their `updatedAt` to `.distantPast`.
+    /// Used by the clamp-behavior test to verify the "untouched
+    /// defaults lose conflict resolution against real cloud data"
+    /// path still works after the heuristic was added.
+    private func writeV3FixtureStoreWithSeededDefaults(at storeURL: URL, startedAt: Date) throws {
+        let schema = Schema(VolumeArcSchemaV3.models)
+        let config = ModelConfiguration(
+            "MigrationFixtureSeededDefaultsV3",
+            schema: schema,
+            url: storeURL,
+            allowsSave: true,
+            cloudKitDatabase: .none
+        )
+        try autoreleasepool {
+            let container = try ModelContainer(for: schema, configurations: [config])
+            let context = ModelContext(container)
+
+            // Match VolumeArcProductDefaults.userProfile exactly.
+            let defaults = VolumeArcProductDefaults.userProfile
+            let defaultEquipmentCSV = defaults.availableEquipment
+                .map(\.rawValue)
+                .sorted()
+                .joined(separator: ",")
+            context.insert(VolumeArcSchemaV3.UserProfileRecord(
+                name: defaults.name,
+                coachingStyle: defaults.coachingStyle.rawValue,
+                privacyMode: defaults.privacyMode.rawValue,
+                advancementLevel: defaults.advancementLevel.rawValue,
+                availableEquipmentCSV: defaultEquipmentCSV,
+                preferredRepRangeLower: defaults.preferredRepRangeLower,
+                preferredRepRangeUpper: defaults.preferredRepRangeUpper,
+                sessionTimeBudgetMinutes: defaults.sessionTimeBudgetMinutes,
+                weeklyTrainingDays: defaults.weeklyTrainingDays
+                // onboardingCompleted defaults to false — matching the seed
+            ))
+
+            // Match the encoded default weekly schedule exactly.
+            let defaultPlanJSON = SyncPayloadCodec.encode(VolumeArcProductDefaults.weeklySchedule) ?? "[]"
+            context.insert(VolumeArcSchemaV3.TrainingPlanRecord(
+                workoutsJSON: defaultPlanJSON,
+                updatedAt: startedAt
+            ))
+
+            // Workout + memory still use real user-action timestamps —
+            // per-record kinds never get clamped regardless of the
+            // heuristic.
+            context.insert(VolumeArcSchemaV3.WorkoutRecord(
+                identifier: "v3-workout",
+                title: "V3 Workout",
+                startedAt: startedAt,
+                completedAt: startedAt.addingTimeInterval(1_800),
+                durationMinutes: 30,
+                exerciseIDsCSV: "back-squat",
+                setsJSON: "[]",
+                totalVolumeLoad: 1_000,
+                averageRPE: 7,
+                completedSetCount: 5,
+                summary: "V3 summary"
+            ))
+            context.insert(VolumeArcSchemaV3.CoachMemoryRecord(
+                content: "V3 memory",
+                theme: "squat",
+                createdAt: startedAt
+            ))
 
             try context.save()
         }
