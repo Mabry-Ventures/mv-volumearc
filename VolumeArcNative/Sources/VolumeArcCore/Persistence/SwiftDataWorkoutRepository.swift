@@ -164,8 +164,19 @@ public struct SwiftDataWorkoutRepository: Sendable {
         )
         descriptor.fetchLimit = 1
         if let workout = try context.fetch(descriptor).first {
+            // VOL-67 Codex P1 fixup: tombstones need the actual deletion
+            // wall-clock time, not the record's prior `updatedAt`. Using
+            // `updatedAt` here meant a queued delete could have a
+            // `queuedAt` that predates a newer inbound update from another
+            // device; the applier's `invalidateEntries(olderThan: payload.updatedAt)`
+            // would then drop the delete before push and silently lose the
+            // user's delete intent (or worse, resurrect a record that's
+            // already tombstoned locally). Snapshot the delete timestamp
+            // once so both the queue row and the outbound record's
+            // `modifiedAt` (see `makeCloudSyncRecord` for deletes in
+            // CloudSync.swift) agree on a monotonic deletion instant.
+            let deletedAt = Date()
             let payloadJSON = SyncPayloadCodec.encodeWorkoutPayload(from: workout) ?? ""
-            let queuedAt = workout.updatedAt
             context.delete(workout)
             try context.save()
             try outboundQueue.enqueue(
@@ -173,7 +184,7 @@ public struct SwiftDataWorkoutRepository: Sendable {
                 recordIdentifier: identifier,
                 operation: CloudSyncRecord.Operation.delete.rawValue,
                 payloadJSON: payloadJSON,
-                queuedAt: queuedAt
+                queuedAt: deletedAt
             )
         }
     }

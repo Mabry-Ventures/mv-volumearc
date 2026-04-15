@@ -473,6 +473,88 @@ final class VolumeArcCloudSyncTests: XCTestCase {
         XCTAssertTrue(pushed.isEmpty, "Stale queued write must not reach the transport")
     }
 
+    /// Codex P1 (follow-up): when the user deletes a workout, the
+    /// outbound queue entry's `queuedAt` must reflect the deletion
+    /// wall-clock time, NOT the record's prior `updatedAt`. If we used
+    /// the old value, a newer inbound pull between the record's last
+    /// update and the delete would cause the applier's
+    /// `invalidateEntries(olderThan:)` to drop the queued delete,
+    /// silently losing the user's delete intent.
+    func testDeleteWorkoutEnqueuesWithActualDeletionTimestamp() throws {
+        let t0 = Date(timeIntervalSince1970: 1_720_050_000)
+        let workout = try workoutRepository.createWorkout(title: "To Delete", startedAt: t0, updatedAt: t0)
+        XCTAssertEqual(workout.updatedAt.timeIntervalSince1970, t0.timeIntervalSince1970, accuracy: 0.01)
+
+        // Clear the create upsert so we're only looking at the delete.
+        let createEntries = try outboundQueue.pendingRecords()
+        try outboundQueue.delete(ids: createEntries.map(\.id))
+        XCTAssertTrue(try outboundQueue.pendingRecords().isEmpty)
+
+        let beforeDelete = Date()
+        try workoutRepository.deleteWorkout(identifier: workout.identifier)
+        let afterDelete = Date()
+
+        let deleteEntries = try outboundQueue.pendingRecords()
+        XCTAssertEqual(deleteEntries.count, 1)
+        let deleteEntry = try XCTUnwrap(deleteEntries.first)
+        XCTAssertEqual(deleteEntry.operation, CloudSyncRecord.Operation.delete.rawValue)
+        XCTAssertEqual(deleteEntry.recordIdentifier, workout.identifier)
+        // queuedAt must be the actual delete instant (≥ beforeDelete, ≤ afterDelete),
+        // NOT the record's stale `updatedAt` which was set at create time.
+        XCTAssertGreaterThanOrEqual(deleteEntry.queuedAt.timeIntervalSince1970,
+                                     beforeDelete.timeIntervalSince1970 - 0.001,
+                                     "Queued delete timestamp must be >= delete wall-clock")
+        XCTAssertLessThanOrEqual(deleteEntry.queuedAt.timeIntervalSince1970,
+                                  afterDelete.timeIntervalSince1970 + 0.001,
+                                  "Queued delete timestamp must be <= delete wall-clock")
+        XCTAssertGreaterThan(deleteEntry.queuedAt.timeIntervalSince1970,
+                             t0.timeIntervalSince1970,
+                             "Queued delete timestamp must be strictly newer than the record's original updatedAt")
+    }
+
+    /// Codex P1 (follow-up): the `CloudSyncRecord` built from a queued
+    /// delete must use the delete's `queuedAt` as its `modifiedAt`,
+    /// not the payload's embedded `updatedAt` (which was snapshotted
+    /// pre-delete). Otherwise the pushed tombstone carries a stale
+    /// timestamp and server-side LWW can silently overwrite it.
+    func testPushedDeleteRecordUsesDeletionTimestampAsModifiedAt() async throws {
+        // 1) Create, then delete, a workout. The queued entry's queuedAt
+        //    is the delete time; the payload's embedded updatedAt is the
+        //    pre-delete create time.
+        let createdAt = Date(timeIntervalSince1970: 1_720_060_000)
+        let workout = try workoutRepository.createWorkout(title: "Delete Me", startedAt: createdAt, updatedAt: createdAt)
+        XCTAssertEqual(workout.updatedAt.timeIntervalSince1970, createdAt.timeIntervalSince1970, accuracy: 0.01)
+
+        let beforeDelete = Date()
+        try workoutRepository.deleteWorkout(identifier: workout.identifier)
+        let afterDelete = Date()
+
+        // 2) Push via coordinator so we see what modifiedAt the transport
+        //    actually receives on the outbound CloudSyncRecord.
+        let transport = RecordingCloudSyncTransport()
+        let coordinator = CloudSyncCoordinator(
+            transport: transport,
+            stateStore: FileSyncStateStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+            outboundQueue: outboundQueue
+        )
+        _ = try await coordinator.push()
+
+        // 3) Locate the delete record among the pushed batch and check
+        //    that its modifiedAt matches the delete wall-clock, not the
+        //    stale createdAt embedded in the payload.
+        let pushed = await transport.pushedRecords
+        let deleteRecord = try XCTUnwrap(pushed.first(where: {
+            $0.kind == .workout && $0.operation == .delete && $0.identifier == workout.identifier
+        }))
+        XCTAssertGreaterThanOrEqual(deleteRecord.modifiedAt.timeIntervalSince1970,
+                                     beforeDelete.timeIntervalSince1970 - 0.001)
+        XCTAssertLessThanOrEqual(deleteRecord.modifiedAt.timeIntervalSince1970,
+                                  afterDelete.timeIntervalSince1970 + 0.001)
+        XCTAssertGreaterThan(deleteRecord.modifiedAt.timeIntervalSince1970,
+                             createdAt.timeIntervalSince1970,
+                             "Delete tombstone modifiedAt must be the delete wall-clock, not the record's pre-delete updatedAt")
+    }
+
     /// Codex P1 scenario: device A has a stale queued upsert for a
     /// workout that device B has already deleted on the server. When A
     /// runs `syncCycle()`, it must (1) apply the remote delete locally,

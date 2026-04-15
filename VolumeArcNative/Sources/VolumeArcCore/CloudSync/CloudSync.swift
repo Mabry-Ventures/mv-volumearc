@@ -395,12 +395,28 @@ public actor CloudSyncCoordinator {
             throw CloudSyncError.invalidQueuedRecord(reason: "Unsupported queue operation: \(change.operation)")
         }
 
+        // VOL-67 Codex P1 fixup: for delete tombstones, the authoritative
+        // timestamp is the actual deletion instant recorded on the queue
+        // row at enqueue time, NOT the `updatedAt` embedded in the
+        // snapshotted payload (which reflects the record's state BEFORE
+        // deletion). Using the payload's `updatedAt` let a queued delete
+        // lose ordering to a newer inbound update and silently drop the
+        // user's delete intent. For upserts we still prefer the payload's
+        // embedded timestamp since that reflects the exact snapshot we
+        // captured at enqueue.
+        let modifiedAt: Date
+        if operation == .delete {
+            modifiedAt = change.queuedAt
+        } else {
+            modifiedAt = SyncPayloadCodec.modifiedAt(for: kind, payloadJSON: change.payloadJSON) ?? change.queuedAt
+        }
+
         return CloudSyncRecord(
             kind: kind,
             identifier: change.recordIdentifier,
             operation: operation,
             payloadJSON: change.payloadJSON,
-            modifiedAt: SyncPayloadCodec.modifiedAt(for: kind, payloadJSON: change.payloadJSON) ?? change.queuedAt
+            modifiedAt: modifiedAt
         )
     }
 }

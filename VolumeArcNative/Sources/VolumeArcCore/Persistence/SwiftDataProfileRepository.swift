@@ -225,7 +225,13 @@ public struct SwiftDataCoachMemoryRepository: Sendable {
             }
         )
         let oldRecords = try context.fetch(descriptor)
-        let deletions = oldRecords.map { ($0.identifier, SyncPayloadCodec.encodeCoachMemoryPayload(from: $0) ?? "", $0.createdAt) }
+        // VOL-67 Codex P1 fixup: tombstone timestamp must be the actual
+        // deletion wall-clock time, not the record's `createdAt`, so the
+        // outbound delete doesn't get invalidated by a newer inbound
+        // version that happens to sit between `createdAt` and the delete.
+        // See the matching comment in `SwiftDataWorkoutRepository.deleteWorkout`.
+        let deletedAt = Date()
+        let deletions = oldRecords.map { ($0.identifier, SyncPayloadCodec.encodeCoachMemoryPayload(from: $0) ?? "") }
         for record in oldRecords {
             context.delete(record)
         }
@@ -236,7 +242,7 @@ public struct SwiftDataCoachMemoryRepository: Sendable {
                 recordIdentifier: deletion.0,
                 operation: CloudSyncRecord.Operation.delete.rawValue,
                 payloadJSON: deletion.1,
-                queuedAt: deletion.2
+                queuedAt: deletedAt
             )
         }
     }
@@ -253,8 +259,12 @@ public struct SwiftDataCoachMemoryRepository: Sendable {
         descriptor.fetchLimit = 1
         guard let record = try context.fetch(descriptor).first else { return }
 
+        // VOL-67 Codex P1 fixup: see `deleteWorkout` / `pruneOlderThan` for
+        // rationale. Use the deletion wall-clock, not the record's
+        // `createdAt`, so a queued tombstone can't be invalidated by a
+        // newer inbound pull and silently lose the user's delete intent.
+        let deletedAt = Date()
         let payloadJSON = SyncPayloadCodec.encodeCoachMemoryPayload(from: record) ?? ""
-        let queuedAt = record.createdAt
         context.delete(record)
         try context.save()
         try outboundQueue.enqueue(
@@ -262,7 +272,7 @@ public struct SwiftDataCoachMemoryRepository: Sendable {
             recordIdentifier: identifier,
             operation: CloudSyncRecord.Operation.delete.rawValue,
             payloadJSON: payloadJSON,
-            queuedAt: queuedAt
+            queuedAt: deletedAt
         )
     }
 }
