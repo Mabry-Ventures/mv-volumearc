@@ -746,6 +746,16 @@ public struct DefaultSyncPayloadApplier: Sendable {
     /// give priority to the inbound record, so only delete intents
     /// that are strictly newer than the inbound modification suppress
     /// the resurrection.
+    ///
+    /// VOL-67 Copilot (fixup #19): delegates to the queue's
+    /// `hasPendingDeleteTombstone` method, which pushes the identifier
+    /// + operation + timestamp filter into SwiftData via `#Predicate`.
+    /// Previously this scanned the full pending-records list in
+    /// application code, which was O(n) per inbound insert and could
+    /// noticeably slow the pull/apply phase on devices with a large
+    /// offline backlog. The predicate-narrowed fetch returns at most
+    /// a handful of rows, so this check is now effectively O(1) per
+    /// inbound record.
     @MainActor
     private func hasNewerLocalDeleteTombstone(
         kind: CloudSyncRecord.Kind,
@@ -753,17 +763,42 @@ public struct DefaultSyncPayloadApplier: Sendable {
         inboundTimestamp: Date
     ) throws -> Bool {
         guard let outboundQueue else { return false }
-        let pending = try outboundQueue.pendingRecords()
+
+        // Build the candidate identifier set: canonical form plus any
+        // singleton long-form alias (legacy rows may use either).
         let canonicalID = kind.canonicalQueueIdentifier(from: recordIdentifier)
-        let deleteRaw = CloudSyncRecord.Operation.delete.rawValue
-        return pending.contains { change in
-            guard change.operation == deleteRaw else { return false }
-            guard let rowKind = CloudSyncRecord.Kind.parse(change.recordType),
-                  rowKind == kind else { return false }
-            let rowID = rowKind.canonicalQueueIdentifier(from: change.recordIdentifier)
-            guard rowID == canonicalID else { return false }
-            return change.queuedAt > inboundTimestamp
+        var candidateIdentifiers: Set<String> = [canonicalID, recordIdentifier]
+        if kind.isSingleton {
+            candidateIdentifiers.insert(kind.defaultIdentifier)
+            switch kind {
+            case .userProfile:
+                candidateIdentifiers.insert("userProfile")
+            case .trainingPlan:
+                candidateIdentifiers.insert("trainingPlan")
+            case .workout, .coachMemory:
+                break
+            }
         }
+
+        // Build the candidate record-type set: canonical + any known
+        // long-form alias for this kind.
+        var candidateRecordTypes: Set<String> = [kind.rawValue]
+        switch kind {
+        case .userProfile:
+            candidateRecordTypes.insert("userProfile")
+        case .trainingPlan:
+            candidateRecordTypes.insert("trainingPlan")
+        case .coachMemory:
+            candidateRecordTypes.insert("coachMemory")
+        case .workout:
+            break
+        }
+
+        return try outboundQueue.hasPendingDeleteTombstone(
+            candidateRecordTypes: candidateRecordTypes,
+            candidateIdentifiers: candidateIdentifiers,
+            newerThan: inboundTimestamp
+        )
     }
 
     @MainActor

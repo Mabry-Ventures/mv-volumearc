@@ -59,6 +59,14 @@ public enum OutboundQueueBackfill {
         let existingKeys: Set<String> = Set(existingQueue.map { queueKey(recordType: $0.recordType, identifier: $0.recordIdentifier) })
 
         var insertedAny = false
+        // VOL-67 Copilot (fixup #19): track records that were skipped
+        // because their payload couldn't be encoded. If any encode
+        // fails, we must NOT mark the flag complete — otherwise a
+        // subsequent launch will short-circuit out of the backfill
+        // helper and those records stay permanently un-queued. A later
+        // run can retry (e.g., after the user edits the record, or
+        // after a schema/encoder update fixes the encode path).
+        var encodeFailures = 0
 
         for workout in workouts {
             let key = queueKey(
@@ -66,7 +74,10 @@ public enum OutboundQueueBackfill {
                 identifier: workout.identifier
             )
             guard !existingKeys.contains(key) else { continue }
-            guard let payloadJSON = SyncPayloadCodec.encodeWorkoutPayload(from: workout) else { continue }
+            guard let payloadJSON = SyncPayloadCodec.encodeWorkoutPayload(from: workout) else {
+                encodeFailures += 1
+                continue
+            }
             context.insert(OutboundSyncQueueRecord(
                 recordType: CloudSyncRecord.Kind.workout.rawValue,
                 recordIdentifier: workout.identifier,
@@ -83,7 +94,10 @@ public enum OutboundQueueBackfill {
                 identifier: CloudSyncRecord.Kind.userProfile.defaultIdentifier
             )
             guard !existingKeys.contains(key) else { continue }
-            guard let payloadJSON = SyncPayloadCodec.encodeUserProfilePayloadForMigration(from: profile) else { continue }
+            guard let payloadJSON = SyncPayloadCodec.encodeUserProfilePayloadForMigration(from: profile) else {
+                encodeFailures += 1
+                continue
+            }
             context.insert(OutboundSyncQueueRecord(
                 recordType: CloudSyncRecord.Kind.userProfile.rawValue,
                 recordIdentifier: CloudSyncRecord.Kind.userProfile.defaultIdentifier,
@@ -100,7 +114,10 @@ public enum OutboundQueueBackfill {
                 identifier: CloudSyncRecord.Kind.trainingPlan.defaultIdentifier
             )
             guard !existingKeys.contains(key) else { continue }
-            guard let payloadJSON = SyncPayloadCodec.encodeTrainingPlanPayloadForMigration(from: plan) else { continue }
+            guard let payloadJSON = SyncPayloadCodec.encodeTrainingPlanPayloadForMigration(from: plan) else {
+                encodeFailures += 1
+                continue
+            }
             context.insert(OutboundSyncQueueRecord(
                 recordType: CloudSyncRecord.Kind.trainingPlan.rawValue,
                 recordIdentifier: CloudSyncRecord.Kind.trainingPlan.defaultIdentifier,
@@ -117,7 +134,10 @@ public enum OutboundQueueBackfill {
                 identifier: memory.identifier
             )
             guard !existingKeys.contains(key) else { continue }
-            guard let payloadJSON = SyncPayloadCodec.encodeCoachMemoryPayload(from: memory) else { continue }
+            guard let payloadJSON = SyncPayloadCodec.encodeCoachMemoryPayload(from: memory) else {
+                encodeFailures += 1
+                continue
+            }
             context.insert(OutboundSyncQueueRecord(
                 recordType: CloudSyncRecord.Kind.coachMemory.rawValue,
                 recordIdentifier: memory.identifier,
@@ -132,7 +152,18 @@ public enum OutboundQueueBackfill {
             try context.save()
         }
 
-        userDefaults.set(true, forKey: flagKey)
+        // VOL-67 Copilot (fixup #19): only mark the backfill flag
+        // complete when every candidate record reached the queue (as
+        // a fresh insert or via existing-row dedupe). If ANY record
+        // was skipped due to a failed payload encode, leave the flag
+        // unset so a future launch re-runs the backfill and has
+        // another chance to queue those records. The successful
+        // inserts from this run still persisted via the `save()`
+        // above, so the retry is idempotent — existingKeys will
+        // dedupe them on the next attempt.
+        if encodeFailures == 0 {
+            userDefaults.set(true, forKey: flagKey)
+        }
     }
 
     /// VOL-67 Copilot (fixup #15): build the dedupe key from the

@@ -234,9 +234,14 @@ public struct SwiftDataCoachMemoryRepository: Sendable {
         // version that happens to sit between `createdAt` and the delete.
         // VOL-67 Codex P2 fixup: stage queue rows into the same context
         // as the deletes and commit everything in one atomic save.
+        //
+        // VOL-67 Copilot (fixup #19): empty `payloadJSON` on the delete
+        // tombstone. See comment in `SwiftDataWorkoutRepository.deleteWorkout`
+        // — the sync pipeline ignores the delete payload, so serializing
+        // the full memory body just retained deleted user content in
+        // the outbound queue and CloudKit tombstone for no benefit.
         let deletedAt = Date()
         for record in oldRecords {
-            let payloadJSON = SyncPayloadCodec.encodeCoachMemoryPayload(from: record) ?? ""
             let identifier = record.identifier
             context.delete(record)
             outboundQueue.stage(
@@ -244,7 +249,7 @@ public struct SwiftDataCoachMemoryRepository: Sendable {
                 recordType: CloudSyncRecord.Kind.coachMemory.rawValue,
                 recordIdentifier: identifier,
                 operation: CloudSyncRecord.Operation.delete.rawValue,
-                payloadJSON: payloadJSON,
+                payloadJSON: "",
                 queuedAt: deletedAt
             )
         }
@@ -266,15 +271,18 @@ public struct SwiftDataCoachMemoryRepository: Sendable {
         // VOL-67 Codex P1 + P2 fixups: actual deletion wall-clock as
         // the tombstone timestamp AND atomic stage-then-save so the
         // delete and the queue row commit together.
+        //
+        // VOL-67 Copilot (fixup #19): empty `payloadJSON` on delete.
+        // See the bulk-prune path above + the workout-delete path for
+        // the full rationale.
         let deletedAt = Date()
-        let payloadJSON = SyncPayloadCodec.encodeCoachMemoryPayload(from: record) ?? ""
         context.delete(record)
         outboundQueue.stage(
             into: context,
             recordType: CloudSyncRecord.Kind.coachMemory.rawValue,
             recordIdentifier: identifier,
             operation: CloudSyncRecord.Operation.delete.rawValue,
-            payloadJSON: payloadJSON,
+            payloadJSON: "",
             queuedAt: deletedAt
         )
         try context.save()

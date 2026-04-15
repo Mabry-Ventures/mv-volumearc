@@ -170,15 +170,26 @@ public struct SwiftDataWorkoutRepository: Sendable {
             // queue row into the same context as the delete and let one
             // `context.save()` commit both atomically, so a queue write
             // failure can't leave a deleted record with no tombstone.
+            //
+            // VOL-67 Copilot (fixup #19): delete tombstones do NOT need
+            // the full serialized payload. `CloudSyncCoordinator.makeCloudSyncRecord`
+            // uses `queuedAt` as the authoritative delete timestamp and
+            // ignores `payloadJSON` for `.delete` operations, and
+            // `DefaultSyncPayloadApplier` doesn't decode the payload on
+            // deletions either. Serializing the full workout body into
+            // the tombstone retained deleted user content in the queue
+            // (and in CloudKit) with no functional benefit — it just
+            // inflated record size and prolonged data retention.
+            // Staging an empty string keeps the delete row valid while
+            // dropping the deleted content from the queue entirely.
             let deletedAt = Date()
-            let payloadJSON = SyncPayloadCodec.encodeWorkoutPayload(from: workout) ?? ""
             context.delete(workout)
             outboundQueue.stage(
                 into: context,
                 recordType: CloudSyncRecord.Kind.workout.rawValue,
                 recordIdentifier: identifier,
                 operation: CloudSyncRecord.Operation.delete.rawValue,
-                payloadJSON: payloadJSON,
+                payloadJSON: "",
                 queuedAt: deletedAt
             )
             try context.save()

@@ -107,6 +107,31 @@ public protocol OutboundSyncQueue: Sendable {
         recordIdentifier: String,
         olderThan: Date?
     ) throws
+
+    /// VOL-67 Copilot (fixup #19): targeted probe for a pending delete
+    /// tombstone whose `queuedAt` is strictly newer than `newerThan`.
+    /// Returns `true` if ANY queue row matches
+    /// `(recordIdentifier in: candidateIdentifiers)` AND
+    /// `operation == "delete"` AND `queuedAt > newerThan` AND
+    /// (`recordType in: candidateRecordTypes` OR `candidateRecordTypes`
+    /// is empty). The applier uses this in its tombstone-wins check
+    /// (see `DefaultSyncPayloadApplier.hasNewerLocalDeleteTombstone`)
+    /// instead of scanning the full pending queue on every inbound
+    /// insert — which would be O(n) per inbound record on devices
+    /// with a large offline backlog.
+    ///
+    /// Callers pass the canonical-form identifier plus any known
+    /// legacy-form aliases so the lookup catches tombstones stored
+    /// under either shape. Same for `candidateRecordTypes`: a caller
+    /// doing a lookup for `.userProfile` would pass
+    /// `["profile", "userProfile"]` so legacy long-form rows
+    /// still match.
+    @MainActor
+    func hasPendingDeleteTombstone(
+        candidateRecordTypes: Set<String>,
+        candidateIdentifiers: Set<String>,
+        newerThan: Date
+    ) throws -> Bool
 }
 
 public struct NoOpOutboundSyncQueue: OutboundSyncQueue {
@@ -146,6 +171,13 @@ public struct NoOpOutboundSyncQueue: OutboundSyncQueue {
         recordIdentifier: String,
         olderThan: Date?
     ) throws {}
+
+    @MainActor
+    public func hasPendingDeleteTombstone(
+        candidateRecordTypes: Set<String>,
+        candidateIdentifiers: Set<String>,
+        newerThan: Date
+    ) throws -> Bool { false }
 }
 
 public struct SwiftDataOutboundSyncQueue: OutboundSyncQueue, Sendable {
@@ -327,6 +359,57 @@ public struct SwiftDataOutboundSyncQueue: OutboundSyncQueue, Sendable {
         if removed > 0 {
             try context.save()
         }
+    }
+
+    @MainActor
+    public func hasPendingDeleteTombstone(
+        candidateRecordTypes: Set<String>,
+        candidateIdentifiers: Set<String>,
+        newerThan: Date
+    ) throws -> Bool {
+        // VOL-67 Copilot (fixup #19): targeted `#Predicate` narrowing the
+        // fetch to rows that could plausibly match before doing any
+        // application-level filtering. The applier calls this on every
+        // inbound upsert whose local record doesn't exist; on devices
+        // with a large offline backlog, scanning `pendingRecords()` and
+        // filtering in-process was O(n) per inbound record and could
+        // substantially slow the pull/apply phase. The predicate pushes
+        // the identifier + operation + timestamp filter into SwiftData,
+        // so the fetch returns only the handful of rows that could
+        // actually be newer-than-inbound delete tombstones.
+        //
+        // The record-type comparison is left to the caller side because
+        // `#Predicate` can't reference an external `Set<String>` for
+        // multi-value equality across a captured array reliably in
+        // some SwiftData versions, but matching by identifier +
+        // operation + timestamp is sufficient to narrow the fetch to
+        // O(1)-ish in practice (queue rows are keyed by identifier,
+        // and delete tombstones are rare compared to upserts). We then
+        // verify the recordType matches `candidateRecordTypes` in Swift
+        // before returning — over an already-narrowed row set.
+        guard !candidateIdentifiers.isEmpty else { return false }
+
+        let context = ModelContext(container)
+        let deleteOp = CloudSyncRecord.Operation.delete.rawValue
+        let idsToMatch = candidateIdentifiers
+        let threshold = newerThan
+
+        var descriptor = FetchDescriptor<OutboundSyncQueueRecord>(
+            predicate: #Predicate<OutboundSyncQueueRecord> { row in
+                idsToMatch.contains(row.recordIdentifier) &&
+                row.operation == deleteOp &&
+                row.queuedAt > threshold
+            }
+        )
+        descriptor.fetchLimit = 1
+
+        // If the caller restricted record types, do the final filter
+        // in-process — the narrowed fetch makes this trivial.
+        let candidateRows = try context.fetch(descriptor)
+        if candidateRecordTypes.isEmpty {
+            return !candidateRows.isEmpty
+        }
+        return candidateRows.contains { candidateRecordTypes.contains($0.recordType) }
     }
 
     private static func snapshot(from record: OutboundSyncQueueRecord) -> QueuedOutboundSyncChange {

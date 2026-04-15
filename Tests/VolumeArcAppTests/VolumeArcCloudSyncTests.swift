@@ -480,6 +480,37 @@ final class VolumeArcCloudSyncTests: XCTestCase {
     /// update and the delete would cause the applier's
     /// `invalidateEntries(olderThan:)` to drop the queued delete,
     /// silently losing the user's delete intent.
+    /// VOL-67 Copilot (fixup #19): delete tombstones must NOT carry
+    /// the full serialized record body. `CloudSyncCoordinator.makeCloudSyncRecord`
+    /// uses `queuedAt` as the authoritative delete timestamp and
+    /// ignores `payloadJSON` for `.delete` operations, and
+    /// `DefaultSyncPayloadApplier` doesn't decode the payload on
+    /// deletions either — so serializing the full body just retained
+    /// deleted user content in the outbound queue and CloudKit
+    /// tombstone for no functional benefit. Fix: stage an empty
+    /// `payloadJSON` on delete.
+    func testDeleteWorkoutTombstoneHasEmptyPayload() throws {
+        let workout = try workoutRepository.createWorkout(
+            title: "With Content To Not Retain",
+            startedAt: Date(timeIntervalSince1970: 1_720_055_000)
+        )
+
+        // Clear the create upsert so only the delete remains.
+        let createEntries = try outboundQueue.pendingRecords()
+        try outboundQueue.delete(ids: createEntries.map(\.id))
+
+        try workoutRepository.deleteWorkout(identifier: workout.identifier)
+
+        let tombstones = try outboundQueue.pendingRecords()
+            .filter { $0.operation == CloudSyncRecord.Operation.delete.rawValue }
+        XCTAssertEqual(tombstones.count, 1, "Exactly one delete tombstone expected")
+        XCTAssertEqual(
+            tombstones.first?.payloadJSON,
+            "",
+            "Delete tombstones must have empty payloadJSON — the sync pipeline ignores it and persisting the body retains deleted user content"
+        )
+    }
+
     func testDeleteWorkoutEnqueuesWithActualDeletionTimestamp() throws {
         let t0 = Date(timeIntervalSince1970: 1_720_050_000)
         let workout = try workoutRepository.createWorkout(title: "To Delete", startedAt: t0, updatedAt: t0)
