@@ -314,23 +314,17 @@ public final class WorkoutDashboardModel: ObservableObject {
     public func completeWorkoutSession() async -> RecentSession? {
         #if canImport(SwiftData)
         guard let workoutRepository, let workoutID = activeWorkoutID else { return nil }
+
+        // VOL-57 fixup: `completeWorkout` succeeds as a discrete step.
+        // Previously the snapshot fetch was inside the same do-block, so
+        // any SwiftData fetch error on the read thrown after the write
+        // routed through the catch and skipped teardown — leaving the
+        // UI in an "active session" state for a workout that was already
+        // persisted as complete, and surfacing a false failure event.
+        // Split the two: a failed write is a real completion failure;
+        // a failed read is best-effort and must not block teardown.
         do {
             try workoutRepository.completeWorkout(identifier: workoutID)
-            let completedSession = try workoutRepository.workout(withIdentifier: workoutID).map(Self.recentSession)
-            self.activeWorkoutID = nil
-            self.activeWorkoutTitle = nil
-            self.isSessionActive = false
-            self.loggedSetCountThisSession = 0
-
-            telemetrySink.record(TelemetryEvent(
-                category: "workout",
-                name: "session_completed",
-                severity: .info,
-                message: "Completed workout"
-            ))
-
-            await refresh()
-            return completedSession
         } catch {
             telemetrySink.record(TelemetryEvent(
                 category: "workout",
@@ -338,10 +332,37 @@ public final class WorkoutDashboardModel: ObservableObject {
                 severity: .error,
                 message: error.localizedDescription
             ))
+            return nil
         }
+
+        // Completion has persisted — tear down the session state
+        // unconditionally so the UI reflects reality even if the
+        // snapshot read below fails.
+        self.activeWorkoutID = nil
+        self.activeWorkoutTitle = nil
+        self.isSessionActive = false
+        self.loggedSetCountThisSession = 0
+
+        telemetrySink.record(TelemetryEvent(
+            category: "workout",
+            name: "session_completed",
+            severity: .info,
+            message: "Completed workout"
+        ))
+
+        // Best-effort snapshot read for the return value. Completion
+        // already succeeded and teardown already ran, so a fetch error
+        // here is not a failure of the operation — just a missing
+        // return payload.
+        let completedSession = (try? workoutRepository.workout(withIdentifier: workoutID))
+            .flatMap { $0 }
+            .map(Self.recentSession)
+
+        await refresh()
+        return completedSession
+        #else
         return nil
         #endif
-        return nil
     }
 
     /// Persist profile updates from the edit screen or onboarding.
