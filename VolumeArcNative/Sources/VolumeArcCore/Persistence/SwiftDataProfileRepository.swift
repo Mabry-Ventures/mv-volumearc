@@ -28,6 +28,7 @@ public struct SwiftDataUserProfileRepository: Sendable {
         var descriptor = FetchDescriptor<UserProfileRecord>()
         descriptor.fetchLimit = 1
 
+        let target: UserProfileRecord
         if let existing = try context.fetch(descriptor).first {
             existing.name = profile.name
             existing.coachingStyle = profile.coachingStyle.rawValue
@@ -39,6 +40,7 @@ public struct SwiftDataUserProfileRepository: Sendable {
             existing.sessionTimeBudgetMinutes = profile.sessionTimeBudgetMinutes
             existing.weeklyTrainingDays = profile.weeklyTrainingDays
             existing.updatedAt = .now
+            target = existing
         } else {
             let record = UserProfileRecord(
                 name: profile.name,
@@ -52,12 +54,11 @@ public struct SwiftDataUserProfileRepository: Sendable {
                 weeklyTrainingDays: profile.weeklyTrainingDays
             )
             context.insert(record)
+            target = record
         }
 
+        stageUpsert(for: target, into: context)
         try context.save()
-        if let persisted = try context.fetch(descriptor).first {
-            try enqueueUpsert(for: persisted)
-        }
     }
 
     /// Mark onboarding as complete.
@@ -69,8 +70,8 @@ public struct SwiftDataUserProfileRepository: Sendable {
         guard let profile = try context.fetch(descriptor).first else { return }
         profile.onboardingCompleted = true
         profile.updatedAt = .now
+        stageUpsert(for: profile, into: context)
         try context.save()
-        try enqueueUpsert(for: profile)
     }
 
     /// Check whether onboarding has been completed.
@@ -130,17 +131,19 @@ public struct SwiftDataTrainingPlanRepository: Sendable {
 
         guard let json = SyncPayloadCodec.encode(workouts) else { return }
 
+        let target: TrainingPlanRecord
         if let existing = try context.fetch(descriptor).first {
             existing.workoutsJSON = json
             existing.updatedAt = .now
+            target = existing
         } else {
-            context.insert(TrainingPlanRecord(workoutsJSON: json))
+            let record = TrainingPlanRecord(workoutsJSON: json)
+            context.insert(record)
+            target = record
         }
 
+        stageUpsert(for: target, into: context)
         try context.save()
-        if let persisted = try context.fetch(descriptor).first {
-            try enqueueUpsert(for: persisted)
-        }
     }
 
     /// Decode the persisted plan into `WeeklyWorkout` models.
@@ -186,8 +189,8 @@ public struct SwiftDataCoachMemoryRepository: Sendable {
         let context = ModelContext(container)
         let record = CoachMemoryRecord(content: content, theme: theme)
         context.insert(record)
+        stageUpsert(for: record, into: context)
         try context.save()
-        try enqueueUpsert(for: record)
     }
 
     /// Fetch the N most recent memory entries.
@@ -229,22 +232,23 @@ public struct SwiftDataCoachMemoryRepository: Sendable {
         // deletion wall-clock time, not the record's `createdAt`, so the
         // outbound delete doesn't get invalidated by a newer inbound
         // version that happens to sit between `createdAt` and the delete.
-        // See the matching comment in `SwiftDataWorkoutRepository.deleteWorkout`.
+        // VOL-67 Codex P2 fixup: stage queue rows into the same context
+        // as the deletes and commit everything in one atomic save.
         let deletedAt = Date()
-        let deletions = oldRecords.map { ($0.identifier, SyncPayloadCodec.encodeCoachMemoryPayload(from: $0) ?? "") }
         for record in oldRecords {
+            let payloadJSON = SyncPayloadCodec.encodeCoachMemoryPayload(from: record) ?? ""
+            let identifier = record.identifier
             context.delete(record)
-        }
-        try context.save()
-        for deletion in deletions {
-            try outboundQueue.enqueue(
+            outboundQueue.stage(
+                into: context,
                 recordType: CloudSyncRecord.Kind.coachMemory.rawValue,
-                recordIdentifier: deletion.0,
+                recordIdentifier: identifier,
                 operation: CloudSyncRecord.Operation.delete.rawValue,
-                payloadJSON: deletion.1,
+                payloadJSON: payloadJSON,
                 queuedAt: deletedAt
             )
         }
+        try context.save()
     }
 
     /// Delete a single memory entry by identifier.
@@ -259,29 +263,36 @@ public struct SwiftDataCoachMemoryRepository: Sendable {
         descriptor.fetchLimit = 1
         guard let record = try context.fetch(descriptor).first else { return }
 
-        // VOL-67 Codex P1 fixup: see `deleteWorkout` / `pruneOlderThan` for
-        // rationale. Use the deletion wall-clock, not the record's
-        // `createdAt`, so a queued tombstone can't be invalidated by a
-        // newer inbound pull and silently lose the user's delete intent.
+        // VOL-67 Codex P1 + P2 fixups: actual deletion wall-clock as
+        // the tombstone timestamp AND atomic stage-then-save so the
+        // delete and the queue row commit together.
         let deletedAt = Date()
         let payloadJSON = SyncPayloadCodec.encodeCoachMemoryPayload(from: record) ?? ""
         context.delete(record)
-        try context.save()
-        try outboundQueue.enqueue(
+        outboundQueue.stage(
+            into: context,
             recordType: CloudSyncRecord.Kind.coachMemory.rawValue,
             recordIdentifier: identifier,
             operation: CloudSyncRecord.Operation.delete.rawValue,
             payloadJSON: payloadJSON,
             queuedAt: deletedAt
         )
+        try context.save()
     }
 }
 
+// VOL-67 Codex P2 fixup: these helpers stage the outbound queue row
+// into the caller-provided context rather than creating a new context
+// and saving independently. Every repository mutation above follows
+// the pattern: insert/modify record → stageUpsert → `context.save()` —
+// so a queue write failure can't leave the primary record persisted
+// without its sync row.
 extension SwiftDataUserProfileRepository {
     @MainActor
-    private func enqueueUpsert(for profile: UserProfileRecord) throws {
+    fileprivate func stageUpsert(for profile: UserProfileRecord, into context: ModelContext) {
         guard let payloadJSON = SyncPayloadCodec.encodeUserProfilePayload(from: profile) else { return }
-        try outboundQueue.enqueue(
+        outboundQueue.stage(
+            into: context,
             recordType: CloudSyncRecord.Kind.userProfile.rawValue,
             recordIdentifier: CloudSyncRecord.Kind.userProfile.defaultIdentifier,
             operation: CloudSyncRecord.Operation.upsert.rawValue,
@@ -293,9 +304,10 @@ extension SwiftDataUserProfileRepository {
 
 extension SwiftDataTrainingPlanRepository {
     @MainActor
-    private func enqueueUpsert(for plan: TrainingPlanRecord) throws {
+    fileprivate func stageUpsert(for plan: TrainingPlanRecord, into context: ModelContext) {
         guard let payloadJSON = SyncPayloadCodec.encodeTrainingPlanPayload(from: plan) else { return }
-        try outboundQueue.enqueue(
+        outboundQueue.stage(
+            into: context,
             recordType: CloudSyncRecord.Kind.trainingPlan.rawValue,
             recordIdentifier: CloudSyncRecord.Kind.trainingPlan.defaultIdentifier,
             operation: CloudSyncRecord.Operation.upsert.rawValue,
@@ -307,9 +319,10 @@ extension SwiftDataTrainingPlanRepository {
 
 extension SwiftDataCoachMemoryRepository {
     @MainActor
-    private func enqueueUpsert(for record: CoachMemoryRecord) throws {
+    fileprivate func stageUpsert(for record: CoachMemoryRecord, into context: ModelContext) {
         guard let payloadJSON = SyncPayloadCodec.encodeCoachMemoryPayload(from: record) else { return }
-        try outboundQueue.enqueue(
+        outboundQueue.stage(
+            into: context,
             recordType: CloudSyncRecord.Kind.coachMemory.rawValue,
             recordIdentifier: record.identifier,
             operation: CloudSyncRecord.Operation.upsert.rawValue,

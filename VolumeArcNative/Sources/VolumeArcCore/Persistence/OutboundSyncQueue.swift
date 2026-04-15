@@ -54,6 +54,28 @@ public struct QueuedOutboundSyncChange: Sendable, Equatable {
 }
 
 public protocol OutboundSyncQueue: Sendable {
+    /// Atomic-write helper: inserts a queue row into a caller-owned
+    /// `ModelContext` without saving. The caller is expected to save
+    /// the context after staging, which means the primary record
+    /// write and the queue row commit in the SAME SwiftData
+    /// transaction. VOL-67 Codex P2: without this, a save-then-enqueue
+    /// pattern could leave the local record persisted but the queue
+    /// row missing (and the mutation would never reach CloudKit) if
+    /// the queue write failed after the record write succeeded.
+    @MainActor
+    func stage(
+        into context: ModelContext,
+        recordType: String,
+        recordIdentifier: String,
+        operation: String,
+        payloadJSON: String,
+        queuedAt: Date
+    )
+
+    /// Standalone enqueue that creates its own context and saves.
+    /// Kept for callers (notably tests) that want to prepopulate the
+    /// queue without owning a repository context. Production
+    /// repository mutations should use `stage(into:)` for atomicity.
     @MainActor
     func enqueue(
         recordType: String,
@@ -91,6 +113,16 @@ public struct NoOpOutboundSyncQueue: OutboundSyncQueue {
     public init() {}
 
     @MainActor
+    public func stage(
+        into context: ModelContext,
+        recordType: String,
+        recordIdentifier: String,
+        operation: String,
+        payloadJSON: String,
+        queuedAt: Date
+    ) {}
+
+    @MainActor
     public func enqueue(
         recordType: String,
         recordIdentifier: String,
@@ -124,6 +156,24 @@ public struct SwiftDataOutboundSyncQueue: OutboundSyncQueue, Sendable {
     }
 
     @MainActor
+    public func stage(
+        into context: ModelContext,
+        recordType: String,
+        recordIdentifier: String,
+        operation: String,
+        payloadJSON: String,
+        queuedAt: Date = .now
+    ) {
+        context.insert(OutboundSyncQueueRecord(
+            recordType: recordType,
+            recordIdentifier: recordIdentifier,
+            operation: operation,
+            payloadJSON: payloadJSON,
+            queuedAt: queuedAt
+        ))
+    }
+
+    @MainActor
     public func enqueue(
         recordType: String,
         recordIdentifier: String,
@@ -132,13 +182,14 @@ public struct SwiftDataOutboundSyncQueue: OutboundSyncQueue, Sendable {
         queuedAt: Date = .now
     ) throws {
         let context = ModelContext(container)
-        context.insert(OutboundSyncQueueRecord(
+        stage(
+            into: context,
             recordType: recordType,
             recordIdentifier: recordIdentifier,
             operation: operation,
             payloadJSON: payloadJSON,
             queuedAt: queuedAt
-        ))
+        )
         try context.save()
     }
 

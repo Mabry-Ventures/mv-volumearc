@@ -24,8 +24,8 @@ public struct SwiftDataWorkoutRepository: Sendable {
         let context = ModelContext(container)
         let workout = WorkoutRecord(title: title, startedAt: startedAt, updatedAt: updatedAt)
         context.insert(workout)
+        stageUpsert(for: workout, into: context)
         try context.save()
-        try enqueueUpsert(for: workout)
         return workout
     }
 
@@ -126,8 +126,8 @@ public struct SwiftDataWorkoutRepository: Sendable {
         workout.exerciseIDsCSV = exerciseIDs.sorted().joined(separator: ",")
         workout.updatedAt = .now
 
+        stageUpsert(for: workout, into: context)
         try context.save()
-        try enqueueUpsert(for: workout)
     }
 
     /// Mark a workout as completed.
@@ -147,8 +147,8 @@ public struct SwiftDataWorkoutRepository: Sendable {
         workout.durationMinutes = max(1, Int(now.timeIntervalSince(workout.startedAt) / 60))
         if !summary.isEmpty { workout.summary = summary }
         workout.updatedAt = now
+        stageUpsert(for: workout, into: context)
         try context.save()
-        try enqueueUpsert(for: workout)
     }
 
     // MARK: - Delete
@@ -165,27 +165,23 @@ public struct SwiftDataWorkoutRepository: Sendable {
         descriptor.fetchLimit = 1
         if let workout = try context.fetch(descriptor).first {
             // VOL-67 Codex P1 fixup: tombstones need the actual deletion
-            // wall-clock time, not the record's prior `updatedAt`. Using
-            // `updatedAt` here meant a queued delete could have a
-            // `queuedAt` that predates a newer inbound update from another
-            // device; the applier's `invalidateEntries(olderThan: payload.updatedAt)`
-            // would then drop the delete before push and silently lose the
-            // user's delete intent (or worse, resurrect a record that's
-            // already tombstoned locally). Snapshot the delete timestamp
-            // once so both the queue row and the outbound record's
-            // `modifiedAt` (see `makeCloudSyncRecord` for deletes in
-            // CloudSync.swift) agree on a monotonic deletion instant.
+            // wall-clock time (see comment in the delete paths of the
+            // coach-memory repository). VOL-67 Codex P2 fixup: stage the
+            // queue row into the same context as the delete and let one
+            // `context.save()` commit both atomically, so a queue write
+            // failure can't leave a deleted record with no tombstone.
             let deletedAt = Date()
             let payloadJSON = SyncPayloadCodec.encodeWorkoutPayload(from: workout) ?? ""
             context.delete(workout)
-            try context.save()
-            try outboundQueue.enqueue(
+            outboundQueue.stage(
+                into: context,
                 recordType: CloudSyncRecord.Kind.workout.rawValue,
                 recordIdentifier: identifier,
                 operation: CloudSyncRecord.Operation.delete.rawValue,
                 payloadJSON: payloadJSON,
                 queuedAt: deletedAt
             )
+            try context.save()
         }
     }
 
@@ -235,10 +231,15 @@ private struct LoggedSet: Codable {
 }
 
 extension SwiftDataWorkoutRepository {
+    /// Stage an upsert queue row into the same context as the record
+    /// mutation. The caller saves the context once, committing both
+    /// writes atomically. See `OutboundSyncQueue.stage(into:)` for
+    /// the VOL-67 Codex P2 rationale behind this pattern.
     @MainActor
-    private func enqueueUpsert(for workout: WorkoutRecord) throws {
+    fileprivate func stageUpsert(for workout: WorkoutRecord, into context: ModelContext) {
         guard let payloadJSON = SyncPayloadCodec.encodeWorkoutPayload(from: workout) else { return }
-        try outboundQueue.enqueue(
+        outboundQueue.stage(
+            into: context,
             recordType: CloudSyncRecord.Kind.workout.rawValue,
             recordIdentifier: workout.identifier,
             operation: CloudSyncRecord.Operation.upsert.rawValue,
