@@ -739,11 +739,26 @@ final class VolumeArcMigrationTests: XCTestCase {
         // long-form alias (not canonical `"profile"`), and the
         // `recordIdentifier="userProfile"` matches the long-form
         // identifier shape that pre-canonicalization code produced.
+        //
+        // VOL-67 Codex P2 (fixup #31): the fixture's payloadJSON must
+        // be a VALID envelope that decodes for the kind, otherwise
+        // the backfill's new validity filter treats the row as
+        // malformed and enqueues a fresh canonical row on top of it
+        // (correct behavior for malformed legacy rows, wrong for this
+        // test which is specifically validating canonical dedupe of a
+        // legitimate-but-legacy-shape row). Use the repository's
+        // migrated profile to generate a real valid payload.
+        let migratedProfileForPayload = try XCTUnwrap(
+            seedContext.fetch(FetchDescriptor<UserProfileRecord>()).first
+        )
+        let validLegacyPayload = try XCTUnwrap(
+            SyncPayloadCodec.encodeUserProfilePayload(from: migratedProfileForPayload)
+        )
         seedContext.insert(OutboundSyncQueueRecord(
             recordType: "userProfile",
             recordIdentifier: "userProfile",
             operation: CloudSyncRecord.Operation.upsert.rawValue,
-            payloadJSON: "{\"profile\":{\"name\":\"Legacy\"}}",
+            payloadJSON: validLegacyPayload,
             queuedAt: Date(timeIntervalSince1970: 1_715_500_100)
         ))
         try seedContext.save()

@@ -55,8 +55,32 @@ public enum OutboundQueueBackfill {
 
         // Deduplicate against already-queued rows so a crash between
         // insert and flag-set doesn't produce duplicates on retry.
+        //
+        // VOL-67 Codex P2 (fixup #31): only count VALID existing rows
+        // when building the dedupe set. If a queue row exists for a
+        // key but its payload/kind/operation is malformed (legacy row
+        // from a pre-rename build, corrupted write, etc.), the push
+        // cycle will later quarantine and delete that row via
+        // `CloudSyncCoordinator.push`'s fixup #11/#14 quarantine path.
+        // Without this filter, the backfill would see the malformed
+        // row in `existingKeys`, skip enqueueing a fresh upsert, and
+        // mark the flag complete — leaving the record with NO
+        // outbound row after quarantine cleanup. The record would
+        // then never sync unless the user edits it again.
+        //
+        // By filtering to only valid rows, malformed rows are treated
+        // as if they didn't exist for dedupe purposes. The backfill
+        // enqueues a fresh upsert alongside the malformed row; the
+        // push cycle's coalesce picks the newer row (the fresh
+        // backfill), successfully pushes it, and cleans up all
+        // drained rows for the key (including the malformed one).
+        // Both layers converge on the correct state.
         let existingQueue = try context.fetch(FetchDescriptor<OutboundSyncQueueRecord>())
-        let existingKeys: Set<String> = Set(existingQueue.map { queueKey(recordType: $0.recordType, identifier: $0.recordIdentifier) })
+        let existingKeys: Set<String> = Set(
+            existingQueue
+                .filter { Self.isValidOutboundQueueRow($0) }
+                .map { queueKey(recordType: $0.recordType, identifier: $0.recordIdentifier) }
+        )
 
         var insertedAny = false
         // VOL-67 Copilot (fixup #19): track records that were skipped
@@ -213,6 +237,28 @@ public enum OutboundQueueBackfill {
         if encodeFailures == 0 {
             userDefaults.set(true, forKey: flagKey)
         }
+    }
+
+    /// VOL-67 Codex P2 (fixup #31): a queue row counts as "valid"
+    /// for dedupe purposes only if the push path would accept it —
+    /// parseable `recordType`, parseable `operation`, and (for
+    /// upserts) a `payloadJSON` that decodes via the per-kind decoder.
+    /// Delete rows have empty `payloadJSON` by design (fixup #19) and
+    /// are always valid as long as kind/operation parse.
+    ///
+    /// This check mirrors the validations performed by
+    /// `CloudSyncCoordinator.makeCloudSyncRecord` and the pull-path
+    /// decode in `CloudKitSyncTransport.pullChanges` (fixup #30), so
+    /// the backfill's view of "existing valid row" agrees with what
+    /// the push cycle will actually accept.
+    private static func isValidOutboundQueueRow(_ row: OutboundSyncQueueRecord) -> Bool {
+        guard let kind = CloudSyncRecord.Kind.parse(row.recordType) else { return false }
+        guard CloudSyncRecord.Operation(rawValue: row.operation) != nil else { return false }
+        if row.operation == CloudSyncRecord.Operation.delete.rawValue {
+            // Delete tombstones carry empty payloadJSON by design.
+            return true
+        }
+        return SyncPayloadCodec.modifiedAt(for: kind, payloadJSON: row.payloadJSON) != nil
     }
 
     /// VOL-67 Copilot (fixup #15): build the dedupe key from the
