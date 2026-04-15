@@ -426,15 +426,26 @@ public actor CloudSyncCoordinator {
                 try outboundQueue.drain(limit: limit)
             }
 
-            // Coalesce by (recordType, recordIdentifier) so the batch
-            // contains at most one entry per logical record. Iterate
-            // in order: each successive row overwrites the previous
-            // one for the same key, so the final dict holds the
-            // latest operation per record.
+            // Coalesce by (normalized Kind, canonical identifier) so
+            // the batch contains at most one entry per logical record.
+            // VOL-67 Codex P2 (fixup #10): resolve both the
+            // `recordType` and `recordIdentifier` through `Kind.parse`
+            // and `canonicalQueueIdentifier(from:)` before building
+            // the key. Without normalization, a legacy row
+            // `(recordType: "userProfile", recordIdentifier: "userProfile")`
+            // and a canonical row `(recordType: "profile",
+            // recordIdentifier: "profile")` would hash to different
+            // keys and both get pushed — two writes for the same
+            // logical singleton profile, with undefined ordering.
+            // Iterate in `queuedAt` order: each successive row
+            // overwrites the previous one for the same normalized
+            // key, so the final dict holds the latest operation per
+            // logical record regardless of which alias form it was
+            // queued under.
             var coalesced: [String: QueuedOutboundSyncChange] = [:]
             var orderedKeys: [String] = []
             for change in drainedChanges {
-                let key = "\(change.recordType)|\(change.recordIdentifier)"
+                let key = Self.coalesceKey(for: change)
                 if coalesced[key] == nil {
                     orderedKeys.append(key)
                 }
@@ -505,6 +516,19 @@ public actor CloudSyncCoordinator {
         return pushedCount + result.changedRecords.count
     }
 
+    /// Produce the coalescing key for a queued change. VOL-67 Codex P2
+    /// (fixup #10): the key is built from the normalized `Kind` raw
+    /// value and the canonical queue identifier, so legacy long-form
+    /// rows and canonical short-form rows collapse to the same slot.
+    private static func coalesceKey(for change: QueuedOutboundSyncChange) -> String {
+        if let kind = CloudSyncRecord.Kind.parse(change.recordType) {
+            return "\(kind.rawValue)|\(kind.canonicalQueueIdentifier(from: change.recordIdentifier))"
+        }
+        // Unknown/future record type: fall back to the raw pair so we
+        // don't accidentally merge records we don't understand.
+        return "\(change.recordType)|\(change.recordIdentifier)"
+    }
+
     private static func makeCloudSyncRecord(from change: QueuedOutboundSyncChange) throws -> CloudSyncRecord {
         guard let kind = CloudSyncRecord.Kind.parse(change.recordType) else {
             throw CloudSyncError.invalidQueuedRecord(reason: "Unsupported record type: \(change.recordType)")
@@ -529,9 +553,15 @@ public actor CloudSyncCoordinator {
             modifiedAt = SyncPayloadCodec.modifiedAt(for: kind, payloadJSON: change.payloadJSON) ?? change.queuedAt
         }
 
+        // VOL-67 Codex P2 (fixup #10): also normalize the outbound
+        // identifier so a legacy queue row gets pushed under the
+        // canonical form — singletons always report as
+        // `defaultIdentifier`, per-record kinds pass through
+        // unchanged. This mirrors the coalesce key normalization
+        // so the outbound batch is internally consistent.
         return CloudSyncRecord(
             kind: kind,
-            identifier: change.recordIdentifier,
+            identifier: kind.canonicalQueueIdentifier(from: change.recordIdentifier),
             operation: operation,
             payloadJSON: change.payloadJSON,
             modifiedAt: modifiedAt

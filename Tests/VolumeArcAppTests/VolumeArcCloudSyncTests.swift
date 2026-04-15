@@ -652,6 +652,91 @@ final class VolumeArcCloudSyncTests: XCTestCase {
         }.isEmpty)
     }
 
+    /// VOL-67 Codex P2 (fixup #10): queue rows that differ only in
+    /// recordType alias form (legacy `userProfile` vs. canonical
+    /// `profile`) or in identifier alias form must collapse to a
+    /// single coalesced push. Otherwise the server gets two writes
+    /// for the same logical singleton record with undefined ordering.
+    func testPushCoalescesLegacyAndCanonicalAliasesForSameSingleton() async throws {
+        let baseTimestamp = Date(timeIntervalSince1970: 1_720_150_000)
+
+        // Enqueue TWO rows for the same logical profile: one with the
+        // legacy long-form recordType/identifier, one with the
+        // canonical short form. The canonical one is newer.
+        let legacyPayload = try XCTUnwrap(SyncPayloadCodec.synthesizeLegacyPayloadJSON(
+            kind: .userProfile,
+            fields: [
+                "name": "Legacy Queued",
+                "coachingStyle": "motivational",
+                "privacyMode": "standard",
+                "advancementLevel": "intermediate",
+                "availableEquipmentCSV": "barbell",
+                "preferredRepRangeLower": 5,
+                "preferredRepRangeUpper": 8,
+                "sessionTimeBudgetMinutes": 60,
+                "weeklyTrainingDays": 4,
+                "onboardingCompleted": true,
+                "updatedAt": baseTimestamp,
+            ]
+        ))
+        try outboundQueue.enqueue(
+            recordType: "userProfile", // legacy long-form
+            recordIdentifier: "userProfile", // legacy long-form identifier
+            operation: CloudSyncRecord.Operation.upsert.rawValue,
+            payloadJSON: legacyPayload,
+            queuedAt: baseTimestamp
+        )
+
+        let newerTimestamp = baseTimestamp.addingTimeInterval(60)
+        let canonicalPayload = try XCTUnwrap(SyncPayloadCodec.synthesizeLegacyPayloadJSON(
+            kind: .userProfile,
+            fields: [
+                "name": "Canonical Newer",
+                "coachingStyle": "motivational",
+                "privacyMode": "standard",
+                "advancementLevel": "intermediate",
+                "availableEquipmentCSV": "barbell",
+                "preferredRepRangeLower": 5,
+                "preferredRepRangeUpper": 8,
+                "sessionTimeBudgetMinutes": 60,
+                "weeklyTrainingDays": 4,
+                "onboardingCompleted": true,
+                "updatedAt": newerTimestamp,
+            ]
+        ))
+        try outboundQueue.enqueue(
+            recordType: CloudSyncRecord.Kind.userProfile.rawValue, // "profile"
+            recordIdentifier: CloudSyncRecord.Kind.userProfile.defaultIdentifier, // "profile"
+            operation: CloudSyncRecord.Operation.upsert.rawValue,
+            payloadJSON: canonicalPayload,
+            queuedAt: newerTimestamp
+        )
+
+        XCTAssertEqual(try outboundQueue.pendingRecords().count, 2)
+
+        let transport = RecordingCloudSyncTransport()
+        let coordinator = CloudSyncCoordinator(
+            transport: transport,
+            stateStore: FileSyncStateStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+            outboundQueue: outboundQueue
+        )
+
+        let pushedCount = try await coordinator.push()
+        XCTAssertEqual(pushedCount, 1, "Two alias-form rows for the same logical profile must coalesce to one")
+
+        let pushed = await transport.pushedRecords
+        XCTAssertEqual(pushed.count, 1)
+
+        // The coalesced record must be the newer canonical one.
+        let pushedRecord = try XCTUnwrap(pushed.first)
+        XCTAssertEqual(pushedRecord.kind, .userProfile)
+        XCTAssertEqual(pushedRecord.identifier, "profile", "Coalesced outbound must use canonical singleton identifier")
+        let decodedPayload = try XCTUnwrap(SyncPayloadCodec.decodeUserProfilePayload(from: pushedRecord.payloadJSON))
+        XCTAssertEqual(decodedPayload.name, "Canonical Newer", "Newer queuedAt must win the coalesce")
+
+        XCTAssertTrue(try outboundQueue.pendingRecords().isEmpty)
+    }
+
     /// An upsert followed by a delete for the same record should
     /// collapse to the delete. Otherwise CloudKit would receive both
     /// an upsert and a delete for the same `CKRecord.ID` in one

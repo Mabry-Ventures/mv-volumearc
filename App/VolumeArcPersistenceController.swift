@@ -67,6 +67,17 @@ final class VolumeArcPersistenceController {
 
         guard try context.fetch(descriptor).isEmpty else { return }
 
+        // VOL-67 Codex P1 (fixup #10): seeded defaults must carry
+        // `Date.distantPast` as their `updatedAt` so any inbound
+        // authoritative profile / plan from CloudKit — even one
+        // written days or weeks ago — wins the `shouldApply`
+        // timestamp comparison and replaces the local defaults. If
+        // we used `Date.now` (the model's default), the fresh
+        // install would advertise itself as "most recently
+        // modified" and subsequent pulls would be dropped as
+        // "local is newer", stranding the user on defaults AND
+        // risking an outbound push that overwrites their real
+        // server copy on the next local edit.
         let defaults = VolumeArcProductDefaults.userProfile
         let profile = UserProfileRecord(
             name: defaults.name,
@@ -77,10 +88,12 @@ final class VolumeArcPersistenceController {
             preferredRepRangeLower: defaults.preferredRepRangeLower,
             preferredRepRangeUpper: defaults.preferredRepRangeUpper,
             sessionTimeBudgetMinutes: defaults.sessionTimeBudgetMinutes,
-            weeklyTrainingDays: defaults.weeklyTrainingDays
+            weeklyTrainingDays: defaults.weeklyTrainingDays,
+            updatedAt: .distantPast
         )
         let trainingPlan = TrainingPlanRecord(
-            workoutsJSON: SyncPayloadCodec.encode(VolumeArcProductDefaults.weeklySchedule) ?? "[]"
+            workoutsJSON: SyncPayloadCodec.encode(VolumeArcProductDefaults.weeklySchedule) ?? "[]",
+            updatedAt: .distantPast
         )
 
         context.insert(profile)
