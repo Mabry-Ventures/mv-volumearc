@@ -45,6 +45,38 @@ public struct CloudSyncRecord: Sendable, Codable {
             default: return nil
             }
         }
+
+        /// Whether this kind stores a single record per user (profile,
+        /// plan) or can have many (workout, memory). Singletons always
+        /// enqueue under `defaultIdentifier` regardless of what
+        /// identifier CloudKit returned on the inbound side, so
+        /// `canonicalQueueIdentifier(_:)` normalizes inbound IDs to
+        /// keep invalidation aligned with queue rows.
+        public var isSingleton: Bool {
+            switch self {
+            case .userProfile, .trainingPlan: return true
+            case .workout, .coachMemory: return false
+            }
+        }
+
+        /// Return the identifier a queue row would have been written
+        /// under for this kind. For singletons, always `defaultIdentifier`
+        /// (regardless of what CloudKit sent). For per-record kinds,
+        /// pass through the inbound identifier unchanged.
+        ///
+        /// VOL-67 Codex P2 (fixup #7): the applier was passing
+        /// `record.identifier` from the inbound CK record directly
+        /// into `invalidateEntries`. For a legacy profile record
+        /// whose `recordName` was `"userProfile"` (the pre-rename
+        /// canonical form), that identifier no longer matched the
+        /// queue row's canonical `"profile"` — so applying the
+        /// legacy record locally didn't clear the stale queued
+        /// upsert, and the next push resent stale state.
+        public func canonicalQueueIdentifier(
+            from inboundIdentifier: String
+        ) -> String {
+            isSingleton ? defaultIdentifier : inboundIdentifier
+        }
     }
 
     public enum Operation: String, Sendable, Codable {
@@ -566,10 +598,21 @@ public struct DefaultSyncPayloadApplier: Sendable {
     @MainActor
     private func applyDeletion(identifier: String) throws {
         // Best-effort fallback for legacy deleted-record callbacks that don't
-        // include a record kind.
+        // include a record kind. The identifier is matched against each
+        // entity store; at most one hit is expected.
         let context = ModelContext(workoutRepository.container)
 
-        if identifier == CloudSyncRecord.Kind.userProfile.defaultIdentifier {
+        // VOL-67 Codex P2 (fixup #7): accept both the current canonical
+        // singleton identifier and the pre-rename legacy long form.
+        // A legacy CK delete callback for "userProfile" must still
+        // resolve to the profile entity and clear the canonical
+        // "profile" queue row.
+        let profileCanonical = CloudSyncRecord.Kind.userProfile.defaultIdentifier
+        let planCanonical = CloudSyncRecord.Kind.trainingPlan.defaultIdentifier
+        let isProfileIdentifier = (identifier == profileCanonical || identifier == "userProfile")
+        let isPlanIdentifier = (identifier == planCanonical || identifier == "trainingPlan")
+
+        if isProfileIdentifier {
             var profileDescriptor = FetchDescriptor<UserProfileRecord>()
             profileDescriptor.fetchLimit = 1
             if let profile = try context.fetch(profileDescriptor).first {
@@ -577,7 +620,7 @@ public struct DefaultSyncPayloadApplier: Sendable {
             }
         }
 
-        if identifier == CloudSyncRecord.Kind.trainingPlan.defaultIdentifier {
+        if isPlanIdentifier {
             var planDescriptor = FetchDescriptor<TrainingPlanRecord>()
             planDescriptor.fetchLimit = 1
             if let plan = try context.fetch(planDescriptor).first {
@@ -608,12 +651,33 @@ public struct DefaultSyncPayloadApplier: Sendable {
         try context.save()
 
         // VOL-67 fixup: the legacy callback doesn't tell us which record
-        // kind the deletion applies to, so sweep the queue for every kind
-        // that matches this identifier. One of them will be a no-op.
-        for kind in CloudSyncRecord.Kind.allCases {
+        // kind the deletion applies to, so sweep the queue for every kind.
+        // For non-singleton kinds (workout, coachMemory), pass the
+        // identifier through. For singletons, sweep the canonical queue
+        // identifier only when the inbound ID looks like that singleton
+        // (so a workout-UUID delete doesn't spuriously clear a queued
+        // profile row).
+        try outboundQueue?.invalidateEntries(
+            recordType: CloudSyncRecord.Kind.workout.rawValue,
+            recordIdentifier: identifier,
+            olderThan: nil
+        )
+        try outboundQueue?.invalidateEntries(
+            recordType: CloudSyncRecord.Kind.coachMemory.rawValue,
+            recordIdentifier: identifier,
+            olderThan: nil
+        )
+        if isProfileIdentifier {
             try outboundQueue?.invalidateEntries(
-                recordType: kind.rawValue,
-                recordIdentifier: identifier,
+                recordType: CloudSyncRecord.Kind.userProfile.rawValue,
+                recordIdentifier: profileCanonical,
+                olderThan: nil
+            )
+        }
+        if isPlanIdentifier {
+            try outboundQueue?.invalidateEntries(
+                recordType: CloudSyncRecord.Kind.trainingPlan.rawValue,
+                recordIdentifier: planCanonical,
                 olderThan: nil
             )
         }
@@ -729,10 +793,14 @@ public struct DefaultSyncPayloadApplier: Sendable {
 
         try context.save()
 
-        // VOL-67 fixup: invalidate stale queued profile writes (see applyWorkout).
+        // VOL-67 fixup: invalidate stale queued profile writes (see
+        // applyWorkout). Singleton kind — normalize the inbound
+        // identifier to the canonical queue form so a legacy CK
+        // record named "userProfile" still invalidates the queued
+        // row stored under "profile".
         try outboundQueue?.invalidateEntries(
             recordType: CloudSyncRecord.Kind.userProfile.rawValue,
-            recordIdentifier: record.identifier,
+            recordIdentifier: CloudSyncRecord.Kind.userProfile.canonicalQueueIdentifier(from: record.identifier),
             olderThan: payload.updatedAt
         )
     }
@@ -764,10 +832,14 @@ public struct DefaultSyncPayloadApplier: Sendable {
 
         try context.save()
 
-        // VOL-67 fixup: invalidate stale queued plan writes (see applyWorkout).
+        // VOL-67 fixup: invalidate stale queued plan writes (see
+        // applyWorkout). Singleton kind — normalize to canonical
+        // queue identifier so a legacy CK record named
+        // "trainingPlan" still clears the queued row stored under
+        // "plan".
         try outboundQueue?.invalidateEntries(
             recordType: CloudSyncRecord.Kind.trainingPlan.rawValue,
-            recordIdentifier: record.identifier,
+            recordIdentifier: CloudSyncRecord.Kind.trainingPlan.canonicalQueueIdentifier(from: record.identifier),
             olderThan: payload.updatedAt
         )
     }
@@ -861,9 +933,12 @@ public struct DefaultSyncPayloadApplier: Sendable {
         // queued upsert to resurrect a record that was deleted on another
         // device. `olderThan: nil` clears the queue slot regardless of
         // timestamp for the exact `(recordType, recordIdentifier)`.
+        // Normalize singleton identifiers to the canonical queue form
+        // so a legacy CK delete for "userProfile" still clears the
+        // queued "profile" row.
         try outboundQueue?.invalidateEntries(
             recordType: record.kind.rawValue,
-            recordIdentifier: record.identifier,
+            recordIdentifier: record.kind.canonicalQueueIdentifier(from: record.identifier),
             olderThan: nil
         )
     }

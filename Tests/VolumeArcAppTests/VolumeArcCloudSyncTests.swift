@@ -834,6 +834,123 @@ final class VolumeArcCloudSyncTests: XCTestCase {
         XCTAssertEqual(decoded.updatedAt.timeIntervalSince1970, startedAtSeconds + 600, accuracy: 0.001)
     }
 
+    // MARK: - VOL-67 Codex P2 (fixup #7): canonicalize singleton IDs
+
+    /// Singleton kinds (`userProfile`, `trainingPlan`) always enqueue
+    /// under the canonical `defaultIdentifier` ("profile" / "plan").
+    /// But a legacy CK inbound record may carry `recordName = "userProfile"`
+    /// instead of `"profile"`. When the applier processed that record
+    /// it used to pass `record.identifier` directly into
+    /// `invalidateEntries`, which never matched the canonically-queued
+    /// row. The test here exercises that exact path: queue a canonical
+    /// profile row, then simulate a legacy-form inbound apply by
+    /// calling `canonicalQueueIdentifier(from: "userProfile")` and
+    /// verifying it resolves to `"profile"` so invalidation matches.
+    func testCanonicalQueueIdentifierNormalizesSingletonLegacyForms() {
+        let profile = CloudSyncRecord.Kind.userProfile
+        let plan = CloudSyncRecord.Kind.trainingPlan
+        let workout = CloudSyncRecord.Kind.workout
+        let memory = CloudSyncRecord.Kind.coachMemory
+
+        // Singletons: any input collapses to defaultIdentifier.
+        XCTAssertEqual(profile.canonicalQueueIdentifier(from: "userProfile"), "profile")
+        XCTAssertEqual(profile.canonicalQueueIdentifier(from: "profile"), "profile")
+        XCTAssertEqual(profile.canonicalQueueIdentifier(from: "random-uuid"), "profile")
+        XCTAssertEqual(plan.canonicalQueueIdentifier(from: "trainingPlan"), "plan")
+        XCTAssertEqual(plan.canonicalQueueIdentifier(from: "plan"), "plan")
+
+        // Non-singletons: pass through.
+        let workoutID = UUID().uuidString
+        XCTAssertEqual(workout.canonicalQueueIdentifier(from: workoutID), workoutID)
+        let memoryID = UUID().uuidString
+        XCTAssertEqual(memory.canonicalQueueIdentifier(from: memoryID), memoryID)
+
+        XCTAssertTrue(profile.isSingleton)
+        XCTAssertTrue(plan.isSingleton)
+        XCTAssertFalse(workout.isSingleton)
+        XCTAssertFalse(memory.isSingleton)
+    }
+
+    /// End-to-end: queue a canonical profile row ("profile"), apply a
+    /// simulated inbound record with a legacy recordIdentifier
+    /// ("userProfile"), verify the queued row is invalidated via the
+    /// applier's `invalidateEntries` path.
+    func testApplierInvalidatesCanonicalProfileRowFromLegacyInboundIdentifier() async throws {
+        let baselineTimestamp = Date(timeIntervalSince1970: 1_720_140_000)
+
+        // Queue a canonical profile upsert. Payload JSON is constructed
+        // via the legacy-field synthesis helper so we get a correctly
+        // envelope-wrapped payload the applier can decode.
+        let queuedJSON = try XCTUnwrap(SyncPayloadCodec.synthesizeLegacyPayloadJSON(
+            kind: .userProfile,
+            fields: [
+                "name": "Queued Stale",
+                "coachingStyle": "motivational",
+                "privacyMode": "standard",
+                "advancementLevel": "intermediate",
+                "availableEquipmentCSV": "barbell",
+                "preferredRepRangeLower": 5,
+                "preferredRepRangeUpper": 8,
+                "sessionTimeBudgetMinutes": 60,
+                "weeklyTrainingDays": 4,
+                "onboardingCompleted": true,
+                "updatedAt": baselineTimestamp,
+            ]
+        ))
+        try outboundQueue.enqueue(
+            recordType: CloudSyncRecord.Kind.userProfile.rawValue, // "profile"
+            recordIdentifier: CloudSyncRecord.Kind.userProfile.defaultIdentifier, // "profile"
+            operation: CloudSyncRecord.Operation.upsert.rawValue,
+            payloadJSON: queuedJSON,
+            queuedAt: baselineTimestamp
+        )
+        XCTAssertEqual(try outboundQueue.pendingRecords().count, 1)
+
+        // Build an inbound record with the LEGACY identifier form
+        // ("userProfile" instead of canonical "profile") but a newer
+        // timestamp, as if it came from a pre-rename peer device.
+        let newerTimestamp = baselineTimestamp.addingTimeInterval(300)
+        let inboundJSON = try XCTUnwrap(SyncPayloadCodec.synthesizeLegacyPayloadJSON(
+            kind: .userProfile,
+            fields: [
+                "name": "Winner",
+                "coachingStyle": "motivational",
+                "privacyMode": "standard",
+                "advancementLevel": "intermediate",
+                "availableEquipmentCSV": "barbell",
+                "preferredRepRangeLower": 5,
+                "preferredRepRangeUpper": 8,
+                "sessionTimeBudgetMinutes": 60,
+                "weeklyTrainingDays": 4,
+                "onboardingCompleted": true,
+                "updatedAt": newerTimestamp,
+            ]
+        ))
+        let legacyInbound = CloudSyncRecord(
+            kind: .userProfile,
+            identifier: "userProfile", // legacy long-form
+            operation: .upsert,
+            payloadJSON: inboundJSON,
+            modifiedAt: newerTimestamp
+        )
+
+        // Apply it — the applier must:
+        // 1. Update the local profile store to the winner state
+        // 2. Invalidate the queued "profile" row even though the
+        //    inbound identifier was "userProfile"
+        let applier = makeApplier(container: container, outboundQueue: outboundQueue)
+        try await applier.apply(result: CloudSyncPullResult(
+            changedRecords: [legacyInbound],
+            deletedRecordIDs: [],
+            nextCursor: nil
+        ))
+
+        // Queue should now be empty — the stale canonical row was
+        // invalidated via the legacy inbound identifier.
+        XCTAssertTrue(try outboundQueue.pendingRecords().isEmpty,
+                      "Canonical profile queue row must be invalidated when a legacy 'userProfile' record is applied")
+    }
+
     /// Codex P2 (fixup #5): the queue's `invalidateEntries` must
     /// collapse legacy long-form row recordTypes (`userProfile`,
     /// `trainingPlan`, `coachMemory`) and current short-form call

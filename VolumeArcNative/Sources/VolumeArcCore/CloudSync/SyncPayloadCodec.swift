@@ -16,6 +16,32 @@ public enum SyncPayloadCodec {
         public let weeklyTrainingDays: Int
         public let onboardingCompleted: Bool
         public let updatedAt: Date
+
+        public init(
+            name: String,
+            coachingStyle: String,
+            privacyMode: String,
+            advancementLevel: String,
+            availableEquipmentCSV: String,
+            preferredRepRangeLower: Int,
+            preferredRepRangeUpper: Int,
+            sessionTimeBudgetMinutes: Int,
+            weeklyTrainingDays: Int,
+            onboardingCompleted: Bool,
+            updatedAt: Date
+        ) {
+            self.name = name
+            self.coachingStyle = coachingStyle
+            self.privacyMode = privacyMode
+            self.advancementLevel = advancementLevel
+            self.availableEquipmentCSV = availableEquipmentCSV
+            self.preferredRepRangeLower = preferredRepRangeLower
+            self.preferredRepRangeUpper = preferredRepRangeUpper
+            self.sessionTimeBudgetMinutes = sessionTimeBudgetMinutes
+            self.weeklyTrainingDays = weeklyTrainingDays
+            self.onboardingCompleted = onboardingCompleted
+            self.updatedAt = updatedAt
+        }
     }
 
     public struct WorkoutPayload: Codable, Equatable, Sendable {
@@ -30,17 +56,54 @@ public enum SyncPayloadCodec {
         public let completedSetCount: Int
         public let summary: String
         public let updatedAt: Date
+
+        public init(
+            title: String,
+            startedAt: Date,
+            completedAt: Date?,
+            durationMinutes: Int,
+            exerciseIDsCSV: String,
+            setsJSON: String,
+            totalVolumeLoad: Double,
+            averageRPE: Double,
+            completedSetCount: Int,
+            summary: String,
+            updatedAt: Date
+        ) {
+            self.title = title
+            self.startedAt = startedAt
+            self.completedAt = completedAt
+            self.durationMinutes = durationMinutes
+            self.exerciseIDsCSV = exerciseIDsCSV
+            self.setsJSON = setsJSON
+            self.totalVolumeLoad = totalVolumeLoad
+            self.averageRPE = averageRPE
+            self.completedSetCount = completedSetCount
+            self.summary = summary
+            self.updatedAt = updatedAt
+        }
     }
 
     public struct TrainingPlanPayload: Codable, Equatable, Sendable {
         public let workoutsJSON: String
         public let updatedAt: Date
+
+        public init(workoutsJSON: String, updatedAt: Date) {
+            self.workoutsJSON = workoutsJSON
+            self.updatedAt = updatedAt
+        }
     }
 
     public struct CoachMemoryPayload: Codable, Equatable, Sendable {
         public let content: String
         public let theme: String
         public let createdAt: Date
+
+        public init(content: String, theme: String, createdAt: Date) {
+            self.content = content
+            self.theme = theme
+            self.createdAt = createdAt
+        }
     }
 
     private struct UserProfileEnvelope: Codable, Equatable, Sendable {
