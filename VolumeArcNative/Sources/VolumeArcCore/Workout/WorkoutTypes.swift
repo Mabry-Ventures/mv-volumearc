@@ -134,21 +134,30 @@ public struct WatchWorkoutSyncPayload: Codable, Sendable {
 
 public struct AthleteProfile: Sendable {
     public let name: String
+    public let coachingStyle: CoachingStyle
+    public let privacyMode: PrivacyMode
     public let advancementLevel: AdvancementLevel
     public let availableEquipment: Set<Equipment>
+    public let sessionTimeBudgetMinutes: Int
     public let weeklyTrainingDays: Int
     public let preferredRepRange: ClosedRange<Int>
 
     public init(
         name: String,
+        coachingStyle: CoachingStyle = .motivational,
+        privacyMode: PrivacyMode = .standard,
         advancementLevel: AdvancementLevel = .intermediate,
         availableEquipment: Set<Equipment> = [.barbell, .dumbbell, .machine, .bodyweight],
+        sessionTimeBudgetMinutes: Int = 60,
         weeklyTrainingDays: Int = 4,
         preferredRepRange: ClosedRange<Int> = 5...8
     ) {
         self.name = name
+        self.coachingStyle = coachingStyle
+        self.privacyMode = privacyMode
         self.advancementLevel = advancementLevel
         self.availableEquipment = availableEquipment
+        self.sessionTimeBudgetMinutes = sessionTimeBudgetMinutes
         self.weeklyTrainingDays = weeklyTrainingDays
         self.preferredRepRange = preferredRepRange
     }

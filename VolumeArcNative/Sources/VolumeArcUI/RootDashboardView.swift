@@ -65,6 +65,26 @@ public struct RootDashboardView: View {
         .vaToastOverlay(toastPresenter)
         .task {
             await model.refresh()
+            navigation.showOnboarding = model.hasLoadedInitialData && !model.isOnboardingComplete
+        }
+        .fullScreenCover(isPresented: $navigation.showOnboarding) {
+            OnboardingView(isPresented: $navigation.showOnboarding) { result in
+                Task {
+                    // VOL-57 fixup: only `updateProfile` here; the
+                    // `.onChange(of: model.isOnboardingComplete)` below is
+                    // the single source of truth for dismissing the cover.
+                    // If `updateProfile` silently fails (SwiftData save
+                    // error), `isOnboardingComplete` stays false, the cover
+                    // stays up, and the user can retry. Unconditionally
+                    // dismissing here let users bypass the first-run gate
+                    // whenever the profile save happened to fail.
+                    await model.updateProfile(result.toDefaults())
+                }
+            }
+        }
+        .onChange(of: model.isOnboardingComplete) { _, isComplete in
+            guard model.hasLoadedInitialData else { return }
+            navigation.showOnboarding = !isComplete
         }
         .onChange(of: navigation.selectedTab) { _, _ in
             VAHaptics.selection()

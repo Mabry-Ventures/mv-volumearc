@@ -37,6 +37,7 @@ public struct OnboardingView: View {
             )
             .ignoresSafeArea()
         )
+        .accessibilityIdentifier("onboarding.root")
     }
 
     // MARK: - Progress bar
@@ -344,7 +345,6 @@ public struct OnboardingView: View {
                 VAHaptics.tap()
                 if step == .done {
                     onComplete(result)
-                    isPresented = false
                 } else {
                     withAnimation(VAAnimation.standard) {
                         step = Step(rawValue: step.rawValue + 1) ?? .done

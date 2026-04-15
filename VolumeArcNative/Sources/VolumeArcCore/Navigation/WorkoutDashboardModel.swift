@@ -55,7 +55,7 @@ public final class WorkoutDashboardModel: ObservableObject {
 
     #if canImport(StoreKit)
     private let syncEngine: CloudSyncCoordinator?
-    private let subscriptionStore: StoreKitSubscriptionStore?
+    public let subscriptionStore: StoreKitSubscriptionStore?
     #endif
 
     private var activeWorkoutID: String?
@@ -310,24 +310,21 @@ public final class WorkoutDashboardModel: ObservableObject {
     }
 
     /// End the currently active workout session.
-    public func completeWorkoutSession() async {
+    @discardableResult
+    public func completeWorkoutSession() async -> RecentSession? {
         #if canImport(SwiftData)
-        guard let workoutRepository, let workoutID = activeWorkoutID else { return }
+        guard let workoutRepository, let workoutID = activeWorkoutID else { return nil }
+
+        // VOL-57 fixup: `completeWorkout` succeeds as a discrete step.
+        // Previously the snapshot fetch was inside the same do-block, so
+        // any SwiftData fetch error on the read thrown after the write
+        // routed through the catch and skipped teardown — leaving the
+        // UI in an "active session" state for a workout that was already
+        // persisted as complete, and surfacing a false failure event.
+        // Split the two: a failed write is a real completion failure;
+        // a failed read is best-effort and must not block teardown.
         do {
             try workoutRepository.completeWorkout(identifier: workoutID)
-            self.activeWorkoutID = nil
-            self.activeWorkoutTitle = nil
-            self.isSessionActive = false
-            self.loggedSetCountThisSession = 0
-
-            telemetrySink.record(TelemetryEvent(
-                category: "workout",
-                name: "session_completed",
-                severity: .info,
-                message: "Completed workout"
-            ))
-
-            await refresh()
         } catch {
             telemetrySink.record(TelemetryEvent(
                 category: "workout",
@@ -335,7 +332,36 @@ public final class WorkoutDashboardModel: ObservableObject {
                 severity: .error,
                 message: error.localizedDescription
             ))
+            return nil
         }
+
+        // Completion has persisted — tear down the session state
+        // unconditionally so the UI reflects reality even if the
+        // snapshot read below fails.
+        self.activeWorkoutID = nil
+        self.activeWorkoutTitle = nil
+        self.isSessionActive = false
+        self.loggedSetCountThisSession = 0
+
+        telemetrySink.record(TelemetryEvent(
+            category: "workout",
+            name: "session_completed",
+            severity: .info,
+            message: "Completed workout"
+        ))
+
+        // Best-effort snapshot read for the return value. Completion
+        // already succeeded and teardown already ran, so a fetch error
+        // here is not a failure of the operation — just a missing
+        // return payload.
+        let completedSession = (try? workoutRepository.workout(withIdentifier: workoutID))
+            .flatMap { $0 }
+            .map(Self.recentSession)
+
+        await refresh()
+        return completedSession
+        #else
+        return nil
         #endif
     }
 
@@ -503,7 +529,7 @@ public final class WorkoutDashboardModel: ObservableObject {
             recentMemories: memories
         )
 
-        return context.asPromptBlock(privacyMode: .standard)
+        return context.asPromptBlock(privacyMode: athlete.privacyMode)
     }
 
     /// Pattern-match the user's prompt to infer a memory theme for organization.
@@ -583,6 +609,19 @@ public final class WorkoutDashboardModel: ObservableObject {
         ))
         await refresh()
     }
+
+    #if canImport(SwiftData)
+    private static func recentSession(from workout: WorkoutRecord) -> RecentSession {
+        RecentSession(
+            date: workout.completedAt ?? workout.startedAt,
+            durationMinutes: workout.durationMinutes,
+            exerciseIDs: workout.exerciseIDsCSV.split(separator: ",").map(String.init),
+            totalVolumeLoad: workout.totalVolumeLoad,
+            averageRPE: workout.averageRPE,
+            completedSetCount: workout.completedSetCount
+        )
+    }
+    #endif
 }
 
 // MARK: - Coach message model

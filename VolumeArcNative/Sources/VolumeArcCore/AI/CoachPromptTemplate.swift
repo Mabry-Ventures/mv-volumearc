@@ -106,13 +106,15 @@ public struct CoachContext: Sendable {
         if let nextExercise, let nextTarget {
             lines.append("- Next up: \(nextExercise) at \(nextTarget)")
         }
-        if recentSessionCount > 0 {
-            lines.append("- Last 7 days: \(recentSessionCount) sessions, avg RPE \(String(format: "%.1f", averageRPE))")
-        } else {
-            lines.append("- No recent sessions logged")
-        }
-        if let lastSessionSummary {
-            lines.append("- Last session: \(lastSessionSummary)")
+        if privacyMode == .standard {
+            if recentSessionCount > 0 {
+                lines.append("- Last 7 days: \(recentSessionCount) sessions, avg RPE \(String(format: "%.1f", averageRPE))")
+            } else {
+                lines.append("- No recent sessions logged")
+            }
+            if let lastSessionSummary {
+                lines.append("- Last session: \(lastSessionSummary)")
+            }
         }
 
         if privacyMode == .standard && !recentMemories.isEmpty {

@@ -18,21 +18,32 @@ extension Notification.Name {
 /// Launch argument flags the app respects at startup. XCUITests set these
 /// to produce deterministic state.
 enum VolumeArcLaunchArguments {
+    private static func flagEnabled(_ flag: String) -> Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: flag) else { return false }
+
+        let nextIndex = arguments.index(after: index)
+        guard nextIndex < arguments.endIndex else { return true }
+
+        let rawValue = arguments[nextIndex]
+        guard rawValue.hasPrefix("-") == false else { return true }
+        return rawValue != "0"
+    }
+
     /// `-UITestMode 1` — disables analytics, skips permission prompts, seeds
     /// deterministic state, and exposes accessibility identifiers on UI.
     static var isUITestMode: Bool {
-        ProcessInfo.processInfo.arguments.contains("-UITestMode") &&
-            ProcessInfo.processInfo.environment["UITestMode"] != "0"
+        flagEnabled("-UITestMode")
     }
 
     /// `-SkipOnboarding 1` — skips the onboarding flow and seeds defaults.
     static var skipOnboarding: Bool {
-        ProcessInfo.processInfo.arguments.contains("-SkipOnboarding")
+        flagEnabled("-SkipOnboarding")
     }
 
     /// `-SeedFixtures 1` — seeds the persistence layer with demo fixture data.
     static var seedFixtures: Bool {
-        ProcessInfo.processInfo.arguments.contains("-SeedFixtures")
+        flagEnabled("-SeedFixtures")
     }
 }
 
@@ -49,6 +60,7 @@ struct VolumeArcApp: App {
     #endif
 
     init() {
+        VolumeArcRuntimeFlags.isDeterministicMode = VolumeArcLaunchArguments.isUITestMode
         #if canImport(Sentry)
         VolumeArcSentryConfiguration.bootstrapIfNeeded()
         #endif
@@ -60,6 +72,29 @@ struct VolumeArcApp: App {
         #endif
         #if canImport(SwiftData)
         let persistence = VolumeArcPersistenceController.shared
+        if let container = persistence.container {
+            do {
+                try VolumeArcLaunchBootstrapper.applyLaunchArguments(
+                    to: container,
+                    isUITestMode: VolumeArcLaunchArguments.isUITestMode,
+                    skipOnboarding: VolumeArcLaunchArguments.skipOnboarding,
+                    seedFixtures: VolumeArcLaunchArguments.seedFixtures
+                )
+            } catch {
+                // Surface bootstrap failure rather than silently swallowing
+                // it with `try?`. A broken deterministic-mode seed will
+                // otherwise cause flaky, non-reproducible test behavior and
+                // hide the root cause.
+                NSLog(
+                    "[VolumeArc] Launch bootstrap failed: %@ (isUITestMode=%@, skipOnboarding=%@, seedFixtures=%@)",
+                    error.localizedDescription,
+                    String(describing: VolumeArcLaunchArguments.isUITestMode),
+                    String(describing: VolumeArcLaunchArguments.skipOnboarding),
+                    String(describing: VolumeArcLaunchArguments.seedFixtures)
+                )
+                assertionFailure("Launch bootstrap failed: \(error)")
+            }
+        }
         #endif
         let aiProvider = VolumeArcAIRuntimeFactory.makeCoachProvider()
         let voiceCoach = VolumeArcAIRuntimeFactory.makeVoiceCoach()
@@ -188,7 +223,9 @@ struct VolumeArcApp: App {
                 #if canImport(UserNotifications)
                 let scheduler = VolumeArcNotificationScheduler()
                 scheduler.registerCategories()
-                _ = await scheduler.requestPermissionIfNeeded()
+                if !VolumeArcRuntimeFlags.isDeterministicMode {
+                    _ = await scheduler.requestPermissionIfNeeded()
+                }
                 #endif
                 #if canImport(Network)
                 Self.startNetworkReachabilityMonitor()
@@ -482,6 +519,10 @@ struct VolumeArcApp: App {
     }
 
     private static func makeTelemetrySink(initialEvents: [TelemetryEvent] = []) -> TelemetrySink {
+        if VolumeArcRuntimeFlags.isDeterministicMode {
+            return InMemoryTelemetrySink(events: initialEvents)
+        }
+
         let persistent = UserDefaultsTelemetrySink()
         var sinks: [TelemetrySink] = []
         if initialEvents.isEmpty == false {

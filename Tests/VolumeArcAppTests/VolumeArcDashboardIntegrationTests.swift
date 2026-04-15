@@ -160,6 +160,54 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertTrue(recent.allSatisfy { $0.completedSetCount == 1 })
     }
 
+    func testCompleteWorkoutSessionReturnsFreshSnapshotForNewSession() async throws {
+        // Use a fictitious exercise + an unusual rep count so the value can't
+        // collide with whatever the autopilot recommends for the new session.
+        let previousDuration = 42
+        let previousVolume: Double = 12_345
+
+        let previous = try workoutRepository.createWorkout(
+            title: "Previous Session",
+            startedAt: .now.addingTimeInterval(TimeInterval(-(previousDuration * 60)))
+        )
+        try workoutRepository.appendSet(
+            WorkoutSetPerformance(weight: 12_345, reps: 1, rpe: 9, completedAt: .now.addingTimeInterval(-300)),
+            forExercise: "back-squat",
+            to: previous.identifier
+        )
+        try workoutRepository.completeWorkout(identifier: previous.identifier)
+
+        let model = makeDashboardModel()
+        await model.refresh()
+
+        await model.startWorkoutSession()
+        let expectedTarget = model.autopilot?.nextTarget
+        await model.logRecommendedSet()
+
+        let completed = await model.completeWorkoutSession()
+        let snapshot = try XCTUnwrap(completed)
+        XCTAssertEqual(snapshot.completedSetCount, 1, "The returned snapshot should describe the session that just completed")
+        XCTAssertNotEqual(snapshot.totalVolumeLoad, previousVolume, "The snapshot should not reuse the previous session's total volume")
+        XCTAssertNotEqual(snapshot.durationMinutes, previousDuration, "The snapshot should not reuse the previous session's duration")
+
+        if let expectedTarget {
+            XCTAssertEqual(
+                snapshot.totalVolumeLoad,
+                expectedTarget.weight * Double(expectedTarget.repRange.lowerBound),
+                accuracy: 0.01,
+                "The returned snapshot should use the just-logged set metrics"
+            )
+        }
+
+        let publishedVolume = try XCTUnwrap(model.recentSessions.first?.totalVolumeLoad)
+        XCTAssertEqual(
+            publishedVolume,
+            snapshot.totalVolumeLoad,
+            accuracy: 0.01,
+            "Refresh should publish the same freshly completed session the method returned"
+        )
+    }
+
     // MARK: - Profile + onboarding
 
     func testUpsertProfilePersistsValues() throws {
@@ -202,6 +250,77 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertTrue(try userProfileRepository.isOnboardingComplete())
     }
 
+    // MARK: - Paywall / subscription wiring (VOL-58)
+
+    /// VOL-58 verification: the dashboard model exposes a non-nil
+    /// `subscriptionStore` that `ProfileView` can pass into `PaywallView`.
+    /// This is the integration-level stand-in for the XCUITest that was
+    /// deferred because SwiftUI Form cells in iOS 26 don't reliably
+    /// surface inner `accessibilityIdentifier`s. The XCUITest would have
+    /// verified the end-to-end tap → sheet flow; this test verifies the
+    /// state binding that makes that flow possible.
+    func testDashboardModelExposesSubscriptionStoreForPaywall() {
+        let model = makeDashboardModel()
+        XCTAssertNotNil(
+            model.subscriptionStore,
+            "ProfileView's paywall sheet binds to model.subscriptionStore — if this is nil, tapping Upgrade is a no-op"
+        )
+
+        // If the compiler accepts this expression, the paywall wiring is
+        // type-compatible with the view layer. The integration test
+        // documents the contract even though SwiftUI views are hard to
+        // instantiate in XCTest without ViewInspector.
+        let store = try? XCTUnwrap(model.subscriptionStore)
+        XCTAssertNotNil(store, "StoreKit subscription store must be available")
+    }
+
+    func testStrictPrivacyModeRedactsCoachContext() async throws {
+        let store = CapturedContextStore()
+        let provider = CapturingCoachProvider(store: store)
+        let model = makeDashboardModel(aiProvider: provider)
+
+        try userProfileRepository.upsertProfile(
+            UserProfileDefaults(
+                name: "Jane Lifter",
+                coachingStyle: .analytical,
+                privacyMode: .strict,
+                advancementLevel: .advanced,
+                availableEquipment: [.barbell, .dumbbell],
+                preferredRepRangeLower: 3,
+                preferredRepRangeUpper: 6,
+                sessionTimeBudgetMinutes: 75,
+                weeklyTrainingDays: 5
+            )
+        )
+        try userProfileRepository.markOnboardingComplete()
+        try coachMemoryRepository.append(
+            content: "Last session Jane reported the bench press felt unusually heavy.",
+            theme: "bench"
+        )
+
+        let workout = try workoutRepository.createWorkout(
+            title: "Bench Day",
+            startedAt: .now.addingTimeInterval(-(75 * 60))
+        )
+        try workoutRepository.appendSet(
+            WorkoutSetPerformance(weight: 185, reps: 4, rpe: 8.5, completedAt: .now.addingTimeInterval(-600)),
+            forExercise: "bench-press",
+            to: workout.identifier
+        )
+        try workoutRepository.completeWorkout(identifier: workout.identifier)
+
+        await model.refresh()
+        await model.askCoach("How should I approach today's top set?")
+
+        let captured = await store.get()
+        let context = try XCTUnwrap(captured)
+        XCTAssertTrue(context.contains("Readiness:"), "Strict mode should still preserve useful training context")
+        XCTAssertFalse(context.contains("Jane Lifter"), "Strict mode should redact the athlete's name")
+        XCTAssertFalse(context.contains("Last 7 days:"), "Strict mode should strip recent history summaries")
+        XCTAssertFalse(context.contains("Last session:"), "Strict mode should strip the previous session summary")
+        XCTAssertFalse(context.contains("Recent coaching notes"), "Strict mode should strip stored coaching memories")
+    }
+
     // MARK: - Coach memory
 
     func testCoachMemoryAppendAndProject() throws {
@@ -229,6 +348,49 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         let fetched = try trainingPlanRepository.weeklyWorkouts()
         XCTAssertEqual(fetched.count, 3)
         XCTAssertEqual(fetched.map(\.title), plan.map(\.title))
+    }
+
+    private func makeDashboardModel(
+        aiProvider: any AICoachProvider = LocalHeuristicAICoachProvider()
+    ) -> WorkoutDashboardModel {
+        WorkoutDashboardModel(
+            aiProvider: aiProvider,
+            syncEngine: CloudSyncCoordinator(
+                transport: UnavailableCloudSyncTransport(reason: "Integration tests do not sync"),
+                stateStore: FileSyncStateStore(
+                    url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                )
+            ),
+            repository: workoutRepository,
+            coachMemoryRepository: coachMemoryRepository,
+            userProfileRepository: userProfileRepository,
+            trainingPlanRepository: trainingPlanRepository,
+            accountSessionStore: UserDefaultsAccountSessionStore(),
+            voicePermissionStore: UnavailableVoicePermissionStore(),
+            healthStore: UnavailableHealthStore(),
+            notificationStore: InMemoryNotificationStore(),
+            telemetrySink: InMemoryTelemetrySink(),
+            surfaceStore: UserDefaultsPlatformSurfaceStateStore(),
+            subscriptionStore: StoreKitSubscriptionStore(productIDs: []),
+            voiceCoach: LiveVoiceCoachOrchestrator(
+                transport: OpenAIRelayVoiceTransport(provider: aiProvider)
+            )
+        )
+    }
+}
+
+private actor CapturedContextStore {
+    private var context: String?
+    func set(_ value: String) { context = value }
+    func get() -> String? { context }
+}
+
+private struct CapturingCoachProvider: AICoachProvider, Sendable {
+    let store: CapturedContextStore
+
+    func coachResponse(for prompt: String, context: String) async throws -> String {
+        await store.set(context)
+        return "Captured"
     }
 }
 #endif

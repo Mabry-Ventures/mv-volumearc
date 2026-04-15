@@ -58,25 +58,44 @@ public struct ProfileView: View {
             }
 
             Section(String(localized: "Premium", comment: "Profile tab section header — subscription")) {
-                Button {
+                // Intentionally NOT a SwiftUI Button. Button inside Form
+                // wraps itself as a cell with combined accessibility, and
+                // across SwiftUI runtime revisions the inner
+                // `accessibilityIdentifier` gets swallowed by the cell,
+                // which made the Upgrade row unqueryable from XCUITest.
+                // Using an HStack with `onTapGesture` keeps the row tappable
+                // with the exact same UX but lets us pin the accessibility
+                // identifier and label directly on the tap target.
+                HStack {
+                    Label(
+                        String(localized: "Upgrade", comment: "Profile button — open the paywall"),
+                        systemImage: "sparkles"
+                    )
+                    .foregroundStyle(VA.Colors.primary)
+                    Spacer()
+                    Text(String(
+                        localized: "Monthly / Yearly",
+                        comment: "Profile upgrade row subtitle — available billing periods"
+                    ))
+                    .font(.caption)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
                     VAHaptics.tap()
                     isShowingPaywall = true
-                } label: {
-                    HStack {
-                        Label(
-                            String(localized: "Upgrade", comment: "Profile button — open the paywall"),
-                            systemImage: "sparkles"
-                        )
-                        .foregroundStyle(VA.Colors.primary)
-                        Spacer()
-                        Text(String(
-                            localized: "Monthly / Yearly",
-                            comment: "Profile upgrade row subtitle — available billing periods"
-                        ))
-                        .font(.caption)
-                        .foregroundStyle(VA.Colors.textSecondary)
-                    }
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("profile.upgrade")
+                .accessibilityLabel(String(
+                    localized: "Upgrade to Premium",
+                    comment: "VoiceOver label for the upgrade row"
+                ))
+                .accessibilityHint(String(
+                    localized: "Opens the paywall to start a Premium subscription",
+                    comment: "VoiceOver hint for the upgrade row"
+                ))
+                .accessibilityAddTraits(.isButton)
             }
 
             Section(String(localized: "App", comment: "Profile tab section header — app-level settings")) {
@@ -117,10 +136,23 @@ public struct ProfileView: View {
         .sheet(isPresented: $isEditingProfile) {
             EditProfileView(
                 isPresented: $isEditingProfile,
-                athlete: model.athlete
+                athlete: model.athlete,
+                coachingStyle: model.athlete.coachingStyle,
+                privacyMode: model.athlete.privacyMode,
+                sessionMinutes: model.athlete.sessionTimeBudgetMinutes
             ) { defaults in
                 Task {
                     await model.updateProfile(defaults)
+                }
+            }
+        }
+        .sheet(isPresented: $isShowingPaywall) {
+            Group {
+                if let subscriptionStore = model.subscriptionStore {
+                    PaywallView(
+                        subscriptionStore: subscriptionStore,
+                        isPresented: $isShowingPaywall
+                    )
                 }
             }
         }
