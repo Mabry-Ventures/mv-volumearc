@@ -2,6 +2,27 @@
 import Foundation
 import SwiftData
 
+/// VOL-67 Codex P2 (fixup #28): thrown by repository `stageUpsert`
+/// helpers when `SyncPayloadCodec.encode*Payload(from:)` returns nil
+/// for a primary record mutation — i.e., the record can't be
+/// serialized to a valid outbound queue payload (malformed fields,
+/// non-finite `Double`, etc.). The caller must propagate this error
+/// up to the repository method's `throws` signature so `context.save()`
+/// never runs and the primary record mutation is rolled back along
+/// with the queue row insertion, guaranteeing atomic "record + queue
+/// row" semantics. Without this, a local write could commit without
+/// its corresponding outbound row and silently never sync.
+public enum OutboundQueueStagingError: Error, LocalizedError {
+    case payloadEncodingFailed(recordType: String, recordIdentifier: String)
+
+    public var errorDescription: String? {
+        switch self {
+        case let .payloadEncodingFailed(recordType, recordIdentifier):
+            return "Failed to encode outbound queue payload for \(recordType) \(recordIdentifier); refusing to commit local write without a matching sync row."
+        }
+    }
+}
+
 @Model
 public final class OutboundSyncQueueRecord {
     public var id: UUID = UUID()

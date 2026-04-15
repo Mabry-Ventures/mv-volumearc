@@ -121,7 +121,38 @@ struct VolumeArcApp: App {
         #endif
         #if canImport(SwiftData)
         if let container = persistence.container {
-            let outboundQueue = SwiftDataOutboundSyncQueue(container: container)
+            // VOL-67 Codex P1 (fixup #28): gate the entire outbound
+            // sync pipeline on `.cloudSynced` storage mode. Fallback
+            // containers (`.localFallback`, `.inMemoryFallback`) are a
+            // DIFFERENT SQLite file than the cloud-backed store — they
+            // start empty, get populated by `seedIfNeeded`, and must
+            // NEVER push to CloudKit. Otherwise a transient fallback
+            // launch on a device that previously synced successfully
+            // would use its persisted cursor to push seeded/default
+            // fallback state up to CloudKit, overwriting authoritative
+            // cloud data another device wrote.
+            //
+            // Fixup #22 gated the backfill on this same mode, but the
+            // sync engine + repository outbound queue were still wired
+            // through the real transport whenever a container existed,
+            // so every repository mutation in fallback mode could still
+            // enqueue outbound rows and those rows could reach CloudKit
+            // on the next sync cycle. This fixup closes the remaining
+            // leak by using `NoOpOutboundSyncQueue` + `UnavailableCloudSyncTransport`
+            // in fallback modes, so local writes stay local and the
+            // coordinator reports `isAvailable == false` for pulls.
+            let isCloudSynced = persistence.bootstrapStatus.storageMode == .cloudSynced
+            let outboundQueue: any OutboundSyncQueue
+            let effectiveTransport: CloudSyncTransport
+            if isCloudSynced {
+                outboundQueue = SwiftDataOutboundSyncQueue(container: container)
+                effectiveTransport = syncTransport
+            } else {
+                outboundQueue = NoOpOutboundSyncQueue()
+                effectiveTransport = UnavailableCloudSyncTransport(
+                    reason: "Storage mode is \(persistence.bootstrapStatus.storageMode.rawValue); outbound sync is disabled until cloud-backed persistence is available."
+                )
+            }
             let repository = SwiftDataWorkoutRepository(container: container, outboundQueue: outboundQueue)
             let coachMemoryRepository = SwiftDataCoachMemoryRepository(container: container, outboundQueue: outboundQueue)
             let userProfileRepository = SwiftDataUserProfileRepository(container: container, outboundQueue: outboundQueue)
@@ -141,7 +172,7 @@ struct VolumeArcApp: App {
             // in production and unparseable queue rows look like they
             // vanished into the void.
             let syncEngine = CloudSyncCoordinator(
-                transport: syncTransport,
+                transport: effectiveTransport,
                 payloadApplier: syncApplier,
                 stateStore: syncStateStore,
                 outboundQueue: outboundQueue,

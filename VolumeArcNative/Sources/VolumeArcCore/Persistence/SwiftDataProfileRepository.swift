@@ -57,7 +57,7 @@ public struct SwiftDataUserProfileRepository: Sendable {
             target = record
         }
 
-        stageUpsert(for: target, into: context)
+        try stageUpsert(for: target, into: context)
         try context.save()
     }
 
@@ -70,7 +70,7 @@ public struct SwiftDataUserProfileRepository: Sendable {
         guard let profile = try context.fetch(descriptor).first else { return }
         profile.onboardingCompleted = true
         profile.updatedAt = .now
-        stageUpsert(for: profile, into: context)
+        try stageUpsert(for: profile, into: context)
         try context.save()
     }
 
@@ -142,7 +142,7 @@ public struct SwiftDataTrainingPlanRepository: Sendable {
             target = record
         }
 
-        stageUpsert(for: target, into: context)
+        try stageUpsert(for: target, into: context)
         try context.save()
     }
 
@@ -189,7 +189,7 @@ public struct SwiftDataCoachMemoryRepository: Sendable {
         let context = ModelContext(container)
         let record = CoachMemoryRecord(content: content, theme: theme)
         context.insert(record)
-        stageUpsert(for: record, into: context)
+        try stageUpsert(for: record, into: context)
         try context.save()
     }
 
@@ -295,10 +295,24 @@ public struct SwiftDataCoachMemoryRepository: Sendable {
 // the pattern: insert/modify record → stageUpsert → `context.save()` —
 // so a queue write failure can't leave the primary record persisted
 // without its sync row.
+// VOL-67 Codex P2 (fixup #28): all three staging helpers throw
+// `OutboundQueueStagingError.payloadEncodingFailed` when the record
+// can't be serialized. Before the fix they silently returned,
+// letting the caller commit the primary record change without a
+// matching queue row — local write persisted but never sync'd. Now
+// the error aborts the enclosing repository method before
+// `context.save()` runs, rolling back both the record mutation
+// and the queue row (because neither was saved) and surfacing
+// the failure to the caller.
 extension SwiftDataUserProfileRepository {
     @MainActor
-    fileprivate func stageUpsert(for profile: UserProfileRecord, into context: ModelContext) {
-        guard let payloadJSON = SyncPayloadCodec.encodeUserProfilePayload(from: profile) else { return }
+    fileprivate func stageUpsert(for profile: UserProfileRecord, into context: ModelContext) throws {
+        guard let payloadJSON = SyncPayloadCodec.encodeUserProfilePayload(from: profile) else {
+            throw OutboundQueueStagingError.payloadEncodingFailed(
+                recordType: CloudSyncRecord.Kind.userProfile.rawValue,
+                recordIdentifier: CloudSyncRecord.Kind.userProfile.defaultIdentifier
+            )
+        }
         outboundQueue.stage(
             into: context,
             recordType: CloudSyncRecord.Kind.userProfile.rawValue,
@@ -312,8 +326,13 @@ extension SwiftDataUserProfileRepository {
 
 extension SwiftDataTrainingPlanRepository {
     @MainActor
-    fileprivate func stageUpsert(for plan: TrainingPlanRecord, into context: ModelContext) {
-        guard let payloadJSON = SyncPayloadCodec.encodeTrainingPlanPayload(from: plan) else { return }
+    fileprivate func stageUpsert(for plan: TrainingPlanRecord, into context: ModelContext) throws {
+        guard let payloadJSON = SyncPayloadCodec.encodeTrainingPlanPayload(from: plan) else {
+            throw OutboundQueueStagingError.payloadEncodingFailed(
+                recordType: CloudSyncRecord.Kind.trainingPlan.rawValue,
+                recordIdentifier: CloudSyncRecord.Kind.trainingPlan.defaultIdentifier
+            )
+        }
         outboundQueue.stage(
             into: context,
             recordType: CloudSyncRecord.Kind.trainingPlan.rawValue,
@@ -327,8 +346,13 @@ extension SwiftDataTrainingPlanRepository {
 
 extension SwiftDataCoachMemoryRepository {
     @MainActor
-    fileprivate func stageUpsert(for record: CoachMemoryRecord, into context: ModelContext) {
-        guard let payloadJSON = SyncPayloadCodec.encodeCoachMemoryPayload(from: record) else { return }
+    fileprivate func stageUpsert(for record: CoachMemoryRecord, into context: ModelContext) throws {
+        guard let payloadJSON = SyncPayloadCodec.encodeCoachMemoryPayload(from: record) else {
+            throw OutboundQueueStagingError.payloadEncodingFailed(
+                recordType: CloudSyncRecord.Kind.coachMemory.rawValue,
+                recordIdentifier: record.identifier
+            )
+        }
         outboundQueue.stage(
             into: context,
             recordType: CloudSyncRecord.Kind.coachMemory.rawValue,

@@ -24,7 +24,7 @@ public struct SwiftDataWorkoutRepository: Sendable {
         let context = ModelContext(container)
         let workout = WorkoutRecord(title: title, startedAt: startedAt, updatedAt: updatedAt)
         context.insert(workout)
-        stageUpsert(for: workout, into: context)
+        try stageUpsert(for: workout, into: context)
         try context.save()
         return workout
     }
@@ -126,7 +126,7 @@ public struct SwiftDataWorkoutRepository: Sendable {
         workout.exerciseIDsCSV = exerciseIDs.sorted().joined(separator: ",")
         workout.updatedAt = .now
 
-        stageUpsert(for: workout, into: context)
+        try stageUpsert(for: workout, into: context)
         try context.save()
     }
 
@@ -147,7 +147,7 @@ public struct SwiftDataWorkoutRepository: Sendable {
         workout.durationMinutes = max(1, Int(now.timeIntervalSince(workout.startedAt) / 60))
         if !summary.isEmpty { workout.summary = summary }
         workout.updatedAt = now
-        stageUpsert(for: workout, into: context)
+        try stageUpsert(for: workout, into: context)
         try context.save()
     }
 
@@ -246,9 +246,25 @@ extension SwiftDataWorkoutRepository {
     /// mutation. The caller saves the context once, committing both
     /// writes atomically. See `OutboundSyncQueue.stage(into:)` for
     /// the VOL-67 Codex P2 rationale behind this pattern.
+    ///
+    /// VOL-67 Codex P2 (fixup #28): throws
+    /// `OutboundQueueStagingError.payloadEncodingFailed` when the
+    /// workout can't be serialized to JSON (e.g., non-finite
+    /// `Double` fields from bad instrumentation data). Before the
+    /// fix this method silently returned, letting the caller save
+    /// the primary record change without a corresponding queue row
+    /// — local write committed but never sync'd. Now the caller's
+    /// `try context.save()` never runs because the error aborts the
+    /// whole repository method before the save, so the record
+    /// mutation is rolled back and the caller sees the failure.
     @MainActor
-    fileprivate func stageUpsert(for workout: WorkoutRecord, into context: ModelContext) {
-        guard let payloadJSON = SyncPayloadCodec.encodeWorkoutPayload(from: workout) else { return }
+    fileprivate func stageUpsert(for workout: WorkoutRecord, into context: ModelContext) throws {
+        guard let payloadJSON = SyncPayloadCodec.encodeWorkoutPayload(from: workout) else {
+            throw OutboundQueueStagingError.payloadEncodingFailed(
+                recordType: CloudSyncRecord.Kind.workout.rawValue,
+                recordIdentifier: workout.identifier
+            )
+        }
         outboundQueue.stage(
             into: context,
             recordType: CloudSyncRecord.Kind.workout.rawValue,
