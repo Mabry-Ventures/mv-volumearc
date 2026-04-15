@@ -23,9 +23,9 @@ jobs:
   request-ai-reviews:
     name: Request AI Reviews
     if: github.event_name == 'pull_request_target' && !github.event.pull_request.draft
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
-      - name: Request Codex and Gemini reviews for current head SHA
+      - name: Request Codex review for current head SHA
         uses: actions/github-script@v7
         with:
           script: |
@@ -52,13 +52,19 @@ jobs:
 
             await ensureComment(
               `<!-- codex-review-request:${sha} -->`,
-              `<!-- codex-review-request:${sha} -->\n@codex review`
+              `<!-- codex-review-request:${sha} -->
+@codex review`
             );
 
-            await ensureComment(
-              `<!-- gemini-review-request:${sha} -->`,
-              `<!-- gemini-review-request:${sha} -->\n/gemini review`
-            );
+      - name: Request Copilot review for current pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh pr edit "$PR_NUMBER" --repo "$REPO" --remove-reviewer '@copilot' || true
+          gh pr edit "$PR_NUMBER" --repo "$REPO" --add-reviewer '@copilot'
 
   codex-review:
     name: Codex Code Review
@@ -67,7 +73,7 @@ jobs:
       github.event_name == 'issue_comment' ||
       github.event_name == 'pull_request_review' ||
       github.event_name == 'pull_request_review_comment'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Wait for Codex review signal
         uses: actions/github-script@v7
@@ -80,6 +86,7 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const botLogins = JSON.parse(process.env.AI_LOGINS);
+            const aiName = process.env.AI_NAME || 'AI';
             const waitMinutes = Number(process.env.WAIT_MINUTES || '15');
             const delayMs = 30000;
             const deadline = Date.now() + waitMinutes * 60 * 1000;
@@ -97,7 +104,7 @@ jobs:
               if (context.payload.comment?.pull_request_review_id && context.payload.pull_request?.number) {
                 return context.payload.pull_request.number;
               }
-              core.setFailed('Unable to determine pull request number for Codex review gate.');
+              core.setFailed(`Unable to determine pull request number for ${aiName} review gate.`);
               return null;
             }
 
@@ -154,14 +161,14 @@ jobs:
 
               return {
                 ok: false,
-                reason: `No fresh Codex review signal yet for head ${headSha.slice(0, 7)} after ${baseline.toISOString()}`,
+                reason: `No fresh ${aiName} review signal yet for head ${headSha.slice(0, 7)} after ${baseline.toISOString()}`,
               };
             }
 
             const prNumber = await getPullNumber();
             if (!prNumber) return;
 
-            let lastReason = 'No Codex signal observed yet.';
+            let lastReason = `No ${aiName} signal observed yet.`;
             while (Date.now() < deadline) {
               const result = await hasSignal(prNumber);
               if (result.ok) {
@@ -173,28 +180,29 @@ jobs:
               await sleep(delayMs);
             }
 
-            core.setFailed(`${lastReason}. Timed out waiting for Codex review.`);
+            core.setFailed(`${lastReason}. Timed out waiting for ${aiName} review.`);
 
-  gemini-review:
-    name: Gemini Code Review
+  copilot-review:
+    name: Copilot Code Review
     if: >-
       github.event_name == 'pull_request_target' ||
       github.event_name == 'issue_comment' ||
       github.event_name == 'pull_request_review' ||
       github.event_name == 'pull_request_review_comment'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
-      - name: Wait for Gemini review signal
+      - name: Wait for Copilot review signal
         uses: actions/github-script@v7
         env:
-          AI_LOGINS: '["gemini-code-assist[bot]"]'
-          AI_NAME: Gemini
+          AI_LOGINS: '["copilot-pull-request-reviewer[bot]","Copilot"]'
+          AI_NAME: Copilot
           WAIT_MINUTES: '15'
         with:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const botLogins = JSON.parse(process.env.AI_LOGINS);
+            const aiName = process.env.AI_NAME || 'AI';
             const waitMinutes = Number(process.env.WAIT_MINUTES || '15');
             const delayMs = 30000;
             const deadline = Date.now() + waitMinutes * 60 * 1000;
@@ -212,7 +220,7 @@ jobs:
               if (context.payload.comment?.pull_request_review_id && context.payload.pull_request?.number) {
                 return context.payload.pull_request.number;
               }
-              core.setFailed('Unable to determine pull request number for Gemini review gate.');
+              core.setFailed(`Unable to determine pull request number for ${aiName} review gate.`);
               return null;
             }
 
@@ -269,14 +277,14 @@ jobs:
 
               return {
                 ok: false,
-                reason: `No fresh Gemini review signal yet for head ${headSha.slice(0, 7)} after ${baseline.toISOString()}`,
+                reason: `No fresh ${aiName} review signal yet for head ${headSha.slice(0, 7)} after ${baseline.toISOString()}`,
               };
             }
 
             const prNumber = await getPullNumber();
             if (!prNumber) return;
 
-            let lastReason = 'No Gemini signal observed yet.';
+            let lastReason = `No ${aiName} signal observed yet.`;
             while (Date.now() < deadline) {
               const result = await hasSignal(prNumber);
               if (result.ok) {
@@ -288,4 +296,4 @@ jobs:
               await sleep(delayMs);
             }
 
-            core.setFailed(`${lastReason}. Timed out waiting for Gemini review.`);
+            core.setFailed(`${lastReason}. Timed out waiting for ${aiName} review.`);
