@@ -441,6 +441,31 @@ final class VolumeArcMigrationTests: XCTestCase {
             idB2,
             "Memories with the same total delimiter-joined bytes but different field boundaries must hash differently"
         )
+
+        // VOL-67 Codex P2 (fixup #20): pin the exact identifier for a
+        // fixed (createdAt, content, theme) triple. This catches any
+        // regression in the canonical-string format — including the
+        // locale-sensitive timestamp formatting issue Codex flagged in
+        // fixup #20 (dropping the `Locale(identifier: "en_US_POSIX")`
+        // argument to `String(format:)` would change the decimal
+        // separator on non-US locales and produce a different hash).
+        //
+        // The value below was captured against the fixup #20 code path
+        // and must stay stable. Any change to `deterministicLegacyMemoryIdentifier`
+        // — delimiter order, precision, byte counting, locale
+        // handling — will break this test and require an intentional
+        // update (and a cross-device migration plan, because any such
+        // change is a breaking hash format).
+        let pinnedIdentifier = try migrateAndReturnMemoryIdentifier(
+            storeName: "Pinned",
+            content: "canonical test",
+            theme: "migration"
+        )
+        XCTAssertEqual(
+            pinnedIdentifier,
+            "legacy-925b5338d35a27a978a3643c77c8faf934e96ff44b5ab567e63d261f36ec4fd9",
+            "Fixed-input identifier must stay stable across code changes. If this assertion fails and you INTENDED to change the hash format, update the expected value AND document a cross-device migration plan (old clients will never match new clients on the same logical memory after any hash change)."
+        )
     }
 
     /// VOL-67 Copilot (fixup #13): production creates a ModelContainer

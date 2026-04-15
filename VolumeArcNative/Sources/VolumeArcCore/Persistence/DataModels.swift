@@ -609,6 +609,16 @@ public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
     /// that can produce different integers on different devices for
     /// the same `Date`.
     ///
+    /// VOL-67 Codex P2 fixup #20: `String(format:_:)` without an
+    /// explicit locale is locale-sensitive — on devices with a
+    /// non-US numeric locale (e.g., `de_DE` where the decimal
+    /// separator is `,`), the formatted timestamp becomes
+    /// `1715600000,000000` instead of `1715600000.000000`, producing
+    /// a different canonical string and thus a different identifier
+    /// for the same logical memory. Forcing the POSIX locale keeps
+    /// the output stable across every device regardless of the
+    /// user's numeric-region preference.
+    ///
     /// This hash scheme is a BREAKING change from fixup #8's format,
     /// but fixup #8 has never shipped to production — the migration
     /// lives on `sprint/phase3b-cloudkit-fresh` which hasn't merged.
@@ -619,7 +629,11 @@ public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
         content: String,
         theme: String
     ) -> String {
-        let timestamp = String(format: "%.6f", createdAt.timeIntervalSince1970)
+        let timestamp = String(
+            format: "%.6f",
+            locale: Locale(identifier: "en_US_POSIX"),
+            createdAt.timeIntervalSince1970
+        )
         let contentBytes = content.utf8.count
         let themeBytes = theme.utf8.count
         let canonical = "ts=\(timestamp)|c=\(contentBytes):\(content)|t=\(themeBytes):\(theme)"
