@@ -135,8 +135,27 @@ public enum OutboundQueueBackfill {
         userDefaults.set(true, forKey: flagKey)
     }
 
+    /// VOL-67 Copilot (fixup #15): build the dedupe key from the
+    /// normalized `Kind` raw value and the canonical queue identifier,
+    /// so legacy long-form rows (`recordType="userProfile",
+    /// recordIdentifier="userProfile"`) collapse to the same slot as
+    /// canonical short-form rows (`recordType="profile",
+    /// recordIdentifier="profile"`). Without this, a device that still
+    /// has legacy-form rows left in its queue at first post-VOL-67
+    /// launch would not get deduplicated against the freshly-built
+    /// canonical row the backfill tries to enqueue — producing a
+    /// duplicate outbound upsert for the same logical singleton.
+    ///
+    /// Mirrors `CloudSyncCoordinator.coalesceKey(for:)` so the backfill
+    /// dedupe and push-time coalescing agree on which rows are "the
+    /// same logical record". Unknown/future record types fall back to
+    /// the raw pair so we don't accidentally merge kinds we don't
+    /// understand.
     private static func queueKey(recordType: String, identifier: String) -> String {
-        "\(recordType)|\(identifier)"
+        if let kind = CloudSyncRecord.Kind.parse(recordType) {
+            return "\(kind.rawValue)|\(kind.canonicalQueueIdentifier(from: identifier))"
+        }
+        return "\(recordType)|\(identifier)"
     }
 }
 #endif

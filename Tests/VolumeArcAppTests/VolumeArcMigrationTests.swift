@@ -396,6 +396,103 @@ final class VolumeArcMigrationTests: XCTestCase {
         XCTAssertEqual(queuedByKind[CloudSyncRecord.Kind.coachMemory.rawValue]?.count, 1)
     }
 
+    /// VOL-67 Copilot (fixup #15): `OutboundQueueBackfill.performIfNeeded`
+    /// builds its dedupe key from `(recordType, recordIdentifier)` of
+    /// existing queue rows and compares against a key computed the same
+    /// way for each candidate migrating record. Before this fix, both
+    /// sides used raw strings — so a legacy long-form row in the queue
+    /// (`recordType="userProfile"`, `recordIdentifier="userProfile"`)
+    /// wouldn't match the canonical short-form key the backfill built
+    /// (`("profile", "profile")`), and the backfill would insert a
+    /// duplicate canonical row for the same logical singleton.
+    ///
+    /// Fix: normalize both existing and newly-computed keys via
+    /// `CloudSyncRecord.Kind.parse(_:)` + `canonicalQueueIdentifier(from:)`.
+    ///
+    /// Setup: migrate a V3 store, then manually insert a LEGACY-form
+    /// profile queue row before running the backfill. Expected: the
+    /// backfill sees the legacy row as already-queued for the profile
+    /// kind and skips it — the final queue has exactly one profile row,
+    /// not two.
+    @MainActor
+    func testBackfillCanonicalizesLegacyQueueKeysForDedupe() throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let storeURL = temporaryDirectory.appendingPathComponent("VolumeArcBackfillDedupe.sqlite")
+        let fixtureDate = Date(timeIntervalSince1970: 1_715_500_000)
+        try writeV3FixtureStoreWithAllEntities(at: storeURL, startedAt: fixtureDate)
+
+        let migratedContainer = try makeDiskBackedCurrentContainer(at: storeURL)
+        let seedContext = ModelContext(migratedContainer)
+
+        // Seed the queue with a LEGACY-form singleton row BEFORE
+        // running the backfill. `recordType="userProfile"` uses the
+        // long-form alias (not canonical `"profile"`), and the
+        // `recordIdentifier="userProfile"` matches the long-form
+        // identifier shape that pre-canonicalization code produced.
+        seedContext.insert(OutboundSyncQueueRecord(
+            recordType: "userProfile",
+            recordIdentifier: "userProfile",
+            operation: CloudSyncRecord.Operation.upsert.rawValue,
+            payloadJSON: "{\"profile\":{\"name\":\"Legacy\"}}",
+            queuedAt: Date(timeIntervalSince1970: 1_715_500_100)
+        ))
+        try seedContext.save()
+
+        // Sanity: exactly one profile-shaped row is in the queue
+        // BEFORE the backfill runs.
+        let preBackfillRows = try seedContext.fetch(FetchDescriptor<OutboundSyncQueueRecord>())
+        XCTAssertEqual(preBackfillRows.count, 1)
+
+        try OutboundQueueBackfill.performIfNeeded(
+            container: migratedContainer,
+            userDefaults: makeEphemeralUserDefaults(),
+            flagKey: "test-\(UUID().uuidString)"
+        )
+
+        // The backfill should have:
+        //   - Seen the legacy "userProfile" row and recognized it as
+        //     the same logical profile singleton, so NOT added a
+        //     duplicate canonical "profile" row.
+        //   - Still added the rows for workout, plan, memory (which
+        //     had no pre-existing queue rows).
+        let postContext = ModelContext(migratedContainer)
+        let queuedRows = try postContext.fetch(FetchDescriptor<OutboundSyncQueueRecord>())
+
+        // Profile: exactly ONE row, and it's the legacy one we seeded
+        // (backfill recognized it and skipped).
+        let profileRows = queuedRows.filter { row in
+            CloudSyncRecord.Kind.parse(row.recordType) == .userProfile
+        }
+        XCTAssertEqual(
+            profileRows.count,
+            1,
+            "Backfill must not duplicate a canonical profile row when a legacy profile row already exists"
+        )
+        XCTAssertEqual(
+            profileRows.first?.recordType,
+            "userProfile",
+            "The remaining profile row should be the legacy one we seeded — backfill should NOT have replaced it"
+        )
+
+        // The other kinds should have been backfilled normally.
+        XCTAssertEqual(
+            queuedRows.filter { CloudSyncRecord.Kind.parse($0.recordType) == .workout }.count,
+            1
+        )
+        XCTAssertEqual(
+            queuedRows.filter { CloudSyncRecord.Kind.parse($0.recordType) == .trainingPlan }.count,
+            1
+        )
+        XCTAssertEqual(
+            queuedRows.filter { CloudSyncRecord.Kind.parse($0.recordType) == .coachMemory }.count,
+            1
+        )
+    }
+
     /// VOL-67 Codex P2 (fixup #8): the memory identifier assigned by
     /// V3→V4 migration must be deterministic — every device migrating
     /// the same `(createdAt, content, theme)` triple must produce the
