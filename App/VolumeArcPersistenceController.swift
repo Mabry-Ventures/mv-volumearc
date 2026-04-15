@@ -42,6 +42,25 @@ final class VolumeArcPersistenceController {
             // This failure is tracked in bootstrapTelemetryEvents via the
             // persistence status, so the startup notice will surface it.
         }
+
+        // VOL-67 Copilot (fixup #13): backfill the outbound sync queue
+        // for pre-VOL-67 records the first time the app opens after
+        // V3→V4 migration. This logic can't live inside the V3→V4
+        // `didMigrate` stage because the outbound queue lives in a
+        // SEPARATE SwiftData configuration from the syncable records
+        // in production — a migration stage's context is bound to one
+        // store at a time, so cross-config inserts silently drop.
+        // Running the backfill here with a container-scoped
+        // `ModelContext` gives us both configs in scope, so
+        // `context.insert(OutboundSyncQueueRecord(...))` routes to
+        // the queue store correctly.
+        do {
+            try backfillOutboundQueueIfNeeded()
+        } catch {
+            // Missing a backfill row isn't fatal — the record is
+            // still safe locally, it just won't push until the user
+            // edits it. Suppress and move on.
+        }
     }
 
     var bootstrapTelemetryEvents: [TelemetryEvent] {
@@ -100,6 +119,21 @@ final class VolumeArcPersistenceController {
         context.insert(trainingPlan)
 
         try context.save()
+    }
+
+    /// VOL-67 Copilot (fixup #13): the backfill logic lives in
+    /// `VolumeArcCore.OutboundQueueBackfill` so it's testable in
+    /// isolation. The production key is a fixed string so the flag
+    /// survives app relaunches.
+    private static let outboundQueueBackfillDefaultsKey = "VolumeArcPersistence.outboundQueueBackfillV4Completed"
+
+    private func backfillOutboundQueueIfNeeded() throws {
+        guard let container else { return }
+        try OutboundQueueBackfill.performIfNeeded(
+            container: container,
+            userDefaults: .standard,
+            flagKey: Self.outboundQueueBackfillDefaultsKey
+        )
     }
 
     private static func makeContainer(for schema: Schema) -> (container: ModelContainer?, status: BootstrapStatus) {

@@ -134,11 +134,18 @@ struct VolumeArcApp: App {
                 telemetrySink: telemetrySink,
                 outboundQueue: outboundQueue
             )
+            // VOL-67 Copilot fixup #13: pass `telemetrySink` so the
+            // outbound-queue quarantine path (see `CloudSyncCoordinator.push`)
+            // can emit `sync.outbound_row_quarantined` events. Without
+            // wiring the sink here, those warnings are silently dropped
+            // in production and unparseable queue rows look like they
+            // vanished into the void.
             let syncEngine = CloudSyncCoordinator(
                 transport: syncTransport,
                 payloadApplier: syncApplier,
                 stateStore: syncStateStore,
-                outboundQueue: outboundQueue
+                outboundQueue: outboundQueue,
+                telemetrySink: telemetrySink
             )
             self.dashboardModel = WorkoutDashboardModel(
                 aiProvider: aiProvider,
@@ -162,7 +169,8 @@ struct VolumeArcApp: App {
         } else {
             let syncEngine = CloudSyncCoordinator(
                 transport: syncTransport,
-                stateStore: syncStateStore
+                stateStore: syncStateStore,
+                telemetrySink: telemetrySink
             )
             self.dashboardModel = WorkoutDashboardModel(
                 aiProvider: aiProvider,

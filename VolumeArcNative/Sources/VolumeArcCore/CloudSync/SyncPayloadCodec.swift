@@ -209,6 +209,46 @@ public enum SyncPayloadCodec {
         )))
     }
 
+    /// VOL-67 Codex P1 (fixup #13): migration-backfill encoders that
+    /// clamp the embedded singleton `updatedAt` to `.distantPast`.
+    ///
+    /// During the V3→V4 migration we enqueue outbound upserts for every
+    /// pre-existing singleton (profile, plan) so the user's existing
+    /// data can reach CloudKit after upgrade. But pre-fixup-#10
+    /// installs seeded those singletons with launch-time timestamps,
+    /// NOT `.distantPast`. If we re-encoded those unchanged, the
+    /// backfilled queue row would carry a "real-looking" modified-at
+    /// and could beat older but authoritative cloud data in the
+    /// applier's `shouldApply` check — clobbering server state that
+    /// should have won. Clamping the payload's `updatedAt` to
+    /// `.distantPast` makes the migrated backfill a "lowest-priority
+    /// floor": the record gets pushed to CloudKit, but any real
+    /// cloud data always wins the timestamp comparison. Per-record
+    /// kinds (workout, memory) keep their real timestamps because
+    /// they represent concrete user actions, not seeded defaults.
+    public static func encodeUserProfilePayloadForMigration(from record: UserProfileRecord) -> String? {
+        encode(UserProfileEnvelope(profile: UserProfilePayload(
+            name: record.name,
+            coachingStyle: record.coachingStyle,
+            privacyMode: record.privacyMode,
+            advancementLevel: record.advancementLevel,
+            availableEquipmentCSV: record.availableEquipmentCSV,
+            preferredRepRangeLower: record.preferredRepRangeLower,
+            preferredRepRangeUpper: record.preferredRepRangeUpper,
+            sessionTimeBudgetMinutes: record.sessionTimeBudgetMinutes,
+            weeklyTrainingDays: record.weeklyTrainingDays,
+            onboardingCompleted: record.onboardingCompleted,
+            updatedAt: .distantPast
+        )))
+    }
+
+    public static func encodeTrainingPlanPayloadForMigration(from record: TrainingPlanRecord) -> String? {
+        encode(TrainingPlanEnvelope(plan: TrainingPlanPayload(
+            workoutsJSON: record.workoutsJSON,
+            updatedAt: .distantPast
+        )))
+    }
+
     public static func encodeCoachMemoryPayload(from record: CoachMemoryRecord) -> String? {
         encode(CoachMemoryEnvelope(memory: CoachMemoryPayload(
             content: record.content,

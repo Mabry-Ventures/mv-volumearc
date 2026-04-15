@@ -537,64 +537,19 @@ public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
 
             try context.save()
 
-            // VOL-67 Codex P1 fixup #8: backfill the outbound sync
-            // queue with an upsert for every pre-existing record.
-            // Without this, a user who upgrades with local history
-            // and makes no further edits would never have anything
-            // in the queue, so the first push would do nothing and
-            // their pre-upgrade data would never reach CloudKit.
-            // Re-fetch to pick up the updatedAt/identifier backfills
-            // applied above so the queued payloads reflect the
-            // post-migration state.
-            let workoutsToEnqueue = try context.fetch(FetchDescriptor<WorkoutRecord>())
-            for workout in workoutsToEnqueue {
-                guard let payloadJSON = SyncPayloadCodec.encodeWorkoutPayload(from: workout) else { continue }
-                context.insert(OutboundSyncQueueRecord(
-                    recordType: CloudSyncRecord.Kind.workout.rawValue,
-                    recordIdentifier: workout.identifier,
-                    operation: CloudSyncRecord.Operation.upsert.rawValue,
-                    payloadJSON: payloadJSON,
-                    queuedAt: workout.updatedAt
-                ))
-            }
-
-            let profiles = try context.fetch(FetchDescriptor<UserProfileRecord>())
-            for profile in profiles {
-                guard let payloadJSON = SyncPayloadCodec.encodeUserProfilePayload(from: profile) else { continue }
-                context.insert(OutboundSyncQueueRecord(
-                    recordType: CloudSyncRecord.Kind.userProfile.rawValue,
-                    recordIdentifier: CloudSyncRecord.Kind.userProfile.defaultIdentifier,
-                    operation: CloudSyncRecord.Operation.upsert.rawValue,
-                    payloadJSON: payloadJSON,
-                    queuedAt: profile.updatedAt
-                ))
-            }
-
-            let plans = try context.fetch(FetchDescriptor<TrainingPlanRecord>())
-            for plan in plans {
-                guard let payloadJSON = SyncPayloadCodec.encodeTrainingPlanPayload(from: plan) else { continue }
-                context.insert(OutboundSyncQueueRecord(
-                    recordType: CloudSyncRecord.Kind.trainingPlan.rawValue,
-                    recordIdentifier: CloudSyncRecord.Kind.trainingPlan.defaultIdentifier,
-                    operation: CloudSyncRecord.Operation.upsert.rawValue,
-                    payloadJSON: payloadJSON,
-                    queuedAt: plan.updatedAt
-                ))
-            }
-
-            let memoriesToEnqueue = try context.fetch(FetchDescriptor<CoachMemoryRecord>())
-            for memory in memoriesToEnqueue {
-                guard let payloadJSON = SyncPayloadCodec.encodeCoachMemoryPayload(from: memory) else { continue }
-                context.insert(OutboundSyncQueueRecord(
-                    recordType: CloudSyncRecord.Kind.coachMemory.rawValue,
-                    recordIdentifier: memory.identifier,
-                    operation: CloudSyncRecord.Operation.upsert.rawValue,
-                    payloadJSON: payloadJSON,
-                    queuedAt: memory.createdAt
-                ))
-            }
-
-            try context.save()
+            // VOL-67 Copilot (fixup #13): the outbound queue lives in
+            // a SEPARATE SwiftData configuration from the syncable
+            // models in production (see
+            // `VolumeArcPersistenceController.makeContainer` — primary
+            // store holds UserProfileRecord/etc, a distinct store
+            // holds OutboundSyncQueueRecord). A custom migration stage's
+            // `context` is bound to the store being migrated, so
+            // `context.insert(OutboundSyncQueueRecord(...))` here would
+            // silently drop the row — it can't route across config
+            // boundaries. The queue backfill therefore lives in
+            // `VolumeArcPersistenceController.backfillOutboundQueueIfNeeded`,
+            // which runs post-bootstrap with a container-scoped
+            // context that has both configs visible.
         }
     )
 

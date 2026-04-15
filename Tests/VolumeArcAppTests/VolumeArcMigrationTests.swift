@@ -151,11 +151,15 @@ final class VolumeArcMigrationTests: XCTestCase {
         )
     }
 
-    /// VOL-67 Codex P1 (fixup #8): the V3→V4 migration must backfill
-    /// the outbound sync queue with an upsert for every pre-existing
-    /// record. Otherwise users who upgrade with local history and
-    /// make no further edits would never have anything to push, and
-    /// their pre-upgrade data would never reach CloudKit.
+    /// VOL-67 Codex P1 (fixup #8, re-scoped in fixup #13): after V3→V4
+    /// migration AND a post-bootstrap `OutboundQueueBackfill` run,
+    /// every pre-existing record must have a queue row. Otherwise
+    /// users who upgrade with local history and make no further edits
+    /// would never have anything to push, and their pre-upgrade data
+    /// would never reach CloudKit. This test runs the backfill
+    /// explicitly to validate the helper end-to-end against a migrated
+    /// store.
+    @MainActor
     func testV3ToV4MigrationBackfillsOutboundQueueForExistingRecords() throws {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -167,6 +171,11 @@ final class VolumeArcMigrationTests: XCTestCase {
         try writeV3FixtureStoreWithAllEntities(at: storeURL, startedAt: fixtureDate)
 
         let migratedContainer = try makeDiskBackedCurrentContainer(at: storeURL)
+        try OutboundQueueBackfill.performIfNeeded(
+            container: migratedContainer,
+            userDefaults: makeEphemeralUserDefaults(),
+            flagKey: "test-\(UUID().uuidString)"
+        )
         let migratedContext = ModelContext(migratedContainer)
 
         let queuedRows = try migratedContext.fetch(FetchDescriptor<OutboundSyncQueueRecord>())
@@ -194,6 +203,197 @@ final class VolumeArcMigrationTests: XCTestCase {
         XCTAssertEqual(memoryRows.count, 1, "Expected one coach memory upsert queued after V3→V4 migration")
         let migratedMemory = try XCTUnwrap(migratedContext.fetch(FetchDescriptor<CoachMemoryRecord>()).first)
         XCTAssertEqual(memoryRows.first?.recordIdentifier, migratedMemory.identifier)
+    }
+
+    /// VOL-67 Codex P1 (fixup #13): the V3→V4 migration backfill must
+    /// clamp singleton (profile, plan) timestamps to `.distantPast` in
+    /// both the queue row's `queuedAt` and the embedded payload's
+    /// `updatedAt`. Pre-fixup-#10 installs seeded profile/plan defaults
+    /// with launch-time timestamps, so backfilling with the record's
+    /// own `updatedAt` would push stale defaults that look "newer"
+    /// than older-but-authoritative cloud data and win `shouldApply`.
+    /// Per-record kinds (workout, memory) keep real timestamps because
+    /// they reflect concrete user actions, not seeded defaults.
+    @MainActor
+    func testV3ToV4MigrationClampsSingletonTimestampsToDistantPast() throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let storeURL = temporaryDirectory.appendingPathComponent("VolumeArcMigrationClamp.sqlite")
+        let fixtureDate = Date(timeIntervalSince1970: 1_715_300_000)
+        try writeV3FixtureStoreWithAllEntities(at: storeURL, startedAt: fixtureDate)
+
+        let migratedContainer = try makeDiskBackedCurrentContainer(at: storeURL)
+        try OutboundQueueBackfill.performIfNeeded(
+            container: migratedContainer,
+            userDefaults: makeEphemeralUserDefaults(),
+            flagKey: "test-\(UUID().uuidString)"
+        )
+        let migratedContext = ModelContext(migratedContainer)
+
+        let queuedRows = try migratedContext.fetch(FetchDescriptor<OutboundSyncQueueRecord>())
+        let queuedByKind = Dictionary(grouping: queuedRows, by: { $0.recordType })
+
+        // Singleton: profile queue row and embedded payload must both be distantPast
+        let profileRow = try XCTUnwrap((queuedByKind[CloudSyncRecord.Kind.userProfile.rawValue] ?? []).first)
+        XCTAssertEqual(
+            profileRow.queuedAt.timeIntervalSince1970,
+            Date.distantPast.timeIntervalSince1970,
+            accuracy: 1.0,
+            "Profile queue row's queuedAt should be clamped to distantPast"
+        )
+        let profilePayload = try XCTUnwrap(SyncPayloadCodec.decodeUserProfilePayload(from: profileRow.payloadJSON))
+        XCTAssertEqual(
+            profilePayload.updatedAt.timeIntervalSince1970,
+            Date.distantPast.timeIntervalSince1970,
+            accuracy: 1.0,
+            "Profile payload's embedded updatedAt should be clamped to distantPast"
+        )
+
+        // Singleton: plan queue row and embedded payload must both be distantPast
+        let planRow = try XCTUnwrap((queuedByKind[CloudSyncRecord.Kind.trainingPlan.rawValue] ?? []).first)
+        XCTAssertEqual(
+            planRow.queuedAt.timeIntervalSince1970,
+            Date.distantPast.timeIntervalSince1970,
+            accuracy: 1.0,
+            "Plan queue row's queuedAt should be clamped to distantPast"
+        )
+        let planPayload = try XCTUnwrap(SyncPayloadCodec.decodeTrainingPlanPayload(from: planRow.payloadJSON))
+        XCTAssertEqual(
+            planPayload.updatedAt.timeIntervalSince1970,
+            Date.distantPast.timeIntervalSince1970,
+            accuracy: 1.0,
+            "Plan payload's embedded updatedAt should be clamped to distantPast"
+        )
+
+        // Per-record kind: workout keeps a real timestamp (reflects user action)
+        let workoutRow = try XCTUnwrap((queuedByKind[CloudSyncRecord.Kind.workout.rawValue] ?? []).first)
+        XCTAssertGreaterThan(
+            workoutRow.queuedAt.timeIntervalSince1970,
+            0,
+            "Workout queue row's queuedAt should be a real timestamp, not distantPast"
+        )
+        let workoutPayload = try XCTUnwrap(SyncPayloadCodec.decodeWorkoutPayload(from: workoutRow.payloadJSON))
+        XCTAssertGreaterThan(
+            workoutPayload.updatedAt.timeIntervalSince1970,
+            0,
+            "Workout payload's embedded updatedAt should be a real timestamp"
+        )
+
+        // Per-record kind: memory keeps a real timestamp (reflects user action)
+        let memoryRow = try XCTUnwrap((queuedByKind[CloudSyncRecord.Kind.coachMemory.rawValue] ?? []).first)
+        XCTAssertGreaterThan(
+            memoryRow.queuedAt.timeIntervalSince1970,
+            0,
+            "Memory queue row's queuedAt should be a real timestamp, not distantPast"
+        )
+    }
+
+    /// VOL-67 Copilot (fixup #13): production creates a ModelContainer
+    /// with TWO configurations — a primary store for the syncable
+    /// records and a SEPARATE store for `OutboundSyncQueueRecord`. Prior
+    /// migration tests used a single-configuration container, so they
+    /// couldn't validate that the V3→V4 backfill actually routes queue
+    /// inserts to the separate queue store. This test mirrors
+    /// production: migrates a V3 store with a multi-config V4
+    /// container, runs the post-bootstrap `OutboundQueueBackfill`
+    /// helper (which is where the backfill lives now, outside the
+    /// migration stage), then opens a queue-only container pointing
+    /// at the queue URL to confirm the rows landed there specifically.
+    @MainActor
+    func testV3ToV4MigrationBackfillsOutboundQueueWithSeparateQueueStore() throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let primaryURL = temporaryDirectory.appendingPathComponent("VolumeArc.sqlite")
+        let queueURL = temporaryDirectory.appendingPathComponent("VolumeArcOutboundQueue.sqlite")
+        let fixtureDate = Date(timeIntervalSince1970: 1_715_400_000)
+        try writeV3FixtureStoreWithAllEntities(at: primaryURL, startedAt: fixtureDate)
+
+        // Build a V4 container with two configurations pointing at the
+        // two separate store URLs. This mirrors
+        // `VolumeArcPersistenceController.makeContainer` exactly, minus
+        // CloudKit mirroring (which can't run in tests).
+        let syncableSchema = Schema([
+            UserProfileRecord.self,
+            TrainingPlanRecord.self,
+            WorkoutRecord.self,
+            CoachMemoryRecord.self,
+        ])
+        let queueSchema = Schema([OutboundSyncQueueRecord.self])
+        let combinedSchema = Schema(VolumeArcSchemaV4.models)
+
+        let primaryConfig = ModelConfiguration(
+            "VolumeArc",
+            schema: syncableSchema,
+            url: primaryURL,
+            allowsSave: true,
+            cloudKitDatabase: .none
+        )
+        let queueConfig = ModelConfiguration(
+            "VolumeArc-OutboundQueue",
+            schema: queueSchema,
+            url: queueURL,
+            allowsSave: true,
+            cloudKitDatabase: .none
+        )
+
+        let multiConfigContainer = try ModelContainer(
+            for: combinedSchema,
+            migrationPlan: VolumeArcSchemaMigrationPlan.self,
+            configurations: [primaryConfig, queueConfig]
+        )
+
+        // Post-bootstrap backfill: this is what production runs right
+        // after `makeContainer` inside `VolumeArcPersistenceController.init`.
+        try OutboundQueueBackfill.performIfNeeded(
+            container: multiConfigContainer,
+            userDefaults: makeEphemeralUserDefaults(),
+            flagKey: "test-\(UUID().uuidString)"
+        )
+
+        // Verify the records migrated into the primary store.
+        let primaryContext = ModelContext(multiConfigContainer)
+        let workouts = try primaryContext.fetch(FetchDescriptor<WorkoutRecord>())
+        let profiles = try primaryContext.fetch(FetchDescriptor<UserProfileRecord>())
+        let plans = try primaryContext.fetch(FetchDescriptor<TrainingPlanRecord>())
+        let memories = try primaryContext.fetch(FetchDescriptor<CoachMemoryRecord>())
+        XCTAssertEqual(workouts.count, 1)
+        XCTAssertEqual(profiles.count, 1)
+        XCTAssertEqual(plans.count, 1)
+        XCTAssertEqual(memories.count, 1)
+
+        // Open a separate queue-only container pointing at the queue
+        // URL. If the migration backfill wasn't routed to this store,
+        // this container will be empty — the original bug we're
+        // preventing.
+        let queueOnlyContainer = try ModelContainer(
+            for: queueSchema,
+            configurations: [
+                ModelConfiguration(
+                    "VolumeArc-OutboundQueue",
+                    schema: queueSchema,
+                    url: queueURL,
+                    allowsSave: true,
+                    cloudKitDatabase: .none
+                )
+            ]
+        )
+        let queueContext = ModelContext(queueOnlyContainer)
+        let queuedRows = try queueContext.fetch(FetchDescriptor<OutboundSyncQueueRecord>())
+
+        // Four records → four queue rows (workout, profile, plan, memory).
+        XCTAssertEqual(queuedRows.count, 4, "Expected 4 outbound queue rows after V3→V4 migration")
+
+        let queuedByKind = Dictionary(grouping: queuedRows, by: { $0.recordType })
+        XCTAssertEqual(queuedByKind[CloudSyncRecord.Kind.workout.rawValue]?.count, 1)
+        XCTAssertEqual(queuedByKind[CloudSyncRecord.Kind.userProfile.rawValue]?.count, 1)
+        XCTAssertEqual(queuedByKind[CloudSyncRecord.Kind.trainingPlan.rawValue]?.count, 1)
+        XCTAssertEqual(queuedByKind[CloudSyncRecord.Kind.coachMemory.rawValue]?.count, 1)
     }
 
     /// VOL-67 Codex P2 (fixup #8): the memory identifier assigned by
@@ -449,6 +649,19 @@ final class VolumeArcMigrationTests: XCTestCase {
 
             try context.save()
         }
+    }
+
+    /// A throwaway `UserDefaults` suite so tests don't touch the user's
+    /// `.standard` defaults or collide across runs. Each test gets a
+    /// fresh suite bound to a random name; the suite is never
+    /// registered or persisted, so its contents vanish when the test
+    /// process ends.
+    private func makeEphemeralUserDefaults() -> UserDefaults {
+        let suiteName = "VolumeArcTest-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName) ?? .standard
+        // Reset anything the suite may have been initialized with.
+        defaults.removePersistentDomain(forName: suiteName)
+        return defaults
     }
 
     private func makeDiskBackedCurrentContainer(at storeURL: URL) throws -> ModelContainer {
