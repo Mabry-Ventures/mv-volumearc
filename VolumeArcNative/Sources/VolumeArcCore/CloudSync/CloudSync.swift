@@ -228,8 +228,27 @@ public final class CloudKitSyncTransport: CloudSyncTransport, @unchecked Sendabl
                 // same window still get applied by the coordinator —
                 // they're idempotent on re-fetch because shouldApply
                 // rejects equal-timestamp re-applies.
+                //
+                // VOL-67 Codex P1 (fixup #24): SHORT-CIRCUIT the
+                // synthesis path for delete operations. Fixup #19
+                // stopped persisting the record body on delete
+                // tombstones (outbound `deleteWorkout`/`deleteMemory`
+                // stage `payloadJSON: ""`), so pulled delete records
+                // come back with an empty `payloadJSON`. The legacy
+                // synthesis fallback would then try to read upsert
+                // fields off the CKRecord (title, startedAt, etc.),
+                // fail because deletes don't carry those fields, and
+                // skip the record — meaning remote deletes would
+                // never apply locally and the cursor would keep
+                // resetting on every pull. For deletes we use the
+                // empty payload as-is: `applyDeletion` only reads
+                // `record.kind` and `record.identifier`, never the
+                // payload, so an empty string is safe for the
+                // entire downstream path.
                 let payloadJSON: String
-                if let explicit = record["payloadJSON"] as? String, !explicit.isEmpty {
+                if operation == .delete {
+                    payloadJSON = (record["payloadJSON"] as? String) ?? ""
+                } else if let explicit = record["payloadJSON"] as? String, !explicit.isEmpty {
                     payloadJSON = explicit
                 } else {
                     var fields: [String: Any] = [:]
