@@ -330,12 +330,25 @@ public enum SyncPayloadCodec {
                 let updatedAt = Self.readDate(fields["updatedAt"])
             else { return nil }
 
+            // VOL-67 Codex P2 (fixup #12): the pre-VOL-67 inbound applier
+            // read the equipment CSV from `record.payload["equipment"]`
+            // (see the legacy `DefaultSyncPayloadApplier` decode path in
+            // the original CloudSync.swift — confirmed in git history at
+            // commit a13b515). Any CKRecord that was pushed by that
+            // older applier stores the CSV under the `equipment` key,
+            // NOT the canonical `availableEquipmentCSV`. On upgrade
+            // pulls we accept both; prefer the canonical key when
+            // present so a newer-schema record doesn't get overridden
+            // by a stale `equipment` leftover.
+            let legacyEquipment = (fields["availableEquipmentCSV"] as? String)
+                ?? (fields["equipment"] as? String)
+                ?? ""
             let payload = UserProfilePayload(
                 name: name,
                 coachingStyle: (fields["coachingStyle"] as? String) ?? "motivational",
                 privacyMode: (fields["privacyMode"] as? String) ?? "standard",
                 advancementLevel: (fields["advancementLevel"] as? String) ?? "intermediate",
-                availableEquipmentCSV: (fields["availableEquipmentCSV"] as? String) ?? "",
+                availableEquipmentCSV: legacyEquipment,
                 preferredRepRangeLower: (fields["preferredRepRangeLower"] as? Int) ?? (fields["preferredRepRangeLower"] as? NSNumber)?.intValue ?? 5,
                 preferredRepRangeUpper: (fields["preferredRepRangeUpper"] as? Int) ?? (fields["preferredRepRangeUpper"] as? NSNumber)?.intValue ?? 8,
                 sessionTimeBudgetMinutes: (fields["sessionTimeBudgetMinutes"] as? Int) ?? (fields["sessionTimeBudgetMinutes"] as? NSNumber)?.intValue ?? 60,

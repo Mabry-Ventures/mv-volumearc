@@ -890,6 +890,48 @@ final class VolumeArcCloudSyncTests: XCTestCase {
         XCTAssertTrue(decoded.onboardingCompleted)
     }
 
+    /// VOL-67 Codex P2 (fixup #12): pre-VOL-67 CloudKit records stored
+    /// the available-equipment CSV under the field key `"equipment"`,
+    /// not the canonical `"availableEquipmentCSV"`. On an upgrade pull
+    /// we have to read both so the user's real equipment list isn't
+    /// dropped to empty and then pushed back to cloud.
+    func testSynthesizeLegacyPayloadReadsLegacyEquipmentKey() throws {
+        let updatedAt = Date(timeIntervalSince1970: 1_720_110_001)
+        let fields: [String: Any] = [
+            "name": "Pre-VOL-67 Athlete",
+            // Intentionally omit availableEquipmentCSV and provide the
+            // legacy `equipment` key instead, matching what an older
+            // applier would have written to CloudKit.
+            "equipment": "barbell,kettlebell,bodyweight",
+            "updatedAt": updatedAt,
+        ]
+
+        let json = try XCTUnwrap(
+            SyncPayloadCodec.synthesizeLegacyPayloadJSON(kind: .userProfile, fields: fields)
+        )
+        let decoded = try XCTUnwrap(SyncPayloadCodec.decodeUserProfilePayload(from: json))
+        XCTAssertEqual(decoded.availableEquipmentCSV, "barbell,kettlebell,bodyweight")
+    }
+
+    /// When both keys are present, the canonical one wins — an
+    /// intermediate upgrade (record written twice, once by old code and
+    /// once by new) shouldn't resurrect the stale `equipment` value.
+    func testSynthesizeLegacyPayloadPrefersCanonicalEquipmentKey() throws {
+        let updatedAt = Date(timeIntervalSince1970: 1_720_110_002)
+        let fields: [String: Any] = [
+            "name": "Dual-Key Athlete",
+            "availableEquipmentCSV": "dumbbell,machine",
+            "equipment": "barbell", // stale leftover
+            "updatedAt": updatedAt,
+        ]
+
+        let json = try XCTUnwrap(
+            SyncPayloadCodec.synthesizeLegacyPayloadJSON(kind: .userProfile, fields: fields)
+        )
+        let decoded = try XCTUnwrap(SyncPayloadCodec.decodeUserProfilePayload(from: json))
+        XCTAssertEqual(decoded.availableEquipmentCSV, "dumbbell,machine")
+    }
+
     func testSynthesizeLegacyPayloadReturnsNilWhenRequiredFieldsMissing() {
         // Missing `title` (required) → nil.
         let fields: [String: Any] = [
