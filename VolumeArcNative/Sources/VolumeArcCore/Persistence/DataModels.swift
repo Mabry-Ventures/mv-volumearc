@@ -16,123 +16,20 @@ import SwiftData
 // `.automatic` cloud database and the defaults check never ran. Now that
 // VOL-55 hardcodes the container ID as a Swift constant, CloudKit is
 // actually active, and every non-optional property must have a default.
-
-@Model
-public final class UserProfileRecord {
-    public var name: String = ""
-    public var coachingStyle: String = "motivational"
-    public var privacyMode: String = "standard"
-    public var advancementLevel: String = "intermediate"
-    public var availableEquipmentCSV: String = ""
-    public var preferredRepRangeLower: Int = 5
-    public var preferredRepRangeUpper: Int = 8
-    public var sessionTimeBudgetMinutes: Int = 60
-    public var weeklyTrainingDays: Int = 4
-    public var onboardingCompleted: Bool = false
-    // @Model macro rejects `.now` shorthand; must fully qualify.
-    public var updatedAt: Date = Date()
-
-    public init(
-        name: String = "",
-        coachingStyle: String = "motivational",
-        privacyMode: String = "standard",
-        advancementLevel: String = "intermediate",
-        availableEquipmentCSV: String = "",
-        preferredRepRangeLower: Int = 5,
-        preferredRepRangeUpper: Int = 8,
-        sessionTimeBudgetMinutes: Int = 60,
-        weeklyTrainingDays: Int = 4,
-        onboardingCompleted: Bool = false,
-        updatedAt: Date = .now
-    ) {
-        self.name = name
-        self.coachingStyle = coachingStyle
-        self.privacyMode = privacyMode
-        self.advancementLevel = advancementLevel
-        self.availableEquipmentCSV = availableEquipmentCSV
-        self.preferredRepRangeLower = preferredRepRangeLower
-        self.preferredRepRangeUpper = preferredRepRangeUpper
-        self.sessionTimeBudgetMinutes = sessionTimeBudgetMinutes
-        self.weeklyTrainingDays = weeklyTrainingDays
-        self.onboardingCompleted = onboardingCompleted
-        self.updatedAt = updatedAt
-    }
-}
-
-@Model
-public final class TrainingPlanRecord {
-    public var workoutsJSON: String = "[]"
-    public var updatedAt: Date = Date()
-
-    public init(workoutsJSON: String = "[]", updatedAt: Date = .now) {
-        self.workoutsJSON = workoutsJSON
-        self.updatedAt = updatedAt
-    }
-}
-
-@Model
-public final class WorkoutRecord {
-    public var identifier: String = ""
-    public var title: String = ""
-    public var startedAt: Date = Date()
-    public var completedAt: Date?
-    public var durationMinutes: Int = 0
-    public var exerciseIDsCSV: String = ""
-    public var setsJSON: String = "[]"
-    public var totalVolumeLoad: Double = 0
-    public var averageRPE: Double = 0
-    public var completedSetCount: Int = 0
-    public var summary: String = ""
-    public var updatedAt: Date = Date()
-
-    public init(
-        identifier: String = UUID().uuidString,
-        title: String = "",
-        startedAt: Date = .now,
-        completedAt: Date? = nil,
-        durationMinutes: Int = 0,
-        exerciseIDsCSV: String = "",
-        setsJSON: String = "[]",
-        totalVolumeLoad: Double = 0,
-        averageRPE: Double = 0,
-        completedSetCount: Int = 0,
-        summary: String = "",
-        updatedAt: Date = .now
-    ) {
-        self.identifier = identifier
-        self.title = title
-        self.startedAt = startedAt
-        self.completedAt = completedAt
-        self.durationMinutes = durationMinutes
-        self.exerciseIDsCSV = exerciseIDsCSV
-        self.setsJSON = setsJSON
-        self.totalVolumeLoad = totalVolumeLoad
-        self.averageRPE = averageRPE
-        self.completedSetCount = completedSetCount
-        self.summary = summary
-        self.updatedAt = updatedAt
-    }
-}
-
-@Model
-public final class CoachMemoryRecord {
-    public var identifier: String = ""
-    public var content: String = ""
-    public var theme: String = ""
-    public var createdAt: Date = Date()
-
-    public init(
-        identifier: String = UUID().uuidString,
-        content: String = "",
-        theme: String = "",
-        createdAt: Date = .now
-    ) {
-        self.identifier = identifier
-        self.content = content
-        self.theme = theme
-        self.createdAt = createdAt
-    }
-}
+//
+// VOL-67 Copilot (fixup #23): the concrete `@Model` class definitions
+// for the syncable record types live inside `VolumeArcSchemaV4` at the
+// bottom of this file. The module-scope symbols below are typealiases
+// to those frozen nested classes. This mirrors how V1/V2/V3 are
+// structured (each `VersionedSchema` enum owns its own frozen `@Model`
+// types) and lets V4 stay an immutable historical shape — future V5
+// work will introduce new frozen types inside `VolumeArcSchemaV5` and
+// re-point these module-scope aliases there, leaving V4's shape
+// locked for the migration plan.
+public typealias UserProfileRecord = VolumeArcSchemaV4.UserProfileRecord
+public typealias TrainingPlanRecord = VolumeArcSchemaV4.TrainingPlanRecord
+public typealias WorkoutRecord = VolumeArcSchemaV4.WorkoutRecord
+public typealias CoachMemoryRecord = VolumeArcSchemaV4.CoachMemoryRecord
 
 public enum VolumeArcSchemaV1: VersionedSchema {
     public static let versionIdentifier = Schema.Version(1, 0, 0)
@@ -469,6 +366,132 @@ public enum VolumeArcSchemaV3: VersionedSchema {
 
 public enum VolumeArcSchemaV4: VersionedSchema {
     public static let versionIdentifier = Schema.Version(4, 0, 0)
+
+    // VOL-67 Copilot (fixup #23): frozen nested `@Model` types that
+    // represent V4's immutable schema shape. The module-scope
+    // typealiases at the top of this file resolve `UserProfileRecord`,
+    // `WorkoutRecord`, etc. to these V4-nested classes, so existing
+    // call sites can keep using unqualified names. When V5 work begins,
+    // these type definitions must stay frozen here and new V5 types
+    // get added inside a new `VolumeArcSchemaV5` enum; the module-scope
+    // typealiases then re-point to V5 for the current-version view.
+
+    @Model
+    public final class UserProfileRecord {
+        public var name: String = ""
+        public var coachingStyle: String = "motivational"
+        public var privacyMode: String = "standard"
+        public var advancementLevel: String = "intermediate"
+        public var availableEquipmentCSV: String = ""
+        public var preferredRepRangeLower: Int = 5
+        public var preferredRepRangeUpper: Int = 8
+        public var sessionTimeBudgetMinutes: Int = 60
+        public var weeklyTrainingDays: Int = 4
+        public var onboardingCompleted: Bool = false
+        // @Model macro rejects `.now` shorthand; must fully qualify.
+        public var updatedAt: Date = Date()
+
+        public init(
+            name: String = "",
+            coachingStyle: String = "motivational",
+            privacyMode: String = "standard",
+            advancementLevel: String = "intermediate",
+            availableEquipmentCSV: String = "",
+            preferredRepRangeLower: Int = 5,
+            preferredRepRangeUpper: Int = 8,
+            sessionTimeBudgetMinutes: Int = 60,
+            weeklyTrainingDays: Int = 4,
+            onboardingCompleted: Bool = false,
+            updatedAt: Date = .now
+        ) {
+            self.name = name
+            self.coachingStyle = coachingStyle
+            self.privacyMode = privacyMode
+            self.advancementLevel = advancementLevel
+            self.availableEquipmentCSV = availableEquipmentCSV
+            self.preferredRepRangeLower = preferredRepRangeLower
+            self.preferredRepRangeUpper = preferredRepRangeUpper
+            self.sessionTimeBudgetMinutes = sessionTimeBudgetMinutes
+            self.weeklyTrainingDays = weeklyTrainingDays
+            self.onboardingCompleted = onboardingCompleted
+            self.updatedAt = updatedAt
+        }
+    }
+
+    @Model
+    public final class TrainingPlanRecord {
+        public var workoutsJSON: String = "[]"
+        public var updatedAt: Date = Date()
+
+        public init(workoutsJSON: String = "[]", updatedAt: Date = .now) {
+            self.workoutsJSON = workoutsJSON
+            self.updatedAt = updatedAt
+        }
+    }
+
+    @Model
+    public final class WorkoutRecord {
+        public var identifier: String = ""
+        public var title: String = ""
+        public var startedAt: Date = Date()
+        public var completedAt: Date?
+        public var durationMinutes: Int = 0
+        public var exerciseIDsCSV: String = ""
+        public var setsJSON: String = "[]"
+        public var totalVolumeLoad: Double = 0
+        public var averageRPE: Double = 0
+        public var completedSetCount: Int = 0
+        public var summary: String = ""
+        public var updatedAt: Date = Date()
+
+        public init(
+            identifier: String = UUID().uuidString,
+            title: String = "",
+            startedAt: Date = .now,
+            completedAt: Date? = nil,
+            durationMinutes: Int = 0,
+            exerciseIDsCSV: String = "",
+            setsJSON: String = "[]",
+            totalVolumeLoad: Double = 0,
+            averageRPE: Double = 0,
+            completedSetCount: Int = 0,
+            summary: String = "",
+            updatedAt: Date = .now
+        ) {
+            self.identifier = identifier
+            self.title = title
+            self.startedAt = startedAt
+            self.completedAt = completedAt
+            self.durationMinutes = durationMinutes
+            self.exerciseIDsCSV = exerciseIDsCSV
+            self.setsJSON = setsJSON
+            self.totalVolumeLoad = totalVolumeLoad
+            self.averageRPE = averageRPE
+            self.completedSetCount = completedSetCount
+            self.summary = summary
+            self.updatedAt = updatedAt
+        }
+    }
+
+    @Model
+    public final class CoachMemoryRecord {
+        public var identifier: String = ""
+        public var content: String = ""
+        public var theme: String = ""
+        public var createdAt: Date = Date()
+
+        public init(
+            identifier: String = UUID().uuidString,
+            content: String = "",
+            theme: String = "",
+            createdAt: Date = .now
+        ) {
+            self.identifier = identifier
+            self.content = content
+            self.theme = theme
+            self.createdAt = createdAt
+        }
+    }
 
     public static var models: [any PersistentModel.Type] {
         [
