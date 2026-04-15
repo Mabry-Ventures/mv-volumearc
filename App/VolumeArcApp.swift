@@ -311,13 +311,34 @@ struct VolumeArcApp: App {
     #endif
 
     private static func makeSyncTransport() -> CloudSyncTransport {
-        let containerIdentifier = VolumeArcCloudConfiguration.containerIdentifier?
+        // VOL-55: containerIdentifier is now a compile-time constant, so
+        // this always has a valid value. We keep the emptiness check for
+        // future flexibility in case the constant ever needs to be read
+        // from a different source.
+        let containerIdentifier = VolumeArcCloudConfiguration.containerIdentifier
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard let containerIdentifier, containerIdentifier.isEmpty == false else {
+        guard containerIdentifier.isEmpty == false else {
             return UnavailableCloudSyncTransport(
                 reason: VolumeArcCloudConfiguration.startupWarning
                     ?? "Cloud sync is unavailable on this build."
+            )
+        }
+
+        // VOL-59 fixup: `CKContainer(identifier:)` traps the process
+        // (SIGTRAP / brk 1) if the caller's effective entitlements don't
+        // grant access to the requested container. On simulator Debug
+        // builds with `CODE_SIGNING_ALLOWED = NO`, the binary is ad-hoc
+        // signed without any entitlements, so the CloudKit attach path
+        // crashes the app on launch during `VolumeArcApp.init()`. Gate
+        // the transport on the runtime entitlement check so the app
+        // degrades to `UnavailableCloudSyncTransport` in unsigned /
+        // unentitled builds instead of crashing. This also covers the
+        // XCTest-hosted app process where the xctest runner inherits
+        // no entitlements.
+        guard VolumeArcCloudConfiguration.hasCloudKitEntitlement else {
+            return UnavailableCloudSyncTransport(
+                reason: "Cloud sync is unavailable because this build does not carry a CloudKit entitlement."
             )
         }
 

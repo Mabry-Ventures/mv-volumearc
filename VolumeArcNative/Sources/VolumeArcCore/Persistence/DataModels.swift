@@ -2,25 +2,45 @@
 import Foundation
 import SwiftData
 
+// VOL-55 follow-up: every `@Model` property needs a default value when
+// SwiftData's CloudKit integration is enabled. Without defaults, the
+// store fails to load at launch with:
+//
+//   "CloudKit integration requires that all attributes be optional, or
+//    have a default value set."
+//
+// Previously this constraint was silently bypassed because the CloudKit
+// container wasn't configured in the bundle (Info.plist was missing
+// `VolumeArcCloudKitContainer`), so SwiftData fell back to
+// `.automatic` cloud database and the defaults check never ran. Now that
+// VOL-55 hardcodes the container ID as a Swift constant, CloudKit is
+// actually active, and every non-optional property must have a default.
+
 @Model
 public final class UserProfileRecord {
-    public var name: String
-    public var coachingStyle: String
-    public var privacyMode: String
-    public var advancementLevel: String
-    public var availableEquipmentCSV: String
-    public var preferredRepRangeLower: Int
-    public var preferredRepRangeUpper: Int
-    public var sessionTimeBudgetMinutes: Int
-    public var weeklyTrainingDays: Int
-    public var onboardingCompleted: Bool
-    public var updatedAt: Date
+    public var name: String = ""
+    public var coachingStyle: String = "motivational"
+    public var privacyMode: String = "standard"
+    public var advancementLevel: String = "intermediate"
+    public var availableEquipmentCSV: String = ""
+    public var preferredRepRangeLower: Int = 5
+    public var preferredRepRangeUpper: Int = 8
+    public var sessionTimeBudgetMinutes: Int = 60
+    public var weeklyTrainingDays: Int = 4
+    public var onboardingCompleted: Bool = false
+    // @Model macro rejects `.now` shorthand; must fully qualify.
+    public var updatedAt: Date = Date()
 
     public init(
-        name: String, coachingStyle: String, privacyMode: String,
-        advancementLevel: String, availableEquipmentCSV: String,
-        preferredRepRangeLower: Int, preferredRepRangeUpper: Int,
-        sessionTimeBudgetMinutes: Int, weeklyTrainingDays: Int,
+        name: String = "",
+        coachingStyle: String = "motivational",
+        privacyMode: String = "standard",
+        advancementLevel: String = "intermediate",
+        availableEquipmentCSV: String = "",
+        preferredRepRangeLower: Int = 5,
+        preferredRepRangeUpper: Int = 8,
+        sessionTimeBudgetMinutes: Int = 60,
+        weeklyTrainingDays: Int = 4,
         onboardingCompleted: Bool = false,
         updatedAt: Date = .now
     ) {
@@ -40,10 +60,10 @@ public final class UserProfileRecord {
 
 @Model
 public final class TrainingPlanRecord {
-    public var workoutsJSON: String
-    public var updatedAt: Date
+    public var workoutsJSON: String = "[]"
+    public var updatedAt: Date = Date()
 
-    public init(workoutsJSON: String, updatedAt: Date = .now) {
+    public init(workoutsJSON: String = "[]", updatedAt: Date = .now) {
         self.workoutsJSON = workoutsJSON
         self.updatedAt = updatedAt
     }
@@ -51,21 +71,21 @@ public final class TrainingPlanRecord {
 
 @Model
 public final class WorkoutRecord {
-    public var identifier: String
-    public var title: String
-    public var startedAt: Date
+    public var identifier: String = ""
+    public var title: String = ""
+    public var startedAt: Date = Date()
     public var completedAt: Date?
-    public var durationMinutes: Int
-    public var exerciseIDsCSV: String
-    public var setsJSON: String
-    public var totalVolumeLoad: Double
-    public var averageRPE: Double
-    public var completedSetCount: Int
-    public var summary: String
+    public var durationMinutes: Int = 0
+    public var exerciseIDsCSV: String = ""
+    public var setsJSON: String = "[]"
+    public var totalVolumeLoad: Double = 0
+    public var averageRPE: Double = 0
+    public var completedSetCount: Int = 0
+    public var summary: String = ""
 
     public init(
         identifier: String = UUID().uuidString,
-        title: String,
+        title: String = "",
         startedAt: Date = .now,
         completedAt: Date? = nil,
         durationMinutes: Int = 0,
@@ -92,11 +112,11 @@ public final class WorkoutRecord {
 
 @Model
 public final class CoachMemoryRecord {
-    public var content: String
-    public var theme: String
-    public var createdAt: Date
+    public var content: String = ""
+    public var theme: String = ""
+    public var createdAt: Date = Date()
 
-    public init(content: String, theme: String = "", createdAt: Date = .now) {
+    public init(content: String = "", theme: String = "", createdAt: Date = .now) {
         self.content = content
         self.theme = theme
         self.createdAt = createdAt
