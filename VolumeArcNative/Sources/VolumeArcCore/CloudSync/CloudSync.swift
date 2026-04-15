@@ -249,7 +249,28 @@ public final class CloudKitSyncTransport: CloudSyncTransport, @unchecked Sendabl
                 if operation == .delete {
                     payloadJSON = (record["payloadJSON"] as? String) ?? ""
                 } else if let explicit = record["payloadJSON"] as? String, !explicit.isEmpty {
-                    payloadJSON = explicit
+                    // VOL-67 Codex P2 (fixup #30): an explicit non-empty
+                    // `payloadJSON` can still be malformed (older buggy
+                    // clients, manual cloud edits, corrupted records,
+                    // etc.). The downstream applier uses
+                    // `guard let payload = SyncPayloadCodec.decode*Payload(from:)
+                    // else { return }` and silently drops bad payloads —
+                    // while the pull cursor still advances past them.
+                    // Net effect: malformed records disappear forever with
+                    // no retry and no error. Validate the payload here at
+                    // pull time by round-tripping through the codec's
+                    // `modifiedAt(for:payloadJSON:)` helper (which tries
+                    // the per-kind decoder). If it fails, route into the
+                    // same cursor-reset path as legacy synthesis failures:
+                    // skip the record for THIS cycle so the applier
+                    // doesn't see junk, and reset the cursor so the whole
+                    // window gets re-fetched next time.
+                    if SyncPayloadCodec.modifiedAt(for: kind, payloadJSON: explicit) != nil {
+                        payloadJSON = explicit
+                    } else {
+                        legacySynthesisSkips += 1
+                        return
+                    }
                 } else {
                     var fields: [String: Any] = [:]
                     for key in record.allKeys() {

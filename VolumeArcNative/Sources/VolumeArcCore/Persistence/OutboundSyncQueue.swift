@@ -418,6 +418,18 @@ public struct SwiftDataOutboundSyncQueue: OutboundSyncQueue, Sendable {
         // and delete tombstones are rare compared to upserts). We then
         // verify the recordType matches `candidateRecordTypes` in Swift
         // before returning — over an already-narrowed row set.
+        //
+        // VOL-67 Codex P2 (fixup #30): REMOVED the `fetchLimit = 1`
+        // that fixup #19 added as an optimization. With the cap, if
+        // multiple queue rows shared an identifier but differed in
+        // record type (unlikely but possible), the fetch could return
+        // the wrong row first and the in-memory record-type filter
+        // would incorrectly yield `false`. That would let an inbound
+        // upsert bypass the tombstone-wins safeguard and reinsert a
+        // locally-deleted record. The identifier + operation +
+        // timestamp predicate still narrows to a handful of rows in
+        // practice, and the in-memory type filter runs over that
+        // narrow set — correct in every case.
         guard !candidateIdentifiers.isEmpty else { return false }
 
         let context = ModelContext(container)
@@ -425,14 +437,13 @@ public struct SwiftDataOutboundSyncQueue: OutboundSyncQueue, Sendable {
         let idsToMatch = candidateIdentifiers
         let threshold = newerThan
 
-        var descriptor = FetchDescriptor<OutboundSyncQueueRecord>(
+        let descriptor = FetchDescriptor<OutboundSyncQueueRecord>(
             predicate: #Predicate<OutboundSyncQueueRecord> { row in
                 idsToMatch.contains(row.recordIdentifier) &&
                 row.operation == deleteOp &&
                 row.queuedAt > threshold
             }
         )
-        descriptor.fetchLimit = 1
 
         // If the caller restricted record types, do the final filter
         // in-process — the narrowed fetch makes this trivial.
