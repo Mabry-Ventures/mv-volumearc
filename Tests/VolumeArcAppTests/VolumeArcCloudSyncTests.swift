@@ -598,6 +598,113 @@ final class VolumeArcCloudSyncTests: XCTestCase {
         XCTAssertTrue(pushed.isEmpty, "Queued upsert must not reach the transport after an inbound delete")
     }
 
+    // MARK: - VOL-67 Codex P1 #3: coalesce drained rows before push
+
+    /// Multiple mutations of the same workout must collapse to a
+    /// single pushed record. Without this, CloudKit receives
+    /// duplicate `CKRecord`s with the same `CKRecord.ID` in one
+    /// `CKModifyRecordsOperation`, which may be rejected or applied
+    /// in undefined order.
+    func testPushCoalescesMultipleUpsertsForSameRecord() async throws {
+        let startedAt = Date(timeIntervalSince1970: 1_720_070_000)
+        let workout = try workoutRepository.createWorkout(title: "Coalesce Me", startedAt: startedAt)
+
+        // Three successive sets → three upserts queued for the same workout.
+        for (index, weight) in [225.0, 230.0, 235.0].enumerated() {
+            try workoutRepository.appendSet(
+                WorkoutSetPerformance(
+                    weight: weight,
+                    reps: 5,
+                    rpe: 7.5,
+                    completedAt: startedAt.addingTimeInterval(Double(index * 60 + 60))
+                ),
+                forExercise: "back-squat",
+                to: workout.identifier
+            )
+        }
+
+        let pendingBefore = try outboundQueue.pendingRecords()
+            .filter { $0.recordType == CloudSyncRecord.Kind.workout.rawValue && $0.recordIdentifier == workout.identifier }
+        XCTAssertEqual(pendingBefore.count, 4, "Expected 4 queued workout upserts (1 create + 3 appendSet)")
+
+        let transport = RecordingCloudSyncTransport()
+        let coordinator = CloudSyncCoordinator(
+            transport: transport,
+            stateStore: FileSyncStateStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+            outboundQueue: outboundQueue
+        )
+
+        let pushedCount = try await coordinator.push()
+        XCTAssertEqual(pushedCount, 1, "Four upserts for the same workout must coalesce to one pushed record")
+
+        let pushed = await transport.pushedRecords
+        let workoutRecords = pushed.filter { $0.kind == .workout && $0.identifier == workout.identifier }
+        XCTAssertEqual(workoutRecords.count, 1, "Transport must receive exactly one CKRecord per workout identifier")
+
+        // The pushed record must reflect the final state (235 lb set, 3 sets total).
+        let pushedPayload = try XCTUnwrap(SyncPayloadCodec.decodeWorkoutPayload(from: workoutRecords[0].payloadJSON))
+        XCTAssertEqual(pushedPayload.completedSetCount, 3)
+        XCTAssertEqual(pushedPayload.totalVolumeLoad, 225.0 * 5 + 230.0 * 5 + 235.0 * 5, accuracy: 0.001)
+
+        // Every drained row (including superseded ones) is cleared from the queue.
+        XCTAssertTrue(try outboundQueue.pendingRecords().filter {
+            $0.recordType == CloudSyncRecord.Kind.workout.rawValue && $0.recordIdentifier == workout.identifier
+        }.isEmpty)
+    }
+
+    /// An upsert followed by a delete for the same record should
+    /// collapse to the delete. Otherwise CloudKit would receive both
+    /// an upsert and a delete for the same `CKRecord.ID` in one
+    /// batch, with undefined ordering.
+    func testPushCoalescesUpsertFollowedByDeleteToDelete() async throws {
+        let workout = try workoutRepository.createWorkout(title: "Create Then Delete", startedAt: Date(timeIntervalSince1970: 1_720_080_000))
+        try workoutRepository.deleteWorkout(identifier: workout.identifier)
+
+        // Queue now has: create upsert + delete, both for the same workout.
+        let pendingBefore = try outboundQueue.pendingRecords().filter {
+            $0.recordType == CloudSyncRecord.Kind.workout.rawValue && $0.recordIdentifier == workout.identifier
+        }
+        XCTAssertEqual(pendingBefore.count, 2)
+
+        let transport = RecordingCloudSyncTransport()
+        let coordinator = CloudSyncCoordinator(
+            transport: transport,
+            stateStore: FileSyncStateStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+            outboundQueue: outboundQueue
+        )
+
+        _ = try await coordinator.push()
+
+        let pushed = await transport.pushedRecords
+        let forThisWorkout = pushed.filter { $0.kind == .workout && $0.identifier == workout.identifier }
+        XCTAssertEqual(forThisWorkout.count, 1, "Upsert+delete must coalesce to one pushed record")
+        XCTAssertEqual(forThisWorkout[0].operation, .delete, "Coalesced result must be the delete")
+        XCTAssertTrue(try outboundQueue.pendingRecords().isEmpty)
+    }
+
+    // MARK: - VOL-67 Codex P2: legacy record type aliases
+
+    /// CloudKit records written by a prior version of this code may
+    /// carry the pre-rename long-form record types (`userProfile`,
+    /// `trainingPlan`, `coachMemory`). `Kind.parse(_:)` must accept
+    /// both forms so existing remote data doesn't silently vanish
+    /// on decode.
+    func testKindParseAcceptsLegacyLongFormNames() {
+        XCTAssertEqual(CloudSyncRecord.Kind.parse("workout"), .workout)
+        XCTAssertEqual(CloudSyncRecord.Kind.parse("profile"), .userProfile)
+        XCTAssertEqual(CloudSyncRecord.Kind.parse("plan"), .trainingPlan)
+        XCTAssertEqual(CloudSyncRecord.Kind.parse("memory"), .coachMemory)
+
+        // Legacy long-form names from earlier (unshipped) schemas.
+        XCTAssertEqual(CloudSyncRecord.Kind.parse("userProfile"), .userProfile)
+        XCTAssertEqual(CloudSyncRecord.Kind.parse("trainingPlan"), .trainingPlan)
+        XCTAssertEqual(CloudSyncRecord.Kind.parse("coachMemory"), .coachMemory)
+
+        // Unknown raw strings return nil.
+        XCTAssertNil(CloudSyncRecord.Kind.parse("bogus"))
+        XCTAssertNil(CloudSyncRecord.Kind.parse(""))
+    }
+
     // MARK: - Helpers
 
     private func makeApplier(

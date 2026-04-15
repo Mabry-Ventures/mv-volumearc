@@ -24,6 +24,27 @@ public struct CloudSyncRecord: Sendable, Codable {
         public var defaultIdentifier: String {
             rawValue
         }
+
+        /// Resolve a `Kind` from a raw-string record type coming from
+        /// an external source (CloudKit, the persisted outbound queue,
+        /// legacy on-disk records). Tries the current short-form raw
+        /// values first, then falls back to the pre-rename long-form
+        /// names that earlier, unshipped versions of this code may
+        /// have written. VOL-67 Codex P2: without this, an upgrade
+        /// from a previous schema would silently drop records whose
+        /// `recordType` was `userProfile` / `trainingPlan` /
+        /// `coachMemory` instead of `profile` / `plan` / `memory`.
+        public static func parse(_ raw: String) -> Kind? {
+            if let direct = Kind(rawValue: raw) {
+                return direct
+            }
+            switch raw {
+            case "userProfile": return .userProfile
+            case "trainingPlan": return .trainingPlan
+            case "coachMemory": return .coachMemory
+            default: return nil
+            }
+        }
     }
 
     public enum Operation: String, Sendable, Codable {
@@ -142,7 +163,7 @@ public final class CloudKitSyncTransport: CloudSyncTransport, @unchecked Sendabl
 
         operation.recordWasChangedBlock = { _, result in
             if case let .success(record) = result,
-               let kind = CloudSyncRecord.Kind(rawValue: record.recordType) {
+               let kind = CloudSyncRecord.Kind.parse(record.recordType) {
                 let modifiedAt = record.modificationDate ?? .now
                 let operation = CloudSyncRecord.Operation(
                     rawValue: (record["operation"] as? String) ?? CloudSyncRecord.Operation.upsert.rawValue
@@ -318,6 +339,24 @@ public actor CloudSyncCoordinator {
     }
 
     /// Push up to `limit` queued local changes and delete them only after a successful transport call.
+    ///
+    /// VOL-67 Codex P1: drained rows are coalesced by `(recordType,
+    /// recordIdentifier)` before the batch is handed to the transport.
+    /// Without coalescing, a record that was mutated N times between
+    /// sync cycles would produce N `CKRecord`s with the same
+    /// `CKRecord.ID` in a single `CKModifyRecordsOperation`. CloudKit
+    /// may reject such a batch outright or apply the records in an
+    /// undefined order, leaving the queue stuck retrying or the
+    /// remote state inconsistent. Because `drain(limit:)` returns
+    /// rows in `queuedAt` ascending order, the "later operation
+    /// wins" collapse handles every multi-mutation history we care
+    /// about:
+    ///   - `upsert → upsert → upsert` → keep the newest upsert (latest state)
+    ///   - `upsert → delete` → keep the delete (tombstone wins)
+    ///   - `delete → upsert` → keep the upsert (record was recreated)
+    /// Every drained row is still deleted from the queue on success —
+    /// including the superseded ones that didn't make it into the
+    /// coalesced batch — so nothing stays queued after a successful push.
     public func push(limit: Int = 50, additionalRecords: [CloudSyncRecord] = []) async throws -> Int {
         guard transport.isAvailable else { return 0 }
 
@@ -328,7 +367,25 @@ public actor CloudSyncCoordinator {
             drainedChanges = try await MainActor.run {
                 try outboundQueue.drain(limit: limit)
             }
-            let queuedRecords = try drainedChanges.map(Self.makeCloudSyncRecord(from:))
+
+            // Coalesce by (recordType, recordIdentifier) so the batch
+            // contains at most one entry per logical record. Iterate
+            // in order: each successive row overwrites the previous
+            // one for the same key, so the final dict holds the
+            // latest operation per record.
+            var coalesced: [String: QueuedOutboundSyncChange] = [:]
+            var orderedKeys: [String] = []
+            for change in drainedChanges {
+                let key = "\(change.recordType)|\(change.recordIdentifier)"
+                if coalesced[key] == nil {
+                    orderedKeys.append(key)
+                }
+                coalesced[key] = change
+            }
+            // Preserve the latest-value-wins ordering in a stable sequence
+            // so tests and transports see a predictable push order.
+            let coalescedChanges = orderedKeys.compactMap { coalesced[$0] }
+            let queuedRecords = try coalescedChanges.map(Self.makeCloudSyncRecord(from:))
             records.append(contentsOf: queuedRecords)
         }
 
@@ -336,6 +393,9 @@ public actor CloudSyncCoordinator {
 
         try await transport.pushRecords(records)
 
+        // Drop every drained row, including the ones that were
+        // superseded by a later mutation and never made it into the
+        // pushed batch — they're resolved on the server now.
         if let outboundQueue, !drainedChanges.isEmpty {
             try await MainActor.run {
                 try outboundQueue.delete(ids: drainedChanges.map(\.id))
@@ -388,7 +448,7 @@ public actor CloudSyncCoordinator {
     }
 
     private static func makeCloudSyncRecord(from change: QueuedOutboundSyncChange) throws -> CloudSyncRecord {
-        guard let kind = CloudSyncRecord.Kind(rawValue: change.recordType) else {
+        guard let kind = CloudSyncRecord.Kind.parse(change.recordType) else {
             throw CloudSyncError.invalidQueuedRecord(reason: "Unsupported record type: \(change.recordType)")
         }
         guard let operation = CloudSyncRecord.Operation(rawValue: change.operation) else {
