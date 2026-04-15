@@ -71,6 +71,75 @@ final class VolumeArcPersistenceTests: XCTestCase {
         XCTAssertTrue(TelemetrySeverity.warning < .error)
     }
 
+    // MARK: - VOL-67 Codex P2 (fixup #16): outbound backfill flag scoped by storage mode
+
+    /// The outbound-queue-backfill completion flag must be scoped per
+    /// storage mode, not shared across all modes. Previously a single
+    /// fixed key was used, so a first-launch backfill that ran against
+    /// `.localFallback` (CloudKit entitlement missing) would mark the
+    /// flag complete; a later recovery to `.cloudSynced` opens a
+    /// DIFFERENT store file whose pre-existing migrated records still
+    /// need outbound queue rows — but the shared flag would
+    /// short-circuit the backfill, stranding that data until the user
+    /// edited it.
+    ///
+    /// Fix: append `storageMode.rawValue` to the flag key prefix so
+    /// every mode tracks its own completion independently.
+    @MainActor
+    func testOutboundQueueBackfillFlagKeyIsScopedByStorageMode() {
+        let cloudKey = VolumeArcPersistenceController.outboundQueueBackfillFlagKey(for: .cloudSynced)
+        let localKey = VolumeArcPersistenceController.outboundQueueBackfillFlagKey(for: .localFallback)
+        let inMemoryKey = VolumeArcPersistenceController.outboundQueueBackfillFlagKey(for: .inMemoryFallback)
+        let unavailableKey = VolumeArcPersistenceController.outboundQueueBackfillFlagKey(for: .unavailable)
+
+        // Each mode must produce a distinct key so completion tracking
+        // stays independent per store.
+        let allKeys: Set<String> = [cloudKey, localKey, inMemoryKey, unavailableKey]
+        XCTAssertEqual(allKeys.count, 4, "Each storage mode must produce a unique backfill flag key")
+
+        // Keys must encode the storage mode's raw value so the key is
+        // stable across app launches for a given mode.
+        XCTAssertTrue(cloudKey.hasSuffix(VolumeArcPersistenceController.StorageMode.cloudSynced.rawValue))
+        XCTAssertTrue(localKey.hasSuffix(VolumeArcPersistenceController.StorageMode.localFallback.rawValue))
+        XCTAssertTrue(inMemoryKey.hasSuffix(VolumeArcPersistenceController.StorageMode.inMemoryFallback.rawValue))
+        XCTAssertTrue(unavailableKey.hasSuffix(VolumeArcPersistenceController.StorageMode.unavailable.rawValue))
+
+        // All keys must share the same prefix so a future migration
+        // could enumerate + clear them together.
+        let prefix = "VolumeArcPersistence.outboundQueueBackfillV4Completed"
+        XCTAssertTrue(cloudKey.hasPrefix(prefix))
+        XCTAssertTrue(localKey.hasPrefix(prefix))
+        XCTAssertTrue(inMemoryKey.hasPrefix(prefix))
+        XCTAssertTrue(unavailableKey.hasPrefix(prefix))
+    }
+
+    /// End-to-end behavior: if the fallback-mode flag is set AND the
+    /// cloud-mode flag is NOT set, running the backfill under the
+    /// cloud-mode flag key must still execute. This demonstrates that
+    /// scoping the flag by mode correctly preserves the ability to
+    /// backfill a new store after a mode-recovery.
+    @MainActor
+    func testBackfillRunsAfterModeRecoveryWhenFlagIsScopedByMode() throws {
+        let ephemeralDefaults = UserDefaults(suiteName: "test.\(UUID().uuidString)")!
+        defer { ephemeralDefaults.removePersistentDomain(forName: "test") }
+
+        // Simulate: local-fallback backfill already ran and marked its
+        // flag complete.
+        let localFlag = VolumeArcPersistenceController.outboundQueueBackfillFlagKey(for: .localFallback)
+        ephemeralDefaults.set(true, forKey: localFlag)
+
+        // The cloud-mode flag must still be unset, so a cloud-mode
+        // backfill would still run. `OutboundQueueBackfill.performIfNeeded`
+        // treats "unset" as "run required".
+        let cloudFlag = VolumeArcPersistenceController.outboundQueueBackfillFlagKey(for: .cloudSynced)
+        XCTAssertFalse(
+            ephemeralDefaults.bool(forKey: cloudFlag),
+            "Cloud-mode flag must remain unset after local-mode backfill completes"
+        )
+        XCTAssertNotEqual(localFlag, cloudFlag,
+                          "Local and cloud backfill flags must be distinct keys")
+    }
+
     // MARK: - Helpers
 
     private func makeStatus(

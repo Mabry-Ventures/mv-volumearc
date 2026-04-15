@@ -123,16 +123,33 @@ final class VolumeArcPersistenceController {
 
     /// VOL-67 Copilot (fixup #13): the backfill logic lives in
     /// `VolumeArcCore.OutboundQueueBackfill` so it's testable in
-    /// isolation. The production key is a fixed string so the flag
-    /// survives app relaunches.
-    private static let outboundQueueBackfillDefaultsKey = "VolumeArcPersistence.outboundQueueBackfillV4Completed"
+    /// isolation. The production key prefix is fixed so the flag
+    /// survives app relaunches; the active storage mode is appended
+    /// at call time (see `outboundQueueBackfillFlagKey(for:)`).
+    ///
+    /// VOL-67 Codex P2 (fixup #16): the completion flag MUST be scoped
+    /// by storage mode. Previously the flag was a single fixed string
+    /// shared across all modes, so a first-launch backfill that ran
+    /// against `.localFallback` (e.g., when the CloudKit entitlement
+    /// was missing) would mark the flag complete. A later recovery to
+    /// `.cloudSynced` opens a DIFFERENT store file
+    /// (`VolumeArc.sqlite` vs `VolumeArc-LocalFallback.sqlite`) whose
+    /// pre-existing migrated records still need outbound queue rows —
+    /// but the shared flag would short-circuit the backfill and those
+    /// records would never sync until the user edited them. Scoping
+    /// by storage mode gives each store its own completion marker.
+    private static let outboundQueueBackfillDefaultsKeyPrefix = "VolumeArcPersistence.outboundQueueBackfillV4Completed"
+
+    static func outboundQueueBackfillFlagKey(for storageMode: StorageMode) -> String {
+        "\(outboundQueueBackfillDefaultsKeyPrefix).\(storageMode.rawValue)"
+    }
 
     private func backfillOutboundQueueIfNeeded() throws {
         guard let container else { return }
         try OutboundQueueBackfill.performIfNeeded(
             container: container,
             userDefaults: .standard,
-            flagKey: Self.outboundQueueBackfillDefaultsKey
+            flagKey: Self.outboundQueueBackfillFlagKey(for: bootstrapStatus.storageMode)
         )
     }
 
