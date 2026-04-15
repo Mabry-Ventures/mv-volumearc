@@ -52,8 +52,7 @@ jobs:
 
             await ensureComment(
               `<!-- codex-review-request:${sha} -->`,
-              `<!-- codex-review-request:${sha} -->
-@codex review`
+              `<!-- codex-review-request:${sha} -->\n@codex review`
             );
 
       - name: Request Copilot review for current pull request
