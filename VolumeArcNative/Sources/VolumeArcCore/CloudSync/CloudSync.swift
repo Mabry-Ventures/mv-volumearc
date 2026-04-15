@@ -723,6 +723,68 @@ public struct DefaultSyncPayloadApplier: Sendable {
         }
     }
 
+    /// VOL-67 Codex P1 (fixup #18): check whether the outbound queue
+    /// holds a pending delete tombstone for `(kind, recordIdentifier)`
+    /// whose `queuedAt` is strictly newer than `inboundTimestamp`.
+    ///
+    /// Used by the per-kind apply methods' "no existing local record"
+    /// branch to avoid resurrecting a record the user just deleted.
+    /// Scenario: `syncCycle()` pulls before pushing. The pull returns
+    /// an inbound upsert for a record whose local row was already
+    /// removed by a queued delete. Without this check, the apply path
+    /// would insert the record back into the local store; the
+    /// subsequent push would send the tombstone to CloudKit (deleting
+    /// the server copy) but the newly-reinserted local row would
+    /// survive, leaving the UI showing a zombie record until the next
+    /// pull/apply cycle noticed the divergence.
+    ///
+    /// Identifier matching canonicalizes via `Kind.parse` +
+    /// `canonicalQueueIdentifier(from:)` so the check also catches
+    /// legacy-form queue rows (e.g., `recordType="userProfile"`
+    /// matching against canonical `.userProfile` kind). Strict `>`
+    /// matches the applier's `shouldApply` semantics: equal timestamps
+    /// give priority to the inbound record, so only delete intents
+    /// that are strictly newer than the inbound modification suppress
+    /// the resurrection.
+    @MainActor
+    private func hasNewerLocalDeleteTombstone(
+        kind: CloudSyncRecord.Kind,
+        recordIdentifier: String,
+        inboundTimestamp: Date
+    ) throws -> Bool {
+        guard let outboundQueue else { return false }
+        let pending = try outboundQueue.pendingRecords()
+        let canonicalID = kind.canonicalQueueIdentifier(from: recordIdentifier)
+        let deleteRaw = CloudSyncRecord.Operation.delete.rawValue
+        return pending.contains { change in
+            guard change.operation == deleteRaw else { return false }
+            guard let rowKind = CloudSyncRecord.Kind.parse(change.recordType),
+                  rowKind == kind else { return false }
+            let rowID = rowKind.canonicalQueueIdentifier(from: change.recordIdentifier)
+            guard rowID == canonicalID else { return false }
+            return change.queuedAt > inboundTimestamp
+        }
+    }
+
+    @MainActor
+    private func recordSuppressedInboundInsert(
+        kind: CloudSyncRecord.Kind,
+        recordIdentifier: String,
+        inboundTimestamp: Date
+    ) {
+        telemetrySink?.record(TelemetryEvent(
+            category: "sync",
+            name: "inbound_upsert_suppressed_by_tombstone",
+            severity: .info,
+            message: "Pull upsert for \(kind.rawValue)/\(recordIdentifier) suppressed: local delete tombstone is newer than inbound",
+            metadata: [
+                "recordType": kind.rawValue,
+                "recordIdentifier": recordIdentifier,
+                "inboundTimestamp": ISO8601DateFormatter().string(from: inboundTimestamp),
+            ]
+        ))
+    }
+
     @MainActor
     private func applyDeletion(identifier: String) throws {
         // Best-effort fallback for legacy deleted-record callbacks that don't
@@ -845,6 +907,28 @@ public struct DefaultSyncPayloadApplier: Sendable {
             existing.summary = payload.summary
             existing.updatedAt = payload.updatedAt
         } else {
+            // VOL-67 Codex P1 (fixup #18): don't resurrect a record the
+            // user just deleted locally. If the outbound queue has a
+            // strictly newer delete tombstone for this workout, the
+            // pending delete represents more recent user intent than
+            // the inbound upsert — inserting here would make the
+            // deleted workout visually reappear, and the subsequent
+            // push would delete it on the server without removing the
+            // reinserted local row. Skip and let the next push apply
+            // the tombstone.
+            if try hasNewerLocalDeleteTombstone(
+                kind: record.kind,
+                recordIdentifier: record.identifier,
+                inboundTimestamp: payload.updatedAt
+            ) {
+                recordSuppressedInboundInsert(
+                    kind: record.kind,
+                    recordIdentifier: record.identifier,
+                    inboundTimestamp: payload.updatedAt
+                )
+                return
+            }
+
             context.insert(WorkoutRecord(
                 identifier: record.identifier,
                 title: payload.title,
@@ -904,6 +988,25 @@ public struct DefaultSyncPayloadApplier: Sendable {
             existing.onboardingCompleted = payload.onboardingCompleted
             existing.updatedAt = payload.updatedAt
         } else {
+            // VOL-67 Codex P1 (fixup #18): tombstone-wins check — same
+            // resurrection race as workouts/memories. For singletons
+            // the `recordIdentifier` canonicalizes to
+            // `CloudSyncRecord.Kind.userProfile.defaultIdentifier`, so
+            // any pending delete tombstone for this kind (under any
+            // alias form) matches regardless of how it's stored.
+            if try hasNewerLocalDeleteTombstone(
+                kind: record.kind,
+                recordIdentifier: record.identifier,
+                inboundTimestamp: payload.updatedAt
+            ) {
+                recordSuppressedInboundInsert(
+                    kind: record.kind,
+                    recordIdentifier: record.identifier,
+                    inboundTimestamp: payload.updatedAt
+                )
+                return
+            }
+
             context.insert(UserProfileRecord(
                 name: payload.name,
                 coachingStyle: payload.coachingStyle,
@@ -952,6 +1055,20 @@ public struct DefaultSyncPayloadApplier: Sendable {
             existing.workoutsJSON = payload.workoutsJSON
             existing.updatedAt = payload.updatedAt
         } else {
+            // VOL-67 Codex P1 (fixup #18): tombstone-wins check.
+            if try hasNewerLocalDeleteTombstone(
+                kind: record.kind,
+                recordIdentifier: record.identifier,
+                inboundTimestamp: payload.updatedAt
+            ) {
+                recordSuppressedInboundInsert(
+                    kind: record.kind,
+                    recordIdentifier: record.identifier,
+                    inboundTimestamp: payload.updatedAt
+                )
+                return
+            }
+
             context.insert(TrainingPlanRecord(
                 workoutsJSON: payload.workoutsJSON,
                 updatedAt: payload.updatedAt
@@ -996,6 +1113,23 @@ public struct DefaultSyncPayloadApplier: Sendable {
             existing.theme = payload.theme
             existing.createdAt = payload.createdAt
         } else {
+            // VOL-67 Codex P1 (fixup #18): tombstone-wins check — same
+            // resurrection race as workouts. Skip the insert when the
+            // outbound queue has a strictly newer delete for this
+            // memory's identifier.
+            if try hasNewerLocalDeleteTombstone(
+                kind: record.kind,
+                recordIdentifier: record.identifier,
+                inboundTimestamp: payload.createdAt
+            ) {
+                recordSuppressedInboundInsert(
+                    kind: record.kind,
+                    recordIdentifier: record.identifier,
+                    inboundTimestamp: payload.createdAt
+                )
+                return
+            }
+
             context.insert(CoachMemoryRecord(
                 identifier: record.identifier,
                 content: payload.content,

@@ -822,6 +822,164 @@ final class VolumeArcCloudSyncTests: XCTestCase {
                        "Queue row with queuedAt > olderThan must NOT be invalidated")
     }
 
+    // MARK: - VOL-67 Codex P1 (fixup #18): tombstone wins over inbound resurrection
+
+    /// Codex P1 (fixup #18): when `syncCycle` pulls before pushing, a
+    /// workout that was just deleted locally can still have a queued
+    /// delete tombstone while the local `WorkoutRecord` is gone. Without
+    /// the tombstone-check, any inbound upsert is inserted unconditionally,
+    /// so an older server version can resurrect a record the user just
+    /// deleted — the subsequent push sends the tombstone to CloudKit but
+    /// doesn't remove the reinserted local row, leaving local state
+    /// incorrect until a later pull.
+    ///
+    /// This test reproduces the race: queue a newer delete, apply an
+    /// older inbound upsert, verify the local workout is NOT resurrected
+    /// and the tombstone is still pending for the next push.
+    func testApplierSuppressesInboundUpsertWhenNewerDeleteTombstonePending() async throws {
+        let identifier = "workout-to-be-deleted"
+
+        // Step 1: seed a workout locally and let the repository queue
+        // its upsert. The repository's createWorkout helper handles
+        // the outbound enqueue atomically.
+        _ = try workoutRepository.createWorkout(
+            title: "Pending Delete",
+            startedAt: Date(timeIntervalSince1970: 1_720_300_000)
+        )
+
+        // Step 2: replace the auto-generated identifier so we can
+        // reference it by name in the rest of the test. We fetch the
+        // workout, grab the true identifier, and use that throughout.
+        let context = ModelContext(container)
+        let seededWorkout = try XCTUnwrap(
+            try context.fetch(FetchDescriptor<WorkoutRecord>()).first
+        )
+        let realIdentifier = seededWorkout.identifier
+
+        // Step 3: delete the local workout. The repository removes the
+        // WorkoutRecord from the store AND enqueues a delete tombstone
+        // atomically (staged into the same context save).
+        try workoutRepository.deleteWorkout(identifier: realIdentifier)
+
+        // Sanity: the local workout is gone and the outbound queue
+        // holds the delete tombstone.
+        let remainingWorkouts = try context.fetch(FetchDescriptor<WorkoutRecord>())
+        XCTAssertTrue(
+            remainingWorkouts.isEmpty,
+            "Local workout should be gone after repository.deleteWorkout"
+        )
+
+        let pendingBeforePull = try outboundQueue.pendingRecords()
+            .filter { $0.recordIdentifier == realIdentifier && $0.operation == CloudSyncRecord.Operation.delete.rawValue }
+        XCTAssertEqual(
+            pendingBeforePull.count,
+            1,
+            "Exactly one delete tombstone should be pending"
+        )
+        let tombstoneTimestamp = try XCTUnwrap(pendingBeforePull.first?.queuedAt)
+
+        // Step 4: construct an inbound upsert for the same workout
+        // with an `updatedAt` STRICTLY OLDER than the tombstone's
+        // queuedAt. This is the server-knows-a-stale-version case
+        // Codex described.
+        let inboundTimestamp = tombstoneTimestamp.addingTimeInterval(-60)
+        let inboundPayload = WorkoutRecord(
+            identifier: realIdentifier,
+            title: "Server Version (Older)",
+            startedAt: inboundTimestamp,
+            updatedAt: inboundTimestamp
+        )
+        let inboundRecord = try XCTUnwrap(
+            SyncPayloadCodec.makeRecord(for: inboundPayload, operation: .upsert)
+        )
+
+        // Step 5: apply the pull result through the applier.
+        let telemetry = InMemoryTelemetrySink()
+        let applier = makeApplier(
+            container: container,
+            telemetrySink: telemetry,
+            outboundQueue: outboundQueue
+        )
+        try await applier.apply(result: CloudSyncPullResult(
+            changedRecords: [inboundRecord],
+            deletedRecordIDs: [],
+            nextCursor: nil
+        ))
+
+        // Step 6: verify the workout was NOT resurrected.
+        let refreshedContext = ModelContext(container)
+        let refreshedWorkouts = try refreshedContext.fetch(FetchDescriptor<WorkoutRecord>())
+        XCTAssertTrue(
+            refreshedWorkouts.isEmpty,
+            "Local workout must NOT be resurrected — a newer delete tombstone is pending"
+        )
+
+        // Step 7: verify the delete tombstone is still in the queue
+        // (ready to push).
+        let remainingTombstones = try outboundQueue.pendingRecords()
+            .filter { $0.recordIdentifier == realIdentifier && $0.operation == CloudSyncRecord.Operation.delete.rawValue }
+        XCTAssertEqual(
+            remainingTombstones.count,
+            1,
+            "Delete tombstone must still be pending for the next push cycle"
+        )
+
+        // Step 8: verify telemetry was emitted for the suppressed insert.
+        XCTAssertTrue(
+            telemetry.currentEvents.contains { $0.name == "inbound_upsert_suppressed_by_tombstone" },
+            "Expected inbound_upsert_suppressed_by_tombstone telemetry event"
+        )
+    }
+
+    /// Complement: when the inbound is STRICTLY NEWER than the
+    /// tombstone, normal last-write-wins takes over and the record
+    /// IS resurrected (the server's mutation is newer than the
+    /// user's delete intent). Strict `>` matches the applier's
+    /// existing `shouldApply` tie-breaking: inbound wins ties.
+    func testApplierResurrectsInboundUpsertWhenTombstoneIsOlder() async throws {
+        let identifier = "workout-newer-than-tombstone"
+
+        // Seed, capture identifier, delete — same as the previous test.
+        _ = try workoutRepository.createWorkout(
+            title: "Will Be Resurrected",
+            startedAt: Date(timeIntervalSince1970: 1_720_310_000)
+        )
+        let context = ModelContext(container)
+        let seeded = try XCTUnwrap(try context.fetch(FetchDescriptor<WorkoutRecord>()).first)
+        let realIdentifier = seeded.identifier
+        try workoutRepository.deleteWorkout(identifier: realIdentifier)
+
+        let pendingDeletes = try outboundQueue.pendingRecords()
+            .filter { $0.recordIdentifier == realIdentifier && $0.operation == CloudSyncRecord.Operation.delete.rawValue }
+        let tombstoneTimestamp = try XCTUnwrap(pendingDeletes.first?.queuedAt)
+
+        // Inbound is STRICTLY NEWER than the tombstone.
+        let inboundTimestamp = tombstoneTimestamp.addingTimeInterval(60)
+        let inboundPayload = WorkoutRecord(
+            identifier: realIdentifier,
+            title: "Server Version (Newer)",
+            startedAt: inboundTimestamp,
+            updatedAt: inboundTimestamp
+        )
+        let inboundRecord = try XCTUnwrap(
+            SyncPayloadCodec.makeRecord(for: inboundPayload, operation: .upsert)
+        )
+
+        let applier = makeApplier(container: container, outboundQueue: outboundQueue)
+        try await applier.apply(result: CloudSyncPullResult(
+            changedRecords: [inboundRecord],
+            deletedRecordIDs: [],
+            nextCursor: nil
+        ))
+
+        // The record SHOULD be resurrected — newer upsert beats older
+        // delete under last-write-wins.
+        let refreshedContext = ModelContext(container)
+        let refreshed = try refreshedContext.fetch(FetchDescriptor<WorkoutRecord>())
+        XCTAssertEqual(refreshed.count, 1, "Newer inbound upsert must resurrect the record")
+        XCTAssertEqual(refreshed.first?.title, "Server Version (Newer)")
+    }
+
     // MARK: - VOL-67 Codex P2 #6: synthesize legacy field-based payloads
 
     /// Pre-VOL-67 CKRecords may have stored each payload field as an
