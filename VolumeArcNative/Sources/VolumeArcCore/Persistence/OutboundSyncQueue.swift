@@ -237,8 +237,32 @@ public struct SwiftDataOutboundSyncQueue: OutboundSyncQueue, Sendable {
         let descriptor = FetchDescriptor<OutboundSyncQueueRecord>()
         let rows = try context.fetch(descriptor)
 
+        // VOL-67 Codex P2 fixup: the pull applier always calls us with
+        // the current short-form `kind.rawValue`, but pre-rename queued
+        // rows may still hold the legacy long-form (`userProfile`,
+        // `trainingPlan`, `coachMemory`). Resolve both sides to a `Kind`
+        // via `Kind.parse(_:)` so that a short-form call (e.g.,
+        // `"profile"`) also matches rows stored with the long form
+        // (`"userProfile"`). Without this, legacy rows would never be
+        // invalidated and the next push would resend stale payloads
+        // over newer server state.
+        let targetKind = CloudSyncRecord.Kind.parse(recordType)
+
         var removed = 0
-        for row in rows where row.recordType == recordType && row.recordIdentifier == recordIdentifier {
+        for row in rows {
+            guard row.recordIdentifier == recordIdentifier else { continue }
+
+            let rowKind = CloudSyncRecord.Kind.parse(row.recordType)
+            // Match by resolved kind when both sides parse; fall back to
+            // exact string match for unknown/future record types.
+            let matches: Bool
+            if let targetKind, let rowKind {
+                matches = targetKind == rowKind
+            } else {
+                matches = row.recordType == recordType
+            }
+            guard matches else { continue }
+
             if let olderThan, row.queuedAt >= olderThan {
                 continue
             }

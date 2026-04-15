@@ -684,6 +684,40 @@ final class VolumeArcCloudSyncTests: XCTestCase {
 
     // MARK: - VOL-67 Codex P2: legacy record type aliases
 
+    /// Codex P2 (fixup #5): the queue's `invalidateEntries` must
+    /// collapse legacy long-form row recordTypes (`userProfile`,
+    /// `trainingPlan`, `coachMemory`) and current short-form call
+    /// sites (`profile`, `plan`, `memory`) to the same `Kind` for
+    /// matching. Otherwise a pre-rename queue row on an upgraded
+    /// client never gets invalidated when a newer pull lands, and
+    /// the next push resends the stale payload over the server.
+    func testInvalidateEntriesMatchesLegacyLongFormRecordType() throws {
+        // Simulate a pre-rename queue row: stored with recordType
+        // "userProfile" (the legacy long form) that this version's
+        // rawValue-based lookup would miss.
+        let oldPayload = "{}"
+        try outboundQueue.enqueue(
+            recordType: "userProfile",
+            recordIdentifier: CloudSyncRecord.Kind.userProfile.defaultIdentifier,
+            operation: CloudSyncRecord.Operation.upsert.rawValue,
+            payloadJSON: oldPayload,
+            queuedAt: Date(timeIntervalSince1970: 1_720_000_000)
+        )
+        XCTAssertEqual(try outboundQueue.pendingRecords().count, 1)
+
+        // Applier call site always uses the current short-form
+        // `kind.rawValue` ("profile"). Invalidating with that should
+        // STILL match the legacy long-form row.
+        try outboundQueue.invalidateEntries(
+            recordType: CloudSyncRecord.Kind.userProfile.rawValue, // "profile"
+            recordIdentifier: CloudSyncRecord.Kind.userProfile.defaultIdentifier,
+            olderThan: Date() // future → matches any older row
+        )
+
+        XCTAssertTrue(try outboundQueue.pendingRecords().isEmpty,
+                      "Legacy long-form queue row must be invalidated by a short-form invalidation call")
+    }
+
     /// CloudKit records written by a prior version of this code may
     /// carry the pre-rename long-form record types (`userProfile`,
     /// `trainingPlan`, `coachMemory`). `Kind.parse(_:)` must accept
