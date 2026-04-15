@@ -442,16 +442,27 @@ public enum SyncPayloadCodec {
         return nil
     }
 
-    private static let encoder: JSONEncoder = {
+    // VOL-67 Copilot (fixup #29): `JSONEncoder` and `JSONDecoder` are
+    // NOT thread-safe in Swift. `SyncPayloadCodec.encode/decode` is
+    // called from multiple executors (main-actor repository staging,
+    // the `CloudSyncCoordinator` actor pushing/pulling, the CloudKit
+    // transport background queue, etc.) — a shared static instance
+    // could race during concurrent encode/decode and intermittently
+    // crash or corrupt output. Computed properties give every caller
+    // a freshly constructed instance, which is safe. Modern Swift's
+    // `JSONEncoder` is lightweight enough that the per-call
+    // allocation cost is negligible compared to the serialization
+    // work itself.
+    private static var encoder: JSONEncoder {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .millisecondsSince1970
         encoder.outputFormatting = [.sortedKeys]
         return encoder
-    }()
+    }
 
-    private static let decoder: JSONDecoder = {
+    private static var decoder: JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .millisecondsSince1970
         return decoder
-    }()
+    }
 }
