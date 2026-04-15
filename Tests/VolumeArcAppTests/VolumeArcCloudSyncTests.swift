@@ -374,16 +374,162 @@ final class VolumeArcCloudSyncTests: XCTestCase {
         XCTAssertTrue(pushedRecords.isEmpty)
     }
 
+    // MARK: - VOL-67 fixup: pull-before-push + stale-queue invalidation
+
+    /// Codex P1: `syncCycle()` must pull remote changes before pushing
+    /// queued writes, so the applier's `shouldApply` timestamp check has
+    /// a chance to run against the pre-push remote state.
+    func testSyncCyclePullsBeforePushing() async throws {
+        _ = try workoutRepository.createWorkout(title: "Ordering Probe", startedAt: Date(timeIntervalSince1970: 1_720_010_000))
+
+        let transport = RecordingCloudSyncTransport()
+        let applier = makeApplier(container: container, outboundQueue: outboundQueue)
+        let coordinator = CloudSyncCoordinator(
+            transport: transport,
+            payloadApplier: applier,
+            stateStore: FileSyncStateStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+            outboundQueue: outboundQueue
+        )
+
+        _ = try await coordinator.syncCycle()
+
+        let pullOrder = await transport.pullCallOrder
+        let pushOrder = await transport.pushCallOrder
+        XCTAssertEqual(pullOrder.count, 1, "Expected exactly one pull in a single sync cycle")
+        XCTAssertEqual(pushOrder.count, 1, "Expected exactly one push in a single sync cycle")
+        XCTAssertLessThan(pullOrder[0], pushOrder[0], "Pull must happen strictly before push")
+    }
+
+    /// Codex P1 scenario: device A has a stale queued upsert and device B
+    /// has already written a newer version of the same workout to the
+    /// server. When A runs `syncCycle()`, it must (1) pull B's newer
+    /// version and update local state, (2) invalidate A's stale queued
+    /// entry, (3) push nothing (the only queued row was stale).
+    func testSyncCycleInvalidatesStaleQueuedUpsertWhenPullBringsNewerVersion() async throws {
+        // 1) Local (stale) write at T0, queued.
+        let workoutID = "shared-workout"
+        let t0 = Date(timeIntervalSince1970: 1_720_020_000)
+        let staleWorkout = WorkoutRecord(
+            identifier: workoutID,
+            title: "Stale Local",
+            startedAt: t0,
+            totalVolumeLoad: 100,
+            averageRPE: 7,
+            completedSetCount: 1,
+            summary: "stale",
+            updatedAt: t0
+        )
+        let context = ModelContext(container)
+        context.insert(staleWorkout)
+        try context.save()
+        try outboundQueue.enqueue(
+            recordType: CloudSyncRecord.Kind.workout.rawValue,
+            recordIdentifier: workoutID,
+            operation: CloudSyncRecord.Operation.upsert.rawValue,
+            payloadJSON: SyncPayloadCodec.encodeWorkoutPayload(from: staleWorkout) ?? "",
+            queuedAt: t0
+        )
+        XCTAssertEqual(try outboundQueue.pendingRecords().count, 1)
+
+        // 2) Server (device B) has a newer version at T1.
+        let t1 = t0.addingTimeInterval(60)
+        let serverWorkout = WorkoutRecord(
+            identifier: workoutID,
+            title: "Remote Winner",
+            startedAt: t0,
+            durationMinutes: 45,
+            totalVolumeLoad: 2_000,
+            averageRPE: 8.5,
+            completedSetCount: 10,
+            summary: "remote",
+            updatedAt: t1
+        )
+        let serverRecord = try XCTUnwrap(SyncPayloadCodec.makeRecord(for: serverWorkout))
+        let transport = RecordingCloudSyncTransport(pullResult: {
+            CloudSyncPullResult(changedRecords: [serverRecord], deletedRecordIDs: [], nextCursor: nil)
+        })
+
+        // 3) Run syncCycle. Pull-first must apply server's T1 AND drop A's T0 queue entry.
+        let applier = makeApplier(container: container, outboundQueue: outboundQueue)
+        let coordinator = CloudSyncCoordinator(
+            transport: transport,
+            payloadApplier: applier,
+            stateStore: FileSyncStateStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+            outboundQueue: outboundQueue
+        )
+        _ = try await coordinator.syncCycle()
+
+        // 4) Local workout is now at T1 with remote's fields.
+        let restored = try XCTUnwrap(workoutRepository.workout(withIdentifier: workoutID))
+        XCTAssertEqual(restored.title, "Remote Winner")
+        XCTAssertEqual(restored.updatedAt.timeIntervalSince1970, t1.timeIntervalSince1970, accuracy: 0.001)
+        XCTAssertEqual(restored.totalVolumeLoad, 2_000, accuracy: 0.001)
+
+        // 5) Queue is empty — the stale T0 entry was invalidated.
+        XCTAssertTrue(try outboundQueue.pendingRecords().isEmpty)
+
+        // 6) Push was called but nothing was actually sent (queue was empty by then).
+        let pushed = await transport.pushedRecords
+        XCTAssertTrue(pushed.isEmpty, "Stale queued write must not reach the transport")
+    }
+
+    /// Codex P1 scenario: device A has a stale queued upsert for a
+    /// workout that device B has already deleted on the server. When A
+    /// runs `syncCycle()`, it must (1) apply the remote delete locally,
+    /// (2) unconditionally clear A's queued upsert so it can't
+    /// resurrect the record on the next push.
+    func testSyncCycleInvalidatesQueuedUpsertWhenPullDeliversDeletion() async throws {
+        // 1) Local stale upsert is queued.
+        let workoutID = "doomed-workout"
+        let t0 = Date(timeIntervalSince1970: 1_720_030_000)
+        let doomed = try workoutRepository.createWorkout(title: "Doomed", startedAt: t0)
+        XCTAssertEqual(try outboundQueue.pendingRecords().count, 1)
+
+        // 2) Server has a delete record for the same identifier.
+        let deleteRecord = CloudSyncRecord(
+            kind: .workout,
+            identifier: doomed.identifier,
+            operation: .delete,
+            payloadJSON: "",
+            modifiedAt: t0.addingTimeInterval(120)
+        )
+        let transport = RecordingCloudSyncTransport(pullResult: {
+            CloudSyncPullResult(changedRecords: [deleteRecord], deletedRecordIDs: [], nextCursor: nil)
+        })
+
+        // 3) Run syncCycle.
+        let applier = makeApplier(container: container, outboundQueue: outboundQueue)
+        let coordinator = CloudSyncCoordinator(
+            transport: transport,
+            payloadApplier: applier,
+            stateStore: FileSyncStateStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+            outboundQueue: outboundQueue
+        )
+        _ = try await coordinator.syncCycle()
+
+        // 4) Local workout is gone AND the queue is empty — no resurrection path.
+        XCTAssertNil(try workoutRepository.workout(withIdentifier: workoutID))
+        XCTAssertTrue(try outboundQueue.pendingRecords().isEmpty)
+
+        // 5) Nothing was pushed to the transport.
+        let pushed = await transport.pushedRecords
+        XCTAssertTrue(pushed.isEmpty, "Queued upsert must not reach the transport after an inbound delete")
+    }
+
+    // MARK: - Helpers
+
     private func makeApplier(
         container: ModelContainer,
-        telemetrySink: (any TelemetrySink)? = nil
+        telemetrySink: (any TelemetrySink)? = nil,
+        outboundQueue: (any OutboundSyncQueue)? = nil
     ) -> DefaultSyncPayloadApplier {
         DefaultSyncPayloadApplier(
-            workoutRepository: SwiftDataWorkoutRepository(container: container),
-            coachMemoryRepository: SwiftDataCoachMemoryRepository(container: container),
-            userProfileRepository: SwiftDataUserProfileRepository(container: container),
-            trainingPlanRepository: SwiftDataTrainingPlanRepository(container: container),
-            telemetrySink: telemetrySink
+            workoutRepository: SwiftDataWorkoutRepository(container: container, outboundQueue: outboundQueue),
+            coachMemoryRepository: SwiftDataCoachMemoryRepository(container: container, outboundQueue: outboundQueue),
+            userProfileRepository: SwiftDataUserProfileRepository(container: container, outboundQueue: outboundQueue),
+            trainingPlanRepository: SwiftDataTrainingPlanRepository(container: container, outboundQueue: outboundQueue),
+            telemetrySink: telemetrySink,
+            outboundQueue: outboundQueue
         )
     }
 
@@ -484,18 +630,35 @@ private struct LoggedSetFixture: Codable, Equatable {
 
 private actor RecordingTransportRecorder {
     private(set) var pushedRecords: [CloudSyncRecord] = []
+    private(set) var pushCallOrder: [Int] = []
+    private(set) var pullCallOrder: [Int] = []
+    private var stepCounter = 0
 
     func append(_ records: [CloudSyncRecord]) {
         pushedRecords.append(contentsOf: records)
+        stepCounter += 1
+        pushCallOrder.append(stepCounter)
+    }
+
+    func recordPull() {
+        stepCounter += 1
+        pullCallOrder.append(stepCounter)
     }
 }
 
 private final class RecordingCloudSyncTransport: CloudSyncTransport, @unchecked Sendable {
     private let recorder = RecordingTransportRecorder()
     private let shouldThrow: Bool
+    private let pullResultProvider: @Sendable () -> CloudSyncPullResult
 
-    init(shouldThrow: Bool = false) {
+    init(
+        shouldThrow: Bool = false,
+        pullResult: @Sendable @escaping () -> CloudSyncPullResult = {
+            CloudSyncPullResult(changedRecords: [], deletedRecordIDs: [], nextCursor: nil)
+        }
+    ) {
         self.shouldThrow = shouldThrow
+        self.pullResultProvider = pullResult
     }
 
     var isAvailable: Bool { true }
@@ -508,12 +671,25 @@ private final class RecordingCloudSyncTransport: CloudSyncTransport, @unchecked 
     }
 
     func pullChanges(since cursor: String?) async throws -> CloudSyncPullResult {
-        CloudSyncPullResult(changedRecords: [], deletedRecordIDs: [], nextCursor: cursor)
+        await recorder.recordPull()
+        return pullResultProvider()
     }
 
     var pushedRecords: [CloudSyncRecord] {
         get async {
             await recorder.pushedRecords
+        }
+    }
+
+    var pushCallOrder: [Int] {
+        get async {
+            await recorder.pushCallOrder
+        }
+    }
+
+    var pullCallOrder: [Int] {
+        get async {
+            await recorder.pullCallOrder
         }
     }
 }

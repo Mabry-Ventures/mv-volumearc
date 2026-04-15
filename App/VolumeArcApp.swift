@@ -131,7 +131,8 @@ struct VolumeArcApp: App {
                 coachMemoryRepository: coachMemoryRepository,
                 userProfileRepository: userProfileRepository,
                 trainingPlanRepository: trainingPlanRepository,
-                telemetrySink: telemetrySink
+                telemetrySink: telemetrySink,
+                outboundQueue: outboundQueue
             )
             let syncEngine = CloudSyncCoordinator(
                 transport: syncTransport,

@@ -15,7 +15,7 @@ public protocol CloudSyncTransport: Sendable {
 /// A record destined for (or returned from) CloudKit.
 /// Platform-agnostic wrapper so the applier doesn't depend on CloudKit types.
 public struct CloudSyncRecord: Sendable, Codable {
-    public enum Kind: String, Sendable, Codable {
+    public enum Kind: String, Sendable, Codable, CaseIterable {
         case workout
         case userProfile = "profile"
         case trainingPlan = "plan"
@@ -345,29 +345,44 @@ public actor CloudSyncCoordinator {
         return records.count
     }
 
-    /// Run one push/pull cycle. Returns the number of records pushed + pulled.
+    /// Run one pull/apply/push cycle. Returns the number of records pushed + pulled.
+    ///
+    /// Ordering rationale: pull and apply happen BEFORE push. Reversing
+    /// these steps would let a stale queued mutation clobber newer remote
+    /// state before the applier's `shouldApply` timestamp check could run
+    /// — in the worst case, a queued upsert would resurrect a record that
+    /// another device had deleted. Applying inbound records first also
+    /// invalidates any queued outbound entries for the same identifier
+    /// that are older than the freshly-pulled state (see
+    /// `outboundQueue.invalidateEntries` calls in the per-kind apply
+    /// methods and `applyDeletion`), so the subsequent push step doesn't
+    /// emit stale writes in the first place.
     public func syncCycle(pushing localRecords: [CloudSyncRecord] = []) async throws -> Int {
         guard transport.isAvailable else { return 0 }
 
-        // 1) Push any local changes
-        let pushedCount = try await push(additionalRecords: localRecords)
-
-        // 2) Pull remote changes
+        // 1) Pull remote changes first so the applier can see them before
+        //    any local queue drain runs.
         let cursor = stateStore.loadCursor()
         let result = try await transport.pullChanges(since: cursor)
 
-        // 3) Apply remote changes locally on the main actor (SwiftData is
-        //    bound to @MainActor via ModelContext thread affinity).
+        // 2) Apply remote changes locally on the main actor (SwiftData is
+        //    bound to @MainActor via ModelContext thread affinity). The
+        //    applier also invalidates stale queued entries whose state
+        //    is older than the inbound timestamp.
         #if canImport(SwiftData)
         if let payloadApplier {
             try await payloadApplier.apply(result: result)
         }
         #endif
 
-        // 4) Persist the new cursor
+        // 3) Persist the new cursor before pushing so a push failure
+        //    can't force us to re-pull the same window twice.
         if let nextCursor = result.nextCursor {
             try? stateStore.saveCursor(nextCursor)
         }
+
+        // 4) Push any remaining (still-valid) local changes.
+        let pushedCount = try await push(additionalRecords: localRecords)
 
         return pushedCount + result.changedRecords.count
     }
@@ -399,19 +414,22 @@ public struct DefaultSyncPayloadApplier: Sendable {
     public let userProfileRepository: SwiftDataUserProfileRepository
     public let trainingPlanRepository: SwiftDataTrainingPlanRepository
     private let telemetrySink: (any TelemetrySink)?
+    private let outboundQueue: (any OutboundSyncQueue)?
 
     public init(
         workoutRepository: SwiftDataWorkoutRepository,
         coachMemoryRepository: SwiftDataCoachMemoryRepository,
         userProfileRepository: SwiftDataUserProfileRepository,
         trainingPlanRepository: SwiftDataTrainingPlanRepository,
-        telemetrySink: (any TelemetrySink)? = nil
+        telemetrySink: (any TelemetrySink)? = nil,
+        outboundQueue: (any OutboundSyncQueue)? = nil
     ) {
         self.workoutRepository = workoutRepository
         self.coachMemoryRepository = coachMemoryRepository
         self.userProfileRepository = userProfileRepository
         self.trainingPlanRepository = trainingPlanRepository
         self.telemetrySink = telemetrySink
+        self.outboundQueue = outboundQueue
     }
 
     /// Apply a pull result to the local repositories.
@@ -486,6 +504,17 @@ public struct DefaultSyncPayloadApplier: Sendable {
         }
 
         try context.save()
+
+        // VOL-67 fixup: the legacy callback doesn't tell us which record
+        // kind the deletion applies to, so sweep the queue for every kind
+        // that matches this identifier. One of them will be a no-op.
+        for kind in CloudSyncRecord.Kind.allCases {
+            try outboundQueue?.invalidateEntries(
+                recordType: kind.rawValue,
+                recordIdentifier: identifier,
+                olderThan: nil
+            )
+        }
     }
 
     // MARK: - Per-kind appliers
@@ -539,6 +568,18 @@ public struct DefaultSyncPayloadApplier: Sendable {
         }
 
         try context.save()
+
+        // VOL-67 fixup: once the inbound record has been applied locally,
+        // invalidate any queued outbound entry for the same workout that's
+        // older than the inbound timestamp. Without this, the stale queued
+        // payload would overwrite the newly-pulled server state on the
+        // next push and we'd be right back in the "local clobbers server"
+        // divergence Codex flagged.
+        try outboundQueue?.invalidateEntries(
+            recordType: CloudSyncRecord.Kind.workout.rawValue,
+            recordIdentifier: record.identifier,
+            olderThan: payload.updatedAt
+        )
     }
 
     @MainActor
@@ -585,6 +626,13 @@ public struct DefaultSyncPayloadApplier: Sendable {
         }
 
         try context.save()
+
+        // VOL-67 fixup: invalidate stale queued profile writes (see applyWorkout).
+        try outboundQueue?.invalidateEntries(
+            recordType: CloudSyncRecord.Kind.userProfile.rawValue,
+            recordIdentifier: record.identifier,
+            olderThan: payload.updatedAt
+        )
     }
 
     @MainActor
@@ -613,6 +661,13 @@ public struct DefaultSyncPayloadApplier: Sendable {
         }
 
         try context.save()
+
+        // VOL-67 fixup: invalidate stale queued plan writes (see applyWorkout).
+        try outboundQueue?.invalidateEntries(
+            recordType: CloudSyncRecord.Kind.trainingPlan.rawValue,
+            recordIdentifier: record.identifier,
+            olderThan: payload.updatedAt
+        )
     }
 
     @MainActor
@@ -648,6 +703,14 @@ public struct DefaultSyncPayloadApplier: Sendable {
         }
 
         try context.save()
+
+        // VOL-67 fixup: invalidate stale queued memory writes. Memories
+        // use `createdAt` as the ordering field since they're append-only.
+        try outboundQueue?.invalidateEntries(
+            recordType: CloudSyncRecord.Kind.coachMemory.rawValue,
+            recordIdentifier: record.identifier,
+            olderThan: payload.createdAt
+        )
     }
 
     @MainActor
@@ -690,6 +753,17 @@ public struct DefaultSyncPayloadApplier: Sendable {
         }
 
         try context.save()
+
+        // VOL-67 fixup: unconditionally invalidate every queued entry for
+        // this record. A delete is authoritative — we never want a stale
+        // queued upsert to resurrect a record that was deleted on another
+        // device. `olderThan: nil` clears the queue slot regardless of
+        // timestamp for the exact `(recordType, recordIdentifier)`.
+        try outboundQueue?.invalidateEntries(
+            recordType: record.kind.rawValue,
+            recordIdentifier: record.identifier,
+            olderThan: nil
+        )
     }
 
     private func shouldApply(

@@ -71,6 +71,20 @@ public protocol OutboundSyncQueue: Sendable {
 
     @MainActor
     func pendingRecords() throws -> [QueuedOutboundSyncChange]
+
+    /// Remove queued entries for a given `recordType` + `recordIdentifier`
+    /// that were enqueued strictly before `olderThan`. Used by the sync
+    /// applier to invalidate stale queued writes when an inbound pull
+    /// delivers a newer server version. Pass `nil` for `olderThan` to
+    /// remove every entry for the record regardless of timestamp — the
+    /// applier uses this path on inbound deletes so a stale queued upsert
+    /// can't resurrect a record deleted on another device.
+    @MainActor
+    func invalidateEntries(
+        recordType: String,
+        recordIdentifier: String,
+        olderThan: Date?
+    ) throws
 }
 
 public struct NoOpOutboundSyncQueue: OutboundSyncQueue {
@@ -93,6 +107,13 @@ public struct NoOpOutboundSyncQueue: OutboundSyncQueue {
 
     @MainActor
     public func pendingRecords() throws -> [QueuedOutboundSyncChange] { [] }
+
+    @MainActor
+    public func invalidateEntries(
+        recordType: String,
+        recordIdentifier: String,
+        olderThan: Date?
+    ) throws {}
 }
 
 public struct SwiftDataOutboundSyncQueue: OutboundSyncQueue, Sendable {
@@ -153,6 +174,30 @@ public struct SwiftDataOutboundSyncQueue: OutboundSyncQueue, Sendable {
             sortBy: [SortDescriptor(\.queuedAt, order: .forward)]
         )
         return try context.fetch(descriptor).map(Self.snapshot(from:))
+    }
+
+    @MainActor
+    public func invalidateEntries(
+        recordType: String,
+        recordIdentifier: String,
+        olderThan: Date?
+    ) throws {
+        let context = ModelContext(container)
+        let descriptor = FetchDescriptor<OutboundSyncQueueRecord>()
+        let rows = try context.fetch(descriptor)
+
+        var removed = 0
+        for row in rows where row.recordType == recordType && row.recordIdentifier == recordIdentifier {
+            if let olderThan, row.queuedAt >= olderThan {
+                continue
+            }
+            context.delete(row)
+            removed += 1
+        }
+
+        if removed > 0 {
+            try context.save()
+        }
     }
 
     private static func snapshot(from record: OutboundSyncQueueRecord) -> QueuedOutboundSyncChange {
