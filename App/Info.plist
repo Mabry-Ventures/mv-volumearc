@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  VOL-56 (PR #24): Minimal base Info.plist for the app target. Only
+	  contains keys that the `INFOPLIST_KEY_*` build-setting mechanism
+	  cannot express — i.e., arrays of dictionaries and arrays of strings.
+	  Xcode still auto-populates the boilerplate keys (CFBundleExecutable,
+	  CFBundleIdentifier, CFBundleShortVersionString, etc.) and merges
+	  the remaining simple `INFOPLIST_KEY_*` entries (usage descriptions,
+	  UIApplicationSupportsIndirectInputEvents, etc.) from the build
+	  settings during `ProcessInfoPlistFile`.
+
+	  Keep this file minimal — only add keys here that genuinely cannot
+	  be expressed via `INFOPLIST_KEY_*`. Simple string/bool keys should
+	  stay in `scripts/generate_xcode_project.rb`.
+	-->
+
+	<!-- volumearc:// deep links for widget taps, Siri shortcut fallback,
+	     and universal-link-style navigation from push notifications. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.mabryventures.VolumeArc</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>volumearc</string>
+			</array>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+		</dict>
+	</array>
+
+	<!-- Background task identifiers that `VolumeArcBackgroundTasks`
+	     registers and submits. Missing from this allowlist → iOS rejects
+	     `BGTaskScheduler.submit(...)` with "Unpermitted task identifier"
+	     and background refresh/sync silently never runs. -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.mabryventures.VolumeArc.appRefresh</string>
+		<string>com.mabryventures.VolumeArc.appProcessing</string>
+	</array>
+
+	<!-- Background modes required to schedule the BGTasks above. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
+</dict>
+</plist>

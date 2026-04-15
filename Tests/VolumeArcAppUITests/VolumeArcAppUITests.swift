@@ -79,7 +79,7 @@ final class VolumeArcAppUITests: XCTestCase {
         )
     }
 
-    // The upgrade-row XCUITest is deferred (tracked in VOL-XX).
+    // The upgrade-row XCUITest is deferred (tracked in VOL-58).
     //
     // Background: SwiftUI Form cells in iOS 26 XCUITest don't reliably
     // expose inner `accessibilityIdentifier`s across runtime revisions.

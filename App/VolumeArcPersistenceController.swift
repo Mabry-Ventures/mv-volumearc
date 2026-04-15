@@ -92,22 +92,35 @@ final class VolumeArcPersistenceController {
     private static func makeContainer(for schema: Schema) -> (container: ModelContainer?, status: BootstrapStatus) {
         var attempts: [(StorageMode, Error)] = []
 
-        do {
-            return (
-                container: try ModelContainer(
-                    for: schema,
-                    migrationPlan: VolumeArcSchemaMigrationPlan.self,
-                    configurations: [primaryConfiguration(schema: schema)]
-                ),
-                status: BootstrapStatus(
-                    storageMode: .cloudSynced,
-                    severity: .info,
-                    message: "Cloud-backed persistence ready.",
-                    metadata: ["storageMode": StorageMode.cloudSynced.rawValue]
+        // VOL-59 fixup: only attempt the cloud-synced configuration
+        // when the process actually carries a CloudKit entitlement.
+        // Without it, SwiftData's CloudKit mirror traps the process
+        // during `ModelContainer` init — we can't try/catch our way
+        // around that. When we skip this branch, record a synthetic
+        // "entitlement unavailable" error so the telemetry metadata
+        // explains why bootstrap fell through to `.localFallback`
+        // instead of reporting a healthy "Cloud-backed persistence
+        // ready" state (which would be a lie — CloudKit is off).
+        if VolumeArcCloudConfiguration.hasCloudKitEntitlement {
+            do {
+                return (
+                    container: try ModelContainer(
+                        for: schema,
+                        migrationPlan: VolumeArcSchemaMigrationPlan.self,
+                        configurations: [primaryConfiguration(schema: schema)]
+                    ),
+                    status: BootstrapStatus(
+                        storageMode: .cloudSynced,
+                        severity: .info,
+                        message: "Cloud-backed persistence ready.",
+                        metadata: ["storageMode": StorageMode.cloudSynced.rawValue]
+                    )
                 )
-            )
-        } catch {
-            attempts.append((.cloudSynced, error))
+            } catch {
+                attempts.append((.cloudSynced, error))
+            }
+        } else {
+            attempts.append((.cloudSynced, VolumeArcPersistenceBootstrapError.cloudKitEntitlementUnavailable))
         }
 
         do {
@@ -169,8 +182,20 @@ final class VolumeArcPersistenceController {
     }
 
     private static func primaryConfiguration(schema: Schema) -> ModelConfiguration {
+        // VOL-55: containerIdentifier is a compile-time constant so the
+        // empty check is strictly a guard against future configuration
+        // flexibility (e.g., reading from a .env file).
+        //
+        // VOL-59 fixup: `makeContainer` verifies `hasCloudKitEntitlement`
+        // before calling this function, so we can unconditionally attach
+        // `.private(containerIdentifier)` here. If the caller ever slips
+        // that check, SwiftData will trap on `CKContainer` init — which
+        // is the same behavior as the legacy code path and surfaces the
+        // bug loudly rather than silently reporting a degraded state as
+        // healthy.
         let cloudDatabase: ModelConfiguration.CloudKitDatabase
-        if let containerIdentifier = VolumeArcCloudConfiguration.containerIdentifier, !containerIdentifier.isEmpty {
+        let containerIdentifier = VolumeArcCloudConfiguration.containerIdentifier
+        if !containerIdentifier.isEmpty {
             cloudDatabase = .private(containerIdentifier)
         } else {
             cloudDatabase = .automatic
@@ -203,6 +228,23 @@ final class VolumeArcPersistenceController {
             allowsSave: true,
             cloudKitDatabase: .none
         )
+    }
+}
+
+/// Synthetic error used as a placeholder `attempts` entry when
+/// `makeContainer` intentionally skips the cloud-synced branch because
+/// the process has no CloudKit entitlement. `metadata(for:attempts:)`
+/// serializes this into the bootstrap telemetry so the degraded state
+/// is traceable back to the entitlement gap rather than looking like
+/// a crash/throw.
+enum VolumeArcPersistenceBootstrapError: Error, CustomStringConvertible {
+    case cloudKitEntitlementUnavailable
+
+    var description: String {
+        switch self {
+        case .cloudKitEntitlementUnavailable:
+            return "CloudKit entitlement is not present on this build (simulator or unsigned binary)."
+        }
     }
 }
 #endif

@@ -15,7 +15,9 @@ ruby "scripts/generate_xcode_project.rb"
 # alone be insufficient when a prior run crashed mid-install; `erase all`
 # wipes installed apps and data so xcodebuild boots a pristine device.
 # Both are safe on developer machines — they only affect simulators,
-# not the user's real data.
+# not the user's real data. `xcrun` is invoked via `xcrun` directly so
+# the `xcode-select` PATH settles correctly on runners that don't have
+# DEVELOPER_DIR pointing at Xcode.app at script entry.
 reset_simulators() {
   xcrun simctl shutdown all 2>/dev/null || true
   xcrun simctl erase all 2>/dev/null || true
