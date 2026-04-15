@@ -203,7 +203,59 @@ public final class CloudKitSyncTransport: CloudSyncTransport, @unchecked Sendabl
         operation.recordWasChangedBlock = { _, result in
             if case let .success(record) = result,
                let kind = CloudSyncRecord.Kind.parse(record.recordType) {
-                let modifiedAt = record.modificationDate ?? .now
+                // VOL-67 Copilot (fixup #33): read the client-authored
+                // `modifiedAt` custom field that `pushRecords` writes
+                // (see line 152: `ck["modifiedAt"] = record.modifiedAt`),
+                // with a fallback to `record.modificationDate` (CK
+                // server write time) only when the custom field is
+                // absent or malformed. Previously we always used
+                // `record.modificationDate`, which is the server-side
+                // write time — NOT the client's intended modification
+                // instant. The mismatch broke cross-device LWW:
+                //
+                // 1. Device A edits a workout at T1.
+                // 2. Device A queues the mutation, pushes later at T2
+                //    (T2 > T1 — possibly much later on a slow network
+                //    or after an app background).
+                // 3. CloudKit records the row with `modifiedAt` = T1
+                //    (custom field, client-authored) but
+                //    `record.modificationDate` = T2 (server receive
+                //    time).
+                // 4. Device B has a local edit at T_local where
+                //    T1 < T_local < T2. The edit reflects newer user
+                //    intent than A's push.
+                // 5. Device B pulls A's push and uses
+                //    `record.modificationDate` = T2 as the inbound
+                //    timestamp. `shouldApply` compares T_local < T2
+                //    → apply inbound → Device B's newer edit is
+                //    silently overwritten by A's older (per user
+                //    intent) push.
+                //
+                // Reading the custom field fixes this: Device B now
+                // sees the inbound timestamp as T1, correctly
+                // preserves its newer T_local edit, and the next
+                // push round propagates B's edit to cloud.
+                //
+                // Accept both `Date` and `NSNumber` encodings for the
+                // custom field. NSNumber handles the case where an
+                // older build wrote the timestamp as a numeric (e.g.,
+                // milliseconds since 1970 after a JSON round-trip).
+                // Auto-detect seconds vs milliseconds by magnitude:
+                // > 100_000_000_000 is milliseconds (3168 AD in
+                // seconds — unreachable), otherwise seconds.
+                let modifiedAt: Date = {
+                    if let date = record["modifiedAt"] as? Date {
+                        return date
+                    }
+                    if let number = record["modifiedAt"] as? NSNumber {
+                        let raw = number.doubleValue
+                        if raw.isFinite {
+                            let seconds = raw > 100_000_000_000 ? raw / 1_000 : raw
+                            return Date(timeIntervalSince1970: seconds)
+                        }
+                    }
+                    return record.modificationDate ?? .now
+                }()
                 let operation = CloudSyncRecord.Operation(
                     rawValue: (record["operation"] as? String) ?? CloudSyncRecord.Operation.upsert.rawValue
                 ) ?? .upsert
