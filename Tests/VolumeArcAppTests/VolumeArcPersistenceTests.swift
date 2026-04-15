@@ -113,6 +113,33 @@ final class VolumeArcPersistenceTests: XCTestCase {
         XCTAssertTrue(unavailableKey.hasPrefix(prefix))
     }
 
+    /// VOL-67 Codex P1 (fixup #22): the outbound-queue backfill must
+    /// ONLY run when the active storage mode is `.cloudSynced`.
+    /// Running it in `.localFallback` / `.inMemoryFallback` /
+    /// `.unavailable` lets seeded-default singletons leak into the
+    /// outbound queue; a later transport recovery can then push
+    /// those defaults to CloudKit and overwrite the real profile/plan
+    /// state that another device wrote.
+    @MainActor
+    func testOutboundQueueBackfillGatedToCloudSyncedModeOnly() {
+        XCTAssertTrue(
+            VolumeArcPersistenceController.shouldRunOutboundQueueBackfill(for: .cloudSynced),
+            "Backfill must run in the cloud-backed configuration so pre-VOL-67 records reach the outbound queue"
+        )
+        XCTAssertFalse(
+            VolumeArcPersistenceController.shouldRunOutboundQueueBackfill(for: .localFallback),
+            "Backfill must NOT run in localFallback — seeded defaults could leak to CloudKit after recovery"
+        )
+        XCTAssertFalse(
+            VolumeArcPersistenceController.shouldRunOutboundQueueBackfill(for: .inMemoryFallback),
+            "Backfill must NOT run in inMemoryFallback — same leak risk, plus queue state is ephemeral"
+        )
+        XCTAssertFalse(
+            VolumeArcPersistenceController.shouldRunOutboundQueueBackfill(for: .unavailable),
+            "Backfill must NOT run in unavailable — no container means no backfill anyway"
+        )
+    }
+
     /// End-to-end behavior: if the fallback-mode flag is set AND the
     /// cloud-mode flag is NOT set, running the backfill under the
     /// cloud-mode flag key must still execute. This demonstrates that

@@ -54,13 +54,46 @@ final class VolumeArcPersistenceController {
         // `ModelContext` gives us both configs in scope, so
         // `context.insert(OutboundSyncQueueRecord(...))` routes to
         // the queue store correctly.
-        do {
-            try backfillOutboundQueueIfNeeded()
-        } catch {
-            // Missing a backfill row isn't fatal — the record is
-            // still safe locally, it just won't push until the user
-            // edits it. Suppress and move on.
+        //
+        // VOL-67 Codex P1 (fixup #22): only run the backfill when the
+        // container we just opened is the cloud-backed one. In
+        // `.localFallback`/`.inMemoryFallback` we'd be backfilling a
+        // DIFFERENT store file (`VolumeArc-LocalFallback.sqlite` vs
+        // `VolumeArc.sqlite`), and `seedIfNeeded` will have just
+        // populated that fallback store with default singletons.
+        // Enqueuing those defaults is dangerous: if the device's
+        // CloudKit transport later becomes available (e.g., the
+        // entitlement flap resolves) while still bound to the
+        // fallback persistence, a `syncCycle()` pull against the
+        // previously-persisted cursor might return no historical
+        // records, and then push the seeded defaults to CloudKit,
+        // overwriting the real profile/plan state another device
+        // wrote. Gating the backfill to `.cloudSynced` eliminates
+        // the cross-device data-loss path entirely — fallback modes
+        // keep their local defaults in the fallback store without
+        // ever reaching the queue. When the app later recovers to
+        // `.cloudSynced`, that mode's per-store backfill flag
+        // (fixup #16 scoping) is still unset, so the backfill runs
+        // then against the real cloud store with its real data.
+        if Self.shouldRunOutboundQueueBackfill(for: bootstrapStatus.storageMode) {
+            do {
+                try backfillOutboundQueueIfNeeded()
+            } catch {
+                // Missing a backfill row isn't fatal — the record is
+                // still safe locally, it just won't push until the user
+                // edits it. Suppress and move on.
+            }
         }
+    }
+
+    /// VOL-67 Codex P1 (fixup #22): exposed as a static helper so
+    /// tests can lock down the policy without spinning up a full
+    /// controller instance. The rule is strict: only the
+    /// cloud-backed storage mode is eligible for the outbound-queue
+    /// backfill. All degraded/fallback modes are excluded so seeded
+    /// defaults can't reach CloudKit and overwrite real data.
+    static func shouldRunOutboundQueueBackfill(for mode: StorageMode) -> Bool {
+        mode == .cloudSynced
     }
 
     var bootstrapTelemetryEvents: [TelemetryEvent] {
