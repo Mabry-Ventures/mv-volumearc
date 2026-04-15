@@ -868,8 +868,6 @@ final class VolumeArcCloudSyncTests: XCTestCase {
     /// older inbound upsert, verify the local workout is NOT resurrected
     /// and the tombstone is still pending for the next push.
     func testApplierSuppressesInboundUpsertWhenNewerDeleteTombstonePending() async throws {
-        let identifier = "workout-to-be-deleted"
-
         // Step 1: seed a workout locally and let the repository queue
         // its upsert. The repository's createWorkout helper handles
         // the outbound enqueue atomically.
@@ -968,8 +966,6 @@ final class VolumeArcCloudSyncTests: XCTestCase {
     /// user's delete intent). Strict `>` matches the applier's
     /// existing `shouldApply` tie-breaking: inbound wins ties.
     func testApplierResurrectsInboundUpsertWhenTombstoneIsOlder() async throws {
-        let identifier = "workout-newer-than-tombstone"
-
         // Seed, capture identifier, delete — same as the previous test.
         _ = try workoutRepository.createWorkout(
             title: "Will Be Resurrected",

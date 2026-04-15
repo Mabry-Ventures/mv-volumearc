@@ -586,12 +586,15 @@ public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
             // Per-record kinds (workouts, memories) keep their real
             // timestamps because they always reflect concrete user
             // actions and carry stable identifiers that don't collide
-            // across devices. The outbound-queue backfill still clamps
-            // singleton payloads to `.distantPast` unconditionally
-            // (fixup #13) — that's a safe lower priority for
-            // first-time cross-device pushes, and any real local edits
-            // get their real timestamp via the normal repository write
-            // path post-migration.
+            // across devices. The outbound-queue backfill only clamps
+            // singleton profile/plan payloads to `.distantPast` when
+            // the record still matches the seeded-default heuristic
+            // (fixup #26) — mirroring the conditional clamping here.
+            // That keeps first-time cross-device pushes lower
+            // priority for untouched defaults, while any real local
+            // edits retain their real timestamp via the backfill's
+            // regular-encoder branch and continue propagating cross-
+            // device under normal LWW semantics.
             let migratedProfiles = try context.fetch(FetchDescriptor<UserProfileRecord>())
             for profile in migratedProfiles where Self.isSeededDefaultProfile(profile) {
                 profile.updatedAt = .distantPast
