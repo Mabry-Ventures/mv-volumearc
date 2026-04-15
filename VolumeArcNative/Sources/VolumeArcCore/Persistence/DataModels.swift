@@ -1,4 +1,5 @@
 #if canImport(SwiftData)
+import CryptoKit
 import Foundation
 import SwiftData
 
@@ -513,6 +514,13 @@ public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
         toVersion: VolumeArcSchemaV4.self,
         willMigrate: nil,
         didMigrate: { context in
+            // VOL-67 Codex P2 fixup #8: assign deterministic IDs to
+            // pre-existing memories. `UUID().uuidString` would make
+            // every device pick a different ID for the same logical
+            // memory on upgrade, breaking cross-device delete
+            // reconciliation. SHA256 over a stable `(createdAt,
+            // content, theme)` triple gives the same ID on every
+            // device for the same row.
             let migratedWorkouts = try context.fetch(FetchDescriptor<WorkoutRecord>())
             for workout in migratedWorkouts {
                 workout.updatedAt = workout.completedAt ?? workout.startedAt
@@ -520,11 +528,95 @@ public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
 
             let migratedMemories = try context.fetch(FetchDescriptor<CoachMemoryRecord>())
             for memory in migratedMemories where memory.identifier.isEmpty {
-                memory.identifier = UUID().uuidString
+                memory.identifier = deterministicLegacyMemoryIdentifier(
+                    createdAt: memory.createdAt,
+                    content: memory.content,
+                    theme: memory.theme
+                )
+            }
+
+            try context.save()
+
+            // VOL-67 Codex P1 fixup #8: backfill the outbound sync
+            // queue with an upsert for every pre-existing record.
+            // Without this, a user who upgrades with local history
+            // and makes no further edits would never have anything
+            // in the queue, so the first push would do nothing and
+            // their pre-upgrade data would never reach CloudKit.
+            // Re-fetch to pick up the updatedAt/identifier backfills
+            // applied above so the queued payloads reflect the
+            // post-migration state.
+            let workoutsToEnqueue = try context.fetch(FetchDescriptor<WorkoutRecord>())
+            for workout in workoutsToEnqueue {
+                guard let payloadJSON = SyncPayloadCodec.encodeWorkoutPayload(from: workout) else { continue }
+                context.insert(OutboundSyncQueueRecord(
+                    recordType: CloudSyncRecord.Kind.workout.rawValue,
+                    recordIdentifier: workout.identifier,
+                    operation: CloudSyncRecord.Operation.upsert.rawValue,
+                    payloadJSON: payloadJSON,
+                    queuedAt: workout.updatedAt
+                ))
+            }
+
+            let profiles = try context.fetch(FetchDescriptor<UserProfileRecord>())
+            for profile in profiles {
+                guard let payloadJSON = SyncPayloadCodec.encodeUserProfilePayload(from: profile) else { continue }
+                context.insert(OutboundSyncQueueRecord(
+                    recordType: CloudSyncRecord.Kind.userProfile.rawValue,
+                    recordIdentifier: CloudSyncRecord.Kind.userProfile.defaultIdentifier,
+                    operation: CloudSyncRecord.Operation.upsert.rawValue,
+                    payloadJSON: payloadJSON,
+                    queuedAt: profile.updatedAt
+                ))
+            }
+
+            let plans = try context.fetch(FetchDescriptor<TrainingPlanRecord>())
+            for plan in plans {
+                guard let payloadJSON = SyncPayloadCodec.encodeTrainingPlanPayload(from: plan) else { continue }
+                context.insert(OutboundSyncQueueRecord(
+                    recordType: CloudSyncRecord.Kind.trainingPlan.rawValue,
+                    recordIdentifier: CloudSyncRecord.Kind.trainingPlan.defaultIdentifier,
+                    operation: CloudSyncRecord.Operation.upsert.rawValue,
+                    payloadJSON: payloadJSON,
+                    queuedAt: plan.updatedAt ?? Date()
+                ))
+            }
+
+            let memoriesToEnqueue = try context.fetch(FetchDescriptor<CoachMemoryRecord>())
+            for memory in memoriesToEnqueue {
+                guard let payloadJSON = SyncPayloadCodec.encodeCoachMemoryPayload(from: memory) else { continue }
+                context.insert(OutboundSyncQueueRecord(
+                    recordType: CloudSyncRecord.Kind.coachMemory.rawValue,
+                    recordIdentifier: memory.identifier,
+                    operation: CloudSyncRecord.Operation.upsert.rawValue,
+                    payloadJSON: payloadJSON,
+                    queuedAt: memory.createdAt
+                ))
             }
 
             try context.save()
         }
     )
+
+    /// Produce a stable identifier for a legacy coach memory based on
+    /// its `(createdAt, content, theme)` triple. SHA256 gives the same
+    /// 64-character hex string on every device that's migrating the
+    /// same logical memory, so delete tombstones and queue
+    /// invalidation can target the same record across devices after
+    /// upgrade. VOL-67 Codex P2 (fixup #8).
+    fileprivate static func deterministicLegacyMemoryIdentifier(
+        createdAt: Date,
+        content: String,
+        theme: String
+    ) -> String {
+        // Use milliseconds since 1970 (integer) to avoid FP drift
+        // across devices. Content and theme are newline-separated so
+        // a memory with `"foo\nbar"` content can't collide with one
+        // whose content is `"foo"` and theme is `"bar"`.
+        let millis = Int64(createdAt.timeIntervalSince1970 * 1000)
+        let canonical = "\(millis)\n\(content)\n\(theme)"
+        let digest = SHA256.hash(data: Data(canonical.utf8))
+        return "legacy-" + digest.map { String(format: "%02x", $0) }.joined()
+    }
 }
 #endif

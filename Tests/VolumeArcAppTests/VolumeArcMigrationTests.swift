@@ -151,6 +151,92 @@ final class VolumeArcMigrationTests: XCTestCase {
         )
     }
 
+    /// VOL-67 Codex P1 (fixup #8): the V3→V4 migration must backfill
+    /// the outbound sync queue with an upsert for every pre-existing
+    /// record. Otherwise users who upgrade with local history and
+    /// make no further edits would never have anything to push, and
+    /// their pre-upgrade data would never reach CloudKit.
+    func testV3ToV4MigrationBackfillsOutboundQueueForExistingRecords() throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let storeURL = temporaryDirectory.appendingPathComponent("VolumeArcMigrationQueueBackfill.sqlite")
+        let fixtureDate = Date(timeIntervalSince1970: 1_715_100_000)
+        try writeV3FixtureStoreWithAllEntities(at: storeURL, startedAt: fixtureDate)
+
+        let migratedContainer = try makeDiskBackedCurrentContainer(at: storeURL)
+        let migratedContext = ModelContext(migratedContainer)
+
+        let queuedRows = try migratedContext.fetch(FetchDescriptor<OutboundSyncQueueRecord>())
+        let queuedByKind = Dictionary(grouping: queuedRows, by: { $0.recordType })
+
+        // One workout queued under "workout"
+        let workoutRows = queuedByKind[CloudSyncRecord.Kind.workout.rawValue] ?? []
+        XCTAssertEqual(workoutRows.count, 1, "Expected one workout upsert queued after V3→V4 migration")
+        XCTAssertEqual(workoutRows.first?.operation, CloudSyncRecord.Operation.upsert.rawValue)
+        XCTAssertEqual(workoutRows.first?.recordIdentifier, "v3-workout")
+
+        // One profile queued under the canonical "profile" identifier
+        let profileRows = queuedByKind[CloudSyncRecord.Kind.userProfile.rawValue] ?? []
+        XCTAssertEqual(profileRows.count, 1, "Expected one profile upsert queued after V3→V4 migration")
+        XCTAssertEqual(profileRows.first?.recordIdentifier, CloudSyncRecord.Kind.userProfile.defaultIdentifier)
+
+        // One plan queued under the canonical "plan" identifier
+        let planRows = queuedByKind[CloudSyncRecord.Kind.trainingPlan.rawValue] ?? []
+        XCTAssertEqual(planRows.count, 1, "Expected one training plan upsert queued after V3→V4 migration")
+        XCTAssertEqual(planRows.first?.recordIdentifier, CloudSyncRecord.Kind.trainingPlan.defaultIdentifier)
+
+        // One memory queued with the deterministic identifier that
+        // was also assigned to the migrated CoachMemoryRecord.
+        let memoryRows = queuedByKind[CloudSyncRecord.Kind.coachMemory.rawValue] ?? []
+        XCTAssertEqual(memoryRows.count, 1, "Expected one coach memory upsert queued after V3→V4 migration")
+        let migratedMemory = try XCTUnwrap(migratedContext.fetch(FetchDescriptor<CoachMemoryRecord>()).first)
+        XCTAssertEqual(memoryRows.first?.recordIdentifier, migratedMemory.identifier)
+    }
+
+    /// VOL-67 Codex P2 (fixup #8): the memory identifier assigned by
+    /// V3→V4 migration must be deterministic — every device migrating
+    /// the same `(createdAt, content, theme)` triple must produce the
+    /// same identifier, so delete tombstones and queue invalidation
+    /// can target the same logical record across devices. Runs two
+    /// independent migrations with identical fixtures and asserts the
+    /// identifiers match.
+    func testV3ToV4MigrationProducesDeterministicMemoryIdentifiers() throws {
+        let fixtureDate = Date(timeIntervalSince1970: 1_715_200_000)
+        let tempRoot = FileManager.default.temporaryDirectory
+
+        func migrateAndReturnMemoryIdentifier(storeName: String) throws -> String {
+            let directory = tempRoot.appendingPathComponent("\(storeName)-\(UUID().uuidString)", isDirectory: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: directory) }
+
+            let storeURL = directory.appendingPathComponent("\(storeName).sqlite")
+            try writeV3FixtureStore(at: storeURL, startedAt: fixtureDate, completedAt: fixtureDate)
+
+            let migrated = try makeDiskBackedCurrentContainer(at: storeURL)
+            let context = ModelContext(migrated)
+            let memory = try XCTUnwrap(context.fetch(FetchDescriptor<CoachMemoryRecord>()).first)
+            return memory.identifier
+        }
+
+        let identifierA = try migrateAndReturnMemoryIdentifier(storeName: "DeviceA")
+        let identifierB = try migrateAndReturnMemoryIdentifier(storeName: "DeviceB")
+
+        XCTAssertEqual(
+            identifierA,
+            identifierB,
+            "Two independent migrations of identical legacy memories must produce the same identifier"
+        )
+        XCTAssertTrue(
+            identifierA.hasPrefix("legacy-"),
+            "Deterministic legacy identifiers are prefixed for observability"
+        )
+        // SHA256 hex digest is 64 characters; the prefix adds 7.
+        XCTAssertEqual(identifierA.count, "legacy-".count + 64)
+    }
+
     func testCanInsertAndFetchUserProfileRecord() throws {
         let container = try makeInMemoryContainer()
         let context = ModelContext(container)
@@ -267,6 +353,60 @@ final class VolumeArcMigrationTests: XCTestCase {
                     createdAt: fixtureDate
                 )
             )
+            try context.save()
+        }
+    }
+
+    /// Write a V3 fixture store populated with one of each entity:
+    /// workout, profile, plan, memory. Used by the queue-backfill
+    /// migration test.
+    private func writeV3FixtureStoreWithAllEntities(at storeURL: URL, startedAt: Date) throws {
+        let schema = Schema(VolumeArcSchemaV3.models)
+        let config = ModelConfiguration(
+            "MigrationFixtureAllEntitiesV3",
+            schema: schema,
+            url: storeURL,
+            allowsSave: true,
+            cloudKitDatabase: .none
+        )
+        try autoreleasepool {
+            let container = try ModelContainer(for: schema, configurations: [config])
+            let context = ModelContext(container)
+
+            context.insert(VolumeArcSchemaV3.WorkoutRecord(
+                identifier: "v3-workout",
+                title: "V3 Workout",
+                startedAt: startedAt,
+                completedAt: startedAt.addingTimeInterval(1_800),
+                durationMinutes: 30,
+                exerciseIDsCSV: "back-squat",
+                setsJSON: "[]",
+                totalVolumeLoad: 1_000,
+                averageRPE: 7,
+                completedSetCount: 5,
+                summary: "V3 summary"
+            ))
+            context.insert(VolumeArcSchemaV3.UserProfileRecord(
+                name: "V3 Athlete",
+                coachingStyle: "motivational",
+                privacyMode: "standard",
+                advancementLevel: "intermediate",
+                availableEquipmentCSV: "barbell",
+                preferredRepRangeLower: 5,
+                preferredRepRangeUpper: 8,
+                sessionTimeBudgetMinutes: 60,
+                weeklyTrainingDays: 4
+            ))
+            context.insert(VolumeArcSchemaV3.TrainingPlanRecord(
+                workoutsJSON: "[]",
+                updatedAt: startedAt
+            ))
+            context.insert(VolumeArcSchemaV3.CoachMemoryRecord(
+                content: "V3 memory",
+                theme: "squat",
+                createdAt: startedAt
+            ))
+
             try context.save()
         }
     }
