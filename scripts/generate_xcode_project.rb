@@ -6,7 +6,7 @@ require 'pathname'
 require 'xcodeproj'
 
 ROOT = Pathname.new(__dir__).join('..').expand_path
-PACKAGE_ROOT = ROOT.join('VolumeArcNative').expand_path
+PACKAGE_ROOT = ROOT.join('VolumeArcKit').expand_path
 PROJECT_PATH = ROOT.join('VolumeArcApple.xcodeproj')
 IOS_DEPLOYMENT_TARGET = '26.0'
 WATCHOS_DEPLOYMENT_TARGET = '26.4'

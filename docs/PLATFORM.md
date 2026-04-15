@@ -75,8 +75,8 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 | VolumeArcWatchWidgets | Widget Extension | watchOS 26.4 | `com.mabryventures.VolumeArc.watchwidgets` |
 | VolumeArcAppTests | Unit Test Bundle | iOS 26.0 | `com.mabryventures.VolumeArc.tests` |
 | VolumeArcAppUITests | UI Test Bundle | iOS 26.0 | `com.mabryventures.VolumeArc.uitests` |
-| VolumeArcCore | Static Library | iOS 26.0 | -- (from `VolumeArcNative/`) |
-| VolumeArcUI | Static Library | iOS 26.0 | -- (from `VolumeArcNative/`) |
+| VolumeArcCore | Static Library | iOS 26.0 | -- (from `VolumeArcKit/`) |
+| VolumeArcUI | Static Library | iOS 26.0 | -- (from `VolumeArcKit/`) |
 
 **Dependency graph:** `VolumeArcUI -> VolumeArcCore`. All app targets depend on `VolumeArcCore`. The iOS app and tests also depend on `VolumeArcUI`. The watch and widget targets depend only on `VolumeArcCore`. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module breakdown and data flow.
 
@@ -209,7 +209,7 @@ Each target includes a `PrivacyInfo.xcprivacy` declaring required reason API usa
 
 ### Localization
 
-Every user-facing string in `VolumeArcUI/Screens/` and `Watch/` goes through `String(localized:comment:)` with a translator comment. Currently English-only, but the full catalog is extractable to a String Catalog (`.xcstrings`) without code changes. Plural-bearing strings use Apple's `^[\(count) thing](inflect: true)` syntax for CLDR plural agreement. Enum display labels live in `VolumeArcNative/Sources/VolumeArcUI/LocalizedLabels.swift` as extensions on `AdvancementLevel`, `CoachingStyle`, `Equipment`, and `PrivacyMode` so translators see all enum-derived labels in one place.
+Every user-facing string in `VolumeArcUI/Screens/` and `Watch/` goes through `String(localized:comment:)` with a translator comment. Currently English-only, but the full catalog is extractable to a String Catalog (`.xcstrings`) without code changes. Plural-bearing strings use Apple's `^[\(count) thing](inflect: true)` syntax for CLDR plural agreement. Enum display labels live in `VolumeArcKit/Sources/VolumeArcUI/LocalizedLabels.swift` as extensions on `AdvancementLevel`, `CoachingStyle`, `Equipment`, and `PrivacyMode` so translators see all enum-derived labels in one place.
 
 ### Accessibility
 
@@ -241,7 +241,7 @@ DEVELOPMENT_TEAM=A886EMZZW6 ./scripts/archive_for_distribution.sh
 - **Factory pattern for runtime dependencies:** Platform-specific implementations chosen at init time via static factory methods on the app or model types.
 - **Unavailable stubs:** Each integration has an `Unavailable*` fallback (e.g., `UnavailableHealthStore`, `UnavailableCloudSyncTransport`, `UnavailableVoiceTransport`) so the app always launches.
 - **Actor isolation:** Network-bound providers (`VolumeArcRelaySessionProvider`, `VolumeArcVoicePermissionStore`) use Swift actors for thread safety.
-- **No Package.swift at root:** The Xcode project is Ruby-generated, not SPM-based. `VolumeArcNative/` contains the Swift package structure for shared frameworks.
+- **No Package.swift at root:** The Xcode project is Ruby-generated, not SPM-based. `VolumeArcKit/` contains the Swift package structure for shared frameworks.
 - **Localized strings:** All user-facing strings use `String(localized:comment:)` for future translation support. Plural-bearing strings use `^[count thing](inflect: true)`. Enum labels live in `LocalizedLabels.swift`.
 - **Accessibility:** All interactive and data-display elements in Watch and Widget views have VoiceOver labels, hints, and values. Design system components carry built-in accessibility so screens that use them inherit it.
 - **Codable payloads:** Watch-to-phone payloads use `Codable` structs encoded via `SyncPayloadCodec` rather than ad-hoc string formatting.

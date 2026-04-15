@@ -2,7 +2,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "VolumeArcNative",
+    name: "VolumeArcKit",
     platforms: [
         .iOS(.v26),
         .watchOS("26.4"),

@@ -24,7 +24,7 @@ When you change the **implementation status** of a system (a stub becomes real, 
 
 - The Xcode project is **generated** by `ruby scripts/generate_xcode_project.rb`. Never edit `project.pbxproj` by hand.
 - Every user-facing string goes through `String(localized:comment:)`. Plural-bearing strings use `^[\(count) thing](inflect: true)`.
-- Enum display labels live in `VolumeArcNative/Sources/VolumeArcUI/LocalizedLabels.swift`, not inline in views.
+- Enum display labels live in `VolumeArcKit/Sources/VolumeArcUI/LocalizedLabels.swift`, not inline in views.
 - Every visual property comes from `VA.Colors`, `VA.Typography`, `VA.Space`, `VA.Radius`, or `VA.Shadow` — never hardcode.
 - Every haptic goes through `VAHaptics.*`.
 - Main is protected: every merge requires green CI (build + unit/integration tests + UI smoke tests + SwiftLint + release validation) plus the two-bot AI review gate (Gemini + Codex).

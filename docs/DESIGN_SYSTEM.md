@@ -1,6 +1,6 @@
 # Design System
 
-VolumeArc's design system lives in `VolumeArcNative/Sources/VolumeArcUI/DesignSystem/`. It has two layers: **tokens** (the primitives) and **components** (composable views built from tokens).
+VolumeArc's design system lives in `VolumeArcKit/Sources/VolumeArcUI/DesignSystem/`. It has two layers: **tokens** (the primitives) and **components** (composable views built from tokens).
 
 ## Tokens
 
@@ -134,7 +134,7 @@ Apply with the `.vaAnimation()` helper or directly. `vaAppear()` gives any view 
 
 ## Adding a new component
 
-1. Put it in `VolumeArcNative/Sources/VolumeArcUI/DesignSystem/Components.swift`
+1. Put it in `VolumeArcKit/Sources/VolumeArcUI/DesignSystem/Components.swift`
 2. Use only `VA.*` tokens — no hardcoded values
 3. Support both light and dark mode via dynamic colors
 4. Support Dynamic Type by using `VA.Typography` fonts

@@ -7,7 +7,7 @@ VolumeArc is a multi-target Apple platform app composed of:
 - **iOS host app** (`App/`) — thin layer that bootstraps dependencies, wires notifications, and installs the SwiftUI root.
 - **watchOS companion** (`Watch/`) — workout tracking on the wrist, offline queue, coach cue requests.
 - **Widget extension** (`Widgets/`) — home screen and Lock Screen widgets, Live Activity for active workouts.
-- **Shared Swift package** (`VolumeArcNative/`) — `VolumeArcCore` and `VolumeArcUI` libraries containing all business logic and design system components.
+- **Shared Swift package** (`VolumeArcKit/`) — `VolumeArcCore` and `VolumeArcUI` libraries containing all business logic and design system components.
 
 ## Dependency graph
 
