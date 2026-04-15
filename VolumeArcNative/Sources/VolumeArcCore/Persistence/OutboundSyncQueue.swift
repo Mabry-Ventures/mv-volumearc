@@ -234,8 +234,24 @@ public struct SwiftDataOutboundSyncQueue: OutboundSyncQueue, Sendable {
         olderThan: Date?
     ) throws {
         let context = ModelContext(container)
-        let descriptor = FetchDescriptor<OutboundSyncQueueRecord>()
-        let rows = try context.fetch(descriptor)
+
+        // VOL-67 Copilot perf P2: narrow the fetch via a SwiftData
+        // `#Predicate` on `recordIdentifier` instead of scanning every
+        // queued row. The applier calls this during inbound pull apply,
+        // and an offline device may have accumulated a large backlog —
+        // previously we loaded the whole table and filtered in memory.
+        // The identifier match alone eliminates the vast majority of
+        // rows; the secondary recordType alias resolution stays in
+        // memory because SwiftData's `#Predicate` can't express
+        // multi-value OR against a String column without exploding
+        // the query shape.
+        let targetIdentifier = recordIdentifier
+        let candidatesDescriptor = FetchDescriptor<OutboundSyncQueueRecord>(
+            predicate: #Predicate<OutboundSyncQueueRecord> { row in
+                row.recordIdentifier == targetIdentifier
+            }
+        )
+        let rows = try context.fetch(candidatesDescriptor)
 
         // VOL-67 Codex P2 fixup: the pull applier always calls us with
         // the current short-form `kind.rawValue`, but pre-rename queued
@@ -250,8 +266,6 @@ public struct SwiftDataOutboundSyncQueue: OutboundSyncQueue, Sendable {
 
         var removed = 0
         for row in rows {
-            guard row.recordIdentifier == recordIdentifier else { continue }
-
             let rowKind = CloudSyncRecord.Kind.parse(row.recordType)
             // Match by resolved kind when both sides parse; fall back to
             // exact string match for unknown/future record types.

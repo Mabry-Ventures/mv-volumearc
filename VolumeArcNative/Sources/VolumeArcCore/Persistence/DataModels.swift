@@ -578,7 +578,7 @@ public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
                     recordIdentifier: CloudSyncRecord.Kind.trainingPlan.defaultIdentifier,
                     operation: CloudSyncRecord.Operation.upsert.rawValue,
                     payloadJSON: payloadJSON,
-                    queuedAt: plan.updatedAt ?? Date()
+                    queuedAt: plan.updatedAt
                 ))
             }
 
