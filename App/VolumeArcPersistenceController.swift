@@ -29,7 +29,7 @@ final class VolumeArcPersistenceController {
     let bootstrapStatus: BootstrapStatus
 
     private init() {
-        let schema = Schema(VolumeArcSchemaV3.models)
+        let schema = Schema(VolumeArcSchemaV4.models)
         let bootstrap = Self.makeContainer(for: schema)
         container = bootstrap.container
         bootstrapStatus = bootstrap.status
@@ -107,7 +107,10 @@ final class VolumeArcPersistenceController {
                     container: try ModelContainer(
                         for: schema,
                         migrationPlan: VolumeArcSchemaMigrationPlan.self,
-                        configurations: [primaryConfiguration(schema: schema)]
+                        configurations: [
+                            primaryConfiguration(schema: syncableSchema()),
+                            outboundQueueConfiguration(schema: outboundQueueSchema(), isStoredInMemoryOnly: false),
+                        ]
                     ),
                     status: BootstrapStatus(
                         storageMode: .cloudSynced,
@@ -128,7 +131,7 @@ final class VolumeArcPersistenceController {
                 container: try ModelContainer(
                     for: schema,
                     migrationPlan: VolumeArcSchemaMigrationPlan.self,
-                    configurations: [fallbackLocalConfiguration(schema: schema)]
+                    configurations: [fallbackLocalConfiguration(schema: schema, isStoredInMemoryOnly: false)]
                 ),
                 status: BootstrapStatus(
                     storageMode: .localFallback,
@@ -146,7 +149,7 @@ final class VolumeArcPersistenceController {
                 container: try ModelContainer(
                     for: schema,
                     migrationPlan: VolumeArcSchemaMigrationPlan.self,
-                    configurations: [inMemoryConfiguration(schema: schema)]
+                    configurations: [fallbackLocalConfiguration(schema: schema, isStoredInMemoryOnly: true)]
                 ),
                 status: BootstrapStatus(
                     storageMode: .inMemoryFallback,
@@ -210,24 +213,36 @@ final class VolumeArcPersistenceController {
         )
     }
 
-    private static func fallbackLocalConfiguration(schema: Schema) -> ModelConfiguration {
+    private static func fallbackLocalConfiguration(schema: Schema, isStoredInMemoryOnly: Bool) -> ModelConfiguration {
         ModelConfiguration(
             "VolumeArc-LocalFallback",
             schema: schema,
-            isStoredInMemoryOnly: false,
+            isStoredInMemoryOnly: isStoredInMemoryOnly,
+            allowsSave: true,
+            cloudKitDatabase: .none
+        )
+    }
+    private static func outboundQueueConfiguration(schema: Schema, isStoredInMemoryOnly: Bool) -> ModelConfiguration {
+        ModelConfiguration(
+            "VolumeArc-OutboundQueue",
+            schema: schema,
+            isStoredInMemoryOnly: isStoredInMemoryOnly,
             allowsSave: true,
             cloudKitDatabase: .none
         )
     }
 
-    private static func inMemoryConfiguration(schema: Schema) -> ModelConfiguration {
-        ModelConfiguration(
-            "VolumeArc-InMemoryFallback",
-            schema: schema,
-            isStoredInMemoryOnly: true,
-            allowsSave: true,
-            cloudKitDatabase: .none
-        )
+    private static func syncableSchema() -> Schema {
+        Schema([
+            UserProfileRecord.self,
+            TrainingPlanRecord.self,
+            WorkoutRecord.self,
+            CoachMemoryRecord.self,
+        ])
+    }
+
+    private static func outboundQueueSchema() -> Schema {
+        Schema([OutboundSyncQueueRecord.self])
     }
 }
 

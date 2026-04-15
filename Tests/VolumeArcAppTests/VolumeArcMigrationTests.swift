@@ -33,6 +33,10 @@ final class VolumeArcMigrationTests: XCTestCase {
         XCTAssertEqual(VolumeArcSchemaV3.versionIdentifier, Schema.Version(3, 0, 0))
     }
 
+    func testSchemaV4HasCorrectVersion() {
+        XCTAssertEqual(VolumeArcSchemaV4.versionIdentifier, Schema.Version(4, 0, 0))
+    }
+
     // MARK: - Migration plan structure
 
     func testMigrationPlanIncludesV1Schema() {
@@ -44,19 +48,21 @@ final class VolumeArcMigrationTests: XCTestCase {
                       "Migration plan should include VolumeArcSchemaV2")
         XCTAssertTrue(schemas.contains(where: { $0 == VolumeArcSchemaV3.self }),
                       "Migration plan should include VolumeArcSchemaV3")
+        XCTAssertTrue(schemas.contains(where: { $0 == VolumeArcSchemaV4.self }),
+                      "Migration plan should include VolumeArcSchemaV4")
     }
 
     func testMigrationPlanContainsV1ToV2Stage() {
-        XCTAssertEqual(VolumeArcSchemaMigrationPlan.schemas.count, 3,
-                       "Migration plan should define the V1 bridge, V2 backfill, and V3 current schemas")
-        XCTAssertEqual(VolumeArcSchemaMigrationPlan.stages.count, 2,
-                       "Migration plan should contain the V1 to V2 bridge and the V2 to V3 tightening stage")
+        XCTAssertEqual(VolumeArcSchemaMigrationPlan.schemas.count, 4,
+                       "Migration plan should define the V1 bridge plus the V2, V3, and V4 schemas")
+        XCTAssertEqual(VolumeArcSchemaMigrationPlan.stages.count, 3,
+                       "Migration plan should contain the V1 to V2 bridge plus the V2 to V3 and V3 to V4 stages")
     }
 
     // MARK: - In-memory container creation
 
     func testInMemoryContainerCreatesSuccessfully() throws {
-        let schema = Schema(VolumeArcSchemaV3.models)
+        let schema = Schema(VolumeArcSchemaV4.models)
         let config = ModelConfiguration(
             "MigrationTest",
             schema: schema,
@@ -111,6 +117,40 @@ final class VolumeArcMigrationTests: XCTestCase {
         )
     }
 
+    func testV3StoreMigratesToV4BackfillingWorkoutUpdatedAtAndCoachMemoryIdentifier() throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let storeURL = temporaryDirectory.appendingPathComponent("VolumeArcMigrationV3.sqlite")
+        let fixtureDate = Date(timeIntervalSince1970: 1_715_000_000)
+        let completedAt = fixtureDate.addingTimeInterval(2_700)
+
+        try writeV3FixtureStore(at: storeURL, startedAt: fixtureDate, completedAt: completedAt)
+
+        let migratedContainer = try makeDiskBackedCurrentContainer(at: storeURL)
+        let migratedContext = ModelContext(migratedContainer)
+
+        let migratedWorkout = try XCTUnwrap(
+            migratedContext.fetch(FetchDescriptor<WorkoutRecord>()).first
+        )
+        XCTAssertEqual(
+            migratedWorkout.updatedAt.timeIntervalSince1970,
+            completedAt.timeIntervalSince1970,
+            accuracy: 0.001,
+            "V3 workouts should backfill updatedAt from completedAt when available"
+        )
+
+        let migratedMemory = try XCTUnwrap(
+            migratedContext.fetch(FetchDescriptor<CoachMemoryRecord>()).first
+        )
+        XCTAssertFalse(
+            migratedMemory.identifier.isEmpty,
+            "V3 coach memories should receive a generated identifier during V4 migration"
+        )
+    }
+
     func testCanInsertAndFetchUserProfileRecord() throws {
         let container = try makeInMemoryContainer()
         let context = ModelContext(container)
@@ -157,7 +197,7 @@ final class VolumeArcMigrationTests: XCTestCase {
     // MARK: - Helpers
 
     private func makeInMemoryContainer() throws -> ModelContainer {
-        let schema = Schema(VolumeArcSchemaV3.models)
+        let schema = Schema(VolumeArcSchemaV4.models)
         let config = ModelConfiguration(
             "MigrationTest-\(UUID().uuidString)",
             schema: schema,
@@ -231,8 +271,48 @@ final class VolumeArcMigrationTests: XCTestCase {
         }
     }
 
-    private func makeDiskBackedCurrentContainer(at storeURL: URL) throws -> ModelContainer {
+    private func writeV3FixtureStore(at storeURL: URL, startedAt: Date, completedAt: Date) throws {
         let schema = Schema(VolumeArcSchemaV3.models)
+        let config = ModelConfiguration(
+            "MigrationFixtureV3",
+            schema: schema,
+            url: storeURL,
+            allowsSave: true,
+            cloudKitDatabase: .none
+        )
+        try autoreleasepool {
+            let container = try ModelContainer(for: schema, configurations: [config])
+            let context = ModelContext(container)
+
+            context.insert(
+                VolumeArcSchemaV3.WorkoutRecord(
+                    identifier: "v3-workout",
+                    title: "V3 Session",
+                    startedAt: startedAt,
+                    completedAt: completedAt,
+                    durationMinutes: 45,
+                    exerciseIDsCSV: "back-squat",
+                    setsJSON: "[{\"exerciseID\":\"back-squat\",\"weight\":225,\"reps\":5}]",
+                    totalVolumeLoad: 1_125,
+                    averageRPE: 8.0,
+                    completedSetCount: 1,
+                    summary: "Legacy V3 summary"
+                )
+            )
+            context.insert(
+                VolumeArcSchemaV3.CoachMemoryRecord(
+                    content: "Legacy V3 memory",
+                    theme: "squat",
+                    createdAt: startedAt
+                )
+            )
+
+            try context.save()
+        }
+    }
+
+    private func makeDiskBackedCurrentContainer(at storeURL: URL) throws -> ModelContainer {
+        let schema = Schema(VolumeArcSchemaV4.models)
         let config = ModelConfiguration(
             "MigrationFixture",
             schema: schema,

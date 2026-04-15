@@ -121,20 +121,23 @@ struct VolumeArcApp: App {
         #endif
         #if canImport(SwiftData)
         if let container = persistence.container {
-            let repository = SwiftDataWorkoutRepository(container: container)
-            let coachMemoryRepository = SwiftDataCoachMemoryRepository(container: container)
-            let userProfileRepository = SwiftDataUserProfileRepository(container: container)
-            let trainingPlanRepository = SwiftDataTrainingPlanRepository(container: container)
+            let outboundQueue = SwiftDataOutboundSyncQueue(container: container)
+            let repository = SwiftDataWorkoutRepository(container: container, outboundQueue: outboundQueue)
+            let coachMemoryRepository = SwiftDataCoachMemoryRepository(container: container, outboundQueue: outboundQueue)
+            let userProfileRepository = SwiftDataUserProfileRepository(container: container, outboundQueue: outboundQueue)
+            let trainingPlanRepository = SwiftDataTrainingPlanRepository(container: container, outboundQueue: outboundQueue)
             let syncApplier = DefaultSyncPayloadApplier(
                 workoutRepository: repository,
                 coachMemoryRepository: coachMemoryRepository,
                 userProfileRepository: userProfileRepository,
-                trainingPlanRepository: trainingPlanRepository
+                trainingPlanRepository: trainingPlanRepository,
+                telemetrySink: telemetrySink
             )
             let syncEngine = CloudSyncCoordinator(
                 transport: syncTransport,
                 payloadApplier: syncApplier,
-                stateStore: syncStateStore
+                stateStore: syncStateStore,
+                outboundQueue: outboundQueue
             )
             self.dashboardModel = WorkoutDashboardModel(
                 aiProvider: aiProvider,

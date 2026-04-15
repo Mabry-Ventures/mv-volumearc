@@ -82,6 +82,7 @@ public final class WorkoutRecord {
     public var averageRPE: Double = 0
     public var completedSetCount: Int = 0
     public var summary: String = ""
+    public var updatedAt: Date = Date()
 
     public init(
         identifier: String = UUID().uuidString,
@@ -94,7 +95,8 @@ public final class WorkoutRecord {
         totalVolumeLoad: Double = 0,
         averageRPE: Double = 0,
         completedSetCount: Int = 0,
-        summary: String = ""
+        summary: String = "",
+        updatedAt: Date = .now
     ) {
         self.identifier = identifier
         self.title = title
@@ -107,16 +109,24 @@ public final class WorkoutRecord {
         self.averageRPE = averageRPE
         self.completedSetCount = completedSetCount
         self.summary = summary
+        self.updatedAt = updatedAt
     }
 }
 
 @Model
 public final class CoachMemoryRecord {
+    public var identifier: String = ""
     public var content: String = ""
     public var theme: String = ""
     public var createdAt: Date = Date()
 
-    public init(content: String = "", theme: String = "", createdAt: Date = .now) {
+    public init(
+        identifier: String = UUID().uuidString,
+        content: String = "",
+        theme: String = "",
+        createdAt: Date = .now
+    ) {
+        self.identifier = identifier
         self.content = content
         self.theme = theme
         self.createdAt = createdAt
@@ -345,18 +355,138 @@ public enum VolumeArcSchemaV2: VersionedSchema {
 public enum VolumeArcSchemaV3: VersionedSchema {
     public static let versionIdentifier = Schema.Version(3, 0, 0)
 
+    @Model
+    public final class UserProfileRecord {
+        public var name: String = ""
+        public var coachingStyle: String = "motivational"
+        public var privacyMode: String = "standard"
+        public var advancementLevel: String = "intermediate"
+        public var availableEquipmentCSV: String = ""
+        public var preferredRepRangeLower: Int = 5
+        public var preferredRepRangeUpper: Int = 8
+        public var sessionTimeBudgetMinutes: Int = 60
+        public var weeklyTrainingDays: Int = 4
+        public var onboardingCompleted: Bool = false
+        public var updatedAt: Date = Date()
+
+        public init(
+            name: String = "",
+            coachingStyle: String = "motivational",
+            privacyMode: String = "standard",
+            advancementLevel: String = "intermediate",
+            availableEquipmentCSV: String = "",
+            preferredRepRangeLower: Int = 5,
+            preferredRepRangeUpper: Int = 8,
+            sessionTimeBudgetMinutes: Int = 60,
+            weeklyTrainingDays: Int = 4,
+            onboardingCompleted: Bool = false,
+            updatedAt: Date = .now
+        ) {
+            self.name = name
+            self.coachingStyle = coachingStyle
+            self.privacyMode = privacyMode
+            self.advancementLevel = advancementLevel
+            self.availableEquipmentCSV = availableEquipmentCSV
+            self.preferredRepRangeLower = preferredRepRangeLower
+            self.preferredRepRangeUpper = preferredRepRangeUpper
+            self.sessionTimeBudgetMinutes = sessionTimeBudgetMinutes
+            self.weeklyTrainingDays = weeklyTrainingDays
+            self.onboardingCompleted = onboardingCompleted
+            self.updatedAt = updatedAt
+        }
+    }
+
+    @Model
+    public final class TrainingPlanRecord {
+        public var workoutsJSON: String = "[]"
+        public var updatedAt: Date = Date()
+
+        public init(workoutsJSON: String = "[]", updatedAt: Date = .now) {
+            self.workoutsJSON = workoutsJSON
+            self.updatedAt = updatedAt
+        }
+    }
+
+    @Model
+    public final class WorkoutRecord {
+        public var identifier: String = ""
+        public var title: String = ""
+        public var startedAt: Date = Date()
+        public var completedAt: Date?
+        public var durationMinutes: Int = 0
+        public var exerciseIDsCSV: String = ""
+        public var setsJSON: String = "[]"
+        public var totalVolumeLoad: Double = 0
+        public var averageRPE: Double = 0
+        public var completedSetCount: Int = 0
+        public var summary: String = ""
+
+        public init(
+            identifier: String = UUID().uuidString,
+            title: String = "",
+            startedAt: Date = .now,
+            completedAt: Date? = nil,
+            durationMinutes: Int = 0,
+            exerciseIDsCSV: String = "",
+            setsJSON: String = "[]",
+            totalVolumeLoad: Double = 0,
+            averageRPE: Double = 0,
+            completedSetCount: Int = 0,
+            summary: String = ""
+        ) {
+            self.identifier = identifier
+            self.title = title
+            self.startedAt = startedAt
+            self.completedAt = completedAt
+            self.durationMinutes = durationMinutes
+            self.exerciseIDsCSV = exerciseIDsCSV
+            self.setsJSON = setsJSON
+            self.totalVolumeLoad = totalVolumeLoad
+            self.averageRPE = averageRPE
+            self.completedSetCount = completedSetCount
+            self.summary = summary
+        }
+    }
+
+    @Model
+    public final class CoachMemoryRecord {
+        public var content: String = ""
+        public var theme: String = ""
+        public var createdAt: Date = Date()
+
+        public init(content: String = "", theme: String = "", createdAt: Date = .now) {
+            self.content = content
+            self.theme = theme
+            self.createdAt = createdAt
+        }
+    }
+
     public static var models: [any PersistentModel.Type] {
         [UserProfileRecord.self, TrainingPlanRecord.self, WorkoutRecord.self, CoachMemoryRecord.self]
     }
 }
 
+public enum VolumeArcSchemaV4: VersionedSchema {
+    public static let versionIdentifier = Schema.Version(4, 0, 0)
+
+    public static var models: [any PersistentModel.Type] {
+        [
+            UserProfileRecord.self,
+            TrainingPlanRecord.self,
+            WorkoutRecord.self,
+            CoachMemoryRecord.self,
+            OutboundSyncQueueRecord.self,
+        ]
+    }
+}
+
 public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
     public static var schemas: [any VersionedSchema.Type] {
-        [VolumeArcSchemaV1.self, VolumeArcSchemaV2.self, VolumeArcSchemaV3.self]
+        [VolumeArcSchemaV1.self, VolumeArcSchemaV2.self, VolumeArcSchemaV3.self, VolumeArcSchemaV4.self]
     }
 
     public static var stages: [MigrationStage] {
-        [v1ToV2, v2ToV3]
+        [v1ToV2, v2ToV3, v3ToV4]
     }
 
     private static let v1ToV2 = MigrationStage.custom(
@@ -376,6 +506,25 @@ public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
     private static let v2ToV3 = MigrationStage.lightweight(
         fromVersion: VolumeArcSchemaV2.self,
         toVersion: VolumeArcSchemaV3.self
+    )
+
+    private static let v3ToV4 = MigrationStage.custom(
+        fromVersion: VolumeArcSchemaV3.self,
+        toVersion: VolumeArcSchemaV4.self,
+        willMigrate: nil,
+        didMigrate: { context in
+            let migratedWorkouts = try context.fetch(FetchDescriptor<WorkoutRecord>())
+            for workout in migratedWorkouts {
+                workout.updatedAt = workout.completedAt ?? workout.startedAt
+            }
+
+            let migratedMemories = try context.fetch(FetchDescriptor<CoachMemoryRecord>())
+            for memory in migratedMemories where memory.identifier.isEmpty {
+                memory.identifier = UUID().uuidString
+            }
+
+            try context.save()
+        }
     )
 }
 #endif

@@ -2,6 +2,9 @@ import Foundation
 #if canImport(CloudKit)
 import CloudKit
 #endif
+#if canImport(SwiftData)
+import SwiftData
+#endif
 
 public protocol CloudSyncTransport: Sendable {
     func pushRecords(_ records: [CloudSyncRecord]) async throws
@@ -14,20 +17,37 @@ public protocol CloudSyncTransport: Sendable {
 public struct CloudSyncRecord: Sendable, Codable {
     public enum Kind: String, Sendable, Codable {
         case workout
-        case userProfile
-        case trainingPlan
-        case coachMemory
+        case userProfile = "profile"
+        case trainingPlan = "plan"
+        case coachMemory = "memory"
+
+        public var defaultIdentifier: String {
+            rawValue
+        }
+    }
+
+    public enum Operation: String, Sendable, Codable {
+        case upsert
+        case delete
     }
 
     public let kind: Kind
     public let identifier: String
-    public let payload: [String: String]
+    public let operation: Operation
+    public let payloadJSON: String
     public let modifiedAt: Date
 
-    public init(kind: Kind, identifier: String, payload: [String: String], modifiedAt: Date = .now) {
+    public init(
+        kind: Kind,
+        identifier: String,
+        operation: Operation,
+        payloadJSON: String,
+        modifiedAt: Date = .now
+    ) {
         self.kind = kind
         self.identifier = identifier
-        self.payload = payload
+        self.operation = operation
+        self.payloadJSON = payloadJSON
         self.modifiedAt = modifiedAt
     }
 }
@@ -74,9 +94,8 @@ public final class CloudKitSyncTransport: CloudSyncTransport, @unchecked Sendabl
         let ckRecords = records.map { record -> CKRecord in
             let id = CKRecord.ID(recordName: record.identifier, zoneID: zoneID)
             let ck = CKRecord(recordType: record.kind.rawValue, recordID: id)
-            for (key, value) in record.payload {
-                ck[key] = value as NSString
-            }
+            ck["operation"] = record.operation.rawValue as NSString
+            ck["payloadJSON"] = record.payloadJSON as NSString
             ck["modifiedAt"] = record.modifiedAt as NSDate
             return ck
         }
@@ -124,17 +143,15 @@ public final class CloudKitSyncTransport: CloudSyncTransport, @unchecked Sendabl
         operation.recordWasChangedBlock = { _, result in
             if case let .success(record) = result,
                let kind = CloudSyncRecord.Kind(rawValue: record.recordType) {
-                var payload: [String: String] = [:]
-                for key in record.allKeys() {
-                    if let value = record[key] as? String {
-                        payload[key] = value
-                    }
-                }
                 let modifiedAt = record.modificationDate ?? .now
+                let operation = CloudSyncRecord.Operation(
+                    rawValue: (record["operation"] as? String) ?? CloudSyncRecord.Operation.upsert.rawValue
+                ) ?? .upsert
                 changedRecords.append(CloudSyncRecord(
                     kind: kind,
                     identifier: record.recordID.recordName,
-                    payload: payload,
+                    operation: operation,
+                    payloadJSON: (record["payloadJSON"] as? String) ?? "",
                     modifiedAt: modifiedAt
                 ))
             }
@@ -223,11 +240,13 @@ public struct UnavailableCloudSyncTransport: CloudSyncTransport {
 public enum CloudSyncError: Error, LocalizedError {
     case transportUnavailable(reason: String)
     case applyFailed(underlying: Error)
+    case invalidQueuedRecord(reason: String)
 
     public var errorDescription: String? {
         switch self {
         case let .transportUnavailable(reason): return reason
         case let .applyFailed(underlying): return "Sync apply failed: \(underlying.localizedDescription)"
+        case let .invalidQueuedRecord(reason): return reason
         }
     }
 }
@@ -262,6 +281,7 @@ public struct FileSyncStateStore: Sendable {
 public actor CloudSyncCoordinator {
     private let transport: CloudSyncTransport
     private let stateStore: FileSyncStateStore
+    private let outboundQueue: (any OutboundSyncQueue)?
 
     #if canImport(SwiftData)
     private let payloadApplier: DefaultSyncPayloadApplier?
@@ -269,17 +289,24 @@ public actor CloudSyncCoordinator {
     public init(
         transport: CloudSyncTransport,
         payloadApplier: DefaultSyncPayloadApplier,
-        stateStore: FileSyncStateStore
+        stateStore: FileSyncStateStore,
+        outboundQueue: (any OutboundSyncQueue)? = nil
     ) {
         self.transport = transport
         self.payloadApplier = payloadApplier
         self.stateStore = stateStore
+        self.outboundQueue = outboundQueue
     }
     #endif
 
-    public init(transport: CloudSyncTransport, stateStore: FileSyncStateStore) {
+    public init(
+        transport: CloudSyncTransport,
+        stateStore: FileSyncStateStore,
+        outboundQueue: (any OutboundSyncQueue)? = nil
+    ) {
         self.transport = transport
         self.stateStore = stateStore
+        self.outboundQueue = outboundQueue
         #if canImport(SwiftData)
         self.payloadApplier = nil
         #endif
@@ -290,14 +317,40 @@ public actor CloudSyncCoordinator {
         transport.isAvailable
     }
 
+    /// Push up to `limit` queued local changes and delete them only after a successful transport call.
+    public func push(limit: Int = 50, additionalRecords: [CloudSyncRecord] = []) async throws -> Int {
+        guard transport.isAvailable else { return 0 }
+
+        var records = additionalRecords
+        var drainedChanges: [QueuedOutboundSyncChange] = []
+
+        if let outboundQueue {
+            drainedChanges = try await MainActor.run {
+                try outboundQueue.drain(limit: limit)
+            }
+            let queuedRecords = try drainedChanges.map(Self.makeCloudSyncRecord(from:))
+            records.append(contentsOf: queuedRecords)
+        }
+
+        guard !records.isEmpty else { return 0 }
+
+        try await transport.pushRecords(records)
+
+        if let outboundQueue, !drainedChanges.isEmpty {
+            try await MainActor.run {
+                try outboundQueue.delete(ids: drainedChanges.map(\.id))
+            }
+        }
+
+        return records.count
+    }
+
     /// Run one push/pull cycle. Returns the number of records pushed + pulled.
     public func syncCycle(pushing localRecords: [CloudSyncRecord] = []) async throws -> Int {
         guard transport.isAvailable else { return 0 }
 
         // 1) Push any local changes
-        if !localRecords.isEmpty {
-            try await transport.pushRecords(localRecords)
-        }
+        let pushedCount = try await push(additionalRecords: localRecords)
 
         // 2) Pull remote changes
         let cursor = stateStore.loadCursor()
@@ -316,7 +369,24 @@ public actor CloudSyncCoordinator {
             try? stateStore.saveCursor(nextCursor)
         }
 
-        return localRecords.count + result.changedRecords.count
+        return pushedCount + result.changedRecords.count
+    }
+
+    private static func makeCloudSyncRecord(from change: QueuedOutboundSyncChange) throws -> CloudSyncRecord {
+        guard let kind = CloudSyncRecord.Kind(rawValue: change.recordType) else {
+            throw CloudSyncError.invalidQueuedRecord(reason: "Unsupported record type: \(change.recordType)")
+        }
+        guard let operation = CloudSyncRecord.Operation(rawValue: change.operation) else {
+            throw CloudSyncError.invalidQueuedRecord(reason: "Unsupported queue operation: \(change.operation)")
+        }
+
+        return CloudSyncRecord(
+            kind: kind,
+            identifier: change.recordIdentifier,
+            operation: operation,
+            payloadJSON: change.payloadJSON,
+            modifiedAt: SyncPayloadCodec.modifiedAt(for: kind, payloadJSON: change.payloadJSON) ?? change.queuedAt
+        )
     }
 }
 
@@ -328,24 +398,31 @@ public struct DefaultSyncPayloadApplier: Sendable {
     public let coachMemoryRepository: SwiftDataCoachMemoryRepository
     public let userProfileRepository: SwiftDataUserProfileRepository
     public let trainingPlanRepository: SwiftDataTrainingPlanRepository
+    private let telemetrySink: (any TelemetrySink)?
 
     public init(
         workoutRepository: SwiftDataWorkoutRepository,
         coachMemoryRepository: SwiftDataCoachMemoryRepository,
         userProfileRepository: SwiftDataUserProfileRepository,
-        trainingPlanRepository: SwiftDataTrainingPlanRepository
+        trainingPlanRepository: SwiftDataTrainingPlanRepository,
+        telemetrySink: (any TelemetrySink)? = nil
     ) {
         self.workoutRepository = workoutRepository
         self.coachMemoryRepository = coachMemoryRepository
         self.userProfileRepository = userProfileRepository
         self.trainingPlanRepository = trainingPlanRepository
+        self.telemetrySink = telemetrySink
     }
 
     /// Apply a pull result to the local repositories.
     @MainActor
     public func apply(result: CloudSyncPullResult) async throws {
         for record in result.changedRecords {
-            try applyRecord(record)
+            if record.operation == .delete {
+                try applyDeletion(record)
+            } else {
+                try applyRecord(record)
+            }
         }
         for deletedID in result.deletedRecordIDs {
             try applyDeletion(identifier: deletedID)
@@ -368,91 +445,275 @@ public struct DefaultSyncPayloadApplier: Sendable {
 
     @MainActor
     private func applyDeletion(identifier: String) throws {
-        // Deletion routing by ID prefix is an approximation since we don't
-        // know the record kind from the ID alone. Try workout first (most
-        // common deletion target).
-        try? workoutRepository.deleteWorkout(identifier: identifier)
+        // Best-effort fallback for legacy deleted-record callbacks that don't
+        // include a record kind.
+        let context = ModelContext(workoutRepository.container)
+
+        if identifier == CloudSyncRecord.Kind.userProfile.defaultIdentifier {
+            var profileDescriptor = FetchDescriptor<UserProfileRecord>()
+            profileDescriptor.fetchLimit = 1
+            if let profile = try context.fetch(profileDescriptor).first {
+                context.delete(profile)
+            }
+        }
+
+        if identifier == CloudSyncRecord.Kind.trainingPlan.defaultIdentifier {
+            var planDescriptor = FetchDescriptor<TrainingPlanRecord>()
+            planDescriptor.fetchLimit = 1
+            if let plan = try context.fetch(planDescriptor).first {
+                context.delete(plan)
+            }
+        }
+
+        var workoutDescriptor = FetchDescriptor<WorkoutRecord>(
+            predicate: #Predicate<WorkoutRecord> { workout in
+                workout.identifier == identifier
+            }
+        )
+        workoutDescriptor.fetchLimit = 1
+        if let workout = try context.fetch(workoutDescriptor).first {
+            context.delete(workout)
+        }
+
+        var memoryDescriptor = FetchDescriptor<CoachMemoryRecord>(
+            predicate: #Predicate<CoachMemoryRecord> { memory in
+                memory.identifier == identifier
+            }
+        )
+        memoryDescriptor.fetchLimit = 1
+        if let memory = try context.fetch(memoryDescriptor).first {
+            context.delete(memory)
+        }
+
+        try context.save()
     }
 
     // MARK: - Per-kind appliers
 
     @MainActor
     private func applyWorkout(_ record: CloudSyncRecord) throws {
-        // Workout records sync the aggregate summary, not individual sets,
-        // to keep the wire format small. Sets are reconstructed from the
-        // setsJSON field if present.
-        guard let title = record.payload["title"] else { return }
+        guard let payload = SyncPayloadCodec.decodeWorkoutPayload(from: record.payloadJSON) else { return }
 
-        // Check if we already have a local version that's newer (last-write-wins).
-        if let existing = try workoutRepository.workout(withIdentifier: record.identifier) {
-            let existingTime = existing.completedAt ?? existing.startedAt
-            if existingTime >= record.modifiedAt { return }
-            // Local is older — upsert with remote values.
+        let context = ModelContext(workoutRepository.container)
+        var descriptor = FetchDescriptor<WorkoutRecord>(
+            predicate: #Predicate<WorkoutRecord> { workout in
+                workout.identifier == record.identifier
+            }
+        )
+        descriptor.fetchLimit = 1
+
+        if let existing = try context.fetch(descriptor).first {
+            guard shouldApply(
+                kind: record.kind,
+                identifier: record.identifier,
+                localTimestamp: existing.updatedAt,
+                inboundTimestamp: payload.updatedAt
+            ) else { return }
+
+            existing.title = payload.title
+            existing.startedAt = payload.startedAt
+            existing.completedAt = payload.completedAt
+            existing.durationMinutes = payload.durationMinutes
+            existing.exerciseIDsCSV = payload.exerciseIDsCSV
+            existing.setsJSON = payload.setsJSON
+            existing.totalVolumeLoad = payload.totalVolumeLoad
+            existing.averageRPE = payload.averageRPE
+            existing.completedSetCount = payload.completedSetCount
+            existing.summary = payload.summary
+            existing.updatedAt = payload.updatedAt
+        } else {
+            context.insert(WorkoutRecord(
+                identifier: record.identifier,
+                title: payload.title,
+                startedAt: payload.startedAt,
+                completedAt: payload.completedAt,
+                durationMinutes: payload.durationMinutes,
+                exerciseIDsCSV: payload.exerciseIDsCSV,
+                setsJSON: payload.setsJSON,
+                totalVolumeLoad: payload.totalVolumeLoad,
+                averageRPE: payload.averageRPE,
+                completedSetCount: payload.completedSetCount,
+                summary: payload.summary,
+                updatedAt: payload.updatedAt
+            ))
         }
 
-        _ = try workoutRepository.createWorkout(
-            title: title,
-            startedAt: record.modifiedAt
-        )
+        try context.save()
     }
 
     @MainActor
     private func applyUserProfile(_ record: CloudSyncRecord) throws {
-        // Decode payload into a UserProfileDefaults and upsert.
-        let name = record.payload["name"] ?? ""
-        let coachingStyle = CoachingStyle(rawValue: record.payload["coachingStyle"] ?? "motivational") ?? .motivational
-        let privacyMode = PrivacyMode(rawValue: record.payload["privacyMode"] ?? "standard") ?? .standard
-        let advancementLevel = AdvancementLevel(rawValue: record.payload["advancementLevel"] ?? "intermediate") ?? .intermediate
-        let equipment: [Equipment] = (record.payload["equipment"] ?? "")
-            .split(separator: ",")
-            .compactMap { Equipment(rawValue: String($0)) }
-        let lower = Int(record.payload["preferredRepRangeLower"] ?? "5") ?? 5
-        let upper = Int(record.payload["preferredRepRangeUpper"] ?? "8") ?? 8
-        let time = Int(record.payload["sessionTimeBudgetMinutes"] ?? "60") ?? 60
-        let days = Int(record.payload["weeklyTrainingDays"] ?? "4") ?? 4
+        guard let payload = SyncPayloadCodec.decodeUserProfilePayload(from: record.payloadJSON) else { return }
 
-        let defaults = UserProfileDefaults(
-            name: name,
-            coachingStyle: coachingStyle,
-            privacyMode: privacyMode,
-            advancementLevel: advancementLevel,
-            availableEquipment: equipment.isEmpty ? [.barbell, .dumbbell, .machine, .bodyweight] : equipment,
-            preferredRepRangeLower: lower,
-            preferredRepRangeUpper: upper,
-            sessionTimeBudgetMinutes: time,
-            weeklyTrainingDays: days
-        )
+        let context = ModelContext(userProfileRepository.container)
+        var descriptor = FetchDescriptor<UserProfileRecord>()
+        descriptor.fetchLimit = 1
 
-        try userProfileRepository.upsertProfile(defaults)
+        if let existing = try context.fetch(descriptor).first {
+            guard shouldApply(
+                kind: record.kind,
+                identifier: record.identifier,
+                localTimestamp: existing.updatedAt,
+                inboundTimestamp: payload.updatedAt
+            ) else { return }
+
+            existing.name = payload.name
+            existing.coachingStyle = payload.coachingStyle
+            existing.privacyMode = payload.privacyMode
+            existing.advancementLevel = payload.advancementLevel
+            existing.availableEquipmentCSV = payload.availableEquipmentCSV
+            existing.preferredRepRangeLower = payload.preferredRepRangeLower
+            existing.preferredRepRangeUpper = payload.preferredRepRangeUpper
+            existing.sessionTimeBudgetMinutes = payload.sessionTimeBudgetMinutes
+            existing.weeklyTrainingDays = payload.weeklyTrainingDays
+            existing.onboardingCompleted = payload.onboardingCompleted
+            existing.updatedAt = payload.updatedAt
+        } else {
+            context.insert(UserProfileRecord(
+                name: payload.name,
+                coachingStyle: payload.coachingStyle,
+                privacyMode: payload.privacyMode,
+                advancementLevel: payload.advancementLevel,
+                availableEquipmentCSV: payload.availableEquipmentCSV,
+                preferredRepRangeLower: payload.preferredRepRangeLower,
+                preferredRepRangeUpper: payload.preferredRepRangeUpper,
+                sessionTimeBudgetMinutes: payload.sessionTimeBudgetMinutes,
+                weeklyTrainingDays: payload.weeklyTrainingDays,
+                onboardingCompleted: payload.onboardingCompleted,
+                updatedAt: payload.updatedAt
+            ))
+        }
+
+        try context.save()
     }
 
     @MainActor
     private func applyTrainingPlan(_ record: CloudSyncRecord) throws {
-        guard let json = record.payload["workoutsJSON"],
-              let data = json.data(using: .utf8),
-              let workouts = try? JSONDecoder().decode([WeeklyWorkout].self, from: data)
-        else { return }
-        try trainingPlanRepository.upsertPlan(workouts)
+        guard let payload = SyncPayloadCodec.decodeTrainingPlanPayload(from: record.payloadJSON) else { return }
+
+        let context = ModelContext(trainingPlanRepository.container)
+        var descriptor = FetchDescriptor<TrainingPlanRecord>()
+        descriptor.fetchLimit = 1
+
+        if let existing = try context.fetch(descriptor).first {
+            guard shouldApply(
+                kind: record.kind,
+                identifier: record.identifier,
+                localTimestamp: existing.updatedAt,
+                inboundTimestamp: payload.updatedAt
+            ) else { return }
+
+            existing.workoutsJSON = payload.workoutsJSON
+            existing.updatedAt = payload.updatedAt
+        } else {
+            context.insert(TrainingPlanRecord(
+                workoutsJSON: payload.workoutsJSON,
+                updatedAt: payload.updatedAt
+            ))
+        }
+
+        try context.save()
     }
 
     @MainActor
     private func applyCoachMemory(_ record: CloudSyncRecord) throws {
-        let content = record.payload["content"] ?? ""
-        let theme = record.payload["theme"] ?? ""
-        guard !content.isEmpty else { return }
-        try coachMemoryRepository.append(content: content, theme: theme)
+        guard let payload = SyncPayloadCodec.decodeCoachMemoryPayload(from: record.payloadJSON) else { return }
+
+        let context = ModelContext(coachMemoryRepository.container)
+        var descriptor = FetchDescriptor<CoachMemoryRecord>(
+            predicate: #Predicate<CoachMemoryRecord> { memory in
+                memory.identifier == record.identifier
+            }
+        )
+        descriptor.fetchLimit = 1
+
+        if let existing = try context.fetch(descriptor).first {
+            guard shouldApply(
+                kind: record.kind,
+                identifier: record.identifier,
+                localTimestamp: existing.createdAt,
+                inboundTimestamp: payload.createdAt
+            ) else { return }
+
+            existing.content = payload.content
+            existing.theme = payload.theme
+            existing.createdAt = payload.createdAt
+        } else {
+            context.insert(CoachMemoryRecord(
+                identifier: record.identifier,
+                content: payload.content,
+                theme: payload.theme,
+                createdAt: payload.createdAt
+            ))
+        }
+
+        try context.save()
+    }
+
+    @MainActor
+    private func applyDeletion(_ record: CloudSyncRecord) throws {
+        let context = ModelContext(workoutRepository.container)
+
+        switch record.kind {
+        case .workout:
+            var descriptor = FetchDescriptor<WorkoutRecord>(
+                predicate: #Predicate<WorkoutRecord> { workout in
+                    workout.identifier == record.identifier
+                }
+            )
+            descriptor.fetchLimit = 1
+            if let workout = try context.fetch(descriptor).first {
+                context.delete(workout)
+            }
+        case .userProfile:
+            var descriptor = FetchDescriptor<UserProfileRecord>()
+            descriptor.fetchLimit = 1
+            if let profile = try context.fetch(descriptor).first {
+                context.delete(profile)
+            }
+        case .trainingPlan:
+            var descriptor = FetchDescriptor<TrainingPlanRecord>()
+            descriptor.fetchLimit = 1
+            if let plan = try context.fetch(descriptor).first {
+                context.delete(plan)
+            }
+        case .coachMemory:
+            var descriptor = FetchDescriptor<CoachMemoryRecord>(
+                predicate: #Predicate<CoachMemoryRecord> { memory in
+                    memory.identifier == record.identifier
+                }
+            )
+            descriptor.fetchLimit = 1
+            if let memory = try context.fetch(descriptor).first {
+                context.delete(memory)
+            }
+        }
+
+        try context.save()
+    }
+
+    private func shouldApply(
+        kind: CloudSyncRecord.Kind,
+        identifier: String,
+        localTimestamp: Date,
+        inboundTimestamp: Date
+    ) -> Bool {
+        guard localTimestamp > inboundTimestamp else { return true }
+
+        telemetrySink?.record(TelemetryEvent(
+            category: "sync",
+            name: "sync_conflict_local_wins",
+            severity: .info,
+            message: "Dropped older inbound sync payload for \(kind.rawValue) \(identifier)",
+            metadata: [
+                "recordType": kind.rawValue,
+                "identifier": identifier,
+                "localTimestamp": ISO8601DateFormatter().string(from: localTimestamp),
+                "inboundTimestamp": ISO8601DateFormatter().string(from: inboundTimestamp),
+            ]
+        ))
+
+        return false
     }
 }
 #endif
-
-public enum SyncPayloadCodec {
-    public static func encode<T: Encodable>(_ value: T) -> String? {
-        guard let data = try? JSONEncoder().encode(value) else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-
-    public static func decode<T: Decodable>(_ type: T.Type, from string: String) -> T? {
-        guard let data = string.data(using: .utf8) else { return nil }
-        return try? JSONDecoder().decode(type, from: data)
-    }
-}

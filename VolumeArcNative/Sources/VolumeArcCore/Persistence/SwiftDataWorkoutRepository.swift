@@ -5,9 +5,11 @@ import SwiftData
 /// SwiftData-backed repository for `WorkoutRecord`.
 public struct SwiftDataWorkoutRepository: Sendable {
     public let container: ModelContainer
+    private let outboundQueue: any OutboundSyncQueue
 
-    public init(container: ModelContainer) {
+    public init(container: ModelContainer, outboundQueue: (any OutboundSyncQueue)? = nil) {
         self.container = container
+        self.outboundQueue = outboundQueue ?? NoOpOutboundSyncQueue()
     }
 
     // MARK: - Create
@@ -16,12 +18,14 @@ public struct SwiftDataWorkoutRepository: Sendable {
     @MainActor
     public func createWorkout(
         title: String,
-        startedAt: Date = .now
+        startedAt: Date = .now,
+        updatedAt: Date = .now
     ) throws -> WorkoutRecord {
         let context = ModelContext(container)
-        let workout = WorkoutRecord(title: title, startedAt: startedAt)
+        let workout = WorkoutRecord(title: title, startedAt: startedAt, updatedAt: updatedAt)
         context.insert(workout)
         try context.save()
+        try enqueueUpsert(for: workout)
         return workout
     }
 
@@ -120,8 +124,10 @@ public struct SwiftDataWorkoutRepository: Sendable {
         var exerciseIDs = Set(workout.exerciseIDsCSV.split(separator: ",").map(String.init))
         exerciseIDs.insert(exerciseID)
         workout.exerciseIDsCSV = exerciseIDs.sorted().joined(separator: ",")
+        workout.updatedAt = .now
 
         try context.save()
+        try enqueueUpsert(for: workout)
     }
 
     /// Mark a workout as completed.
@@ -140,7 +146,9 @@ public struct SwiftDataWorkoutRepository: Sendable {
         workout.completedAt = now
         workout.durationMinutes = max(1, Int(now.timeIntervalSince(workout.startedAt) / 60))
         if !summary.isEmpty { workout.summary = summary }
+        workout.updatedAt = now
         try context.save()
+        try enqueueUpsert(for: workout)
     }
 
     // MARK: - Delete
@@ -156,8 +164,17 @@ public struct SwiftDataWorkoutRepository: Sendable {
         )
         descriptor.fetchLimit = 1
         if let workout = try context.fetch(descriptor).first {
+            let payloadJSON = SyncPayloadCodec.encodeWorkoutPayload(from: workout) ?? ""
+            let queuedAt = workout.updatedAt
             context.delete(workout)
             try context.save()
+            try outboundQueue.enqueue(
+                recordType: CloudSyncRecord.Kind.workout.rawValue,
+                recordIdentifier: identifier,
+                operation: CloudSyncRecord.Operation.delete.rawValue,
+                payloadJSON: payloadJSON,
+                queuedAt: queuedAt
+            )
         }
     }
 
@@ -204,5 +221,19 @@ public struct SwiftDataWorkoutRepository: Sendable {
 private struct LoggedSet: Codable {
     let exerciseID: String
     let set: WorkoutSetPerformance
+}
+
+extension SwiftDataWorkoutRepository {
+    @MainActor
+    private func enqueueUpsert(for workout: WorkoutRecord) throws {
+        guard let payloadJSON = SyncPayloadCodec.encodeWorkoutPayload(from: workout) else { return }
+        try outboundQueue.enqueue(
+            recordType: CloudSyncRecord.Kind.workout.rawValue,
+            recordIdentifier: workout.identifier,
+            operation: CloudSyncRecord.Operation.upsert.rawValue,
+            payloadJSON: payloadJSON,
+            queuedAt: workout.updatedAt
+        )
+    }
 }
 #endif

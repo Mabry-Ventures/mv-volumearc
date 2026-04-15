@@ -5,9 +5,11 @@ import SwiftData
 /// SwiftData-backed repository for the single-row `UserProfileRecord`.
 public struct SwiftDataUserProfileRepository: Sendable {
     public let container: ModelContainer
+    private let outboundQueue: any OutboundSyncQueue
 
-    public init(container: ModelContainer) {
+    public init(container: ModelContainer, outboundQueue: (any OutboundSyncQueue)? = nil) {
         self.container = container
+        self.outboundQueue = outboundQueue ?? NoOpOutboundSyncQueue()
     }
 
     /// Fetch the user profile, if one exists.
@@ -53,6 +55,9 @@ public struct SwiftDataUserProfileRepository: Sendable {
         }
 
         try context.save()
+        if let persisted = try context.fetch(descriptor).first {
+            try enqueueUpsert(for: persisted)
+        }
     }
 
     /// Mark onboarding as complete.
@@ -65,6 +70,7 @@ public struct SwiftDataUserProfileRepository: Sendable {
         profile.onboardingCompleted = true
         profile.updatedAt = .now
         try context.save()
+        try enqueueUpsert(for: profile)
     }
 
     /// Check whether onboarding has been completed.
@@ -99,9 +105,11 @@ public struct SwiftDataUserProfileRepository: Sendable {
 /// SwiftData-backed repository for the single-row `TrainingPlanRecord`.
 public struct SwiftDataTrainingPlanRepository: Sendable {
     public let container: ModelContainer
+    private let outboundQueue: any OutboundSyncQueue
 
-    public init(container: ModelContainer) {
+    public init(container: ModelContainer, outboundQueue: (any OutboundSyncQueue)? = nil) {
         self.container = container
+        self.outboundQueue = outboundQueue ?? NoOpOutboundSyncQueue()
     }
 
     /// Fetch the current training plan.
@@ -130,6 +138,9 @@ public struct SwiftDataTrainingPlanRepository: Sendable {
         }
 
         try context.save()
+        if let persisted = try context.fetch(descriptor).first {
+            try enqueueUpsert(for: persisted)
+        }
     }
 
     /// Decode the persisted plan into `WeeklyWorkout` models.
@@ -162,17 +173,21 @@ public struct SwiftDataTrainingPlanRepository: Sendable {
 /// SwiftData-backed repository for `CoachMemoryRecord`.
 public struct SwiftDataCoachMemoryRepository: Sendable {
     public let container: ModelContainer
+    private let outboundQueue: any OutboundSyncQueue
 
-    public init(container: ModelContainer) {
+    public init(container: ModelContainer, outboundQueue: (any OutboundSyncQueue)? = nil) {
         self.container = container
+        self.outboundQueue = outboundQueue ?? NoOpOutboundSyncQueue()
     }
 
     /// Append a new memory entry.
     @MainActor
     public func append(content: String, theme: String = "") throws {
         let context = ModelContext(container)
-        context.insert(CoachMemoryRecord(content: content, theme: theme))
+        let record = CoachMemoryRecord(content: content, theme: theme)
+        context.insert(record)
         try context.save()
+        try enqueueUpsert(for: record)
     }
 
     /// Fetch the N most recent memory entries.
@@ -210,10 +225,87 @@ public struct SwiftDataCoachMemoryRepository: Sendable {
             }
         )
         let oldRecords = try context.fetch(descriptor)
+        let deletions = oldRecords.map { ($0.identifier, SyncPayloadCodec.encodeCoachMemoryPayload(from: $0) ?? "", $0.createdAt) }
         for record in oldRecords {
             context.delete(record)
         }
         try context.save()
+        for deletion in deletions {
+            try outboundQueue.enqueue(
+                recordType: CloudSyncRecord.Kind.coachMemory.rawValue,
+                recordIdentifier: deletion.0,
+                operation: CloudSyncRecord.Operation.delete.rawValue,
+                payloadJSON: deletion.1,
+                queuedAt: deletion.2
+            )
+        }
+    }
+
+    /// Delete a single memory entry by identifier.
+    @MainActor
+    public func deleteMemory(identifier: String) throws {
+        let context = ModelContext(container)
+        var descriptor = FetchDescriptor<CoachMemoryRecord>(
+            predicate: #Predicate<CoachMemoryRecord> { record in
+                record.identifier == identifier
+            }
+        )
+        descriptor.fetchLimit = 1
+        guard let record = try context.fetch(descriptor).first else { return }
+
+        let payloadJSON = SyncPayloadCodec.encodeCoachMemoryPayload(from: record) ?? ""
+        let queuedAt = record.createdAt
+        context.delete(record)
+        try context.save()
+        try outboundQueue.enqueue(
+            recordType: CloudSyncRecord.Kind.coachMemory.rawValue,
+            recordIdentifier: identifier,
+            operation: CloudSyncRecord.Operation.delete.rawValue,
+            payloadJSON: payloadJSON,
+            queuedAt: queuedAt
+        )
+    }
+}
+
+extension SwiftDataUserProfileRepository {
+    @MainActor
+    private func enqueueUpsert(for profile: UserProfileRecord) throws {
+        guard let payloadJSON = SyncPayloadCodec.encodeUserProfilePayload(from: profile) else { return }
+        try outboundQueue.enqueue(
+            recordType: CloudSyncRecord.Kind.userProfile.rawValue,
+            recordIdentifier: CloudSyncRecord.Kind.userProfile.defaultIdentifier,
+            operation: CloudSyncRecord.Operation.upsert.rawValue,
+            payloadJSON: payloadJSON,
+            queuedAt: profile.updatedAt
+        )
+    }
+}
+
+extension SwiftDataTrainingPlanRepository {
+    @MainActor
+    private func enqueueUpsert(for plan: TrainingPlanRecord) throws {
+        guard let payloadJSON = SyncPayloadCodec.encodeTrainingPlanPayload(from: plan) else { return }
+        try outboundQueue.enqueue(
+            recordType: CloudSyncRecord.Kind.trainingPlan.rawValue,
+            recordIdentifier: CloudSyncRecord.Kind.trainingPlan.defaultIdentifier,
+            operation: CloudSyncRecord.Operation.upsert.rawValue,
+            payloadJSON: payloadJSON,
+            queuedAt: plan.updatedAt
+        )
+    }
+}
+
+extension SwiftDataCoachMemoryRepository {
+    @MainActor
+    private func enqueueUpsert(for record: CoachMemoryRecord) throws {
+        guard let payloadJSON = SyncPayloadCodec.encodeCoachMemoryPayload(from: record) else { return }
+        try outboundQueue.enqueue(
+            recordType: CloudSyncRecord.Kind.coachMemory.rawValue,
+            recordIdentifier: record.identifier,
+            operation: CloudSyncRecord.Operation.upsert.rawValue,
+            payloadJSON: payloadJSON,
+            queuedAt: record.createdAt
+        )
     }
 }
 #endif
