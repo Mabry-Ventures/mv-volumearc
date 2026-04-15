@@ -88,13 +88,48 @@ public enum OutboundQueueBackfill {
             insertedAny = true
         }
 
+        // VOL-67 Codex P1 fixup #26: the backfill clamp must match the
+        // record-level clamp (fixup #25) — both gate on the seeded-
+        // default heuristic. Unconditionally clamping the backfill
+        // payload/queuedAt to `.distantPast` was silently dropping
+        // recency information even for user-edited singleton data:
+        //
+        // 1. Device A upgrades with customized profile (local updatedAt
+        //    = real edit time).
+        // 2. Fixup #25: record-level clamp gated on field match, so
+        //    local profile.updatedAt stays at the real edit time.
+        // 3. Backfill (pre-#26) unconditionally used the *ForMigration
+        //    encoder + `queuedAt: .distantPast`, so the pushed payload
+        //    carried `.distantPast` as its modified-at.
+        // 4. Device A's sync pushes the distantPast-tagged profile to
+        //    CloudKit.
+        // 5. Device B pulls — inbound is distantPast, B's local is any
+        //    non-distantPast → B rejects the inbound, Device A's real
+        //    edits never propagate.
+        //
+        // Fix: if the profile matches the seeded default, use the
+        // migration encoder + distantPast (fixup #13 semantics —
+        // default data is lowest-priority cross-device). Otherwise use
+        // the regular encoder and the record's REAL `updatedAt` so
+        // genuine user edits reach other devices normally.
         for profile in profiles {
             let key = queueKey(
                 recordType: CloudSyncRecord.Kind.userProfile.rawValue,
                 identifier: CloudSyncRecord.Kind.userProfile.defaultIdentifier
             )
             guard !existingKeys.contains(key) else { continue }
-            guard let payloadJSON = SyncPayloadCodec.encodeUserProfilePayloadForMigration(from: profile) else {
+
+            let isSeededDefault = VolumeArcSchemaMigrationPlan.isSeededDefaultProfile(profile)
+            let encoded: String?
+            let queueRowTimestamp: Date
+            if isSeededDefault {
+                encoded = SyncPayloadCodec.encodeUserProfilePayloadForMigration(from: profile)
+                queueRowTimestamp = .distantPast
+            } else {
+                encoded = SyncPayloadCodec.encodeUserProfilePayload(from: profile)
+                queueRowTimestamp = profile.updatedAt
+            }
+            guard let payloadJSON = encoded else {
                 encodeFailures += 1
                 continue
             }
@@ -103,7 +138,7 @@ public enum OutboundQueueBackfill {
                 recordIdentifier: CloudSyncRecord.Kind.userProfile.defaultIdentifier,
                 operation: CloudSyncRecord.Operation.upsert.rawValue,
                 payloadJSON: payloadJSON,
-                queuedAt: .distantPast
+                queuedAt: queueRowTimestamp
             ))
             insertedAny = true
         }
@@ -114,7 +149,21 @@ public enum OutboundQueueBackfill {
                 identifier: CloudSyncRecord.Kind.trainingPlan.defaultIdentifier
             )
             guard !existingKeys.contains(key) else { continue }
-            guard let payloadJSON = SyncPayloadCodec.encodeTrainingPlanPayloadForMigration(from: plan) else {
+
+            // VOL-67 Codex P1 fixup #26: same heuristic as profiles —
+            // default plans get the distantPast demotion, customized
+            // plans push with their real `updatedAt`.
+            let isSeededDefault = VolumeArcSchemaMigrationPlan.isSeededDefaultPlan(plan)
+            let encoded: String?
+            let queueRowTimestamp: Date
+            if isSeededDefault {
+                encoded = SyncPayloadCodec.encodeTrainingPlanPayloadForMigration(from: plan)
+                queueRowTimestamp = .distantPast
+            } else {
+                encoded = SyncPayloadCodec.encodeTrainingPlanPayload(from: plan)
+                queueRowTimestamp = plan.updatedAt
+            }
+            guard let payloadJSON = encoded else {
                 encodeFailures += 1
                 continue
             }
@@ -123,7 +172,7 @@ public enum OutboundQueueBackfill {
                 recordIdentifier: CloudSyncRecord.Kind.trainingPlan.defaultIdentifier,
                 operation: CloudSyncRecord.Operation.upsert.rawValue,
                 payloadJSON: payloadJSON,
-                queuedAt: .distantPast
+                queuedAt: queueRowTimestamp
             ))
             insertedAny = true
         }

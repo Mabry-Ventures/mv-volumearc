@@ -598,8 +598,7 @@ public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
             }
 
             let migratedPlans = try context.fetch(FetchDescriptor<TrainingPlanRecord>())
-            let defaultPlanJSON = SyncPayloadCodec.encode(VolumeArcProductDefaults.weeklySchedule) ?? "[]"
-            for plan in migratedPlans where plan.workoutsJSON == defaultPlanJSON {
+            for plan in migratedPlans where Self.isSeededDefaultPlan(plan) {
                 plan.updatedAt = .distantPast
             }
 
@@ -634,7 +633,15 @@ public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
     /// The equipment check sorts and joins the default values the
     /// same way `seedIfNeeded` does, so the comparison is stable
     /// regardless of how the underlying `Set`/`Array` iterates.
-    fileprivate static func isSeededDefaultProfile(_ profile: UserProfileRecord) -> Bool {
+    ///
+    /// VOL-67 Codex P1 fixup #26: promoted from `fileprivate` to
+    /// `public` so the post-bootstrap `OutboundQueueBackfill` can use
+    /// the same heuristic for conditional backfill clamping — both
+    /// the record-level clamp (in this file) and the queue-level
+    /// clamp (in `OutboundQueueBackfill.swift`) need to agree on
+    /// "is this a seeded default or a user edit" so they don't
+    /// disagree on whether to preserve or clamp the real timestamp.
+    public static func isSeededDefaultProfile(_ profile: UserProfileRecord) -> Bool {
         let defaults = VolumeArcProductDefaults.userProfile
         let defaultEquipmentCSV = defaults.availableEquipment
             .map(\.rawValue)
@@ -650,6 +657,20 @@ public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
             && profile.sessionTimeBudgetMinutes == defaults.sessionTimeBudgetMinutes
             && profile.weeklyTrainingDays == defaults.weeklyTrainingDays
             && profile.onboardingCompleted == false
+    }
+
+    /// VOL-67 Codex P1 fixup #26: companion to `isSeededDefaultProfile`
+    /// for `TrainingPlanRecord`. A plan is "untouched seeded default"
+    /// when its `workoutsJSON` exactly matches the canonical JSON
+    /// encoding of `VolumeArcProductDefaults.weeklySchedule` (both
+    /// `seedIfNeeded` and this comparison use the same
+    /// `SyncPayloadCodec` encoder, so the serialized form is
+    /// byte-stable). Used by both the V3→V4 record clamp and the
+    /// `OutboundQueueBackfill` queue clamp so they agree on which
+    /// plans can be safely demoted to `.distantPast`.
+    public static func isSeededDefaultPlan(_ plan: TrainingPlanRecord) -> Bool {
+        let defaultPlanJSON = SyncPayloadCodec.encode(VolumeArcProductDefaults.weeklySchedule) ?? "[]"
+        return plan.workoutsJSON == defaultPlanJSON
     }
 
     /// Produce a stable identifier for a legacy coach memory based on

@@ -215,25 +215,27 @@ final class VolumeArcMigrationTests: XCTestCase {
         XCTAssertEqual(memoryRows.first?.recordIdentifier, migratedMemory.identifier)
     }
 
-    /// VOL-67 Codex P1 (fixup #13): the V3→V4 migration backfill must
-    /// clamp singleton (profile, plan) timestamps to `.distantPast` in
-    /// both the queue row's `queuedAt` and the embedded payload's
-    /// `updatedAt`. Pre-fixup-#10 installs seeded profile/plan defaults
-    /// with launch-time timestamps, so backfilling with the record's
-    /// own `updatedAt` would push stale defaults that look "newer"
-    /// than older-but-authoritative cloud data and win `shouldApply`.
-    /// Per-record kinds (workout, memory) keep real timestamps because
-    /// they reflect concrete user actions, not seeded defaults.
+    /// VOL-67 Codex P1 fixup #13 + fixup #26: the V3→V4 migration
+    /// backfill clamps singleton queue rows + payload `updatedAt` to
+    /// `.distantPast` only when the record matches the seeded-default
+    /// field heuristic (same gate as the record-level clamp in fixup
+    /// #25). This test validates the clamp branch: uses a V3 fixture
+    /// with fields matching `VolumeArcProductDefaults` exactly.
+    ///
+    /// The complementary preserve-branch test
+    /// (`testV3ToV4MigrationPreservesCustomizedSingletonBackfillTimestamps`)
+    /// covers the user-edit path where backfill payloads retain their
+    /// real `updatedAt` so genuine edits can propagate cross-device.
     @MainActor
-    func testV3ToV4MigrationClampsSingletonTimestampsToDistantPast() throws {
+    func testV3ToV4MigrationClampsSeededDefaultSingletonBackfillTimestamps() throws {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
 
-        let storeURL = temporaryDirectory.appendingPathComponent("VolumeArcMigrationClamp.sqlite")
+        let storeURL = temporaryDirectory.appendingPathComponent("VolumeArcMigrationBackfillClampSeededDefaults.sqlite")
         let fixtureDate = Date(timeIntervalSince1970: 1_715_300_000)
-        try writeV3FixtureStoreWithAllEntities(at: storeURL, startedAt: fixtureDate)
+        try writeV3FixtureStoreWithSeededDefaults(at: storeURL, startedAt: fixtureDate)
 
         let migratedContainer = try makeDiskBackedCurrentContainer(at: storeURL)
         try OutboundQueueBackfill.performIfNeeded(
@@ -252,14 +254,14 @@ final class VolumeArcMigrationTests: XCTestCase {
             profileRow.queuedAt.timeIntervalSince1970,
             Date.distantPast.timeIntervalSince1970,
             accuracy: 1.0,
-            "Profile queue row's queuedAt should be clamped to distantPast"
+            "Seeded-default profile queue row's queuedAt should be clamped to distantPast"
         )
         let profilePayload = try XCTUnwrap(SyncPayloadCodec.decodeUserProfilePayload(from: profileRow.payloadJSON))
         XCTAssertEqual(
             profilePayload.updatedAt.timeIntervalSince1970,
             Date.distantPast.timeIntervalSince1970,
             accuracy: 1.0,
-            "Profile payload's embedded updatedAt should be clamped to distantPast"
+            "Seeded-default profile payload's embedded updatedAt should be clamped to distantPast"
         )
 
         // Singleton: plan queue row and embedded payload must both be distantPast
@@ -268,17 +270,17 @@ final class VolumeArcMigrationTests: XCTestCase {
             planRow.queuedAt.timeIntervalSince1970,
             Date.distantPast.timeIntervalSince1970,
             accuracy: 1.0,
-            "Plan queue row's queuedAt should be clamped to distantPast"
+            "Seeded-default plan queue row's queuedAt should be clamped to distantPast"
         )
         let planPayload = try XCTUnwrap(SyncPayloadCodec.decodeTrainingPlanPayload(from: planRow.payloadJSON))
         XCTAssertEqual(
             planPayload.updatedAt.timeIntervalSince1970,
             Date.distantPast.timeIntervalSince1970,
             accuracy: 1.0,
-            "Plan payload's embedded updatedAt should be clamped to distantPast"
+            "Seeded-default plan payload's embedded updatedAt should be clamped to distantPast"
         )
 
-        // Per-record kind: workout keeps a real timestamp (reflects user action)
+        // Per-record kinds always keep real timestamps regardless of heuristic.
         let workoutRow = try XCTUnwrap((queuedByKind[CloudSyncRecord.Kind.workout.rawValue] ?? []).first)
         XCTAssertGreaterThan(
             workoutRow.queuedAt.timeIntervalSince1970,
@@ -292,13 +294,79 @@ final class VolumeArcMigrationTests: XCTestCase {
             "Workout payload's embedded updatedAt should be a real timestamp"
         )
 
-        // Per-record kind: memory keeps a real timestamp (reflects user action)
         let memoryRow = try XCTUnwrap((queuedByKind[CloudSyncRecord.Kind.coachMemory.rawValue] ?? []).first)
         XCTAssertGreaterThan(
             memoryRow.queuedAt.timeIntervalSince1970,
             0,
             "Memory queue row's queuedAt should be a real timestamp, not distantPast"
         )
+    }
+
+    /// VOL-67 Codex P1 fixup #26: complement to the backfill clamp
+    /// test — verifies the PRESERVATION branch. For customized
+    /// singletons, the backfill must queue the record with its REAL
+    /// `updatedAt` (both the queue row and the embedded payload),
+    /// NOT `.distantPast`. Unconditionally clamping would make
+    /// pushed edits look artificially old and any other device
+    /// would reject them, silently losing the user's pre-upgrade
+    /// customizations.
+    @MainActor
+    func testV3ToV4MigrationPreservesCustomizedSingletonBackfillTimestamps() throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let storeURL = temporaryDirectory.appendingPathComponent("VolumeArcMigrationBackfillPreserveCustomized.sqlite")
+        let fixtureDate = Date(timeIntervalSince1970: 1_715_300_000)
+        // Customized fixture — name and workoutsJSON differ from defaults.
+        try writeV3FixtureStoreWithAllEntities(at: storeURL, startedAt: fixtureDate)
+
+        let migratedContainer = try makeDiskBackedCurrentContainer(at: storeURL)
+        try OutboundQueueBackfill.performIfNeeded(
+            container: migratedContainer,
+            userDefaults: makeEphemeralUserDefaults(),
+            flagKey: "test-\(UUID().uuidString)"
+        )
+        let migratedContext = ModelContext(migratedContainer)
+
+        let queuedRows = try migratedContext.fetch(FetchDescriptor<OutboundSyncQueueRecord>())
+        let queuedByKind = Dictionary(grouping: queuedRows, by: { $0.recordType })
+
+        // Profile: backfill queue row + embedded payload must NOT be distantPast.
+        // Customized records keep their REAL updatedAt so cross-device LWW works.
+        let profileRow = try XCTUnwrap((queuedByKind[CloudSyncRecord.Kind.userProfile.rawValue] ?? []).first)
+        XCTAssertNotEqual(
+            profileRow.queuedAt.timeIntervalSince1970,
+            Date.distantPast.timeIntervalSince1970,
+            "Customized profile queue row's queuedAt must NOT be clamped"
+        )
+        XCTAssertGreaterThan(profileRow.queuedAt.timeIntervalSince1970, 0)
+
+        let profilePayload = try XCTUnwrap(SyncPayloadCodec.decodeUserProfilePayload(from: profileRow.payloadJSON))
+        XCTAssertNotEqual(
+            profilePayload.updatedAt.timeIntervalSince1970,
+            Date.distantPast.timeIntervalSince1970,
+            "Customized profile payload's embedded updatedAt must NOT be clamped"
+        )
+        XCTAssertGreaterThan(profilePayload.updatedAt.timeIntervalSince1970, 0)
+
+        // Plan: same — customized workoutsJSON means preserve timestamps.
+        let planRow = try XCTUnwrap((queuedByKind[CloudSyncRecord.Kind.trainingPlan.rawValue] ?? []).first)
+        XCTAssertNotEqual(
+            planRow.queuedAt.timeIntervalSince1970,
+            Date.distantPast.timeIntervalSince1970,
+            "Customized plan queue row's queuedAt must NOT be clamped"
+        )
+        XCTAssertGreaterThan(planRow.queuedAt.timeIntervalSince1970, 0)
+
+        let planPayload = try XCTUnwrap(SyncPayloadCodec.decodeTrainingPlanPayload(from: planRow.payloadJSON))
+        XCTAssertNotEqual(
+            planPayload.updatedAt.timeIntervalSince1970,
+            Date.distantPast.timeIntervalSince1970,
+            "Customized plan payload's embedded updatedAt must NOT be clamped"
+        )
+        XCTAssertGreaterThan(planPayload.updatedAt.timeIntervalSince1970, 0)
     }
 
     /// VOL-67 Codex P1 fixup #17 + Copilot fixup #25: the V3→V4
