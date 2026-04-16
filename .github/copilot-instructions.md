@@ -1,8 +1,9 @@
 When reviewing this repository:
-- Prioritize correctness, regressions, data loss, privacy, security, performance cliffs, and migration safety.
-- Respect the repository's standards in AGENTS.md and CLAUDE.md if present.
-- For Swift code, focus on platform availability, Swift concurrency, actor isolation, persistence migrations, CloudKit sync behavior, and test coverage gaps.
-- Flag risky edge cases clearly, especially anything that could break fresh installs, upgrades, sync, or user data integrity.
+- Respect `AGENTS.md`, `CLAUDE.md`, and `docs/CANONICAL.md` as the operating contract.
 - Prefer a small number of high-signal findings over stylistic nits.
 - Classify findings as critical, important, or nit.
+- Confirm the PR updated the affected canonical docs before approving behavior-changing work.
+- Protect workout correctness, progress integrity, privacy, and auth behavior.
+- Flag prototype shortcuts that create durable debt in data models or release-critical flows.
+- Require validation for training logic, API behavior, and visual regression-sensitive surfaces.
 - If no material issues are present, say so briefly instead of inventing feedback.
