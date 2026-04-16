@@ -67,7 +67,9 @@ mv-volumearc is the VolumeArc web product line, currently centered on a workout/
 - Protect workout correctness, progress integrity, privacy, and auth behavior.
 - Flag prototype shortcuts that create durable debt in data models or release-critical flows.
 - Require validation for training logic, API behavior, and visual regression-sensitive surfaces.
-
+- Treat missing or materially weakened tests for changed behavior as P1.
+- Treat behavior, architecture, pricing, policy, or release changes without matching canonical doc updates as P1.
+- Flag workflow steps that depend on interactive shell PATH, implicit Homebrew visibility, or host-specific machine state without explicit setup.
 ## Canonical Document Rule
 Before a PR is merged, check `docs/CANONICAL.md`, determine which docs are affected, and update them in the same branch. Do not leave product truth or operational docs stale.
 

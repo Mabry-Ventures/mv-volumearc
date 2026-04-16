@@ -1,0 +1,44 @@
+name: Self-Hosted Runner Canary
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 11 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: self-hosted-runner-canary-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos-canary:
+    name: macOS self-hosted canary
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify runner toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "hostname=$(hostname)"
+          echo "PATH=$PATH"
+          sw_vers
+          xcodebuild -version
+          swift --version
+          gh --version
+          git --version
+          python3 --version
+          node --version
+          pnpm --version
+
+      - name: Verify writable temp and keychain visibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          temp_dir="$(mktemp -d)"
+          touch "$temp_dir/canary"
+          security list-keychains >/dev/null

@@ -1,5 +1,6 @@
 When reviewing this repository:
 - Respect `AGENTS.md`, `CLAUDE.md`, and `docs/CANONICAL.md` as the operating contract.
+- Use the matching `.github/instructions/*.instructions.md` files for language or path-specific review rules.
 - Prefer a small number of high-signal findings over stylistic nits.
 - Classify findings as critical, important, or nit.
 - Confirm the PR updated the affected canonical docs before approving behavior-changing work.

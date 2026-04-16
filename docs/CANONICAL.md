@@ -15,3 +15,5 @@ These are the documents and instruction surfaces that must stay fresh. Any PR th
 - `docs/CANONICAL.md` — This file, the doc-freshness routing table.
 - `.github/copilot-instructions.md` — Repo-specific review priorities for Copilot and human reviewers.
 - `.github/pull_request_template.md` — PR checklist enforcing validation and canonical-doc review.
+- `.github/instructions/*.instructions.md` — Path-specific Copilot review rules for language and package surfaces.
+- `.github/workflows/self-hosted-runner-canary.yml` — Manual and scheduled self-hosted runner environment canary.

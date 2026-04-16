@@ -26,6 +26,7 @@ Closes <!-- TICKET-ID or N/A -->
 
 ## Checklist
 
+- [ ] Workflow changes avoid implicit PATH or interactive-shell assumptions on self-hosted runners
 - [ ] No new TODO/FIXME/HACK added without a tracked follow-up
 - [ ] Security/privacy impact reviewed
 - [ ] Rollback or migration impact reviewed when relevant
