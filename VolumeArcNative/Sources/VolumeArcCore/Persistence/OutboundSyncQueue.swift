@@ -259,8 +259,17 @@ public struct SwiftDataOutboundSyncQueue: OutboundSyncQueue, Sendable {
     @MainActor
     public func drain(limit: Int) throws -> [QueuedOutboundSyncChange] {
         let context = ModelContext(container)
+        // VOL-67 Copilot (fixup #34): secondary sort by `id` makes
+        // ordering deterministic for rows with the same `queuedAt`
+        // (e.g., `.distantPast`-clamped singletons, fast successive
+        // writes, clock granularity). Without it, SwiftData is free
+        // to return tied rows in arbitrary order, which makes the
+        // push path's "later wins" coalescing non-deterministic.
         var descriptor = FetchDescriptor<OutboundSyncQueueRecord>(
-            sortBy: [SortDescriptor(\.queuedAt, order: .forward)]
+            sortBy: [
+                SortDescriptor(\.queuedAt, order: .forward),
+                SortDescriptor(\.id, order: .forward),
+            ]
         )
         descriptor.fetchLimit = limit
         return try context.fetch(descriptor).map(Self.snapshot(from:))
@@ -295,8 +304,12 @@ public struct SwiftDataOutboundSyncQueue: OutboundSyncQueue, Sendable {
     @MainActor
     public func pendingRecords() throws -> [QueuedOutboundSyncChange] {
         let context = ModelContext(container)
+        // VOL-67 Copilot (fixup #34): same secondary sort as drain().
         let descriptor = FetchDescriptor<OutboundSyncQueueRecord>(
-            sortBy: [SortDescriptor(\.queuedAt, order: .forward)]
+            sortBy: [
+                SortDescriptor(\.queuedAt, order: .forward),
+                SortDescriptor(\.id, order: .forward),
+            ]
         )
         return try context.fetch(descriptor).map(Self.snapshot(from:))
     }

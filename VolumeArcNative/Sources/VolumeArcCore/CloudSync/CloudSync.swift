@@ -378,15 +378,31 @@ public final class CloudKitSyncTransport: CloudSyncTransport, @unchecked Sendabl
             database.add(operation)
         }
 
-        // VOL-67 Copilot (fixup #21): if the legacy-payload synthesis
-        // had to skip any records, force the next pull to re-fetch the
-        // whole window by dropping the advanced cursor. The applier
-        // still processes whatever records DID synthesize — the
-        // re-apply is idempotent because shouldApply rejects equal or
-        // older timestamps on the second round.
-        if legacySynthesisSkips > 0 {
-            nextCursor = nil
-        }
+        // VOL-67 Copilot (fixup #34): fixup #21 originally cleared the
+        // cursor (`nextCursor = nil`) when any records were skipped,
+        // forcing the next pull to re-fetch the whole window. That was
+        // intended as a safety net for transient failures, but both
+        // skip branches (legacy synthesis failure and explicit payload
+        // decode failure from fixup #30) are PERMANENT: the legacy
+        // CKRecord field layout is static, and a malformed payloadJSON
+        // blob won't magically fix itself on retry. Resetting the
+        // cursor for these failures creates an infinite re-fetch loop
+        // with ongoing network and battery cost — the device pulls the
+        // same window, skips the same records, resets the cursor, and
+        // repeats forever.
+        //
+        // Fix: let the cursor advance. Skipped records are accepted as
+        // unrecoverable data loss for that specific record. The records
+        // that DID synthesize/validate in this window are applied
+        // normally, and the cursor advances past the whole window so
+        // the next cycle pulls only NEW changes. The skip count is
+        // included in the result so the coordinator can emit telemetry
+        // for observability (the loss is "loud", not "silent").
+        //
+        // Future improvement: implement a per-record quarantine store
+        // that tracks skipped CKRecord names across cycles and surfaces
+        // them in a diagnostic UI. Filed as a follow-up concern, not
+        // a launch blocker.
 
         return CloudSyncPullResult(
             changedRecords: changedRecords,
