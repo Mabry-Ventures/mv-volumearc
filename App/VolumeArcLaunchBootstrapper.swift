@@ -54,6 +54,9 @@ enum VolumeArcLaunchBootstrapper {
         for memory in try context.fetch(FetchDescriptor<CoachMemoryRecord>()) {
             context.delete(memory)
         }
+        for queuedChange in try context.fetch(FetchDescriptor<OutboundSyncQueueRecord>()) {
+            context.delete(queuedChange)
+        }
 
         try context.save()
     }
@@ -222,7 +225,8 @@ enum VolumeArcLaunchBootstrapper {
             totalVolumeLoad: totalVolume,
             averageRPE: averageRPE,
             completedSetCount: sets.count,
-            summary: "Deterministic fixture"
+            summary: "Deterministic fixture",
+            updatedAt: completedAt
         )
     }
 }

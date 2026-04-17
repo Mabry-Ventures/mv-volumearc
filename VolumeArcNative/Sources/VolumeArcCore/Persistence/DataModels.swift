@@ -1,4 +1,5 @@
 #if canImport(SwiftData)
+import CryptoKit
 import Foundation
 import SwiftData
 
@@ -15,113 +16,20 @@ import SwiftData
 // `.automatic` cloud database and the defaults check never ran. Now that
 // VOL-55 hardcodes the container ID as a Swift constant, CloudKit is
 // actually active, and every non-optional property must have a default.
-
-@Model
-public final class UserProfileRecord {
-    public var name: String = ""
-    public var coachingStyle: String = "motivational"
-    public var privacyMode: String = "standard"
-    public var advancementLevel: String = "intermediate"
-    public var availableEquipmentCSV: String = ""
-    public var preferredRepRangeLower: Int = 5
-    public var preferredRepRangeUpper: Int = 8
-    public var sessionTimeBudgetMinutes: Int = 60
-    public var weeklyTrainingDays: Int = 4
-    public var onboardingCompleted: Bool = false
-    // @Model macro rejects `.now` shorthand; must fully qualify.
-    public var updatedAt: Date = Date()
-
-    public init(
-        name: String = "",
-        coachingStyle: String = "motivational",
-        privacyMode: String = "standard",
-        advancementLevel: String = "intermediate",
-        availableEquipmentCSV: String = "",
-        preferredRepRangeLower: Int = 5,
-        preferredRepRangeUpper: Int = 8,
-        sessionTimeBudgetMinutes: Int = 60,
-        weeklyTrainingDays: Int = 4,
-        onboardingCompleted: Bool = false,
-        updatedAt: Date = .now
-    ) {
-        self.name = name
-        self.coachingStyle = coachingStyle
-        self.privacyMode = privacyMode
-        self.advancementLevel = advancementLevel
-        self.availableEquipmentCSV = availableEquipmentCSV
-        self.preferredRepRangeLower = preferredRepRangeLower
-        self.preferredRepRangeUpper = preferredRepRangeUpper
-        self.sessionTimeBudgetMinutes = sessionTimeBudgetMinutes
-        self.weeklyTrainingDays = weeklyTrainingDays
-        self.onboardingCompleted = onboardingCompleted
-        self.updatedAt = updatedAt
-    }
-}
-
-@Model
-public final class TrainingPlanRecord {
-    public var workoutsJSON: String = "[]"
-    public var updatedAt: Date = Date()
-
-    public init(workoutsJSON: String = "[]", updatedAt: Date = .now) {
-        self.workoutsJSON = workoutsJSON
-        self.updatedAt = updatedAt
-    }
-}
-
-@Model
-public final class WorkoutRecord {
-    public var identifier: String = ""
-    public var title: String = ""
-    public var startedAt: Date = Date()
-    public var completedAt: Date?
-    public var durationMinutes: Int = 0
-    public var exerciseIDsCSV: String = ""
-    public var setsJSON: String = "[]"
-    public var totalVolumeLoad: Double = 0
-    public var averageRPE: Double = 0
-    public var completedSetCount: Int = 0
-    public var summary: String = ""
-
-    public init(
-        identifier: String = UUID().uuidString,
-        title: String = "",
-        startedAt: Date = .now,
-        completedAt: Date? = nil,
-        durationMinutes: Int = 0,
-        exerciseIDsCSV: String = "",
-        setsJSON: String = "[]",
-        totalVolumeLoad: Double = 0,
-        averageRPE: Double = 0,
-        completedSetCount: Int = 0,
-        summary: String = ""
-    ) {
-        self.identifier = identifier
-        self.title = title
-        self.startedAt = startedAt
-        self.completedAt = completedAt
-        self.durationMinutes = durationMinutes
-        self.exerciseIDsCSV = exerciseIDsCSV
-        self.setsJSON = setsJSON
-        self.totalVolumeLoad = totalVolumeLoad
-        self.averageRPE = averageRPE
-        self.completedSetCount = completedSetCount
-        self.summary = summary
-    }
-}
-
-@Model
-public final class CoachMemoryRecord {
-    public var content: String = ""
-    public var theme: String = ""
-    public var createdAt: Date = Date()
-
-    public init(content: String = "", theme: String = "", createdAt: Date = .now) {
-        self.content = content
-        self.theme = theme
-        self.createdAt = createdAt
-    }
-}
+//
+// VOL-67 Copilot (fixup #23): the concrete `@Model` class definitions
+// for the syncable record types live inside `VolumeArcSchemaV4` at the
+// bottom of this file. The module-scope symbols below are typealiases
+// to those frozen nested classes. This mirrors how V1/V2/V3 are
+// structured (each `VersionedSchema` enum owns its own frozen `@Model`
+// types) and lets V4 stay an immutable historical shape — future V5
+// work will introduce new frozen types inside `VolumeArcSchemaV5` and
+// re-point these module-scope aliases there, leaving V4's shape
+// locked for the migration plan.
+public typealias UserProfileRecord = VolumeArcSchemaV4.UserProfileRecord
+public typealias TrainingPlanRecord = VolumeArcSchemaV4.TrainingPlanRecord
+public typealias WorkoutRecord = VolumeArcSchemaV4.WorkoutRecord
+public typealias CoachMemoryRecord = VolumeArcSchemaV4.CoachMemoryRecord
 
 public enum VolumeArcSchemaV1: VersionedSchema {
     public static let versionIdentifier = Schema.Version(1, 0, 0)
@@ -345,18 +253,264 @@ public enum VolumeArcSchemaV2: VersionedSchema {
 public enum VolumeArcSchemaV3: VersionedSchema {
     public static let versionIdentifier = Schema.Version(3, 0, 0)
 
+    @Model
+    public final class UserProfileRecord {
+        public var name: String = ""
+        public var coachingStyle: String = "motivational"
+        public var privacyMode: String = "standard"
+        public var advancementLevel: String = "intermediate"
+        public var availableEquipmentCSV: String = ""
+        public var preferredRepRangeLower: Int = 5
+        public var preferredRepRangeUpper: Int = 8
+        public var sessionTimeBudgetMinutes: Int = 60
+        public var weeklyTrainingDays: Int = 4
+        public var onboardingCompleted: Bool = false
+        public var updatedAt: Date = Date()
+
+        public init(
+            name: String = "",
+            coachingStyle: String = "motivational",
+            privacyMode: String = "standard",
+            advancementLevel: String = "intermediate",
+            availableEquipmentCSV: String = "",
+            preferredRepRangeLower: Int = 5,
+            preferredRepRangeUpper: Int = 8,
+            sessionTimeBudgetMinutes: Int = 60,
+            weeklyTrainingDays: Int = 4,
+            onboardingCompleted: Bool = false,
+            updatedAt: Date = .now
+        ) {
+            self.name = name
+            self.coachingStyle = coachingStyle
+            self.privacyMode = privacyMode
+            self.advancementLevel = advancementLevel
+            self.availableEquipmentCSV = availableEquipmentCSV
+            self.preferredRepRangeLower = preferredRepRangeLower
+            self.preferredRepRangeUpper = preferredRepRangeUpper
+            self.sessionTimeBudgetMinutes = sessionTimeBudgetMinutes
+            self.weeklyTrainingDays = weeklyTrainingDays
+            self.onboardingCompleted = onboardingCompleted
+            self.updatedAt = updatedAt
+        }
+    }
+
+    @Model
+    public final class TrainingPlanRecord {
+        public var workoutsJSON: String = "[]"
+        public var updatedAt: Date = Date()
+
+        public init(workoutsJSON: String = "[]", updatedAt: Date = .now) {
+            self.workoutsJSON = workoutsJSON
+            self.updatedAt = updatedAt
+        }
+    }
+
+    @Model
+    public final class WorkoutRecord {
+        public var identifier: String = ""
+        public var title: String = ""
+        public var startedAt: Date = Date()
+        public var completedAt: Date?
+        public var durationMinutes: Int = 0
+        public var exerciseIDsCSV: String = ""
+        public var setsJSON: String = "[]"
+        public var totalVolumeLoad: Double = 0
+        public var averageRPE: Double = 0
+        public var completedSetCount: Int = 0
+        public var summary: String = ""
+
+        public init(
+            identifier: String = UUID().uuidString,
+            title: String = "",
+            startedAt: Date = .now,
+            completedAt: Date? = nil,
+            durationMinutes: Int = 0,
+            exerciseIDsCSV: String = "",
+            setsJSON: String = "[]",
+            totalVolumeLoad: Double = 0,
+            averageRPE: Double = 0,
+            completedSetCount: Int = 0,
+            summary: String = ""
+        ) {
+            self.identifier = identifier
+            self.title = title
+            self.startedAt = startedAt
+            self.completedAt = completedAt
+            self.durationMinutes = durationMinutes
+            self.exerciseIDsCSV = exerciseIDsCSV
+            self.setsJSON = setsJSON
+            self.totalVolumeLoad = totalVolumeLoad
+            self.averageRPE = averageRPE
+            self.completedSetCount = completedSetCount
+            self.summary = summary
+        }
+    }
+
+    @Model
+    public final class CoachMemoryRecord {
+        public var content: String = ""
+        public var theme: String = ""
+        public var createdAt: Date = Date()
+
+        public init(content: String = "", theme: String = "", createdAt: Date = .now) {
+            self.content = content
+            self.theme = theme
+            self.createdAt = createdAt
+        }
+    }
+
     public static var models: [any PersistentModel.Type] {
         [UserProfileRecord.self, TrainingPlanRecord.self, WorkoutRecord.self, CoachMemoryRecord.self]
     }
 }
 
+public enum VolumeArcSchemaV4: VersionedSchema {
+    public static let versionIdentifier = Schema.Version(4, 0, 0)
+
+    // VOL-67 Copilot (fixup #23): frozen nested `@Model` types that
+    // represent V4's immutable schema shape. The module-scope
+    // typealiases at the top of this file resolve `UserProfileRecord`,
+    // `WorkoutRecord`, etc. to these V4-nested classes, so existing
+    // call sites can keep using unqualified names. When V5 work begins,
+    // these type definitions must stay frozen here and new V5 types
+    // get added inside a new `VolumeArcSchemaV5` enum; the module-scope
+    // typealiases then re-point to V5 for the current-version view.
+
+    @Model
+    public final class UserProfileRecord {
+        public var name: String = ""
+        public var coachingStyle: String = "motivational"
+        public var privacyMode: String = "standard"
+        public var advancementLevel: String = "intermediate"
+        public var availableEquipmentCSV: String = ""
+        public var preferredRepRangeLower: Int = 5
+        public var preferredRepRangeUpper: Int = 8
+        public var sessionTimeBudgetMinutes: Int = 60
+        public var weeklyTrainingDays: Int = 4
+        public var onboardingCompleted: Bool = false
+        // @Model macro rejects `.now` shorthand; must fully qualify.
+        public var updatedAt: Date = Date()
+
+        public init(
+            name: String = "",
+            coachingStyle: String = "motivational",
+            privacyMode: String = "standard",
+            advancementLevel: String = "intermediate",
+            availableEquipmentCSV: String = "",
+            preferredRepRangeLower: Int = 5,
+            preferredRepRangeUpper: Int = 8,
+            sessionTimeBudgetMinutes: Int = 60,
+            weeklyTrainingDays: Int = 4,
+            onboardingCompleted: Bool = false,
+            updatedAt: Date = .now
+        ) {
+            self.name = name
+            self.coachingStyle = coachingStyle
+            self.privacyMode = privacyMode
+            self.advancementLevel = advancementLevel
+            self.availableEquipmentCSV = availableEquipmentCSV
+            self.preferredRepRangeLower = preferredRepRangeLower
+            self.preferredRepRangeUpper = preferredRepRangeUpper
+            self.sessionTimeBudgetMinutes = sessionTimeBudgetMinutes
+            self.weeklyTrainingDays = weeklyTrainingDays
+            self.onboardingCompleted = onboardingCompleted
+            self.updatedAt = updatedAt
+        }
+    }
+
+    @Model
+    public final class TrainingPlanRecord {
+        public var workoutsJSON: String = "[]"
+        public var updatedAt: Date = Date()
+
+        public init(workoutsJSON: String = "[]", updatedAt: Date = .now) {
+            self.workoutsJSON = workoutsJSON
+            self.updatedAt = updatedAt
+        }
+    }
+
+    @Model
+    public final class WorkoutRecord {
+        public var identifier: String = ""
+        public var title: String = ""
+        public var startedAt: Date = Date()
+        public var completedAt: Date?
+        public var durationMinutes: Int = 0
+        public var exerciseIDsCSV: String = ""
+        public var setsJSON: String = "[]"
+        public var totalVolumeLoad: Double = 0
+        public var averageRPE: Double = 0
+        public var completedSetCount: Int = 0
+        public var summary: String = ""
+        public var updatedAt: Date = Date()
+
+        public init(
+            identifier: String = UUID().uuidString,
+            title: String = "",
+            startedAt: Date = .now,
+            completedAt: Date? = nil,
+            durationMinutes: Int = 0,
+            exerciseIDsCSV: String = "",
+            setsJSON: String = "[]",
+            totalVolumeLoad: Double = 0,
+            averageRPE: Double = 0,
+            completedSetCount: Int = 0,
+            summary: String = "",
+            updatedAt: Date = .now
+        ) {
+            self.identifier = identifier
+            self.title = title
+            self.startedAt = startedAt
+            self.completedAt = completedAt
+            self.durationMinutes = durationMinutes
+            self.exerciseIDsCSV = exerciseIDsCSV
+            self.setsJSON = setsJSON
+            self.totalVolumeLoad = totalVolumeLoad
+            self.averageRPE = averageRPE
+            self.completedSetCount = completedSetCount
+            self.summary = summary
+            self.updatedAt = updatedAt
+        }
+    }
+
+    @Model
+    public final class CoachMemoryRecord {
+        public var identifier: String = ""
+        public var content: String = ""
+        public var theme: String = ""
+        public var createdAt: Date = Date()
+
+        public init(
+            identifier: String = UUID().uuidString,
+            content: String = "",
+            theme: String = "",
+            createdAt: Date = .now
+        ) {
+            self.identifier = identifier
+            self.content = content
+            self.theme = theme
+            self.createdAt = createdAt
+        }
+    }
+
+    public static var models: [any PersistentModel.Type] {
+        [
+            UserProfileRecord.self,
+            TrainingPlanRecord.self,
+            WorkoutRecord.self,
+            CoachMemoryRecord.self,
+            OutboundSyncQueueRecord.self,
+        ]
+    }
+}
+
 public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
     public static var schemas: [any VersionedSchema.Type] {
-        [VolumeArcSchemaV1.self, VolumeArcSchemaV2.self, VolumeArcSchemaV3.self]
+        [VolumeArcSchemaV1.self, VolumeArcSchemaV2.self, VolumeArcSchemaV3.self, VolumeArcSchemaV4.self]
     }
 
     public static var stages: [MigrationStage] {
-        [v1ToV2, v2ToV3]
+        [v1ToV2, v2ToV3, v3ToV4]
     }
 
     private static let v1ToV2 = MigrationStage.custom(
@@ -377,5 +531,207 @@ public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
         fromVersion: VolumeArcSchemaV2.self,
         toVersion: VolumeArcSchemaV3.self
     )
+
+    private static let v3ToV4 = MigrationStage.custom(
+        fromVersion: VolumeArcSchemaV3.self,
+        toVersion: VolumeArcSchemaV4.self,
+        willMigrate: nil,
+        didMigrate: { context in
+            // VOL-67 Codex P2 fixup #8: assign deterministic IDs to
+            // pre-existing memories. `UUID().uuidString` would make
+            // every device pick a different ID for the same logical
+            // memory on upgrade, breaking cross-device delete
+            // reconciliation. SHA256 over a stable `(createdAt,
+            // content, theme)` triple gives the same ID on every
+            // device for the same row.
+            let migratedWorkouts = try context.fetch(FetchDescriptor<WorkoutRecord>())
+            for workout in migratedWorkouts {
+                workout.updatedAt = workout.completedAt ?? workout.startedAt
+            }
+
+            let migratedMemories = try context.fetch(FetchDescriptor<CoachMemoryRecord>())
+            for memory in migratedMemories where memory.identifier.isEmpty {
+                memory.identifier = deterministicLegacyMemoryIdentifier(
+                    createdAt: memory.createdAt,
+                    content: memory.content,
+                    theme: memory.theme
+                )
+            }
+
+            // VOL-67 Codex P1 fixup #17: clamp migrated singleton
+            // `updatedAt` to `Date.distantPast`. Pre-fixup-#10 `seedIfNeeded`
+            // set profile/plan defaults with a launch-time `Date()` value,
+            // which then looks newer than older-but-authoritative cloud
+            // data. `DefaultSyncPayloadApplier.shouldApply` uses strict
+            // `localTimestamp > inboundTimestamp` for its "local newer"
+            // branch, so the seeded defaults would win conflict
+            // resolution against real cloud singletons that happened to
+            // be written before the local install.
+            //
+            // VOL-67 Copilot fixup #25: clamping UNCONDITIONALLY would
+            // discard real last-modified timestamps on user-customized
+            // profiles/plans and make any inbound server state appear
+            // newer after upgrade — overwriting the user's edits with
+            // whatever CloudKit happens to have. Gate the clamp on a
+            // field-match heuristic: a migrated singleton is clamped
+            // only if EVERY field matches the seeded-default values in
+            // `VolumeArcProductDefaults`. Any divergence (user edited
+            // their name, picked a coaching style, added equipment,
+            // reorganized their weekly plan, etc.) means the record
+            // represents real user intent and keeps its real
+            // `updatedAt`. Untouched seeded defaults still get clamped
+            // so they lose conflict resolution against older
+            // authoritative cloud data as Codex intended.
+            //
+            // Per-record kinds (workouts, memories) keep their real
+            // timestamps because they always reflect concrete user
+            // actions and carry stable identifiers that don't collide
+            // across devices. The outbound-queue backfill only clamps
+            // singleton profile/plan payloads to `.distantPast` when
+            // the record still matches the seeded-default heuristic
+            // (fixup #26) — mirroring the conditional clamping here.
+            // That keeps first-time cross-device pushes lower
+            // priority for untouched defaults, while any real local
+            // edits retain their real timestamp via the backfill's
+            // regular-encoder branch and continue propagating cross-
+            // device under normal LWW semantics.
+            let migratedProfiles = try context.fetch(FetchDescriptor<UserProfileRecord>())
+            for profile in migratedProfiles where Self.isSeededDefaultProfile(profile) {
+                profile.updatedAt = .distantPast
+            }
+
+            let migratedPlans = try context.fetch(FetchDescriptor<TrainingPlanRecord>())
+            for plan in migratedPlans where Self.isSeededDefaultPlan(plan) {
+                plan.updatedAt = .distantPast
+            }
+
+            try context.save()
+
+            // VOL-67 Copilot (fixup #13): the outbound queue lives in
+            // a SEPARATE SwiftData configuration from the syncable
+            // models in production (see
+            // `VolumeArcPersistenceController.makeContainer` — primary
+            // store holds UserProfileRecord/etc, a distinct store
+            // holds OutboundSyncQueueRecord). A custom migration stage's
+            // `context` is bound to the store being migrated, so
+            // `context.insert(OutboundSyncQueueRecord(...))` here would
+            // silently drop the row — it can't route across config
+            // boundaries. The queue backfill therefore lives in
+            // `VolumeArcPersistenceController.backfillOutboundQueueIfNeeded`,
+            // which runs post-bootstrap with a container-scoped
+            // context that has both configs visible.
+        }
+    )
+
+    /// VOL-67 Copilot fixup #25: field-match heuristic for detecting
+    /// "untouched seeded default" `UserProfileRecord` instances during
+    /// V3→V4 migration. Returns `true` only when EVERY field matches
+    /// the current `VolumeArcProductDefaults.userProfile` values AND
+    /// `onboardingCompleted` is still false. Any divergence (custom
+    /// name, different coaching style, tweaked equipment list,
+    /// adjusted rep range, etc.) signals a real user edit and causes
+    /// the caller to preserve the migrated `updatedAt` timestamp
+    /// rather than clamping it to `.distantPast`.
+    ///
+    /// The equipment check sorts and joins the default values the
+    /// same way `seedIfNeeded` does, so the comparison is stable
+    /// regardless of how the underlying `Set`/`Array` iterates.
+    ///
+    /// VOL-67 Codex P1 fixup #26: promoted from `fileprivate` to
+    /// `public` so the post-bootstrap `OutboundQueueBackfill` can use
+    /// the same heuristic for conditional backfill clamping — both
+    /// the record-level clamp (in this file) and the queue-level
+    /// clamp (in `OutboundQueueBackfill.swift`) need to agree on
+    /// "is this a seeded default or a user edit" so they don't
+    /// disagree on whether to preserve or clamp the real timestamp.
+    public static func isSeededDefaultProfile(_ profile: UserProfileRecord) -> Bool {
+        let defaults = VolumeArcProductDefaults.userProfile
+        let defaultEquipmentCSV = defaults.availableEquipment
+            .map(\.rawValue)
+            .sorted()
+            .joined(separator: ",")
+        return profile.name == defaults.name
+            && profile.coachingStyle == defaults.coachingStyle.rawValue
+            && profile.privacyMode == defaults.privacyMode.rawValue
+            && profile.advancementLevel == defaults.advancementLevel.rawValue
+            && profile.availableEquipmentCSV == defaultEquipmentCSV
+            && profile.preferredRepRangeLower == defaults.preferredRepRangeLower
+            && profile.preferredRepRangeUpper == defaults.preferredRepRangeUpper
+            && profile.sessionTimeBudgetMinutes == defaults.sessionTimeBudgetMinutes
+            && profile.weeklyTrainingDays == defaults.weeklyTrainingDays
+            && profile.onboardingCompleted == false
+    }
+
+    /// VOL-67 Codex P1 fixup #26: companion to `isSeededDefaultProfile`
+    /// for `TrainingPlanRecord`. A plan is "untouched seeded default"
+    /// when its `workoutsJSON` exactly matches the canonical JSON
+    /// encoding of `VolumeArcProductDefaults.weeklySchedule` (both
+    /// `seedIfNeeded` and this comparison use the same
+    /// `SyncPayloadCodec` encoder, so the serialized form is
+    /// byte-stable). Used by both the V3→V4 record clamp and the
+    /// `OutboundQueueBackfill` queue clamp so they agree on which
+    /// plans can be safely demoted to `.distantPast`.
+    public static func isSeededDefaultPlan(_ plan: TrainingPlanRecord) -> Bool {
+        let defaultPlanJSON = SyncPayloadCodec.encode(VolumeArcProductDefaults.weeklySchedule) ?? "[]"
+        return plan.workoutsJSON == defaultPlanJSON
+    }
+
+    /// Produce a stable identifier for a legacy coach memory based on
+    /// its `(createdAt, content, theme)` triple. SHA256 gives the same
+    /// 64-character hex string on every device that's migrating the
+    /// same logical memory, so delete tombstones and queue
+    /// invalidation can target the same record across devices after
+    /// upgrade. VOL-67 Codex P2 (fixup #8).
+    ///
+    /// VOL-67 Codex P2 fixup #17: the hash input is length-prefixed
+    /// so that different field values always produce different
+    /// canonical strings. The original newline-delimited format was
+    /// ambiguous when content/theme contained newlines — e.g.,
+    /// `(content: "", theme: "foo\nbar")` and
+    /// `(content: "\nfoo", theme: "bar")` both serialized to
+    /// `"<millis>\n\nfoo\nbar"`, producing the same identifier for
+    /// different memories. Length-prefixed encoding (`<bytes>:<data>`)
+    /// eliminates every such collision because the parser always
+    /// knows how many bytes belong to each field, so different
+    /// inputs always produce different canonical strings.
+    ///
+    /// Also uses microsecond precision (`%.6f` format) instead of
+    /// integer milliseconds to reduce the chance that two memories
+    /// created within the same ms hash to the same identifier. The
+    /// fixed-format string avoids `Int64(Double * N)` rounding drift
+    /// that can produce different integers on different devices for
+    /// the same `Date`.
+    ///
+    /// VOL-67 Codex P2 fixup #20: `String(format:_:)` without an
+    /// explicit locale is locale-sensitive — on devices with a
+    /// non-US numeric locale (e.g., `de_DE` where the decimal
+    /// separator is `,`), the formatted timestamp becomes
+    /// `1715600000,000000` instead of `1715600000.000000`, producing
+    /// a different canonical string and thus a different identifier
+    /// for the same logical memory. Forcing the POSIX locale keeps
+    /// the output stable across every device regardless of the
+    /// user's numeric-region preference.
+    ///
+    /// This hash scheme is a BREAKING change from fixup #8's format,
+    /// but fixup #8 has never shipped to production — the migration
+    /// lives on `sprint/phase3b-cloudkit-fresh` which hasn't merged.
+    /// Both hashes land together in this PR, so no user ever sees
+    /// the old-format identifier.
+    fileprivate static func deterministicLegacyMemoryIdentifier(
+        createdAt: Date,
+        content: String,
+        theme: String
+    ) -> String {
+        let timestamp = String(
+            format: "%.6f",
+            locale: Locale(identifier: "en_US_POSIX"),
+            createdAt.timeIntervalSince1970
+        )
+        let contentBytes = content.utf8.count
+        let themeBytes = theme.utf8.count
+        let canonical = "ts=\(timestamp)|c=\(contentBytes):\(content)|t=\(themeBytes):\(theme)"
+        let digest = SHA256.hash(data: Data(canonical.utf8))
+        return "legacy-" + digest.map { String(format: "%02x", $0) }.joined()
+    }
 }
 #endif

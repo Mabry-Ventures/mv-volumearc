@@ -29,7 +29,7 @@ final class VolumeArcPersistenceController {
     let bootstrapStatus: BootstrapStatus
 
     private init() {
-        let schema = Schema(VolumeArcSchemaV3.models)
+        let schema = Schema(VolumeArcSchemaV4.models)
         let bootstrap = Self.makeContainer(for: schema)
         container = bootstrap.container
         bootstrapStatus = bootstrap.status
@@ -42,6 +42,58 @@ final class VolumeArcPersistenceController {
             // This failure is tracked in bootstrapTelemetryEvents via the
             // persistence status, so the startup notice will surface it.
         }
+
+        // VOL-67 Copilot (fixup #13): backfill the outbound sync queue
+        // for pre-VOL-67 records the first time the app opens after
+        // V3→V4 migration. This logic can't live inside the V3→V4
+        // `didMigrate` stage because the outbound queue lives in a
+        // SEPARATE SwiftData configuration from the syncable records
+        // in production — a migration stage's context is bound to one
+        // store at a time, so cross-config inserts silently drop.
+        // Running the backfill here with a container-scoped
+        // `ModelContext` gives us both configs in scope, so
+        // `context.insert(OutboundSyncQueueRecord(...))` routes to
+        // the queue store correctly.
+        //
+        // VOL-67 Codex P1 (fixup #22): only run the backfill when the
+        // container we just opened is the cloud-backed one. In
+        // `.localFallback`/`.inMemoryFallback` we'd be backfilling a
+        // DIFFERENT store file (`VolumeArc-LocalFallback.sqlite` vs
+        // `VolumeArc.sqlite`), and `seedIfNeeded` will have just
+        // populated that fallback store with default singletons.
+        // Enqueuing those defaults is dangerous: if the device's
+        // CloudKit transport later becomes available (e.g., the
+        // entitlement flap resolves) while still bound to the
+        // fallback persistence, a `syncCycle()` pull against the
+        // previously-persisted cursor might return no historical
+        // records, and then push the seeded defaults to CloudKit,
+        // overwriting the real profile/plan state another device
+        // wrote. Gating the backfill to `.cloudSynced` eliminates
+        // the cross-device data-loss path entirely — fallback modes
+        // keep their local defaults in the fallback store without
+        // ever reaching the queue. When the app later recovers to
+        // `.cloudSynced`, that mode's per-store backfill flag
+        // (fixup #16 scoping) is still unset, so the backfill runs
+        // then against the real cloud store with its real data.
+        if Self.shouldRunOutboundQueueBackfill(for: bootstrapStatus.storageMode) {
+            do {
+                try backfillOutboundQueueIfNeeded()
+            } catch {
+                // Missing a backfill row isn't fatal — the record is
+                // still safe locally, it just won't push until the user
+                // edits it. Suppress and move on.
+            }
+        }
+    }
+
+    /// VOL-67 Codex P1 (fixup #22): exposed as a static helper so
+    /// tests can lock down the policy without spinning up a full
+    /// controller instance. The rule is strict: only the
+    /// cloud-backed storage mode is eligible for the outbound-queue
+    /// backfill. All degraded/fallback modes are excluded so seeded
+    /// defaults can't reach CloudKit and overwrite real data.
+    static func shouldRunOutboundQueueBackfill(for mode: StorageMode) -> Bool {
+        mode == .cloudSynced
     }
 
     var bootstrapTelemetryEvents: [TelemetryEvent] {
@@ -67,6 +119,17 @@ final class VolumeArcPersistenceController {
 
         guard try context.fetch(descriptor).isEmpty else { return }
 
+        // VOL-67 Codex P1 (fixup #10): seeded defaults must carry
+        // `Date.distantPast` as their `updatedAt` so any inbound
+        // authoritative profile / plan from CloudKit — even one
+        // written days or weeks ago — wins the `shouldApply`
+        // timestamp comparison and replaces the local defaults. If
+        // we used `Date.now` (the model's default), the fresh
+        // install would advertise itself as "most recently
+        // modified" and subsequent pulls would be dropped as
+        // "local is newer", stranding the user on defaults AND
+        // risking an outbound push that overwrites their real
+        // server copy on the next local edit.
         let defaults = VolumeArcProductDefaults.userProfile
         let profile = UserProfileRecord(
             name: defaults.name,
@@ -77,16 +140,50 @@ final class VolumeArcPersistenceController {
             preferredRepRangeLower: defaults.preferredRepRangeLower,
             preferredRepRangeUpper: defaults.preferredRepRangeUpper,
             sessionTimeBudgetMinutes: defaults.sessionTimeBudgetMinutes,
-            weeklyTrainingDays: defaults.weeklyTrainingDays
+            weeklyTrainingDays: defaults.weeklyTrainingDays,
+            updatedAt: .distantPast
         )
         let trainingPlan = TrainingPlanRecord(
-            workoutsJSON: SyncPayloadCodec.encode(VolumeArcProductDefaults.weeklySchedule) ?? "[]"
+            workoutsJSON: SyncPayloadCodec.encode(VolumeArcProductDefaults.weeklySchedule) ?? "[]",
+            updatedAt: .distantPast
         )
 
         context.insert(profile)
         context.insert(trainingPlan)
 
         try context.save()
+    }
+
+    /// VOL-67 Copilot (fixup #13): the backfill logic lives in
+    /// `VolumeArcCore.OutboundQueueBackfill` so it's testable in
+    /// isolation. The production key prefix is fixed so the flag
+    /// survives app relaunches; the active storage mode is appended
+    /// at call time (see `outboundQueueBackfillFlagKey(for:)`).
+    ///
+    /// VOL-67 Codex P2 (fixup #16): the completion flag MUST be scoped
+    /// by storage mode. Previously the flag was a single fixed string
+    /// shared across all modes, so a first-launch backfill that ran
+    /// against `.localFallback` (e.g., when the CloudKit entitlement
+    /// was missing) would mark the flag complete. A later recovery to
+    /// `.cloudSynced` opens a DIFFERENT store file
+    /// (`VolumeArc.sqlite` vs `VolumeArc-LocalFallback.sqlite`) whose
+    /// pre-existing migrated records still need outbound queue rows —
+    /// but the shared flag would short-circuit the backfill and those
+    /// records would never sync until the user edited them. Scoping
+    /// by storage mode gives each store its own completion marker.
+    private static let outboundQueueBackfillDefaultsKeyPrefix = "VolumeArcPersistence.outboundQueueBackfillV4Completed"
+
+    static func outboundQueueBackfillFlagKey(for storageMode: StorageMode) -> String {
+        "\(outboundQueueBackfillDefaultsKeyPrefix).\(storageMode.rawValue)"
+    }
+
+    private func backfillOutboundQueueIfNeeded() throws {
+        guard let container else { return }
+        try OutboundQueueBackfill.performIfNeeded(
+            container: container,
+            userDefaults: .standard,
+            flagKey: Self.outboundQueueBackfillFlagKey(for: bootstrapStatus.storageMode)
+        )
     }
 
     private static func makeContainer(for schema: Schema) -> (container: ModelContainer?, status: BootstrapStatus) {
@@ -107,7 +204,10 @@ final class VolumeArcPersistenceController {
                     container: try ModelContainer(
                         for: schema,
                         migrationPlan: VolumeArcSchemaMigrationPlan.self,
-                        configurations: [primaryConfiguration(schema: schema)]
+                        configurations: [
+                            primaryConfiguration(schema: syncableSchema()),
+                            outboundQueueConfiguration(schema: outboundQueueSchema(), isStoredInMemoryOnly: false),
+                        ]
                     ),
                     status: BootstrapStatus(
                         storageMode: .cloudSynced,
@@ -128,7 +228,7 @@ final class VolumeArcPersistenceController {
                 container: try ModelContainer(
                     for: schema,
                     migrationPlan: VolumeArcSchemaMigrationPlan.self,
-                    configurations: [fallbackLocalConfiguration(schema: schema)]
+                    configurations: [fallbackLocalConfiguration(schema: schema, isStoredInMemoryOnly: false)]
                 ),
                 status: BootstrapStatus(
                     storageMode: .localFallback,
@@ -146,7 +246,7 @@ final class VolumeArcPersistenceController {
                 container: try ModelContainer(
                     for: schema,
                     migrationPlan: VolumeArcSchemaMigrationPlan.self,
-                    configurations: [inMemoryConfiguration(schema: schema)]
+                    configurations: [fallbackLocalConfiguration(schema: schema, isStoredInMemoryOnly: true)]
                 ),
                 status: BootstrapStatus(
                     storageMode: .inMemoryFallback,
@@ -210,24 +310,36 @@ final class VolumeArcPersistenceController {
         )
     }
 
-    private static func fallbackLocalConfiguration(schema: Schema) -> ModelConfiguration {
+    private static func fallbackLocalConfiguration(schema: Schema, isStoredInMemoryOnly: Bool) -> ModelConfiguration {
         ModelConfiguration(
             "VolumeArc-LocalFallback",
             schema: schema,
-            isStoredInMemoryOnly: false,
+            isStoredInMemoryOnly: isStoredInMemoryOnly,
+            allowsSave: true,
+            cloudKitDatabase: .none
+        )
+    }
+    private static func outboundQueueConfiguration(schema: Schema, isStoredInMemoryOnly: Bool) -> ModelConfiguration {
+        ModelConfiguration(
+            "VolumeArc-OutboundQueue",
+            schema: schema,
+            isStoredInMemoryOnly: isStoredInMemoryOnly,
             allowsSave: true,
             cloudKitDatabase: .none
         )
     }
 
-    private static func inMemoryConfiguration(schema: Schema) -> ModelConfiguration {
-        ModelConfiguration(
-            "VolumeArc-InMemoryFallback",
-            schema: schema,
-            isStoredInMemoryOnly: true,
-            allowsSave: true,
-            cloudKitDatabase: .none
-        )
+    private static func syncableSchema() -> Schema {
+        Schema([
+            UserProfileRecord.self,
+            TrainingPlanRecord.self,
+            WorkoutRecord.self,
+            CoachMemoryRecord.self,
+        ])
+    }
+
+    private static func outboundQueueSchema() -> Schema {
+        Schema([OutboundSyncQueueRecord.self])
     }
 }
 

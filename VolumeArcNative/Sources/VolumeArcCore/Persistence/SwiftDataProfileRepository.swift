@@ -5,9 +5,11 @@ import SwiftData
 /// SwiftData-backed repository for the single-row `UserProfileRecord`.
 public struct SwiftDataUserProfileRepository: Sendable {
     public let container: ModelContainer
+    private let outboundQueue: any OutboundSyncQueue
 
-    public init(container: ModelContainer) {
+    public init(container: ModelContainer, outboundQueue: (any OutboundSyncQueue)? = nil) {
         self.container = container
+        self.outboundQueue = outboundQueue ?? NoOpOutboundSyncQueue()
     }
 
     /// Fetch the user profile, if one exists.
@@ -26,6 +28,7 @@ public struct SwiftDataUserProfileRepository: Sendable {
         var descriptor = FetchDescriptor<UserProfileRecord>()
         descriptor.fetchLimit = 1
 
+        let target: UserProfileRecord
         if let existing = try context.fetch(descriptor).first {
             existing.name = profile.name
             existing.coachingStyle = profile.coachingStyle.rawValue
@@ -37,6 +40,7 @@ public struct SwiftDataUserProfileRepository: Sendable {
             existing.sessionTimeBudgetMinutes = profile.sessionTimeBudgetMinutes
             existing.weeklyTrainingDays = profile.weeklyTrainingDays
             existing.updatedAt = .now
+            target = existing
         } else {
             let record = UserProfileRecord(
                 name: profile.name,
@@ -50,8 +54,10 @@ public struct SwiftDataUserProfileRepository: Sendable {
                 weeklyTrainingDays: profile.weeklyTrainingDays
             )
             context.insert(record)
+            target = record
         }
 
+        try stageUpsert(for: target, into: context)
         try context.save()
     }
 
@@ -64,6 +70,7 @@ public struct SwiftDataUserProfileRepository: Sendable {
         guard let profile = try context.fetch(descriptor).first else { return }
         profile.onboardingCompleted = true
         profile.updatedAt = .now
+        try stageUpsert(for: profile, into: context)
         try context.save()
     }
 
@@ -99,9 +106,11 @@ public struct SwiftDataUserProfileRepository: Sendable {
 /// SwiftData-backed repository for the single-row `TrainingPlanRecord`.
 public struct SwiftDataTrainingPlanRepository: Sendable {
     public let container: ModelContainer
+    private let outboundQueue: any OutboundSyncQueue
 
-    public init(container: ModelContainer) {
+    public init(container: ModelContainer, outboundQueue: (any OutboundSyncQueue)? = nil) {
         self.container = container
+        self.outboundQueue = outboundQueue ?? NoOpOutboundSyncQueue()
     }
 
     /// Fetch the current training plan.
@@ -122,13 +131,18 @@ public struct SwiftDataTrainingPlanRepository: Sendable {
 
         guard let json = SyncPayloadCodec.encode(workouts) else { return }
 
+        let target: TrainingPlanRecord
         if let existing = try context.fetch(descriptor).first {
             existing.workoutsJSON = json
             existing.updatedAt = .now
+            target = existing
         } else {
-            context.insert(TrainingPlanRecord(workoutsJSON: json))
+            let record = TrainingPlanRecord(workoutsJSON: json)
+            context.insert(record)
+            target = record
         }
 
+        try stageUpsert(for: target, into: context)
         try context.save()
     }
 
@@ -162,16 +176,20 @@ public struct SwiftDataTrainingPlanRepository: Sendable {
 /// SwiftData-backed repository for `CoachMemoryRecord`.
 public struct SwiftDataCoachMemoryRepository: Sendable {
     public let container: ModelContainer
+    private let outboundQueue: any OutboundSyncQueue
 
-    public init(container: ModelContainer) {
+    public init(container: ModelContainer, outboundQueue: (any OutboundSyncQueue)? = nil) {
         self.container = container
+        self.outboundQueue = outboundQueue ?? NoOpOutboundSyncQueue()
     }
 
     /// Append a new memory entry.
     @MainActor
     public func append(content: String, theme: String = "") throws {
         let context = ModelContext(container)
-        context.insert(CoachMemoryRecord(content: content, theme: theme))
+        let record = CoachMemoryRecord(content: content, theme: theme)
+        context.insert(record)
+        try stageUpsert(for: record, into: context)
         try context.save()
     }
 
@@ -210,10 +228,139 @@ public struct SwiftDataCoachMemoryRepository: Sendable {
             }
         )
         let oldRecords = try context.fetch(descriptor)
+        // VOL-67 Codex P1 fixup: tombstone timestamp must be the actual
+        // deletion wall-clock time, not the record's `createdAt`, so the
+        // outbound delete doesn't get invalidated by a newer inbound
+        // version that happens to sit between `createdAt` and the delete.
+        // VOL-67 Codex P2 fixup: stage queue rows into the same context
+        // as the deletes and commit everything in one atomic save.
+        //
+        // VOL-67 Copilot (fixup #19): empty `payloadJSON` on the delete
+        // tombstone. See comment in `SwiftDataWorkoutRepository.deleteWorkout`
+        // — the sync pipeline ignores the delete payload, so serializing
+        // the full memory body just retained deleted user content in
+        // the outbound queue and CloudKit tombstone for no benefit.
+        let deletedAt = Date()
         for record in oldRecords {
+            let identifier = record.identifier
             context.delete(record)
+            outboundQueue.stage(
+                into: context,
+                recordType: CloudSyncRecord.Kind.coachMemory.rawValue,
+                recordIdentifier: identifier,
+                operation: CloudSyncRecord.Operation.delete.rawValue,
+                payloadJSON: "",
+                queuedAt: deletedAt
+            )
         }
         try context.save()
+    }
+
+    /// Delete a single memory entry by identifier.
+    @MainActor
+    public func deleteMemory(identifier: String) throws {
+        let context = ModelContext(container)
+        var descriptor = FetchDescriptor<CoachMemoryRecord>(
+            predicate: #Predicate<CoachMemoryRecord> { record in
+                record.identifier == identifier
+            }
+        )
+        descriptor.fetchLimit = 1
+        guard let record = try context.fetch(descriptor).first else { return }
+
+        // VOL-67 Codex P1 + P2 fixups: actual deletion wall-clock as
+        // the tombstone timestamp AND atomic stage-then-save so the
+        // delete and the queue row commit together.
+        //
+        // VOL-67 Copilot (fixup #19): empty `payloadJSON` on delete.
+        // See the bulk-prune path above + the workout-delete path for
+        // the full rationale.
+        let deletedAt = Date()
+        context.delete(record)
+        outboundQueue.stage(
+            into: context,
+            recordType: CloudSyncRecord.Kind.coachMemory.rawValue,
+            recordIdentifier: identifier,
+            operation: CloudSyncRecord.Operation.delete.rawValue,
+            payloadJSON: "",
+            queuedAt: deletedAt
+        )
+        try context.save()
+    }
+}
+
+// VOL-67 Codex P2 fixup: these helpers stage the outbound queue row
+// into the caller-provided context rather than creating a new context
+// and saving independently. Every repository mutation above follows
+// the pattern: insert/modify record → stageUpsert → `context.save()` —
+// so a queue write failure can't leave the primary record persisted
+// without its sync row.
+// VOL-67 Codex P2 (fixup #28): all three staging helpers throw
+// `OutboundQueueStagingError.payloadEncodingFailed` when the record
+// can't be serialized. Before the fix they silently returned,
+// letting the caller commit the primary record change without a
+// matching queue row — local write persisted but never sync'd. Now
+// the error aborts the enclosing repository method before
+// `context.save()` runs, rolling back both the record mutation
+// and the queue row (because neither was saved) and surfacing
+// the failure to the caller.
+extension SwiftDataUserProfileRepository {
+    @MainActor
+    fileprivate func stageUpsert(for profile: UserProfileRecord, into context: ModelContext) throws {
+        guard let payloadJSON = SyncPayloadCodec.encodeUserProfilePayload(from: profile) else {
+            throw OutboundQueueStagingError.payloadEncodingFailed(
+                recordType: CloudSyncRecord.Kind.userProfile.rawValue,
+                recordIdentifier: CloudSyncRecord.Kind.userProfile.defaultIdentifier
+            )
+        }
+        outboundQueue.stage(
+            into: context,
+            recordType: CloudSyncRecord.Kind.userProfile.rawValue,
+            recordIdentifier: CloudSyncRecord.Kind.userProfile.defaultIdentifier,
+            operation: CloudSyncRecord.Operation.upsert.rawValue,
+            payloadJSON: payloadJSON,
+            queuedAt: profile.updatedAt
+        )
+    }
+}
+
+extension SwiftDataTrainingPlanRepository {
+    @MainActor
+    fileprivate func stageUpsert(for plan: TrainingPlanRecord, into context: ModelContext) throws {
+        guard let payloadJSON = SyncPayloadCodec.encodeTrainingPlanPayload(from: plan) else {
+            throw OutboundQueueStagingError.payloadEncodingFailed(
+                recordType: CloudSyncRecord.Kind.trainingPlan.rawValue,
+                recordIdentifier: CloudSyncRecord.Kind.trainingPlan.defaultIdentifier
+            )
+        }
+        outboundQueue.stage(
+            into: context,
+            recordType: CloudSyncRecord.Kind.trainingPlan.rawValue,
+            recordIdentifier: CloudSyncRecord.Kind.trainingPlan.defaultIdentifier,
+            operation: CloudSyncRecord.Operation.upsert.rawValue,
+            payloadJSON: payloadJSON,
+            queuedAt: plan.updatedAt
+        )
+    }
+}
+
+extension SwiftDataCoachMemoryRepository {
+    @MainActor
+    fileprivate func stageUpsert(for record: CoachMemoryRecord, into context: ModelContext) throws {
+        guard let payloadJSON = SyncPayloadCodec.encodeCoachMemoryPayload(from: record) else {
+            throw OutboundQueueStagingError.payloadEncodingFailed(
+                recordType: CloudSyncRecord.Kind.coachMemory.rawValue,
+                recordIdentifier: record.identifier
+            )
+        }
+        outboundQueue.stage(
+            into: context,
+            recordType: CloudSyncRecord.Kind.coachMemory.rawValue,
+            recordIdentifier: record.identifier,
+            operation: CloudSyncRecord.Operation.upsert.rawValue,
+            payloadJSON: payloadJSON,
+            queuedAt: record.createdAt
+        )
     }
 }
 #endif
