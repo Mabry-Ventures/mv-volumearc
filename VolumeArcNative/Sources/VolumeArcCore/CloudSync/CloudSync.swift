@@ -712,28 +712,29 @@ public actor CloudSyncCoordinator {
     public func syncCycle(pushing localRecords: [CloudSyncRecord] = []) async throws -> Int {
         guard transport.isAvailable else { return 0 }
 
-        // VOL-67 Codex P1 (fixup #35): decouple outbound push from
-        // pull TRANSPORT failures so a network/auth/token error in
-        // the pull step doesn't strand queued local mutations.
+        // VOL-67 Codex P1 (fixup #35): decouple the push step from
+        // pull TRANSPORT failures so the sync cycle doesn't abort
+        // entirely when pull throws.
         //
-        // IMPORTANT (Codex P1 follow-up): the catch scope is
-        // deliberately NARROW — it only wraps `transport.pullChanges`.
-        // The apply step (`payloadApplier.apply`) is NOT caught,
-        // because an apply failure means the applier RECEIVED fresh
-        // remote data but failed to write it locally and invalidate
-        // the stale queue entries that conflict with that data. If
-        // we proceeded to push in that state, we'd send entries that
-        // the applier KNOWS are superseded by what the server sent —
-        // i.e., we'd clobber newer remote state. Apply errors must
-        // propagate to abort the cycle.
+        // Error-handling contract:
         //
-        // In contrast, when pull itself FAILS (no data received at
-        // all), there's no evidence the server has anything newer
-        // than what's in our queue. The queued entries represent the
-        // latest local user intent — pushing them is a safe
-        // "best-effort" delivery. The next successful pull will
-        // reconcile any server-side changes that arrived in the
-        // interim via the normal shouldApply timestamp comparison.
+        // • Pull failure (transport error): caught and logged. The
+        //   cycle continues to the push step, but the queue is NOT
+        //   drained (`limit: 0`) — only caller-provided
+        //   `additionalRecords` (known-fresh) are sent. Queued
+        //   historical entries stay intact because they haven't been
+        //   reconciled against server state and could clobber newer
+        //   remote data we couldn't see. The queue is drained on
+        //   the next SUCCESSFUL pull/apply cycle, which reconciles
+        //   stale entries via `invalidateEntries` before push runs.
+        //
+        // • Apply failure (local write/invalidation error): NOT
+        //   caught — propagates to the caller, aborting the cycle.
+        //   Pushing without invalidation would send entries the
+        //   applier KNOWS are superseded by what the server sent.
+        //
+        // • Cancellation: re-thrown immediately (cooperative
+        //   cancellation must propagate, not be absorbed).
         //
         // Cursor is only saved after a successful apply, so a failed
         // apply naturally re-pulls the same window next cycle.
