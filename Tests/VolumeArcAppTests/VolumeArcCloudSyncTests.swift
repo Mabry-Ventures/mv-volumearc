@@ -629,18 +629,20 @@ final class VolumeArcCloudSyncTests: XCTestCase {
         XCTAssertTrue(pushed.isEmpty, "Queued upsert must not reach the transport after an inbound delete")
     }
 
-    // MARK: - VOL-67 Codex P1 (fixup #35): push still runs when pull fails
+    // MARK: - VOL-67 Codex P1 (fixup #35): push behavior when pull fails
 
-    /// Codex P1 (fixup #35): if `pullChanges` throws (expired server
-    /// change token, network error, CloudKit auth failure, etc.),
-    /// `syncCycle` must still call `push()` so queued local mutations
-    /// reach CloudKit. Before this fix, any pull error aborted the
-    /// entire method, stranding the outbound queue until pull was
-    /// manually recovered.
-    func testSyncCyclePushesEvenWhenPullThrows() async throws {
-        // 1) Queue a local workout mutation.
+    /// Codex P1 (fixup #35 + follow-up): when `pullChanges` throws,
+    /// `syncCycle` must NOT drain the outbound queue — the queued
+    /// entries haven't been reconciled against the server and could
+    /// clobber newer remote state that we couldn't see due to the
+    /// pull failure. The queue stays intact until the next successful
+    /// pull reconciles it. However, caller-provided `additionalRecords`
+    /// (known-fresh from the current user action) ARE still pushed so
+    /// immediate writes aren't stranded.
+    func testSyncCyclePreservesQueueWhenPullFails() async throws {
+        // 1) Queue a local workout mutation (historical, un-reconciled).
         _ = try workoutRepository.createWorkout(
-            title: "Must Push Despite Pull Failure",
+            title: "Historical Queued Write",
             startedAt: Date(timeIntervalSince1970: 1_720_040_000)
         )
         XCTAssertEqual(try outboundQueue.pendingRecords().count, 1)
@@ -658,23 +660,54 @@ final class VolumeArcCloudSyncTests: XCTestCase {
         // 3) syncCycle must NOT throw — pull failure is absorbed.
         let count = try await coordinator.syncCycle()
 
-        // 4) Push happened despite pull failure.
-        let pushed = await transport.pushedRecords
-        XCTAssertEqual(pushed.count, 1, "Push must still run even when pull throws")
-        XCTAssertEqual(pushed.first?.kind, .workout)
-        XCTAssertEqual(count, 1, "syncCycle should return the pushed count (pulled count is 0 due to failure)")
-
-        // 5) Queue should be drained after successful push.
-        XCTAssertTrue(
-            try outboundQueue.pendingRecords().isEmpty,
-            "Queue should be drained after push succeeds"
+        // 4) Queue should NOT have been drained — push used limit: 0
+        //    because pull failed and entries aren't reconciled.
+        XCTAssertEqual(
+            try outboundQueue.pendingRecords().count,
+            1,
+            "Queue must be preserved when pull fails — stale entries could clobber newer server state"
         )
+
+        // 5) Nothing reached the transport (no additionalRecords + no drain).
+        let pushed = await transport.pushedRecords
+        XCTAssertTrue(pushed.isEmpty, "No records should be pushed when pull fails and no additionalRecords provided")
+        XCTAssertEqual(count, 0)
 
         // 6) Pull failure was logged to telemetry.
         XCTAssertTrue(
             telemetry.currentEvents.contains { $0.name == "pull_failed" },
             "Expected pull_failed telemetry event"
         )
+    }
+
+    /// Complement: caller-provided `additionalRecords` (known-fresh)
+    /// ARE still pushed even when pull fails. This ensures immediate
+    /// user actions reach CloudKit without being stranded by an
+    /// inbound-sync failure.
+    func testSyncCyclePushesAdditionalRecordsEvenWhenPullFails() async throws {
+        let transport = RecordingCloudSyncTransport(shouldThrowOnPull: true)
+        let coordinator = CloudSyncCoordinator(
+            transport: transport,
+            stateStore: FileSyncStateStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+            outboundQueue: outboundQueue,
+            telemetrySink: InMemoryTelemetrySink()
+        )
+
+        // Push a caller-provided record (known-fresh).
+        let freshRecord = CloudSyncRecord(
+            kind: .workout,
+            identifier: "fresh-direct-push",
+            operation: .upsert,
+            payloadJSON: "{}",
+            modifiedAt: .now
+        )
+        let count = try await coordinator.syncCycle(pushing: [freshRecord])
+
+        // The fresh record reached the transport despite pull failure.
+        let pushed = await transport.pushedRecords
+        XCTAssertEqual(pushed.count, 1, "additionalRecords must push even when pull fails")
+        XCTAssertEqual(pushed.first?.identifier, "fresh-direct-push")
+        XCTAssertEqual(count, 1)
     }
 
     // MARK: - VOL-67 Codex P1 #3: coalesce drained rows before push

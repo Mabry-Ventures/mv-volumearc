@@ -576,7 +576,7 @@ public actor CloudSyncCoordinator {
         // comment below for why we track keys separately from IDs.
         var quarantinedKeys: Set<String> = []
 
-        if let outboundQueue {
+        if let outboundQueue, limit > 0 {
             drainedChanges = try await MainActor.run {
                 try outboundQueue.drain(limit: limit)
             }
@@ -789,8 +789,31 @@ public actor CloudSyncCoordinator {
             pulledCount = result.changedRecords.count
         }
 
-        // 4) Push any remaining (still-valid) local changes.
-        let pushedCount = try await push(additionalRecords: localRecords)
+        // 4) Push local changes.
+        //
+        // Codex P1 follow-up: when pull failed, DON'T drain the queue.
+        // Queued entries are historical state that hasn't been
+        // reconciled against the server — another device may have
+        // written newer versions that we couldn't see because pull
+        // threw. Draining and pushing those stale entries would
+        // clobber the newer server state.
+        //
+        // Pass `limit: 0` so `push()` skips the drain step entirely
+        // and only sends `additionalRecords` (caller-provided,
+        // known-fresh from the current user action). The queue stays
+        // intact until the next successful pull reconciles it via the
+        // applier's `invalidateEntries`, after which a normal
+        // `push(limit: 50)` drains only the still-valid entries.
+        //
+        // When pull succeeded (and apply ran), the queue has been
+        // reconciled: stale entries were invalidated by the applier.
+        // Safe to drain and push everything.
+        let pushedCount: Int
+        if pullResult != nil {
+            pushedCount = try await push(additionalRecords: localRecords)
+        } else {
+            pushedCount = try await push(limit: 0, additionalRecords: localRecords)
+        }
 
         return pushedCount + pulledCount
     }
