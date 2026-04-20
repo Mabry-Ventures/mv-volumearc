@@ -719,10 +719,21 @@ public actor CloudSyncCoordinator {
         // IMPORTANT (Codex P1 follow-up): the catch scope is
         // deliberately NARROW — it only wraps `transport.pullChanges`.
         // The apply step (`payloadApplier.apply`) is NOT caught,
-        // because an apply failure means stale-entry invalidation
-        // didn't run; if we proceeded to push with un-invalidated
-        // stale entries, we'd clobber newer remote state. Apply
-        // errors propagate to the caller, aborting the cycle.
+        // because an apply failure means the applier RECEIVED fresh
+        // remote data but failed to write it locally and invalidate
+        // the stale queue entries that conflict with that data. If
+        // we proceeded to push in that state, we'd send entries that
+        // the applier KNOWS are superseded by what the server sent —
+        // i.e., we'd clobber newer remote state. Apply errors must
+        // propagate to abort the cycle.
+        //
+        // In contrast, when pull itself FAILS (no data received at
+        // all), there's no evidence the server has anything newer
+        // than what's in our queue. The queued entries represent the
+        // latest local user intent — pushing them is a safe
+        // "best-effort" delivery. The next successful pull will
+        // reconcile any server-side changes that arrived in the
+        // interim via the normal shouldApply timestamp comparison.
         //
         // Cursor is only saved after a successful apply, so a failed
         // apply naturally re-pulls the same window next cycle.
@@ -733,12 +744,18 @@ public actor CloudSyncCoordinator {
             let cursor = stateStore.loadCursor()
             pullResult = try await transport.pullChanges(since: cursor)
         } catch {
-            // Respect cooperative cancellation: if the task was
-            // cancelled, re-throw instead of absorbing. Proceeding to
-            // push after cancellation violates structured concurrency
-            // and can produce unexpected side effects.
-            if error is CancellationError || Task.isCancelled {
+            // Respect cooperative cancellation: if the thrown error is
+            // already a CancellationError, preserve it. If cancellation
+            // raced with a different transport error (Task.isCancelled
+            // is true but error is e.g. a network failure), throw a
+            // proper CancellationError via checkCancellation() so
+            // callers see the correct error type. Proceeding to push
+            // after cancellation violates structured concurrency.
+            if error is CancellationError {
                 throw error
+            }
+            if Task.isCancelled {
+                try Task.checkCancellation()
             }
 
             // Pull transport failure — log but don't block push.
@@ -756,7 +773,9 @@ public actor CloudSyncCoordinator {
         // 2) Apply remote changes locally. This step invalidates
         //    stale queued entries whose state is older than the
         //    inbound timestamp. If apply throws, propagate — pushing
-        //    without invalidation risks clobbering newer remote state.
+        //    without invalidation risks clobbering newer remote state
+        //    (see the detailed rationale above for why this case
+        //    differs from the pull-failure path).
         if let result = pullResult {
             if let payloadApplier {
                 try await payloadApplier.apply(result: result)
