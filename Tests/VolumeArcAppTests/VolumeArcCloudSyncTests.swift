@@ -629,6 +629,54 @@ final class VolumeArcCloudSyncTests: XCTestCase {
         XCTAssertTrue(pushed.isEmpty, "Queued upsert must not reach the transport after an inbound delete")
     }
 
+    // MARK: - VOL-67 Codex P1 (fixup #35): push still runs when pull fails
+
+    /// Codex P1 (fixup #35): if `pullChanges` throws (expired server
+    /// change token, network error, CloudKit auth failure, etc.),
+    /// `syncCycle` must still call `push()` so queued local mutations
+    /// reach CloudKit. Before this fix, any pull error aborted the
+    /// entire method, stranding the outbound queue until pull was
+    /// manually recovered.
+    func testSyncCyclePushesEvenWhenPullThrows() async throws {
+        // 1) Queue a local workout mutation.
+        _ = try workoutRepository.createWorkout(
+            title: "Must Push Despite Pull Failure",
+            startedAt: Date(timeIntervalSince1970: 1_720_040_000)
+        )
+        XCTAssertEqual(try outboundQueue.pendingRecords().count, 1)
+
+        // 2) Transport configured to THROW on pull.
+        let transport = RecordingCloudSyncTransport(shouldThrowOnPull: true)
+        let telemetry = InMemoryTelemetrySink()
+        let coordinator = CloudSyncCoordinator(
+            transport: transport,
+            stateStore: FileSyncStateStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+            outboundQueue: outboundQueue,
+            telemetrySink: telemetry
+        )
+
+        // 3) syncCycle must NOT throw — pull failure is absorbed.
+        let count = try await coordinator.syncCycle()
+
+        // 4) Push happened despite pull failure.
+        let pushed = await transport.pushedRecords
+        XCTAssertEqual(pushed.count, 1, "Push must still run even when pull throws")
+        XCTAssertEqual(pushed.first?.kind, .workout)
+        XCTAssertEqual(count, 1, "syncCycle should return the pushed count (pulled count is 0 due to failure)")
+
+        // 5) Queue should be drained after successful push.
+        XCTAssertTrue(
+            try outboundQueue.pendingRecords().isEmpty,
+            "Queue should be drained after push succeeds"
+        )
+
+        // 6) Pull failure was logged to telemetry.
+        XCTAssertTrue(
+            telemetry.currentEvents.contains { $0.name == "pull_failed" },
+            "Expected pull_failed telemetry event"
+        )
+    }
+
     // MARK: - VOL-67 Codex P1 #3: coalesce drained rows before push
 
     /// Multiple mutations of the same workout must collapse to a
@@ -1673,15 +1721,18 @@ private actor RecordingTransportRecorder {
 private final class RecordingCloudSyncTransport: CloudSyncTransport, @unchecked Sendable {
     private let recorder = RecordingTransportRecorder()
     private let shouldThrow: Bool
+    private let shouldThrowOnPull: Bool
     private let pullResultProvider: @Sendable () -> CloudSyncPullResult
 
     init(
         shouldThrow: Bool = false,
+        shouldThrowOnPull: Bool = false,
         pullResult: @Sendable @escaping () -> CloudSyncPullResult = {
             CloudSyncPullResult(changedRecords: [], deletedRecordIDs: [], nextCursor: nil)
         }
     ) {
         self.shouldThrow = shouldThrow
+        self.shouldThrowOnPull = shouldThrowOnPull
         self.pullResultProvider = pullResult
     }
 
@@ -1696,6 +1747,9 @@ private final class RecordingCloudSyncTransport: CloudSyncTransport, @unchecked 
 
     func pullChanges(since cursor: String?) async throws -> CloudSyncPullResult {
         await recorder.recordPull()
+        if shouldThrowOnPull {
+            throw RecordingTransportError.pullFailed
+        }
         return pullResultProvider()
     }
 
@@ -1720,6 +1774,7 @@ private final class RecordingCloudSyncTransport: CloudSyncTransport, @unchecked 
 
 private enum RecordingTransportError: Error {
     case pushFailed
+    case pullFailed
 }
 
 private func XCTAssertThrowsErrorAsync(

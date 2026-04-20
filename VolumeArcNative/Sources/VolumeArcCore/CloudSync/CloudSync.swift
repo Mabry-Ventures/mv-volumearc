@@ -712,29 +712,65 @@ public actor CloudSyncCoordinator {
     public func syncCycle(pushing localRecords: [CloudSyncRecord] = []) async throws -> Int {
         guard transport.isAvailable else { return 0 }
 
-        // 1) Pull remote changes first so the applier can see them before
-        //    any local queue drain runs.
-        let cursor = stateStore.loadCursor()
-        let result = try await transport.pullChanges(since: cursor)
+        // VOL-67 Codex P1 (fixup #35): wrap the pull/apply/cursor-save
+        // phase in a do/catch so a pull failure (expired server change
+        // token, network error, CloudKit auth failure, etc.) doesn't
+        // abort the method before `push()` runs. Before this fix, any
+        // pull error prevented the subsequent push from firing, so
+        // queued local mutations would never leave the device as long
+        // as the pull kept failing — an outbound sync stall that's
+        // entirely unrecoverable without manual intervention (clear
+        // the cursor store or reinstall).
+        //
+        // Pull still runs BEFORE push so the applier can invalidate
+        // stale queued entries against the freshly-pulled state.
+        // If the pull succeeds, the cursor advances and stale entries
+        // are pruned before the push assembles its batch — same
+        // semantics as before. If the pull FAILS, the cursor stays
+        // where it was (no cursor saved), stale-entry invalidation
+        // is skipped, and push runs with whatever was already queued.
+        // The next successful pull cycle will catch up on both the
+        // inbound and the stale-entry cleanup. The user's local
+        // edits reach CloudKit either way.
+        var pulledCount = 0
+        do {
+            // 1) Pull remote changes first so the applier can see them
+            //    before any local queue drain runs.
+            let cursor = stateStore.loadCursor()
+            let result = try await transport.pullChanges(since: cursor)
 
-        // 2) Apply remote changes locally on the main actor (SwiftData is
-        //    bound to @MainActor via ModelContext thread affinity). The
-        //    applier also invalidates stale queued entries whose state
-        //    is older than the inbound timestamp.
-        if let payloadApplier {
-            try await payloadApplier.apply(result: result)
-        }
+            // 2) Apply remote changes locally on the main actor
+            //    (SwiftData is bound to @MainActor via ModelContext
+            //    thread affinity). The applier also invalidates stale
+            //    queued entries whose state is older than the inbound
+            //    timestamp.
+            if let payloadApplier {
+                try await payloadApplier.apply(result: result)
+            }
 
-        // 3) Persist the new cursor before pushing so a push failure
-        //    can't force us to re-pull the same window twice.
-        if let nextCursor = result.nextCursor {
-            try? stateStore.saveCursor(nextCursor)
+            // 3) Persist the new cursor before pushing so a push
+            //    failure can't force us to re-pull the same window.
+            if let nextCursor = result.nextCursor {
+                try? stateStore.saveCursor(nextCursor)
+            }
+
+            pulledCount = result.changedRecords.count
+        } catch {
+            // Pull failed — log but don't block push. The user's
+            // local edits must still reach CloudKit.
+            telemetrySink?.record(TelemetryEvent(
+                category: "sync",
+                name: "pull_failed",
+                severity: .warning,
+                message: "Pull failed: \(error). Push will still attempt.",
+                metadata: [:]
+            ))
         }
 
         // 4) Push any remaining (still-valid) local changes.
         let pushedCount = try await push(additionalRecords: localRecords)
 
-        return pushedCount + result.changedRecords.count
+        return pushedCount + pulledCount
     }
 
     /// Produce the coalescing key for a queued change. VOL-67 Codex P2
