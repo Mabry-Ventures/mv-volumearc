@@ -733,6 +733,14 @@ public actor CloudSyncCoordinator {
             let cursor = stateStore.loadCursor()
             pullResult = try await transport.pullChanges(since: cursor)
         } catch {
+            // Respect cooperative cancellation: if the task was
+            // cancelled, re-throw instead of absorbing. Proceeding to
+            // push after cancellation violates structured concurrency
+            // and can produce unexpected side effects.
+            if error is CancellationError || Task.isCancelled {
+                throw error
+            }
+
             // Pull transport failure — log but don't block push.
             // The user's local edits must still reach CloudKit.
             telemetrySink?.record(TelemetryEvent(
