@@ -629,6 +629,87 @@ final class VolumeArcCloudSyncTests: XCTestCase {
         XCTAssertTrue(pushed.isEmpty, "Queued upsert must not reach the transport after an inbound delete")
     }
 
+    // MARK: - VOL-67 Codex P1 (fixup #35): push behavior when pull fails
+
+    /// Codex P1 (fixup #35 + follow-up): when `pullChanges` throws,
+    /// `syncCycle` must NOT drain the outbound queue — the queued
+    /// entries haven't been reconciled against the server and could
+    /// clobber newer remote state that we couldn't see due to the
+    /// pull failure. The queue stays intact until the next successful
+    /// pull reconciles it. However, caller-provided `additionalRecords`
+    /// (known-fresh from the current user action) ARE still pushed so
+    /// immediate writes aren't stranded.
+    func testSyncCyclePreservesQueueWhenPullFails() async throws {
+        // 1) Queue a local workout mutation (historical, un-reconciled).
+        _ = try workoutRepository.createWorkout(
+            title: "Historical Queued Write",
+            startedAt: Date(timeIntervalSince1970: 1_720_040_000)
+        )
+        XCTAssertEqual(try outboundQueue.pendingRecords().count, 1)
+
+        // 2) Transport configured to THROW on pull.
+        let transport = RecordingCloudSyncTransport(shouldThrowOnPull: true)
+        let telemetry = InMemoryTelemetrySink()
+        let coordinator = CloudSyncCoordinator(
+            transport: transport,
+            stateStore: FileSyncStateStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+            outboundQueue: outboundQueue,
+            telemetrySink: telemetry
+        )
+
+        // 3) syncCycle must NOT throw — pull failure is absorbed.
+        let count = try await coordinator.syncCycle()
+
+        // 4) Queue should NOT have been drained — push used limit: 0
+        //    because pull failed and entries aren't reconciled.
+        XCTAssertEqual(
+            try outboundQueue.pendingRecords().count,
+            1,
+            "Queue must be preserved when pull fails — stale entries could clobber newer server state"
+        )
+
+        // 5) Nothing reached the transport (no additionalRecords + no drain).
+        let pushed = await transport.pushedRecords
+        XCTAssertTrue(pushed.isEmpty, "No records should be pushed when pull fails and no additionalRecords provided")
+        XCTAssertEqual(count, 0)
+
+        // 6) Pull failure was logged to telemetry.
+        XCTAssertTrue(
+            telemetry.currentEvents.contains { $0.name == "pull_failed" },
+            "Expected pull_failed telemetry event"
+        )
+    }
+
+    /// Complement: caller-provided `additionalRecords` (known-fresh)
+    /// ARE still pushed even when pull fails. This ensures immediate
+    /// user actions reach CloudKit without being stranded by an
+    /// inbound-sync failure.
+    func testSyncCyclePushesAdditionalRecordsEvenWhenPullFails() async throws {
+        let transport = RecordingCloudSyncTransport(shouldThrowOnPull: true)
+        let coordinator = CloudSyncCoordinator(
+            transport: transport,
+            stateStore: FileSyncStateStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+            outboundQueue: outboundQueue,
+            telemetrySink: InMemoryTelemetrySink()
+        )
+
+        // Push a caller-provided record (known-fresh).
+        let freshRecord = CloudSyncRecord(
+            kind: .workout,
+            identifier: "fresh-direct-push",
+            operation: .upsert,
+            payloadJSON: "{}",
+            modifiedAt: .now
+        )
+        let count = try await coordinator.syncCycle(pushing: [freshRecord])
+
+        // The fresh record reached the transport despite pull failure.
+        let pushed = await transport.pushedRecords
+        XCTAssertEqual(pushed.count, 1, "additionalRecords must push even when pull fails")
+        XCTAssertEqual(pushed.first?.identifier, "fresh-direct-push")
+        XCTAssertEqual(count, 1)
+    }
+
     // MARK: - VOL-67 Codex P1 #3: coalesce drained rows before push
 
     /// Multiple mutations of the same workout must collapse to a
@@ -1673,15 +1754,18 @@ private actor RecordingTransportRecorder {
 private final class RecordingCloudSyncTransport: CloudSyncTransport, @unchecked Sendable {
     private let recorder = RecordingTransportRecorder()
     private let shouldThrow: Bool
+    private let shouldThrowOnPull: Bool
     private let pullResultProvider: @Sendable () -> CloudSyncPullResult
 
     init(
         shouldThrow: Bool = false,
+        shouldThrowOnPull: Bool = false,
         pullResult: @Sendable @escaping () -> CloudSyncPullResult = {
             CloudSyncPullResult(changedRecords: [], deletedRecordIDs: [], nextCursor: nil)
         }
     ) {
         self.shouldThrow = shouldThrow
+        self.shouldThrowOnPull = shouldThrowOnPull
         self.pullResultProvider = pullResult
     }
 
@@ -1696,6 +1780,9 @@ private final class RecordingCloudSyncTransport: CloudSyncTransport, @unchecked 
 
     func pullChanges(since cursor: String?) async throws -> CloudSyncPullResult {
         await recorder.recordPull()
+        if shouldThrowOnPull {
+            throw RecordingTransportError.pullFailed
+        }
         return pullResultProvider()
     }
 
@@ -1720,6 +1807,7 @@ private final class RecordingCloudSyncTransport: CloudSyncTransport, @unchecked 
 
 private enum RecordingTransportError: Error {
     case pushFailed
+    case pullFailed
 }
 
 private func XCTAssertThrowsErrorAsync(

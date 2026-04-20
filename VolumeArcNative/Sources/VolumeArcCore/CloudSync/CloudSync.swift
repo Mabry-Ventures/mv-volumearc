@@ -576,7 +576,7 @@ public actor CloudSyncCoordinator {
         // comment below for why we track keys separately from IDs.
         var quarantinedKeys: Set<String> = []
 
-        if let outboundQueue {
+        if let outboundQueue, limit > 0 {
             drainedChanges = try await MainActor.run {
                 try outboundQueue.drain(limit: limit)
             }
@@ -712,29 +712,111 @@ public actor CloudSyncCoordinator {
     public func syncCycle(pushing localRecords: [CloudSyncRecord] = []) async throws -> Int {
         guard transport.isAvailable else { return 0 }
 
-        // 1) Pull remote changes first so the applier can see them before
-        //    any local queue drain runs.
-        let cursor = stateStore.loadCursor()
-        let result = try await transport.pullChanges(since: cursor)
+        // VOL-67 Codex P1 (fixup #35): decouple the push step from
+        // pull TRANSPORT failures so the sync cycle doesn't abort
+        // entirely when pull throws.
+        //
+        // Error-handling contract:
+        //
+        // • Pull failure (transport error): caught and logged. The
+        //   cycle continues to the push step, but the queue is NOT
+        //   drained (`limit: 0`) — only caller-provided
+        //   `additionalRecords` (known-fresh) are sent. Queued
+        //   historical entries stay intact because they haven't been
+        //   reconciled against server state and could clobber newer
+        //   remote data we couldn't see. The queue is drained on
+        //   the next SUCCESSFUL pull/apply cycle, which reconciles
+        //   stale entries via `invalidateEntries` before push runs.
+        //
+        // • Apply failure (local write/invalidation error): NOT
+        //   caught — propagates to the caller, aborting the cycle.
+        //   Pushing without invalidation would send entries the
+        //   applier KNOWS are superseded by what the server sent.
+        //
+        // • Cancellation: re-thrown immediately (cooperative
+        //   cancellation must propagate, not be absorbed).
+        //
+        // Cursor is only saved after a successful apply, so a failed
+        // apply naturally re-pulls the same window next cycle.
+        var pulledCount = 0
+        let pullResult: CloudSyncPullResult?
+        do {
+            // 1) Pull remote changes.
+            let cursor = stateStore.loadCursor()
+            pullResult = try await transport.pullChanges(since: cursor)
+        } catch {
+            // Respect cooperative cancellation: if the thrown error is
+            // already a CancellationError, preserve it. If cancellation
+            // raced with a different transport error (Task.isCancelled
+            // is true but error is e.g. a network failure), throw a
+            // proper CancellationError via checkCancellation() so
+            // callers see the correct error type. Proceeding to push
+            // after cancellation violates structured concurrency.
+            if error is CancellationError {
+                throw error
+            }
+            if Task.isCancelled {
+                try Task.checkCancellation()
+            }
 
-        // 2) Apply remote changes locally on the main actor (SwiftData is
-        //    bound to @MainActor via ModelContext thread affinity). The
-        //    applier also invalidates stale queued entries whose state
-        //    is older than the inbound timestamp.
-        if let payloadApplier {
-            try await payloadApplier.apply(result: result)
+            // Pull transport failure — log but don't block push.
+            // The user's local edits must still reach CloudKit.
+            telemetrySink?.record(TelemetryEvent(
+                category: "sync",
+                name: "pull_failed",
+                severity: .warning,
+                message: "Pull failed: \(error). Push will still attempt.",
+                metadata: [:]
+            ))
+            pullResult = nil
         }
 
-        // 3) Persist the new cursor before pushing so a push failure
-        //    can't force us to re-pull the same window twice.
-        if let nextCursor = result.nextCursor {
-            try? stateStore.saveCursor(nextCursor)
+        // 2) Apply remote changes locally. This step invalidates
+        //    stale queued entries whose state is older than the
+        //    inbound timestamp. If apply throws, propagate — pushing
+        //    without invalidation risks clobbering newer remote state
+        //    (see the detailed rationale above for why this case
+        //    differs from the pull-failure path).
+        if let result = pullResult {
+            if let payloadApplier {
+                try await payloadApplier.apply(result: result)
+            }
+
+            // 3) Persist the new cursor only after successful apply.
+            if let nextCursor = result.nextCursor {
+                try? stateStore.saveCursor(nextCursor)
+            }
+
+            pulledCount = result.changedRecords.count
         }
 
-        // 4) Push any remaining (still-valid) local changes.
-        let pushedCount = try await push(additionalRecords: localRecords)
+        // 4) Push local changes.
+        //
+        // Codex P1 follow-up: when pull failed, DON'T drain the queue.
+        // Queued entries are historical state that hasn't been
+        // reconciled against the server — another device may have
+        // written newer versions that we couldn't see because pull
+        // threw. Draining and pushing those stale entries would
+        // clobber the newer server state.
+        //
+        // Pass `limit: 0` so `push()` skips the drain step entirely
+        // and only sends `additionalRecords` (caller-provided,
+        // known-fresh from the current user action). The queue stays
+        // intact until the next successful pull reconciles it via the
+        // applier's `invalidateEntries`, after which a normal
+        // `push(limit: 50)` drains only the still-valid entries.
+        //
+        // When pull succeeded (and apply ran), the queue has been
+        // reconciled: stale entries were invalidated by the applier.
+        // Safe to drain and push everything.
+        let pushedCount: Int
+        if pullResult != nil {
+            pushedCount = try await push(additionalRecords: localRecords)
+        } else {
+            pushedCount = try await push(limit: 0, additionalRecords: localRecords)
+        }
 
-        return pushedCount + result.changedRecords.count
+        return pushedCount + pulledCount
     }
 
     /// Produce the coalescing key for a queued change. VOL-67 Codex P2
