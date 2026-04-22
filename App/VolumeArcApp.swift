@@ -157,7 +157,20 @@ struct VolumeArcApp: App {
                 )
             }
             let repository = SwiftDataWorkoutRepository(container: container, outboundQueue: outboundQueue)
-            let coachMemoryRepository = SwiftDataCoachMemoryRepository(container: container, outboundQueue: outboundQueue)
+            let coachMemoryRepository = SwiftDataCoachMemoryRepository(
+                container: container,
+                outboundQueue: outboundQueue,
+                telemetrySink: telemetrySink
+            )
+            // VOL-79: one-shot retention sweep at launch to clean up
+            // pre-policy rows on existing installs. Non-blocking so we
+            // don't delay first frame on devices with large coach-memory
+            // backlogs. `try?` because prune failures are already
+            // surfaced to the telemetry sink inside the repository and
+            // MUST NOT surface as a launch crash.
+            Task { @MainActor in
+                try? coachMemoryRepository.pruneLegacyRows()
+            }
             let userProfileRepository = SwiftDataUserProfileRepository(container: container, outboundQueue: outboundQueue)
             let trainingPlanRepository = SwiftDataTrainingPlanRepository(container: container, outboundQueue: outboundQueue)
             let syncApplier = DefaultSyncPayloadApplier(
