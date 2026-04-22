@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: VolumeArc engineering tasks
+    url: https://linear.app/mabry-ventures/team/VOL
+    about: Internal work is tracked in Linear, not GitHub issues.
