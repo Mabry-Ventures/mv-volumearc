@@ -34,6 +34,17 @@ jobs:
       - name: Generate Xcode project
         run: ruby scripts/generate_xcode_project.rb
 
+      - name: Clear stale SPM artifacts
+        # VOL-75 workaround: the self-hosted runner's DerivedData survives between
+        # runs, so partial SPM artifact downloads (e.g., the Sentry XCFramework)
+        # can go stale and cause `error: There is no XCFramework found at ...`
+        # failures that look like code bugs. Nuking the project-specific
+        # DerivedData before every build forces SPM to re-resolve cleanly. Only
+        # touches VolumeArcApple-* so we don't stomp on unrelated workspaces
+        # that share the runner.
+        run: |
+          rm -rf "$HOME/Library/Developer/Xcode/DerivedData"/VolumeArcApple-* || true
+
       - name: Build all targets (Debug)
         run: ./scripts/build_all_targets.sh
 
