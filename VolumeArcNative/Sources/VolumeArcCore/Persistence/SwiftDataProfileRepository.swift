@@ -177,13 +177,30 @@ public struct SwiftDataTrainingPlanRepository: Sendable {
 public struct SwiftDataCoachMemoryRepository: Sendable {
     public let container: ModelContainer
     private let outboundQueue: any OutboundSyncQueue
+    private let telemetrySink: (any TelemetrySink)?
 
-    public init(container: ModelContainer, outboundQueue: (any OutboundSyncQueue)? = nil) {
+    // VOL-79: retention policy. `CoachMemoryRecord` rows carry free-form
+    // prompt/response text (potentially PII) and were previously appended
+    // on every coaching turn with no pruning. Enforce both a time-based
+    // TTL AND a size cap — whichever trims more wins on any given append.
+    // `private static let` keeps these values grep-able and easy to tune.
+    private static let retentionDays = 30
+    private static let maxRows = 50
+
+    public init(
+        container: ModelContainer,
+        outboundQueue: (any OutboundSyncQueue)? = nil,
+        telemetrySink: (any TelemetrySink)? = nil
+    ) {
         self.container = container
         self.outboundQueue = outboundQueue ?? NoOpOutboundSyncQueue()
+        self.telemetrySink = telemetrySink
     }
 
-    /// Append a new memory entry.
+    /// Append a new memory entry. Also prunes stale/overflow rows per the
+    /// VOL-79 retention policy. Prune failures don't fail the append —
+    /// they're logged as a telemetry warning so the local write still
+    /// persists even if the sweep errors out.
     @MainActor
     public func append(content: String, theme: String = "") throws {
         let context = ModelContext(container)
@@ -191,6 +208,34 @@ public struct SwiftDataCoachMemoryRepository: Sendable {
         context.insert(record)
         try stageUpsert(for: record, into: context)
         try context.save()
+
+        do {
+            try performRetentionSweep(on: context)
+        } catch {
+            // VOL-79: prune MUST NOT fail the append. The user's newly
+            // appended memory row is already saved; if the sweep errors
+            // we just log and return.
+            telemetrySink?.record(
+                TelemetryEvent(
+                    category: "persistence",
+                    name: "coach.memory.prune.failed",
+                    severity: .warning,
+                    message: "Coach memory retention sweep failed after append",
+                    metadata: ["error": String(describing: error)]
+                )
+            )
+        }
+    }
+
+    /// One-shot retention sweep, typically called at launch to clean up
+    /// pre-policy rows on existing installs. Runs the same logic as the
+    /// post-append prune but independent of any append. Unlike the
+    /// in-append prune this throws on error, letting the caller decide
+    /// whether to log or ignore.
+    @MainActor
+    public func pruneLegacyRows() throws {
+        let context = ModelContext(container)
+        try performRetentionSweep(on: context)
     }
 
     /// Fetch the N most recent memory entries.
@@ -202,6 +247,67 @@ public struct SwiftDataCoachMemoryRepository: Sendable {
         )
         descriptor.fetchLimit = limit
         return try context.fetch(descriptor)
+    }
+
+    /// VOL-79 retention sweep. Fetches all rows sorted by `createdAt`
+    /// descending, keeps the first `maxRows` that are within
+    /// `retentionDays`, and deletes the rest in one batched sweep. Also
+    /// stages outbound delete tombstones so other devices drop the same
+    /// rows once the prune syncs.
+    @MainActor
+    private func performRetentionSweep(on context: ModelContext) throws {
+        let cutoff = Date().addingTimeInterval(-Double(Self.retentionDays) * 86_400)
+        let descriptor = FetchDescriptor<CoachMemoryRecord>(
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+        )
+        let allRecords = try context.fetch(descriptor)
+
+        // Compute the keep set: the first `maxRows` rows that are still
+        // within the TTL. Rows outside the TTL are always pruned, even if
+        // we're under the size cap.
+        var keepCount = 0
+        var rowsToDelete: [CoachMemoryRecord] = []
+        for record in allRecords {
+            if keepCount < Self.maxRows && record.createdAt >= cutoff {
+                keepCount += 1
+            } else {
+                rowsToDelete.append(record)
+            }
+        }
+
+        guard rowsToDelete.isEmpty == false else { return }
+
+        // VOL-67 Codex P1 fixup: tombstone timestamp must be the actual
+        // deletion wall-clock time, not `createdAt`. Applies here too —
+        // see `pruneOlderThan` for the full rationale.
+        let deletedAt = Date()
+        for record in rowsToDelete {
+            let identifier = record.identifier
+            context.delete(record)
+            outboundQueue.stage(
+                into: context,
+                recordType: CloudSyncRecord.Kind.coachMemory.rawValue,
+                recordIdentifier: identifier,
+                operation: CloudSyncRecord.Operation.delete.rawValue,
+                payloadJSON: "",
+                queuedAt: deletedAt
+            )
+        }
+        try context.save()
+
+        telemetrySink?.record(
+            TelemetryEvent(
+                category: "persistence",
+                name: "coach.memory.pruned",
+                severity: .info,
+                message: "Pruned stale coach memory rows per retention policy",
+                metadata: [
+                    "removedCount": String(rowsToDelete.count),
+                    "retentionDays": String(Self.retentionDays),
+                    "maxRows": String(Self.maxRows)
+                ]
+            )
+        )
     }
 
     /// Build a `CoachMemory` projection for the progression engine.

@@ -14,23 +14,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "6CE008FA7A63FF2DDA85B60F"
-               BuildableName = "VolumeArc.app"
-               BlueprintName = "VolumeArcApp"
-               ReferencedContainer = "container:VolumeArcApple.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "NO"
-            buildForProfiling = "NO"
-            buildForArchiving = "NO"
-            buildForAnalyzing = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A4FD9D679CE50DB18A09269E"
-               BuildableName = "VolumeArcAppUITests.xctest"
-               BlueprintName = "VolumeArcAppUITests"
+               BlueprintIdentifier = "8BCBD86980612C93EAF0F48F"
+               BuildableName = "VolumeArcWatchWidgets.appex"
+               BlueprintName = "VolumeArcWatchWidgets"
                ReferencedContainer = "container:VolumeArcApple.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -42,16 +28,6 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES">
       <Testables>
-         <TestableReference
-            skipped = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A4FD9D679CE50DB18A09269E"
-               BuildableName = "VolumeArcAppUITests.xctest"
-               BlueprintName = "VolumeArcAppUITests"
-               ReferencedContainer = "container:VolumeArcApple.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction
