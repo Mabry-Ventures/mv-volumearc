@@ -1,0 +1,15 @@
+# Test-directory-specific overrides.
+#
+# XCTestCase subclasses universally use `var sut: SubjectUnderTest!` (or an
+# equivalent implicitly-unwrapped property) so `setUp` can initialize the
+# subject and `tearDown` can nil it. That pattern fires SwiftLint's opt-in
+# `implicitly_unwrapped_optional` rule across every test file, which is noise
+# for tests specifically — the force-unwrap is a contract, not a bug, and a
+# nil would legitimately fail the test.
+#
+# Also relax `force_unwrapping`: test files deliberately force-unwrap values
+# the test itself set up (fixtures, URL(string:) literals) because a nil in
+# that path means the fixture is wrong, which the test should surface loudly.
+disabled_rules:
+  - implicitly_unwrapped_optional
+  - force_unwrapping
