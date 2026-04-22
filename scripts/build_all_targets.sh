@@ -20,7 +20,7 @@ mkdir -p "$DERIVED_DATA_PATH"
 
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
-  -target "VolumeArcApp" \
+  -scheme "VolumeArcApp" \
   -sdk iphonesimulator \
   -configuration Debug \
   -derivedDataPath "$DERIVED_DATA_PATH" \
@@ -29,7 +29,7 @@ xcodebuild \
 
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
-  -target "VolumeArcWidgets" \
+  -scheme "VolumeArcWidgets" \
   -sdk iphonesimulator \
   -configuration Debug \
   -derivedDataPath "$DERIVED_DATA_PATH" \
@@ -38,7 +38,7 @@ xcodebuild \
 
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
-  -target "VolumeArcWatch" \
+  -scheme "VolumeArcWatch" \
   -sdk watchsimulator \
   -configuration Debug \
   -derivedDataPath "$DERIVED_DATA_PATH" \
@@ -47,7 +47,7 @@ xcodebuild \
 
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
-  -target "VolumeArcWatchWidgets" \
+  -scheme "VolumeArcWatchWidgets" \
   -sdk watchsimulator \
   -configuration Debug \
   -derivedDataPath "$DERIVED_DATA_PATH" \
