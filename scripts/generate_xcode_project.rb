@@ -252,4 +252,21 @@ ui_test_scheme = Xcodeproj::XCScheme.new
 ui_test_scheme.configure_with_targets(app_target, app_ui_tests_target)
 ui_test_scheme.save_as(PROJECT_PATH, 'VolumeArcAppUITests', true)
 
+# VOL-75 P2: per-target schemes so CI can pass `-scheme` (required by
+# `-derivedDataPath`). Without these, `build_all_targets.sh` has to use
+# `-target`, which incompatible with `-derivedDataPath` — forcing shared
+# system DerivedData and the concurrent-build races documented in the
+# runner hygiene umbrella.
+widget_scheme = Xcodeproj::XCScheme.new
+widget_scheme.configure_with_targets(widget_target, nil)
+widget_scheme.save_as(PROJECT_PATH, 'VolumeArcWidgets', true)
+
+watch_scheme = Xcodeproj::XCScheme.new
+watch_scheme.configure_with_targets(watch_target, nil)
+watch_scheme.save_as(PROJECT_PATH, 'VolumeArcWatch', true)
+
+watch_widgets_scheme = Xcodeproj::XCScheme.new
+watch_widgets_scheme.configure_with_targets(watch_widgets_target, nil)
+watch_widgets_scheme.save_as(PROJECT_PATH, 'VolumeArcWatchWidgets', true)
+
 puts "Generated #{PROJECT_PATH}"
