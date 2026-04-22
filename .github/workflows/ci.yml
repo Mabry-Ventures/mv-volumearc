@@ -39,7 +39,14 @@ jobs:
           ruby --version | grep -qE 'ruby (3|4)\.' || { echo "::error::Ruby < 3.0 (EOL)"; exit 1; }
           gem list xcodeproj --installed --version '>= 1.0' >/dev/null || { echo "::error::xcodeproj gem missing"; exit 1; }
           command -v swiftlint >/dev/null || { echo "::error::swiftlint missing on runner"; exit 1; }
-          df -h "$HOME" | awk 'NR==2 { if (int($5) > 85) { print "::error::Disk >85% full"; exit 1 } }'
+          # Absolute-available is more meaningful than percent on shared
+          # runner Macs with big drives; iOS build+test needs ~5GB headroom.
+          avail_gb=$(df -g "$HOME" | awk 'NR==2 {print $4}')
+          if [ "${avail_gb:-0}" -lt 10 ]; then
+            echo "::error::Disk has only ${avail_gb}GB available (need >=10GB)"
+            exit 1
+          fi
+          echo "Disk avail: ${avail_gb}GB"
           echo "Pre-flight OK"
         shell: bash
 
