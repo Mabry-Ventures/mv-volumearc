@@ -27,8 +27,10 @@ When you change the **implementation status** of a system (a stub becomes real, 
 - Enum display labels live in `VolumeArcNative/Sources/VolumeArcUI/LocalizedLabels.swift`, not inline in views.
 - Every visual property comes from `VA.Colors`, `VA.Typography`, `VA.Space`, `VA.Radius`, or `VA.Shadow` — never hardcode.
 - Every haptic goes through `VAHaptics.*`.
-- Main is protected: every merge requires green CI (build + unit/integration tests + UI smoke tests + SwiftLint + release validation) plus the two-bot AI review gate (Gemini + Codex).
+- Main is protected: every merge requires green CI (build + unit/integration tests + UI smoke tests + SwiftLint + release validation) plus the two-bot AI review gate (CodeRabbit Pro primary + Codex Code Review secondary).
 
-## Known launch blockers (post-95/95 audit)
+## Production-readiness status
 
-The project is **not** production-ready as of 2026-04-14. An independent audit found multiple systems with broken end-to-end wiring (empty migration plan, missing Info.plist keys, unreachable onboarding/paywall, dead feature flags). See [the launch-blocker section in `docs/PLATFORM.md`](docs/PLATFORM.md#implementation-status) and the active **VOL-54 through VOL-69** tickets in Linear before describing any system as "shipped" or "production-ready". The 95/95 score from the previous push was wrong — the surface-level audits I ran caught code paths but not end-to-end wiring, and the auditor caught what I missed. Treat the docs as the source of truth, not previous status messages.
+The original post-95/95 launch blockers (VOL-55, 56, 57, 58, 59, 62, 63, 65, 67) shipped in PRs [#23](https://github.com/Mabry-Ventures/mv-volumearc/pull/23)–[#31](https://github.com/Mabry-Ventures/mv-volumearc/pull/31) between 2026-04-14 and 2026-04-20. The app is **not yet production-ready**, but the open items are now hygiene and hardening rather than broken wiring. Current open work is tracked in the Linear **"Go-Live Readiness"** project on the VolumeArc team; consult that project before describing any system as shipped or production-ready.
+
+When in doubt, read [`docs/PLATFORM.md`](docs/PLATFORM.md) — it is the single source of truth and must be updated in the same PR as any status-changing code change. Past "production-ready" claims based on surface-level audits were wrong; treat the docs and Linear project as the only authoritative signal.
