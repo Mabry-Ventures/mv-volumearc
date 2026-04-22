@@ -19,15 +19,37 @@ for path in \
   }
 done
 
+# VOL-73: every target must ship a well-formed PrivacyInfo.xcprivacy
+# with at minimum a non-empty NSPrivacyAccessedAPITypes array (even
+# widget extensions touch UserDefaults via the shared app-group
+# snapshot, so every target has at least one declared reason).
+# Apple rejects submissions on missing or malformed manifests, so this
+# check is hard-failing.
 for path in \
   "App/PrivacyInfo.xcprivacy" \
   "Watch/PrivacyInfo.xcprivacy" \
   "WatchWidgets/PrivacyInfo.xcprivacy" \
   "Widgets/PrivacyInfo.xcprivacy"; do
   [[ -f "$path" ]] || {
-    echo "Missing required privacy manifest: $path" >&2
+    echo "FAIL: Missing required privacy manifest: $path" >&2
     exit 1
   }
+  if ! plutil -lint "$path" >/dev/null; then
+    echo "FAIL: $path is not a valid plist" >&2
+    exit 1
+  fi
+  api_count="$(plutil -extract NSPrivacyAccessedAPITypes raw -o - "$path" 2>/dev/null || echo "")"
+  if [[ -z "$api_count" || "$api_count" -lt 1 ]]; then
+    echo "FAIL: $path missing or empty NSPrivacyAccessedAPITypes" >&2
+    exit 1
+  fi
+  # NSPrivacyCollectedDataTypes must exist (may be an empty array for
+  # passive extensions like widgets) so App Store Connect doesn't
+  # reject on a missing key. plutil returns the array count on success.
+  if ! plutil -extract NSPrivacyCollectedDataTypes raw -o - "$path" >/dev/null 2>&1; then
+    echo "FAIL: $path missing NSPrivacyCollectedDataTypes key" >&2
+    exit 1
+  fi
 done
 
 if ! grep -q "aps-environment" "App/VolumeArc.entitlements"; then
