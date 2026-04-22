@@ -1,15 +1,21 @@
 # Test-directory-specific overrides.
 #
-# XCTestCase subclasses universally use `var sut: SubjectUnderTest!` (or an
-# equivalent implicitly-unwrapped property) so `setUp` can initialize the
-# subject and `tearDown` can nil it. That pattern fires SwiftLint's opt-in
-# `implicitly_unwrapped_optional` rule across every test file, which is noise
-# for tests specifically — the force-unwrap is a contract, not a bug, and a
-# nil would legitimately fail the test.
+# XCTestCase subclasses universally use `var sut: SubjectUnderTest!` so
+# `setUp` can initialize the subject and `tearDown` can nil it. That pattern
+# fires `implicitly_unwrapped_optional` across every test file, which is
+# noise for tests specifically — the force-unwrap is a contract, not a bug.
+# Same for `force_unwrapping`: fixtures and `URL(string:)` literals in tests
+# are intentionally force-unwrapped because a nil means the fixture is wrong,
+# which the test should surface loudly.
 #
-# Also relax `force_unwrapping`: test files deliberately force-unwrap values
-# the test itself set up (fixtures, URL(string:) literals) because a nil in
-# that path means the fixture is wrong, which the test should surface loudly.
+# Length rules (line/type-body/file/function) are also relaxed here. Test
+# classes grow large because they exercise many scenarios; test cases often
+# have long assertion blocks with inline expected values. Code review should
+# catch truly unreadable tests, not a mechanical length gate.
 disabled_rules:
   - implicitly_unwrapped_optional
   - force_unwrapping
+  - line_length
+  - type_body_length
+  - file_length
+  - function_body_length
