@@ -1,9 +1,55 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
+require 'digest'
 require 'fileutils'
 require 'pathname'
 require 'xcodeproj'
+
+# VOL-95: make `ruby scripts/generate_xcode_project.rb` byte-identical
+# between runs so we stop fighting UUID churn in PR merges.
+#
+# The xcodeproj gem allocates random UUIDs via `SecureRandom.hex(12)` on
+# every object creation. Without intervention, every regen thrashes all
+# 500+ pbxproj object UUIDs (and every scheme's `BlueprintIdentifier`),
+# which makes merges an O(n) game of whack-a-mole.
+#
+# The gem ships a built-in `predictabilize_uuids` method that rewrites
+# every UUID to `Digest::MD5.hexdigest(object_graph_path)` right before
+# serialization. That's already the "hash stable attributes into a
+# deterministic UUID" scheme the task asks for -- the gem's version is
+# battle-tested by CocoaPods, covers every object type the gem knows
+# about (so we don't have to enumerate PBXSourcesBuildPhase etc.), and
+# is maintained upstream.
+#
+# Two pieces of finesse are required to make it actually produce
+# byte-identical output:
+#
+# 1. The gem's default MD5 output is 32 chars; real Xcode UUIDs are 24.
+#    We truncate to 24 so the pbxproj looks like something Xcode could
+#    have written (~96 bits of entropy, collision risk trivially zero
+#    for a project with ~500 objects). This keeps diffs legible if a
+#    human ever has to open the pbxproj by hand.
+#
+# 2. `predictabilize_uuids` computes object-graph paths using
+#    `remote_global_id_string` fields, which reference other objects by
+#    UUID. On the first pass those references are still the original
+#    random UUIDs, so the computed paths (and therefore the new UUIDs)
+#    still carry randomness. A second pass re-normalizes with the now
+#    deterministic references, converging to a fixed point. We hardcode
+#    two passes rather than looping because the first-pass/second-pass
+#    invariant is easy to reason about and the cost is negligible.
+module Xcodeproj
+  class Project
+    class UUIDGenerator
+      # Truncate MD5 digest to 24 chars so generated pbxproj UUIDs match
+      # Xcode's own 12-byte convention. Overrides the gem default of 32.
+      def uuid_for_path(path)
+        Digest::MD5.hexdigest(path).upcase[0, 24]
+      end
+    end
+  end
+end
 
 ROOT = Pathname.new(__dir__).join('..').expand_path
 PACKAGE_ROOT = ROOT.join('VolumeArcNative').expand_path
@@ -237,7 +283,12 @@ add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
 # Pinned to exact version per VOL-86: crash-reporting SDK must not silently
 # auto-upgrade. Dependabot (VOL-78) surfaces bumps as explicit PRs.
 sentry_url = 'https://github.com/getsentry/sentry-cocoa.git'
-sentry_requirement = { kind: 'exactVersion', version: '8.58.1' }
+# VOL-95: string keys (not symbols). `predictabilize_uuids` walks every
+# object's tree hash and concatenates keys; on a Hash with Symbol keys
+# it raises "no implicit conversion of Symbol into String" deep inside
+# the gem's `tree_hash_to_path`. Stick to strings so deterministic UUID
+# rewriting can traverse this attribute.
+sentry_requirement = { 'kind' => 'exactVersion', 'version' => '8.58.1' }
 sentry_ref = project.root_object.package_references.find { |r| r.repositoryURL == sentry_url }
 unless sentry_ref
   sentry_ref = project.new(Xcodeproj::Project::Object::XCRemoteSwiftPackageReference)
@@ -266,6 +317,16 @@ project.targets.each do |target|
     'CreatedOnToolsVersion' => '26.4',
   }
 end
+
+# VOL-95: two passes are required. Pass 1 rewrites most UUIDs from
+# graph-path MD5 hashes, but objects that reference other objects by
+# UUID string (e.g. `PBXContainerItemProxy.remote_global_id_string`)
+# still carry the old random references in their tree-hash paths. Pass
+# 2 runs against the now-deterministic references and converges. Must
+# run before `project.save` and before scheme generation so schemes
+# pick up the final, deterministic target UUIDs as BlueprintIdentifier.
+project.predictabilize_uuids
+project.predictabilize_uuids
 
 project.save
 app_scheme = Xcodeproj::XCScheme.new

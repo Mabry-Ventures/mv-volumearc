@@ -64,6 +64,15 @@ jobs:
       - name: Generate Xcode project
         run: ruby scripts/generate_xcode_project.rb
 
+<<<<<<< HEAD
+      - name: Xcode project determinism gate
+        # VOL-95: regenerate twice and fail if the output diverges. Without
+        # this, xcodeproj's random SecureRandom UUIDs would thrash every
+        # object's identifier on each regen, making merges a game of
+        # whack-a-mole. Runs before builds/tests so a regression fails
+        # fast instead of wasting 20+ minutes of runner time.
+        run: ./scripts/test_xcode_project_determinism.sh
+=======
       - name: Seed SPM lockfile into workspace
         # VOL-90: the canonical `Package.resolved` lives at repo root
         # because the `.xcworkspace/` dir is gitignored (rebuilt by
@@ -76,6 +85,7 @@ jobs:
         run: |
           mkdir -p VolumeArcApple.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
           cp Package.resolved VolumeArcApple.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+>>>>>>> origin/main
 
       - name: Clear stale system DerivedData
         # Belt-and-suspenders: scripts now use per-job DerivedData via
