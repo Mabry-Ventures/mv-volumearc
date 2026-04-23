@@ -67,7 +67,7 @@ configure_target(app_target, bundle_id: 'com.mabryventures.VolumeArc', extra: {
   'PRODUCT_NAME' => 'VolumeArc',
   'TARGETED_DEVICE_FAMILY' => '1,2',
   'INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents' => 'YES',
-  'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc reads your workout and recovery data to personalize progression, readiness, and session planning.',
+  'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc reads your completed workouts from Apple Health to show your training history and calculate readiness.',
   'INFOPLIST_KEY_NSHealthUpdateUsageDescription' => 'VolumeArc writes completed workouts so your training history stays in sync with Apple Health.',
   'INFOPLIST_KEY_NSMicrophoneUsageDescription' => 'VolumeArc uses the microphone for voice coaching requests and voice workout logging.',
   'INFOPLIST_KEY_NSSpeechRecognitionUsageDescription' => 'VolumeArc uses speech recognition to understand live coaching requests and voice workout notes.',
@@ -107,7 +107,7 @@ configure_target(watch_target, bundle_id: 'com.mabryventures.VolumeArc.watchkita
   'INFOPLIST_KEY_WKApplication' => 'YES',
   'INFOPLIST_KEY_WKCompanionAppBundleIdentifier' => 'com.mabryventures.VolumeArc',
   'INFOPLIST_KEY_UISupportedInterfaceOrientations' => 'UIInterfaceOrientationPortrait',
-  'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc uses HealthKit on Apple Watch to run live workout sessions and keep your training history accurate.',
+  'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc reads workouts, heart rate, and active energy on Apple Watch so live strength sessions save with accurate training history, heart-rate charts, and calorie totals.',
   'INFOPLIST_KEY_NSHealthUpdateUsageDescription' => 'VolumeArc writes completed watch workouts to Apple Health.',
   'CODE_SIGN_ENTITLEMENTS' => 'Watch/VolumeArcWatch.entitlements',
 })
@@ -234,15 +234,17 @@ add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
 ])
 
 # Sentry Swift Package dependency
+# Pinned to exact version per VOL-86: crash-reporting SDK must not silently
+# auto-upgrade. Dependabot (VOL-78) surfaces bumps as explicit PRs.
 sentry_url = 'https://github.com/getsentry/sentry-cocoa.git'
-sentry_requirement = { kind: 'upToNextMajorVersion', minimumVersion: '8.0.0' }
+sentry_requirement = { kind: 'exactVersion', version: '8.58.1' }
 sentry_ref = project.root_object.package_references.find { |r| r.repositoryURL == sentry_url }
 unless sentry_ref
   sentry_ref = project.new(Xcodeproj::Project::Object::XCRemoteSwiftPackageReference)
   sentry_ref.repositoryURL = sentry_url
-  sentry_ref.requirement = sentry_requirement
   project.root_object.package_references << sentry_ref
 end
+sentry_ref.requirement = sentry_requirement
 sentry_dep = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
 sentry_dep.package = sentry_ref
 sentry_dep.product_name = 'Sentry'
