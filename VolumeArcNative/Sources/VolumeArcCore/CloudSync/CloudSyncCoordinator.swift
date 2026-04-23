@@ -20,32 +20,41 @@ public actor CloudSyncCoordinator {
     private let outboundQueue: (any OutboundSyncQueue)?
     private let telemetrySink: (any TelemetrySink)?
     private let payloadApplier: DefaultSyncPayloadApplier?
+    // VOL-61: the `.cloudSync` flag gates the `syncCycle` entry point. When
+    // off, `syncCycle` becomes a no-op early-exit — the transport and
+    // outbound queue stay alive so flipping the flag back on resumes sync
+    // on the next cycle without re-bootstrap.
+    private let flagGate: FlagGateTelemetry?
 
     public init(
         transport: CloudSyncTransport,
         payloadApplier: DefaultSyncPayloadApplier,
         stateStore: FileSyncStateStore,
         outboundQueue: (any OutboundSyncQueue)? = nil,
-        telemetrySink: (any TelemetrySink)? = nil
+        telemetrySink: (any TelemetrySink)? = nil,
+        flagGate: FlagGateTelemetry? = nil
     ) {
         self.transport = transport
         self.payloadApplier = payloadApplier
         self.stateStore = stateStore
         self.outboundQueue = outboundQueue
         self.telemetrySink = telemetrySink
+        self.flagGate = flagGate
     }
 
     public init(
         transport: CloudSyncTransport,
         stateStore: FileSyncStateStore,
         outboundQueue: (any OutboundSyncQueue)? = nil,
-        telemetrySink: (any TelemetrySink)? = nil
+        telemetrySink: (any TelemetrySink)? = nil,
+        flagGate: FlagGateTelemetry? = nil
     ) {
         self.transport = transport
         self.stateStore = stateStore
         self.outboundQueue = outboundQueue
         self.telemetrySink = telemetrySink
         self.payloadApplier = nil
+        self.flagGate = flagGate
     }
 
     /// Whether the transport is capable of syncing.
@@ -217,6 +226,15 @@ public actor CloudSyncCoordinator {
     /// methods and `applyDeletion`), so the subsequent push step doesn't
     /// emit stale writes in the first place.
     public func syncCycle(pushing localRecords: [CloudSyncRecord] = []) async throws -> Int {
+        // VOL-61: early-exit when the `.cloudSync` feature flag is off. We
+        // do NOT tear down the transport or outbound queue — callers can
+        // flip the flag back on at runtime and the next `syncCycle` will
+        // resume without re-bootstrap. Local writes continue to enqueue
+        // into `outboundQueue`; when sync is re-enabled the backlog drains
+        // on the next successful pull/apply/push cycle.
+        if let flagGate, flagGate.recordIfFirst(.cloudSync) == false {
+            return 0
+        }
         guard transport.isAvailable else { return 0 }
 
         // VOL-67 Codex P1 (fixup #35): decouple the push step from
