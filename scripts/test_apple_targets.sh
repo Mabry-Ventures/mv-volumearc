@@ -18,21 +18,24 @@ ruby "scripts/generate_xcode_project.rb"
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT/.build/derived-data}"
 mkdir -p "$DERIVED_DATA_PATH"
 
-# VOL-57/59 fixup: the self-hosted runner keeps running into
-# "Application failed preflight checks / Busy" when launching the
-# XCUITest runner app. Stale simulator state from a previous CI run
-# leaves SBMainWorkspace rejecting the next launch. `shutdown all` +
-# `erase all` wipes installed apps and data so xcodebuild boots a
-# pristine device. Safe on developer machines — only affects simulators.
-# `xcrun` is invoked directly so `xcode-select` PATH settles on runners
-# without DEVELOPER_DIR pointing at Xcode.app at script entry.
-reset_simulators() {
-  xcrun simctl shutdown all 2>/dev/null || true
-  xcrun simctl erase all 2>/dev/null || true
+# VOL-75 P2: the previous `shutdown all` + `erase all` was destructive at
+# system scope — when two CI jobs ran concurrently on the same Mac
+# (multiple runner instances share the simulator fleet), one job's reset
+# would kill the other job's in-progress test with "Process spawn via
+# launchd failed: Operation canceled." Replaced with a surgical uninstall
+# of our app bundles from whatever simulator xcodebuild brings up;
+# xcodebuild itself owns simulator lifecycle per run.
+reset_app_state() {
+  while read -r device_id; do
+    [[ -z "$device_id" ]] && continue
+    xcrun simctl uninstall "$device_id" com.mabryventures.VolumeArc 2>/dev/null || true
+    xcrun simctl uninstall "$device_id" com.mabryventures.VolumeArc.tests 2>/dev/null || true
+    xcrun simctl uninstall "$device_id" com.mabryventures.VolumeArc.uitests 2>/dev/null || true
+  done < <(xcrun simctl list devices booted 2>/dev/null | grep -oE '[0-9A-F-]{36}' || true)
 }
 
 # Unit tests
-reset_simulators
+reset_app_state
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
   -scheme "VolumeArcAppTests" \
@@ -44,7 +47,7 @@ xcodebuild \
   test
 
 # XCUITests (journey coverage)
-reset_simulators
+reset_app_state
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
   -scheme "VolumeArcAppUITests" \
