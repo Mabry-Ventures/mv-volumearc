@@ -17,6 +17,19 @@ enum VolumeArcSentryConfiguration {
             options.tracesSampleRate = 0.2
             options.attachScreenshot = false
             options.enableMetricKit = true
+            // VOL-72: strip email/phone/device-identifier/session-token
+            // patterns from crash events and breadcrumbs before they
+            // leave the device. Also drops breadcrumbs from the
+            // user-input / coach.memory categories entirely and nils
+            // Sentry's structured user fields (email/username/ipAddress).
+            // Pure functions in `SentryPIIScrubber` so they're unit-testable
+            // without a live Sentry; see `VolumeArcSentryPIIScrubberTests`.
+            options.beforeSend = { event in
+                SentryPIIScrubber.scrub(event: event)
+            }
+            options.beforeBreadcrumb = { crumb in
+                SentryPIIScrubber.scrub(breadcrumb: crumb)
+            }
             #if DEBUG
             options.debug = true
             options.environment = "development"
