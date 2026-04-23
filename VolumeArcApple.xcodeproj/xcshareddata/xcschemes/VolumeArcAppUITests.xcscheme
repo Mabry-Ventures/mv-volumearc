@@ -14,7 +14,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "837EBC67BD378F6776B1D8DB"
+               BlueprintIdentifier = "D81B0339A78B384308CE4E5A"
                BuildableName = "VolumeArc.app"
                BlueprintName = "VolumeArcApp"
                ReferencedContainer = "container:VolumeArcApple.xcodeproj">
@@ -28,7 +28,7 @@
             buildForAnalyzing = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A71C62DC0D03B6A053A48CB3"
+               BlueprintIdentifier = "88AFEE0E53C368AA006DA82D"
                BuildableName = "VolumeArcAppUITests.xctest"
                BlueprintName = "VolumeArcAppUITests"
                ReferencedContainer = "container:VolumeArcApple.xcodeproj">
@@ -46,7 +46,7 @@
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A71C62DC0D03B6A053A48CB3"
+               BlueprintIdentifier = "88AFEE0E53C368AA006DA82D"
                BuildableName = "VolumeArcAppUITests.xctest"
                BlueprintName = "VolumeArcAppUITests"
                ReferencedContainer = "container:VolumeArcApple.xcodeproj">
