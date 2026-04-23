@@ -2,10 +2,28 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSPrivacyCollectedDataTypes</key>
+	<!--
+		VolumeArc iOS app (com.mabryventures.VolumeArc) privacy manifest.
+		VOL-73: required-reason API coverage + collected data types.
+
+		Required-reason APIs declared below cover first-party code only.
+		Bundled frameworks (Sentry) ship their own PrivacyInfo.xcprivacy
+		inside the XCFramework; Apple merges those at submission time, so
+		we intentionally do NOT redeclare Sentry's SystemBootTime /
+		FileTimestamp reasons here.
+	-->
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
 	<array/>
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
+		<!--
+			UserDefaults: telemetry rolling buffer (UserDefaultsTelemetrySink),
+			watch connectivity state, feature flags, runtime flags, onboarding
+			progress, outbound queue backfill markers, AI relay device ID
+			fallback. All first-party app-functionality reads/writes.
+		-->
 		<dict>
 			<key>NSPrivacyAccessedAPIType</key>
 			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
@@ -14,18 +32,65 @@
 				<string>CA92.1</string>
 			</array>
 		</dict>
+	</array>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array>
+		<!--
+			HealthKit data: workouts, heart rate, active energy. Read and
+			written only to deliver personalized coaching and keep the
+			user's Apple Health training history accurate. Never sent off
+			device by VolumeArc (HealthKit is sandboxed to Apple Health).
+		-->
 		<dict>
-			<key>NSPrivacyAccessedAPIType</key>
-			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
-			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeHealthAndFitness</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
 			<array>
-				<string>C617.1</string>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!--
+			Audio (microphone) data: voice coaching requests and voice
+			workout notes. Captured on-device via AVAudioApplication and
+			processed via SFSpeechRecognizer. App functionality only.
+		-->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeAudioData</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!--
+			User content: coach-memory entries (free-form text the user
+			supplies to personalize coaching cues) and workout notes.
+			Stored locally in SwiftData and synced via the user's private
+			CloudKit database (NSPrivacyCollectedDataTypeLinked = false
+			because VolumeArc has no user-identifying server-side account
+			system; CloudKit binds the data to the device iCloud identity,
+			not to a VolumeArc-owned account).
+		-->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
 	</array>
-	<key>NSPrivacyTracking</key>
-	<false/>
-	<key>NSPrivacyTrackingDomains</key>
-	<array/>
 </dict>
 </plist>
