@@ -30,9 +30,10 @@ This is the granular per-feature checklist. For high-level system status, see [`
 | Feature | Status | Notes |
 |---------|--------|-------|
 | AI provider chain (Foundation Models → Relay → Local) | ✅ | Runtime factory selects the three-provider chain with graceful fallback. |
-| `OpenAIRelayCoachProvider` | ✅ | Real HTTP relay-backed coach provider in production use. |
-| `LocalHeuristicAICoachProvider` | ✅ | Real rule-based offline fallback grounded in readiness and recent-session context. |
-| `FoundationModelCoachProvider` | ✅ | On-device provider is wired and falls back cleanly when unavailable or failing. |
+| `OpenAIRelayCoachProvider` | ✅ | Real HTTP relay-backed coach provider in production use. Routes outbound prompts through `CoachPromptTemplate.render(...)`. |
+| `LocalHeuristicAICoachProvider` | ✅ | Real rule-based offline fallback grounded in readiness and recent-session context. Dispatches against the templated prompt so its intent classification stays in lockstep with the cloud path. |
+| `FoundationModelCoachProvider` | ✅ | On-device provider is wired and falls back cleanly when unavailable or failing. Hands the on-device session the same templated prompt the relay sees. |
+| `CoachPromptTemplate` adoption | ✅ | Single `render(intent:contextBlock:question:style:)` entry point. System prompt + per-intent envelope + structured context block + template marker land in every outbound prompt across all three providers. Verified by `VolumeArcCoachPromptTemplateTests`. |
 | Voice transport | ✅ | `OpenAIRelayVoiceTransport` is live for single-turn voice → text → spoken response. Live duplex/WebRTC audio remains future work. |
 | Coach memory | ✅ | `CoachMemoryRepository` persists recent context and is appended during coaching turns. |
 | Streaming response UX | 🚧 [VOL-66](https://linear.app/mabry-ventures/issue/VOL-66) | `AsyncThrowingStream` plumbing exists, but the default implementation is synthetic word-chunking (call non-streaming endpoint, sleep 30ms between words). No real progressive streaming from the relay. |
