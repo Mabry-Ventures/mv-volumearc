@@ -1,0 +1,120 @@
+# AI Coach Eval Harness (VOL-100)
+
+Regression protection for the AI coach's prompt quality. Two layers:
+
+| Layer | Where | When it runs | What it catches |
+|-------|-------|--------------|-----------------|
+| Template-layer (hermetic) | `Tests/VolumeArcAppTests/Evals/CoachEvalTests.swift` | Every PR via `scripts/test_apple_targets.sh` | Any regression that bypasses `CoachPromptTemplate.render`, drops the template marker, changes intent envelopes, strips the system prompt persona, or mutates the renderer's determinism. No network, no model call, no Gemini budget burned. |
+| Response-layer (manual / nightly) | `scripts/run_coach_evals.sh` | On-demand + nightly workflow (follow-up) | Drift in the actual model output — sentence budget, numeric grounding, banned phrases, pain-signal flagging, next-exercise anchoring. Requires `VOLUMEARC_RELAY_SIGNING_KEY`. |
+
+Fixtures are the single source of truth for both layers. They live at `Tests/Evals/CoachEvalFixtures/*.json`, get bundled into the iOS test target as a folder reference, and are read directly off disk by the shell script.
+
+## Methodology
+
+The coach prompt has four axes that matter for quality:
+
+- **Readiness** — the numeric recovery signal the model leans on. Fixtures cover 45, 60, 72, 82, 88 to exercise the low / moderate / borderline / ready / peak branches.
+- **Intent** — the `CoachIntent` classification that selects the per-intent envelope. Fixtures cover all six: `progression`, `deload`, `form`, `recovery`, `substitution`, `free`.
+- **Session history depth** — whether the athlete has 0 (cold start), 1 (single data point), or 5+ (established pattern) recent sessions. Three tiers because the product UI surfaces them differently.
+- **Coaching style** — `motivational`, `analytical`, `minimal`. These map to the `CoachingStyle` enum in `VolumeArcCore`; the task-spec names ("motivational / precise / playful") correspond in spirit but the implementation uses the enum values. A rename is out of scope for this ticket.
+
+Not every cell of the 5 × 6 × 3 × 3 = 270 matrix is covered. 20 fixtures were hand-picked so (a) every value on every axis appears at least twice, (b) the pain-signal, cold-start, sparse-history, and numeric-grounding edge cases all have a fixture, and (c) fixture IDs remain stable across runs so diffs are tractable.
+
+### Template-layer assertions (always on)
+
+Each fixture gets fed through `CoachPromptTemplate.render(intent:contextBlock:question:style:)` and checked for:
+
+1. Template marker (`[VAC:tmpl]`) present — any provider that bypasses the template drops this.
+2. Intent + style declared in the `intent=... style=...` header.
+3. System prompt preamble present ("VolumeArc's strength coach").
+4. Persona fragment matches the style (`High-energy` for motivational, `Data-driven` for analytical, `Short and direct` for minimal).
+5. Context block preserved verbatim.
+6. Question embedded verbatim.
+7. Per-intent envelope fragment present (e.g. `"pushing load or volume"` for progression).
+8. Renderer determinism — same inputs produce byte-identical output.
+
+A coverage sweep also asserts that every `CoachIntent`, every `CoachingStyle`, every readiness bucket from `{45, 60, 72, 82, 88}`, and every session-history tier from `{0, 1, 5+}` still has at least one fixture. If a future edit trims the suite below the coverage floor, the test fails loudly.
+
+### Response-layer assertions (manual / nightly)
+
+`scripts/run_coach_evals.sh` POSTs each fixture to the live relay at `https://volumearc-ai-relay.jared-b6b.workers.dev/v1/coach` using the same HMAC signing scheme the iOS app uses (`VolumeArcRelaySessionProvider.authorizationHeaderValue`). Responses arrive as `text/event-stream` frames, get joined, and then checked against the fixture's `expectedAssertions`:
+
+- `maxSentences` — hard upper bound on sentence count (with a +1 tokenizer grace).
+- `mustContainNumericContext` — the response cites at least one number.
+- `mustMentionReadinessOrRPE` — cites the grounded signal.
+- `mustNotMention` — list of banned phrases (pain platitudes, max-out language, 1RM references).
+- `toneHint` — informational; not asserted today but surfaced in the run log for human review.
+- `mustAnchorOnNextExercise` — the response references the next-up exercise's primary movement pattern. The script extracts the last word from the `Next up:` line in the fixture context (e.g. `"Back Squat"` → `"squat"`) and does a case-insensitive substring match.
+- `mustFlagPainSignal` — the response acknowledges pain or injury hedging language for fixtures where the question carries an injury signal.
+
+Assertions are intentionally SHAPE checks, not string-equality checks. Models are non-deterministic; we assert that the response is in the right shape, not that it matches a pinned golden string.
+
+## Running the harness
+
+### Template layer (hermetic)
+
+Included in the default iOS test run:
+
+```bash
+./scripts/test_apple_targets.sh
+```
+
+The `CoachEvalTests` class runs as part of `VolumeArcAppTests`. Failure surfaces the fixture ID and the specific invariant that broke.
+
+### Response layer (manual)
+
+```bash
+export VOLUMEARC_RELAY_SIGNING_KEY="<same key the iOS app uses>"
+# Optional:
+#   export VOLUMEARC_EVAL_DEVICE_ID="coach-eval-harness"  # default
+#   export VOLUMEARC_RELAY_BASE_URL="https://volumearc-ai-relay.jared-b6b.workers.dev"  # default
+#   export VOLUMEARC_EVAL_OUTPUT_DIR=".build/coach-evals/manual-run"
+
+./scripts/run_coach_evals.sh
+```
+
+The script writes per-fixture response bodies + a `summary.json` under `$VOLUMEARC_EVAL_OUTPUT_DIR` and exits non-zero on any failure. The machine-readable summary is the artifact the nightly CI workflow will upload once VOL-100's follow-up ticket lands.
+
+## Fixture inventory
+
+| # | ID | Readiness | Intent | Sessions | Style | What it exercises | Last template-run | Last response-run |
+|---|----|-----------|--------|----------|-------|-------------------|-------------------|-------------------|
+| 1 | `progression-ready-5-sessions-motivational` | 82 | progression | 5 | motivational | Clean green-light branch with rich history and motivational tone. | pending | pending |
+| 2 | `progression-peak-5-sessions-analytical` | 88 | progression | 5 | analytical | Peak readiness + advanced athlete; model must cite bar speed / RPE trend. | pending | pending |
+| 3 | `progression-moderate-1-session-motivational` | 72 | progression | 1 | motivational | Borderline push decision with thin history — the nuanced branch. | pending | pending |
+| 4 | `deload-low-5-sessions-analytical` | 45 | deload | 5 | analytical | Clear deload case; analytical tone must cite the RPE trend explicitly. | pending | pending |
+| 5 | `deload-moderate-5-sessions-minimal` | 60 | deload | 5 | minimal | Borderline deload + tightest sentence budget (minimal style). | pending | pending |
+| 6 | `deload-borderline-1-session-motivational` | 72 | deload | 1 | motivational | Sparse-history deload question; model must not over-recommend. | pending | pending |
+| 7 | `form-ready-5-sessions-analytical` | 82 | form | 5 | analytical | Form question with rich history — cue specificity matters. | pending | pending |
+| 8 | `form-moderate-empty-minimal` | 60 | form | 0 | minimal | Cold-start form question; must not pretend to have session data. | pending | pending |
+| 9 | `form-low-1-session-motivational` | 45 | form | 1 | motivational | Pain-signal guardrail — must not recommend pushing through pain. | pending | pending |
+| 10 | `recovery-low-5-sessions-motivational` | 45 | recovery | 5 | motivational | Low readiness + accumulated fatigue; motivational tone must not override safety. | pending | pending |
+| 11 | `recovery-moderate-1-session-analytical` | 60 | recovery | 1 | analytical | Moderate readiness with thin data; conservative read expected. | pending | pending |
+| 12 | `recovery-peak-5-sessions-minimal` | 88 | recovery | 5 | minimal | Clean green-light readiness in tightest form. | pending | pending |
+| 13 | `recovery-moderate-empty-motivational` | 72 | recovery | 0 | motivational | New user cold start — readiness exists but no history to cite. | pending | pending |
+| 14 | `substitution-ready-1-session-motivational` | 82 | substitution | 1 | motivational | Substitution anchored on next-up exercise (bench press). | pending | pending |
+| 15 | `substitution-moderate-5-sessions-minimal` | 60 | substitution | 5 | minimal | Minimal-style substitution — terse alternate without padding. | pending | pending |
+| 16 | `substitution-low-empty-analytical` | 45 | substitution | 0 | analytical | Hardest substitution case: pain signal + cold start + low readiness. | pending | pending |
+| 17 | `free-peak-empty-motivational` | 88 | free | 0 | motivational | Cold-start free-form question on a new user's first day. | pending | pending |
+| 18 | `free-moderate-1-session-analytical` | 72 | free | 1 | analytical | Open-ended strategic question with partial history; must avoid generic advice. | pending | pending |
+| 19 | `free-ready-5-sessions-minimal` | 82 | free | 5 | minimal | Dense context + minimal style — model must not dump context back. | pending | pending |
+| 20 | `free-low-empty-analytical` | 45 | free | 0 | analytical | Worst-case cold start: low readiness, no history, free question. | pending | pending |
+
+The `Last template-run` and `Last response-run` columns are hand-updated when you run the harness. The template-layer column flips to `PASS` on every green CI run against the branch. The response-layer column is only updated after a manual or nightly `scripts/run_coach_evals.sh` invocation — the summary JSON under `$VOLUMEARC_EVAL_OUTPUT_DIR/summary.json` is the machine-readable source of truth for that column.
+
+## Adding a new fixture
+
+1. Copy an existing fixture as a template and change the `id`. The ID must be kebab-case, lowercase, no spaces — the ID-stability test enforces this.
+2. Fill in `intent`, `question`, `contextBlock`, `style`, and a meaningful `expectedAssertions` block. Every field under `expectedAssertions` is optional — omit what you don't care about, but keep `mustNotMention` populated with at least the banned phrases the system prompt bans (`max out`, `1RM`, `push through`).
+3. Add a row to the inventory table above with the scenario matrix values and a one-line "what it exercises" note.
+4. Run `./scripts/test_apple_targets.sh` — the axis-coverage test will tell you if the new fixture violates a matrix invariant (e.g., adding a fixture with a brand-new readiness score that no other fixture covers is fine; removing the last fixture at readiness 45 is not).
+
+## Why fixtures live at `Tests/Evals/` not `Tests/VolumeArcAppTests/Evals/`
+
+One directory feeds two consumers. The XCTest bundle reads them as a bundled folder reference (`Bundle(for:).url(forResource: "CoachEvalFixtures")`), and `scripts/run_coach_evals.sh` reads them directly from the repo. A top-level `Tests/Evals/` location keeps them out of the platform-specific test bundle path without orphaning them from the rest of the Tests tree. The Xcode project generator wires the folder in as a test-target resource so changes to the fixtures are always part of the build graph.
+
+## Future work
+
+- **Nightly CI** — wire `scripts/run_coach_evals.sh` into a scheduled workflow that uploads `summary.json` + per-fixture response bodies to the workflow artifacts. Open as a follow-up ticket after VOL-100 lands.
+- **Response-quality golden replay** — record a reference response per fixture once the prompt is locked, run a semantic-similarity check against it on each nightly run, and flag drift above a threshold. Needs a cheap embedding pipeline that doesn't round-trip to Gemini.
+- **Multi-tier evals** — the current suite hits only the `flash-lite` tier. Add a flag to the shell script to run the same fixtures against `pro` so pricing-model-budget trade-offs are visible.

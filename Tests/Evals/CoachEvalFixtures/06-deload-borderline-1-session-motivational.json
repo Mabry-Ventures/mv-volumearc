@@ -1,0 +1,15 @@
+{
+  "id": "deload-borderline-1-session-motivational",
+  "intent": "deload",
+  "question": "Do I need an easier week after that last session?",
+  "contextBlock": "## Training context\n- Athlete: Alex (beginner)\n- Readiness: 72/100 — Recovery looks okay despite soreness.\n- Next up: Romanian Deadlift at 185lb x 8\n- Last 7 days: 1 sessions, avg RPE 8.4\n- Last session: 3 sets at 180lb, RPE 8.5, posterior chain soreness",
+  "style": "motivational",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": true,
+    "mustMentionReadinessOrRPE": true,
+    "mustNotMention": ["max out", "1RM", "failure"],
+    "toneHint": "encouraging"
+  },
+  "notes": "Mid-range readiness + single-session evidence: exercises the 'no full deload needed, lighter top set' branch. Tests whether the model respects sparse history."
+}

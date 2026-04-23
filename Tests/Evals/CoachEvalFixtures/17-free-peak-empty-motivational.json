@@ -1,0 +1,16 @@
+{
+  "id": "free-peak-empty-motivational",
+  "intent": "free",
+  "question": "Hey coach — what's the plan for today?",
+  "contextBlock": "## Training context\n- Athlete: Reese (beginner)\n- Readiness: 88/100 — Peak recovery, first session of the program.\n- Next up: Back Squat at 135lb x 5\n- No recent sessions logged",
+  "style": "motivational",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": true,
+    "mustMentionReadinessOrRPE": true,
+    "mustNotMention": ["max out", "1RM", "push through"],
+    "toneHint": "encouraging",
+    "mustAnchorOnNextExercise": true
+  },
+  "notes": "Free-form question on a new user's first day with peak readiness: exercises the cold-start free branch. Response must ground on next-exercise + readiness, not invent session history."
+}

@@ -1,0 +1,15 @@
+{
+  "id": "progression-ready-5-sessions-motivational",
+  "intent": "progression",
+  "question": "Should I push for a heavier top set today?",
+  "contextBlock": "## Training context\n- Athlete: Sam (intermediate)\n- Readiness: 82/100 — Solid recovery, slight fatigue.\n- Next up: Back Squat at 245lb x 5\n- Last 7 days: 5 sessions, avg RPE 7.8\n- Last session: 4 sets, 4500lb total, RPE 7.6\n\n## Recent coaching notes\n- Bar speed stayed crisp through the last working set.\n- Cue to push the floor away carried over this week.",
+  "style": "motivational",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": true,
+    "mustMentionReadinessOrRPE": true,
+    "mustNotMention": ["max out", "1RM", "failure", "grind it out"],
+    "toneHint": "encouraging"
+  },
+  "notes": "Readiness 82 + 5-session history + motivational style: exercises the 'green light, go push' branch. Numeric grounding is required because we have readiness + last-session data."
+}

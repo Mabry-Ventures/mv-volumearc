@@ -262,6 +262,21 @@ add_resource(watch_group, watch_target, 'PrivacyInfo.xcprivacy')
 add_resource(watch_widgets_group, watch_widgets_target, 'PrivacyInfo.xcprivacy')
 add_resource(widgets_group, widget_target, 'PrivacyInfo.xcprivacy')
 
+# VOL-100: coach eval fixtures wired into the tests bundle so
+# `CoachEvalTests` can resolve them via
+# `Bundle(for:).url(forResource: "CoachEvalFixtures")`. The directory lives
+# under `Tests/Evals/CoachEvalFixtures/` (outside `Tests/VolumeArcAppTests/`
+# on purpose — the same JSON files are read by
+# `scripts/run_coach_evals.sh` from a repo-root path, so a single on-disk
+# location serves both the hermetic XCTests and the nightly relay eval).
+# Added as a folder reference so the 20 JSON files copy into the tests
+# bundle as a `CoachEvalFixtures/` folder rather than individually.
+evals_group = tests_root_group.new_group('Evals', 'Evals')
+fixtures_relative = ROOT.join('Tests/Evals/CoachEvalFixtures').relative_path_from(ROOT.join('Tests/Evals')).to_s
+fixture_folder_ref = evals_group.new_reference(fixtures_relative)
+fixture_folder_ref.set_last_known_file_type('folder')
+app_tests_target.resources_build_phase.add_file_reference(fixture_folder_ref, true)
+
 add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   'Intents/VolumeArcIntents.swift',
   'VolumeArcAIConfiguration.swift',
