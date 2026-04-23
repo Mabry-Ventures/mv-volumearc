@@ -52,13 +52,46 @@ All colors adapt to light/dark mode via `Color(light:dark:)`.
 
 Elevation scale: `none, sm, md, lg`. Apply with `.vaShadow(.md)`.
 
+### Materials — `VA.Materials` (Liquid Glass)
+
+VolumeArc adopts iOS 26's real Liquid Glass APIs (`SwiftUI.Glass`, `View.glassEffect(_:in:)`, `GlassEffectContainer`) — not a `.regularMaterial` approximation. All glass surfaces in the app route through `VA.Materials` tokens so the rendering treatment stays consistent across cards, sheets, toasts, and chrome.
+
+| Token | Maps to | Use |
+|-------|---------|-----|
+| `VA.Materials.glass` | `Glass.regular` | Cards, sheets, toasts, hero chrome |
+| `VA.Materials.glassInteractive` | `Glass.regular.interactive()` | Tappable surfaces (chips, composer fields, secondary buttons) |
+| `VA.Materials.tintedGlass(_)` | `Glass.regular.tint(color)` | Brand or state-tinted surfaces (e.g. tinted toast) |
+
+Apply via the matching view modifiers, which automatically fall back to a solid `VA.Colors.surfacePrimary` fill when `@Environment(\.accessibilityReduceTransparency)` is true:
+
+```swift
+content.vaGlassBackground()                              // primary glass card
+content.vaInteractiveGlassBackground()                   // tappable chip
+content.vaTintedGlassBackground(VA.Colors.warning)       // tinted state surface
+```
+
+Each modifier accepts an optional `in: shape` parameter; defaults match the standard card and chip radii.
+
+When multiple glass-backed views sit adjacent (e.g., a metric grid of two glass cards, or a stack of glass chips), wrap them in `GlassEffectContainer` so iOS 26 composes the rendering as a single coordinated material instead of two independent passes:
+
+```swift
+GlassEffectContainer(spacing: VA.Space.md) {
+    HStack {
+        VACard(style: .glass) { /* metric A */ }
+        VACard(style: .glass) { /* metric B */ }
+    }
+}
+```
+
+The deployment target is iOS 26.0+, so the real APIs are always available at runtime. Each modifier still carries a belt-and-suspenders `.regularMaterial` fallback for pre-iOS 26 toolchains.
+
 ## Components
 
 ### `VACard`
-Standard card with glass material and shadow. Four styles:
+Standard card with shadow. Four styles:
 - `.flat` — no shadow, plain secondary surface
 - `.elevated` — primary surface with medium shadow
-- `.glass` — Liquid Glass material (default)
+- `.glass` — real iOS 26 Liquid Glass via `vaGlassBackground` (default)
 - `.accent` — gradient background with primary color wash
 
 ```swift

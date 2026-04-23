@@ -100,28 +100,52 @@ public struct CoachView: View {
     private var quickPrompts: some View {
         VStack(alignment: .leading, spacing: VA.Space.md) {
             VASectionHeader(String(localized: "Try asking", comment: "Suggested prompts section header"))
-            ForEach(suggestedPrompts, id: \.self) { prompt in
-                Button {
-                    draftMessage = prompt
-                    inputFocused = true
-                    VAHaptics.tap()
-                } label: {
-                    HStack {
-                        Text(prompt)
-                            .font(VA.Typography.body)
-                            .foregroundStyle(VA.Colors.textPrimary)
-                            .multilineTextAlignment(.leading)
-                        Spacer()
-                        Image(systemName: "arrow.up.forward")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(VA.Colors.textTertiary)
-                    }
-                    .padding(VA.Space.md)
-                    .background(.regularMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+            // Wrap the stacked interactive-glass rows in a `GlassEffectContainer`
+            // so iOS 26's coordinated glass renderer composes them as a single
+            // material treatment rather than rendering each row independently.
+            quickPromptsList
+        }
+    }
+
+    @ViewBuilder
+    private var quickPromptsList: some View {
+        if #available(iOS 26.0, *) {
+            GlassEffectContainer(spacing: VA.Space.md) {
+                VStack(alignment: .leading, spacing: VA.Space.md) {
+                    promptButtons
                 }
-                .buttonStyle(.plain)
             }
+        } else {
+            VStack(alignment: .leading, spacing: VA.Space.md) {
+                promptButtons
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var promptButtons: some View {
+        ForEach(suggestedPrompts, id: \.self) { prompt in
+            Button {
+                draftMessage = prompt
+                inputFocused = true
+                VAHaptics.tap()
+            } label: {
+                HStack {
+                    Text(prompt)
+                        .font(VA.Typography.body)
+                        .foregroundStyle(VA.Colors.textPrimary)
+                        .multilineTextAlignment(.leading)
+                    Spacer()
+                    Image(systemName: "arrow.up.forward")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(VA.Colors.textTertiary)
+                }
+                .padding(VA.Space.md)
+                .vaInteractiveGlassBackground(
+                    in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous)
+                )
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -146,8 +170,9 @@ public struct CoachView: View {
                 .textFieldStyle(.plain)
                 .font(VA.Typography.body)
                 .padding(VA.Space.md)
-                .background(.regularMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+                .vaInteractiveGlassBackground(
+                    in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous)
+                )
                 .lineLimit(1...4)
                 .focused($inputFocused)
 

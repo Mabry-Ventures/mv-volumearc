@@ -100,7 +100,7 @@ This is the granular per-feature checklist. For high-level system status, see [`
 |---------|--------|-------|
 | Design tokens | ✅ | `VA.Colors`, `VA.Typography`, `VA.Space`, `VA.Radius`, and `VA.Shadow` define the visual system. |
 | Core components | ✅ | Shared cards, buttons, metric displays, progress rings, states, and coach bubbles ship in `VolumeArcUI`. |
-| Liquid Glass materials | ✅ | Material-backed UI is live on supported iOS surfaces. |
+| Liquid Glass materials | ✅ | Real iOS 26 Liquid Glass APIs (`SwiftUI.Glass`, `View.glassEffect`, `GlassEffectContainer`) ship across `VACard`, `VAToast`, `VACoachBubble`, the next-workout hero, paywall plan rows, onboarding rows, coach prompts/composer, and session metric grid. Routed through `VA.Materials.glass / glassInteractive / tintedGlass(_:)` design tokens with a solid-fill fallback for `accessibilityReduceTransparency`. |
 | Haptics system | ✅ | Centralized `VAHaptics` patterns ship across training interactions. |
 | Motion system | ✅ | Shared spring tokens and motion helpers ship. |
 | Dark mode | ✅ | Tokens adapt correctly in light and dark appearance. |

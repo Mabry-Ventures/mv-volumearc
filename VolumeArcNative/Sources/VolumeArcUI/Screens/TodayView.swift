@@ -149,7 +149,10 @@ public struct TodayView: View {
                 )
                 .navigationTransition(.zoom(sourceID: "next-workout-hero", in: heroNamespace))
             } label: {
-                VACard(style: .elevated) {
+                // Hero card adopts the real iOS 26 Liquid Glass treatment via
+                // `VACard(style: .glass)`. The zoom hero transition itself is
+                // unchanged.
+                VACard(style: .glass) {
                     VStack(alignment: .leading, spacing: VA.Space.md) {
                         HStack {
                             VStack(alignment: .leading, spacing: VA.Space.xxs) {

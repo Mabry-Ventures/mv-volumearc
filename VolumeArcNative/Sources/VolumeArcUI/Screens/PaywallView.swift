@@ -227,14 +227,7 @@ public struct PaywallView: View {
                 Spacer()
             }
             .padding(VA.Space.lg)
-            .background {
-                if isSelected {
-                    VA.Colors.primary.opacity(0.08)
-                } else {
-                    Rectangle().fill(.regularMaterial)
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+            .modifier(PaywallPlanCardBackgroundModifier(isSelected: isSelected))
             .overlay {
                 if isSelected {
                     RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous)
@@ -317,6 +310,24 @@ public struct PaywallView: View {
             .foregroundStyle(VA.Colors.textSecondary)
         }
         .padding(.top, VA.Space.md)
+    }
+}
+
+/// Selected plans show the brand-tinted overlay; unselected plans use real
+/// iOS 26 Liquid Glass via `vaGlassBackground`. Lifted into a dedicated
+/// `ViewModifier` so the call site in `PaywallView` stays declarative.
+private struct PaywallPlanCardBackgroundModifier: ViewModifier {
+    let isSelected: Bool
+
+    func body(content: Content) -> some View {
+        if isSelected {
+            content
+                .background(VA.Colors.primary.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+        } else {
+            content
+                .vaGlassBackground(in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+        }
     }
 }
 #endif
