@@ -70,60 +70,146 @@ public protocol OpenAIRelayCredentialsProviding: Sendable {
     func authorizationHeaderValue() async throws -> String
 }
 
+public enum CoachTier: String, Sendable {
+    case flashLite = "flash-lite"
+    case pro = "pro"
+}
+
+/// Relay-backed coach provider that talks to `volumearc-ai-relay` via SSE.
+///
+/// VOL-66: real progressive streaming. `streamCoachResponse(for:context:)`
+/// now consumes `text/event-stream` from the Worker and yields token chunks
+/// as Gemini emits them. The non-streaming `coachResponse` joins the stream
+/// to a single string for callers that don't need progressive UI.
+///
+/// Despite the `OpenAI` in the name (kept for stability against in-flight
+/// branches), the Worker now proxies to Gemini 3.1 Flash Lite / Pro. The
+/// type name is intentionally model-agnostic and will be renamed to
+/// `CloudRelayCoachProvider` in a separate churn-free cleanup pass.
 public struct OpenAIRelayCoachProvider: AICoachProvider {
     private let configuration: OpenAIRelayConfiguration
     private let credentialsProvider: OpenAIRelayCredentialsProviding
     private let coachingStyle: CoachingStyle
+    private let tier: CoachTier
+    private let session: URLSession
 
     public init(
         configuration: OpenAIRelayConfiguration,
         credentialsProvider: OpenAIRelayCredentialsProviding,
-        coachingStyle: CoachingStyle = .motivational
+        coachingStyle: CoachingStyle = .motivational,
+        tier: CoachTier = .flashLite,
+        session: URLSession = .shared
     ) {
         self.configuration = configuration
         self.credentialsProvider = credentialsProvider
         self.coachingStyle = coachingStyle
+        self.tier = tier
+        self.session = session
     }
 
     public func coachResponse(for prompt: String, context: String) async throws -> String {
-        let auth = try await credentialsProvider.authorizationHeaderValue()
-        var request = URLRequest(url: configuration.baseURL.appending(path: "relay/coach"))
-        request.httpMethod = "POST"
-        request.setValue(auth, forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 30
-
-        // VOL-64: route every outbound relay call through `CoachPromptTemplate`
-        // so the system prompt, intent envelope, context block, and template
-        // marker land on the relay together. Keep `context` populated so the
-        // relay still has the structured block separately if it wants to
-        // analyze it; `system` carries the persona prompt for relays that
-        // consume it as a separate channel.
-        let intent = CoachPromptTemplate.inferIntent(from: prompt)
-        let renderedPrompt = CoachPromptTemplate.render(
-            intent: intent,
-            contextBlock: context,
-            question: prompt,
-            style: coachingStyle
-        )
-        let systemPrompt = CoachPromptTemplate.systemPrompt(style: coachingStyle)
-
-        let body: [String: String] = [
-            "prompt": renderedPrompt,
-            "context": context,
-            "system": systemPrompt,
-            "intent": intent.rawValue
-        ]
-        request.httpBody = try JSONEncoder().encode(body)
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            let message = String(data: data, encoding: .utf8) ?? "Unknown"
-            throw AIRuntimeIntegrationError.relayRequestFailed(statusCode: (response as? HTTPURLResponse)?.statusCode ?? 0, message: message)
+        var full = ""
+        for try await chunk in streamCoachResponse(for: prompt, context: context) {
+            full += chunk
         }
+        return full
+    }
 
-        struct CoachResponse: Decodable { let text: String }
-        return try JSONDecoder().decode(CoachResponse.self, from: data).text
+    public func streamCoachResponse(for prompt: String, context: String) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let auth = try await credentialsProvider.authorizationHeaderValue()
+                    var request = URLRequest(url: configuration.baseURL.appending(path: "v1/coach"))
+                    request.httpMethod = "POST"
+                    request.setValue(auth, forHTTPHeaderField: "Authorization")
+                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    request.setValue(tier.rawValue, forHTTPHeaderField: "X-Coach-Tier")
+                    request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+                    request.timeoutInterval = 60
+
+                    // VOL-64: render the prompt on-device and send it
+                    // pre-rendered so the template marker + system prompt
+                    // are the single source of truth. Worker uses these
+                    // verbatim and layers Gemini safety settings on top.
+                    let intent = CoachPromptTemplate.inferIntent(from: prompt)
+                    let renderedPrompt = CoachPromptTemplate.render(
+                        intent: intent,
+                        contextBlock: context,
+                        question: prompt,
+                        style: coachingStyle
+                    )
+                    let systemPrompt = CoachPromptTemplate.systemPrompt(style: coachingStyle)
+                    let body: [String: String] = [
+                        "intent": intent.rawValue,
+                        "question": prompt,
+                        "contextBlock": context,
+                        "style": coachingStyle.rawValue,
+                        "prompt": renderedPrompt,
+                        "system": systemPrompt
+                    ]
+                    request.httpBody = try JSONEncoder().encode(body)
+
+                    let (stream, response) = try await session.bytes(for: request)
+                    guard let http = response as? HTTPURLResponse else {
+                        continuation.finish(throwing: AIRuntimeIntegrationError.invalidHTTPResponse)
+                        return
+                    }
+                    guard (200..<300).contains(http.statusCode) else {
+                        continuation.finish(
+                            throwing: AIRuntimeIntegrationError.relayRequestFailed(
+                                statusCode: http.statusCode,
+                                message: "Relay returned HTTP \(http.statusCode)"
+                            )
+                        )
+                        return
+                    }
+
+                    var buffer = ""
+                    for try await line in stream.lines {
+                        if Task.isCancelled { break }
+                        if line.isEmpty {
+                            // Event terminator — process accumulated data line if any.
+                            if !buffer.isEmpty {
+                                let trimmed = buffer
+                                buffer = ""
+                                if let text = Self.extractText(from: trimmed) {
+                                    continuation.yield(text)
+                                }
+                            }
+                            continue
+                        }
+                        if line.hasPrefix("data:") {
+                            buffer = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
+                        } else if line.hasPrefix("event: done") {
+                            break
+                        } else if line.hasPrefix("event: error") {
+                            continuation.finish(
+                                throwing: AIRuntimeIntegrationError.relayRequestFailed(
+                                    statusCode: http.statusCode,
+                                    message: "Relay emitted error event"
+                                )
+                            )
+                            return
+                        }
+                    }
+                    // Flush any trailing data line without a blank terminator.
+                    if !buffer.isEmpty, let text = Self.extractText(from: buffer) {
+                        continuation.yield(text)
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    private static func extractText(from dataLine: String) -> String? {
+        guard let data = dataLine.data(using: .utf8) else { return nil }
+        struct Chunk: Decodable { let text: String? }
+        return (try? JSONDecoder().decode(Chunk.self, from: data))?.text
     }
 }
 

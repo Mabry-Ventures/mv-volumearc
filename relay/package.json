@@ -1,0 +1,16 @@
+{
+  "name": "volumearc-ai-relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Worker that proxies iOS coach requests to the Gemini API with SSE streaming, bearer auth, and per-device rate limiting.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260410.0",
+    "typescript": "^5.6.3",
+    "wrangler": "^4.84.1"
+  }
+}

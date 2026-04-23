@@ -36,7 +36,7 @@ This is the granular per-feature checklist. For high-level system status, see [`
 | `CoachPromptTemplate` adoption | ✅ | Single `render(intent:contextBlock:question:style:)` entry point. System prompt + per-intent envelope + structured context block + template marker land in every outbound prompt across all three providers. Verified by `VolumeArcCoachPromptTemplateTests`. |
 | Voice transport | ✅ | `OpenAIRelayVoiceTransport` is live for single-turn voice → text → spoken response. Live duplex/WebRTC audio remains future work. |
 | Coach memory | ✅ | `CoachMemoryRepository` persists recent context and is appended during coaching turns. |
-| Streaming response UX | 🚧 [VOL-66](https://linear.app/mabry-ventures/issue/VOL-66) | `AsyncThrowingStream` plumbing exists, but the default implementation is synthetic word-chunking (call non-streaming endpoint, sleep 30ms between words). No real progressive streaming from the relay. |
+| Streaming response UX | ✅ | `OpenAIRelayCoachProvider.streamCoachResponse` consumes `text/event-stream` from the `volumearc-ai-relay` Cloudflare Worker, parses `data: {"text":"..."}` frames, and yields Gemini tokens as they arrive. Non-streaming callers join the stream to a single string. Synthetic word-chunking is kept as the default-impl fallback for providers without native streaming. |
 | Evaluation harness | 📋 | Prompt-quality regression tooling is still planned. |
 | Privacy mode enforcement | 📋 | Privacy mode is modeled and surfaced in UI, but strict-mode prompt enforcement is not yet consistently applied in the dashboard coach path. |
 

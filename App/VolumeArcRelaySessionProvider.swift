@@ -1,95 +1,70 @@
+import CryptoKit
 import Foundation
 import VolumeArcCore
 
+/// Produces the `Authorization: Bearer <device>.<hmac>` header the relay
+/// expects. The signing key lives in Keychain (bootstrapped from
+/// `VOLUMEARC_RELAY_SIGNING_KEY` env var or `VolumeArcRelaySigningKey`
+/// Info.plist key). The device ID is a stable UUID generated on first
+/// launch and persisted to Keychain with a UserDefaults fallback.
+///
+/// The previous implementation fetched a session token from a `/relay/session`
+/// endpoint; the new Cloudflare Worker computes auth locally via HMAC, so
+/// there's no round-trip. This cuts coach-request latency by one network
+/// hop and removes a class of transient auth failures.
 actor VolumeArcRelaySessionProvider: OpenAIRelayCredentialsProviding {
-    private struct SessionResponse: Decodable {
-        let bearerToken: String
-        let expiresAt: String
-    }
-
-    private let baseURL: URL
-    private let applicationID: String
     private let secureStore = VolumeArcSecureStore()
-    private let sessionTokenKey = "ai.relay.session.bearerToken"
-    private let sessionExpirationKey = "ai.relay.session.expiresAt"
+    private let signingKeyKey = "ai.relay.signingKey"
     private let deviceIDKey = "ai.relay.deviceID"
-    private let sessionRefreshSkew: TimeInterval = 60
+    private let fallbackDefaults = UserDefaults(suiteName: "com.mabryventures.VolumeArc.device-identity")
 
     init(baseURL: URL, applicationID: String) {
-        self.baseURL = baseURL
-        self.applicationID = applicationID
+        _ = baseURL
+        _ = applicationID
     }
 
     func authorizationHeaderValue() async throws -> String {
-        if let token = try cachedTokenIfValid() {
-            return "Bearer \(token)"
-        }
-
-        let session = try await fetchSession()
-        try secureStore.save(session.bearerToken, for: sessionTokenKey)
-        try secureStore.save(session.expiresAt, for: sessionExpirationKey)
-        return "Bearer \(session.bearerToken)"
+        let signingKey = try resolveSigningKey()
+        let device = deviceID()
+        let signature = Self.hmacHex(key: signingKey, message: device)
+        return "Bearer \(device).\(signature)"
     }
 
-    private func cachedTokenIfValid() throws -> String? {
-        guard let token = try secureStore.load(sessionTokenKey),
-              let expiresAtString = try secureStore.load(sessionExpirationKey),
-              let expiresAt = ISO8601DateFormatter().date(from: expiresAtString)
-        else {
-            return nil
+    private func resolveSigningKey() throws -> String {
+        if let fromStore = try secureStore.load(signingKeyKey), fromStore.isEmpty == false {
+            return fromStore
         }
-
-        guard expiresAt.timeIntervalSinceNow > sessionRefreshSkew else {
-            return nil
-        }
-
-        return token
-    }
-
-    private func fetchSession() async throws -> SessionResponse {
-        var request = URLRequest(url: baseURL.appending(path: "relay/session"))
-        request.httpMethod = "POST"
-        request.setValue(deviceID(), forHTTPHeaderField: "x-device-id")
-        request.setValue(applicationID, forHTTPHeaderField: "x-app-id")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 10
-        request.httpBody = Data("{}".utf8)
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AIRuntimeIntegrationError.invalidHTTPResponse
-        }
-
-        guard (200..<300).contains(httpResponse.statusCode) else {
-            let message = String(data: data, encoding: .utf8) ?? "Unknown relay session failure"
-            throw AIRuntimeIntegrationError.relayRequestFailed(
-                statusCode: httpResponse.statusCode,
-                message: message
+        let bootstrap = ProcessInfo.processInfo.environment["VOLUMEARC_RELAY_SIGNING_KEY"]
+            ?? Bundle.main.object(forInfoDictionaryKey: "VolumeArcRelaySigningKey") as? String
+        guard let bootstrap, bootstrap.isEmpty == false else {
+            throw AIRuntimeIntegrationError.relayUnavailable(
+                reason: "Relay signing key is not configured; set VOLUMEARC_RELAY_SIGNING_KEY or Info.plist VolumeArcRelaySigningKey."
             )
         }
-
-        return try JSONDecoder().decode(SessionResponse.self, from: data)
+        try? secureStore.save(bootstrap, for: signingKeyKey)
+        return bootstrap
     }
-
-    private let fallbackDefaults = UserDefaults(suiteName: "com.mabryventures.VolumeArc.device-identity")
 
     private func deviceID() -> String {
         if let existing = try? secureStore.load(deviceIDKey), existing.isEmpty == false {
             return existing
         }
-
         if let fallback = fallbackDefaults?.string(forKey: deviceIDKey), fallback.isEmpty == false {
             return fallback
         }
-
         let generated = UUID().uuidString.lowercased()
         do {
             try secureStore.save(generated, for: deviceIDKey)
         } catch {
-            // Keychain save failed — persist to UserDefaults so the device ID
-            // remains stable across launches even when the Keychain is unavailable.
             fallbackDefaults?.set(generated, forKey: deviceIDKey)
         }
         return generated
+    }
+
+    private static func hmacHex(key: String, message: String) -> String {
+        let keyData = Data(key.utf8)
+        let messageData = Data(message.utf8)
+        let mac = HMAC<SHA256>.authenticationCode(for: messageData, using: SymmetricKey(data: keyData))
+        return Data(mac).map { String(format: "%02x", $0) }.joined()
     }
 }
