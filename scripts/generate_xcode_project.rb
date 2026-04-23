@@ -364,4 +364,23 @@ watch_widgets_scheme = Xcodeproj::XCScheme.new
 watch_widgets_scheme.configure_with_targets(watch_widgets_target, nil)
 watch_widgets_scheme.save_as(PROJECT_PATH, 'VolumeArcWatchWidgets', true)
 
+# VOL-90: seed the workspace-level `Package.resolved` from the tracked
+# root-level copy so SPM resolution is deterministic across machines.
+# The `.xcworkspace/` dir is gitignored (rebuilt by xcodebuild on every
+# resolve), so only the root copy survives in git. Seeding it here on a
+# fresh clone means `xcodebuild -resolvePackageDependencies` reuses the
+# pinned versions rather than re-resolving against the upstream indexes.
+#
+# CI also seeds via `.github/workflows/ci.yml` in case the generator
+# ran before this was added. Validation lives in
+# `scripts/validate_release_config.sh` (fails if the two copies drift).
+ROOT_LOCKFILE = ROOT.join('Package.resolved')
+WORKSPACE_LOCKFILE_DIR = PROJECT_PATH.join('project.xcworkspace/xcshareddata/swiftpm')
+WORKSPACE_LOCKFILE = WORKSPACE_LOCKFILE_DIR.join('Package.resolved')
+if ROOT_LOCKFILE.exist?
+  FileUtils.mkdir_p(WORKSPACE_LOCKFILE_DIR)
+  FileUtils.cp(ROOT_LOCKFILE, WORKSPACE_LOCKFILE)
+  puts "Seeded #{WORKSPACE_LOCKFILE.relative_path_from(ROOT)} from root Package.resolved"
+end
+
 puts "Generated #{PROJECT_PATH}"

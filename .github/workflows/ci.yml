@@ -24,6 +24,17 @@ jobs:
     name: Build & Test
     runs-on: [self-hosted, mv-shared]
     timeout-minutes: 30
+    # VOL-97: the post-merge coverage-trend append step commits back to
+    # main, so the job-scoped GITHUB_TOKEN needs write access to
+    # repository contents. PR jobs don't commit; the same permission is
+    # harmless there because branch protection on main + the
+    # `if: github.event_name == 'push'` guard on the append step are
+    # what actually gate the write. `pull-requests: write` lets the
+    # sticky PR comment step create/update the coverage comment via
+    # actions/github-script.
+    permissions:
+      contents: write
+      pull-requests: write
 
     steps:
       - name: Checkout
@@ -53,6 +64,7 @@ jobs:
       - name: Generate Xcode project
         run: ruby scripts/generate_xcode_project.rb
 
+<<<<<<< HEAD
       - name: Xcode project determinism gate
         # VOL-95: regenerate twice and fail if the output diverges. Without
         # this, xcodeproj's random SecureRandom UUIDs would thrash every
@@ -60,6 +72,20 @@ jobs:
         # whack-a-mole. Runs before builds/tests so a regression fails
         # fast instead of wasting 20+ minutes of runner time.
         run: ./scripts/test_xcode_project_determinism.sh
+=======
+      - name: Seed SPM lockfile into workspace
+        # VOL-90: the canonical `Package.resolved` lives at repo root
+        # because the `.xcworkspace/` dir is gitignored (rebuilt by
+        # xcodebuild on every resolve). Seeding the workspace copy from
+        # the tracked root copy pins the Sentry version the generator
+        # declared — otherwise xcodebuild would re-resolve against the
+        # upstream index and could pick a different commit on every run.
+        # Belt-and-suspenders: the ruby generator also seeds, but having
+        # it here makes the intent visible and survives generator churn.
+        run: |
+          mkdir -p VolumeArcApple.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+          cp Package.resolved VolumeArcApple.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+>>>>>>> origin/main
 
       - name: Clear stale system DerivedData
         # Belt-and-suspenders: scripts now use per-job DerivedData via
@@ -87,6 +113,148 @@ jobs:
 
       - name: Coverage gate (VolumeArcCore >= 80%)
         run: ./scripts/check_coverage.sh
+
+      # VOL-97: publish the xcresult bundle so reviewers can open it in
+      # Xcode without re-running CI. Runs on success and failure so a
+      # broken run still yields a downloadable artifact.
+      - name: Upload xcresult
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TestResults-${{ github.run_id }}
+          path: .build/derived-data/TestResults.xcresult
+          retention-days: 14
+
+      # VOL-97: machine-readable coverage summary so the sticky PR
+      # comment and the trend-append step have a stable handoff file.
+      - name: Upload coverage summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: CoverageSummary-${{ github.run_id }}
+          path: .build/coverage-summary.json
+          retention-days: 14
+          if-no-files-found: ignore
+
+      # VOL-97: post a sticky coverage comment on PR runs so reviewers
+      # see the gate result without opening the log. Uses
+      # actions/github-script (first-party action; policy forbids
+      # reaching for third-party sticky-comment actions) with a
+      # find-or-create pattern keyed on a hidden marker.
+      - name: Sticky PR coverage comment
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = '.build/coverage-summary.json';
+            if (!fs.existsSync(path)) {
+              core.info('No coverage-summary.json on disk; skipping sticky comment.');
+              return;
+            }
+            const data = JSON.parse(fs.readFileSync(path, 'utf8'));
+            const marker = '<!-- volumearc-coverage-comment -->';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const gate = data.passed ? `passed (>= ${data.threshold}%)` : `FAILED (< ${data.threshold}%)`;
+            const body = [
+              marker,
+              '### Coverage',
+              '',
+              '| Module | Coverage | Gate |',
+              '|---|---|---|',
+              `| ${data.target} | ${data.coverage}% | ${gate} |`,
+              '',
+              `Full report: [xcresult artifact](${runUrl}) (TestResults-${context.runId}, 14-day retention)`,
+            ].join('\n');
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner, repo, issue_number, per_page: 100,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner, repo, comment_id: existing.id, body,
+              });
+              core.info(`Updated sticky coverage comment ${existing.id}.`);
+            } else {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number, body,
+              });
+              core.info('Created sticky coverage comment.');
+            }
+
+      # VOL-97: historical trend. On every push to main we append a
+      # {commit, date, coverage} record to docs/coverage-trend.json and
+      # commit it back. The append step is guarded on the event name +
+      # ref so PR runs and tag-build runs are no-ops. We use the
+      # job-scoped GITHUB_TOKEN (needs `permissions: contents: write`,
+      # granted at the job level above) — no extra PAT required. If a
+      # repo-level branch protection rule ever blocks bot pushes to
+      # main, flip this block to open a PR via peter-evans/create-pull-request
+      # or disable it with a TODO.
+      - name: Append coverage to trend
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && success()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ ! -f .build/coverage-summary.json ]]; then
+            echo "::warning::No coverage-summary.json; skipping trend append."
+            exit 0
+          fi
+          python3 <<'PY'
+          import json, os, subprocess, datetime
+          summary = json.load(open(".build/coverage-summary.json"))
+          trend_path = "docs/coverage-trend.json"
+          try:
+              trend = json.load(open(trend_path))
+          except FileNotFoundError:
+              trend = {
+                  "target": summary["target"],
+                  "threshold": summary["threshold"],
+                  "note": "Append-only log of VolumeArcCore line coverage per main-branch commit.",
+                  "records": [],
+              }
+          sha = os.environ.get("GITHUB_SHA", "")
+          date = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+          records = trend.setdefault("records", [])
+          # Avoid duplicate records if the workflow re-runs on the same
+          # commit (e.g. manual re-run from the UI).
+          if any(r.get("commit") == sha for r in records):
+              print(f"Skipping duplicate record for {sha}.")
+          else:
+              records.append({
+                  "commit": sha,
+                  "date": date,
+                  "coverage": summary["coverage"],
+                  "passed": summary["passed"],
+              })
+              with open(trend_path, "w", encoding="utf-8") as handle:
+                  json.dump(trend, handle, indent=2)
+                  handle.write("\n")
+              print(f"Appended record for {sha}: {summary['coverage']}%")
+          PY
+          if git diff --quiet docs/coverage-trend.json; then
+            echo "No trend-file change; skipping commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/coverage-trend.json
+          git commit -m "chore(ci): append coverage trend for ${GITHUB_SHA::7}" \
+            -m "[skip ci]"
+          # Push with retry on non-fast-forward; another concurrent main
+          # run may have appended first.
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "Push attempt $attempt failed; rebasing and retrying."
+            git pull --rebase origin main || true
+          done
+          echo "::warning::Failed to push coverage-trend update after 3 attempts."
 
       - name: Lint (SwiftLint)
         # VOL-77: hard-fail on actual SwiftLint errors (rules that exceed
