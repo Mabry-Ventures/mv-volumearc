@@ -234,15 +234,17 @@ add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
 ])
 
 # Sentry Swift Package dependency
+# Pinned to exact version per VOL-86: crash-reporting SDK must not silently
+# auto-upgrade. Dependabot (VOL-78) surfaces bumps as explicit PRs.
 sentry_url = 'https://github.com/getsentry/sentry-cocoa.git'
-sentry_requirement = { kind: 'upToNextMajorVersion', minimumVersion: '8.0.0' }
+sentry_requirement = { kind: 'exactVersion', version: '8.58.1' }
 sentry_ref = project.root_object.package_references.find { |r| r.repositoryURL == sentry_url }
 unless sentry_ref
   sentry_ref = project.new(Xcodeproj::Project::Object::XCRemoteSwiftPackageReference)
   sentry_ref.repositoryURL = sentry_url
-  sentry_ref.requirement = sentry_requirement
   project.root_object.package_references << sentry_ref
 end
+sentry_ref.requirement = sentry_requirement
 sentry_dep = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
 sentry_dep.package = sentry_ref
 sentry_dep.product_name = 'Sentry'
