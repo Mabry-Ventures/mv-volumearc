@@ -2,7 +2,9 @@ included:
   - App
   - Watch
   - Widgets
+  - WatchWidgets
   - Tests
+  - VolumeArcNative/Sources
 
 excluded:
   - build
