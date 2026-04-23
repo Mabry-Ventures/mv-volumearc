@@ -25,7 +25,7 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 
 ## Implementation Status
 
-> **Status: Pre-production — hygiene and hardening.** The original post-95/95 launch blockers (VOL-55, 56, 57, 58, 59, 62, 63, 65, 67) shipped in PRs [#23](https://github.com/Mabry-Ventures/mv-volumearc/pull/23)–[#31](https://github.com/Mabry-Ventures/mv-volumearc/pull/31) between 2026-04-14 and 2026-04-20. The end-to-end wiring is now in place, but the app still has App Store blockers (production APS environment, paywall legal links, privacy manifest completeness, Sentry PII scrubbing) and hygiene gaps (dead feature flags, synthetic AI streaming, unused `CoachPromptTemplate`, test coverage gate, file-size refactors). **Current open work is tracked in the Linear "Go-Live Readiness" project** on the VolumeArc team.
+> **Status: Pre-production — hygiene and hardening.** The original post-95/95 launch blockers (VOL-55, 56, 57, 58, 59, 62, 63, 65, 67) shipped in PRs [#23](https://github.com/Mabry-Ventures/mv-volumearc/pull/23)–[#31](https://github.com/Mabry-Ventures/mv-volumearc/pull/31) between 2026-04-14 and 2026-04-20. The end-to-end wiring is now in place, but the app still has App Store blockers (production APS environment, paywall legal links, privacy manifest completeness, Sentry PII scrubbing) and hygiene gaps (dead feature flags, synthetic AI streaming, test coverage gate, file-size refactors). **Current open work is tracked in the Linear "Go-Live Readiness" project** on the VolumeArc team.
 >
 > ### Open items by theme
 >
@@ -34,7 +34,6 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 > **Known hygiene gaps** (carried from prior audit):
 > - **VOL-52** (Backlog) — Test coverage enforcement gate in CI
 > - **VOL-61** (Backlog) — `FeatureFlagProvider` is dead code; flags gate nothing
-> - **VOL-64** (Backlog) — `CoachPromptTemplate` exists but is never used
 > - **VOL-66** (Backlog) — AI streaming is synthetic word-chunking, not real progressive streaming
 > - **VOL-69** (Backlog) — Liquid Glass claim — adopt real iOS 26 APIs or update docs
 >
@@ -45,7 +44,7 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 | System | Status | Notes |
 |--------|--------|-------|
 | iPhone UI | Implemented | Full tab bar (Today, Workouts, Coach, Signals, Profile). `RootDashboardView` presents `OnboardingView` via `fullScreenCover` on first launch. `ProfileView` presents `PaywallView` via sheet on upgrade tap. Localized, accessible, Dynamic Type, hero transitions, toast presenter all working |
-| AI coaching | Implemented (synthetic streaming, dead template — VOL-64, VOL-66) | Three-provider chain works for non-streaming responses. `streamCoachResponse` is synthetic word-chunking, not real progressive streaming. `CoachPromptTemplate` is defined but unused — coach builds prompts ad-hoc |
+| AI coaching | Implemented (synthetic streaming — VOL-66) | Three-provider chain works for non-streaming responses. All three providers (`OpenAIRelayCoachProvider`, `LocalHeuristicAICoachProvider`, `FoundationModelCoachProvider`) route their outbound prompts through `CoachPromptTemplate.render(intent:contextBlock:question:style:)` so the system prompt, intent envelope, structured context block, and template marker are identical across the cloud, on-device, and offline paths. `streamCoachResponse` is still synthetic word-chunking, not real progressive streaming |
 | Voice coaching | Implemented (single-turn) | `OpenAIRelayVoiceTransport` delegates to the same relay-backed `AICoachProvider` chain; `LiveVoiceCoachOrchestrator` exposes `speak(prompt:context:)` and lifecycle hooks. Live duplex audio is explicit future work |
 | Cloud sync | Implemented (entitlement-gated at runtime) | CloudKit container ID is a compile-time constant (`App/VolumeArcCloudConfiguration.swift`). `CKModifyRecordsOperation` push + `CKFetchRecordZoneChangesOperation` pull + cursor persistence work on device/TestFlight builds with entitlements. Every repository write path calls `stageUpsert` into `OutboundSyncQueue`, which `CloudSyncCoordinator` drains on `syncCycle`. Simulator Debug builds fall back to `UnavailableCloudSyncTransport` because they lack the entitlement |
 | Watch app | Implemented | HealthKit `HKWorkoutSession` + `HKLiveWorkoutBuilder`, rest timer, decisions, accessibility, offline payload queue, real phone/watch sync via WCSession |
@@ -84,7 +83,7 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 
 **Persistence** (`VolumeArcPersistenceController.swift`): SwiftData with cascading fallback -- CloudSynced -> LocalFallback -> InMemoryFallback -> Unavailable. Seeds default `UserProfileRecord` and `TrainingPlanRecord` on first launch.
 
-**AI coaching** (`VolumeArcAIRuntimeFactory.swift`): Three-tier provider chain with `AsyncThrowingStream` streaming, memory append via `CoachMemoryRepository`, and structured output parsing:
+**AI coaching** (`VolumeArcAIRuntimeFactory.swift`): Three-tier provider chain with `AsyncThrowingStream` streaming, memory append via `CoachMemoryRepository`, and structured output parsing. Every provider routes its outbound prompt through `CoachPromptTemplate.render(...)` so the system prompt, per-intent envelope, structured context block, and template marker are identical across the cloud, on-device, and offline paths — a regression that bypasses the template drops the marker and trips `VolumeArcCoachPromptTemplateTests`:
 1. `FoundationModelCoachProvider` (on-device, iOS 26.0+ only)
 2. `OpenAIRelayCoachProvider` (cloud relay)
 3. `LocalHeuristicAICoachProvider` (offline fallback)
