@@ -1,8 +1,7 @@
 import Foundation
 #if canImport(SwiftData)
 import SwiftData
-#endif
-#if canImport(SwiftData)
+
 /// Applies remote sync records to local SwiftData repositories.
 /// Uses last-write-wins based on the record's `modifiedAt` timestamp.
 public struct DefaultSyncPayloadApplier: Sendable {
@@ -10,8 +9,10 @@ public struct DefaultSyncPayloadApplier: Sendable {
     public let coachMemoryRepository: SwiftDataCoachMemoryRepository
     public let userProfileRepository: SwiftDataUserProfileRepository
     public let trainingPlanRepository: SwiftDataTrainingPlanRepository
-    private let telemetrySink: (any TelemetrySink)?
-    private let outboundQueue: (any OutboundSyncQueue)?
+    // VOL-74: promoted from `private` to `internal` so the per-kind
+    // apply methods can access them from a sibling extension file.
+    internal let telemetrySink: (any TelemetrySink)?
+    internal let outboundQueue: (any OutboundSyncQueue)?
 
     public init(
         workoutRepository: SwiftDataWorkoutRepository,
@@ -92,7 +93,7 @@ public struct DefaultSyncPayloadApplier: Sendable {
     /// a handful of rows, so this check is now effectively O(1) per
     /// inbound record.
     @MainActor
-    private func hasNewerLocalDeleteTombstone(
+    internal func hasNewerLocalDeleteTombstone(
         kind: CloudSyncRecord.Kind,
         recordIdentifier: String,
         inboundTimestamp: Date
@@ -137,7 +138,7 @@ public struct DefaultSyncPayloadApplier: Sendable {
     }
 
     @MainActor
-    private func recordSuppressedInboundInsert(
+    internal func recordSuppressedInboundInsert(
         kind: CloudSyncRecord.Kind,
         recordIdentifier: String,
         inboundTimestamp: Date
@@ -246,7 +247,7 @@ public struct DefaultSyncPayloadApplier: Sendable {
     // MARK: - Per-kind appliers
 
     @MainActor
-    private func applyWorkout(_ record: CloudSyncRecord) throws {
+    internal func applyWorkout(_ record: CloudSyncRecord) throws {
         guard let payload = SyncPayloadCodec.decodeWorkoutPayload(from: record.payloadJSON) else { return }
 
         let context = ModelContext(workoutRepository.container)
@@ -331,7 +332,7 @@ public struct DefaultSyncPayloadApplier: Sendable {
     }
 
     @MainActor
-    private func applyUserProfile(_ record: CloudSyncRecord) throws {
+    internal func applyUserProfile(_ record: CloudSyncRecord) throws {
         guard let payload = SyncPayloadCodec.decodeUserProfilePayload(from: record.payloadJSON) else { return }
 
         let context = ModelContext(userProfileRepository.container)
@@ -407,7 +408,7 @@ public struct DefaultSyncPayloadApplier: Sendable {
     }
 
     @MainActor
-    private func applyTrainingPlan(_ record: CloudSyncRecord) throws {
+    internal func applyTrainingPlan(_ record: CloudSyncRecord) throws {
         guard let payload = SyncPayloadCodec.decodeTrainingPlanPayload(from: record.payloadJSON) else { return }
 
         let context = ModelContext(trainingPlanRepository.container)
@@ -460,7 +461,7 @@ public struct DefaultSyncPayloadApplier: Sendable {
     }
 
     @MainActor
-    private func applyCoachMemory(_ record: CloudSyncRecord) throws {
+    internal func applyCoachMemory(_ record: CloudSyncRecord) throws {
         guard let payload = SyncPayloadCodec.decodeCoachMemoryPayload(from: record.payloadJSON) else { return }
 
         let context = ModelContext(coachMemoryRepository.container)
