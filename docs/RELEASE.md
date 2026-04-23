@@ -39,6 +39,17 @@ Required CI secrets:
 - `APP_STORE_CONNECT_API_KEY_PATH` — path to the `.p8` key file on the runner
 - `VOLUMEARC_PAT` — personal access token (only needed if cross-repo checkout returns)
 
+### Signing & entitlements (VOL-70)
+
+The iOS app ships **two** entitlements files, swapped per build configuration by `scripts/generate_xcode_project.rb`:
+
+- `App/VolumeArc.Debug.entitlements` — `aps-environment = development` (APNs sandbox, used by Debug and simulator builds)
+- `App/VolumeArc.Release.entitlements` — `aps-environment = production` (APNs production, required for Release-signed IPAs)
+
+HealthKit, CloudKit, iCloud containers, and App Groups are identical across both files. Keep them in sync when adding capabilities. `scripts/validate_release_config.sh` hard-fails if the Release file drifts back to `development`, and the Xcode build settings assertion confirms `CODE_SIGN_ENTITLEMENTS = App/VolumeArc.Release.entitlements` for the Release configuration.
+
+End-to-end verification (that the production APS token works end-to-end with APNs) only happens on a signed archive and TestFlight build — local simulator runs always use the Debug entitlements.
+
 ## App Store release
 
 1. Verify TestFlight build is stable with at least 3 testers
