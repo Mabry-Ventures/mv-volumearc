@@ -1,0 +1,15 @@
+{
+  "id": "progression-moderate-1-session-motivational",
+  "intent": "progression",
+  "question": "Think I can go up on bench today?",
+  "contextBlock": "## Training context\n- Athlete: Taylor (beginner)\n- Readiness: 72/100 — Recovery okay, bit of shoulder stiffness.\n- Next up: Bench Press at 155lb x 5\n- Last 7 days: 1 sessions, avg RPE 7.2\n- Last session: 3 sets at 150lb, RPE 7.0, last rep slow",
+  "style": "motivational",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": true,
+    "mustMentionReadinessOrRPE": true,
+    "mustNotMention": ["max out", "1RM", "failure"],
+    "toneHint": "encouraging"
+  },
+  "notes": "Moderate readiness, beginner with sparse history: exercises the 'hold or small jump' nuanced branch — exactly where prompt-quality matters most."
+}

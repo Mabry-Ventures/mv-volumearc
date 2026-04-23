@@ -1,0 +1,15 @@
+{
+  "id": "recovery-peak-5-sessions-minimal",
+  "intent": "recovery",
+  "question": "Am I ready to go today?",
+  "contextBlock": "## Training context\n- Athlete: Dakota (advanced)\n- Readiness: 88/100 — Peak recovery, HRV trending up.\n- Next up: Deadlift at 405lb x 3\n- Last 7 days: 5 sessions, avg RPE 7.6\n- Last session: 3 sets at 385lb, RPE 7.4",
+  "style": "minimal",
+  "expectedAssertions": {
+    "maxSentences": 2,
+    "mustContainNumericContext": true,
+    "mustMentionReadinessOrRPE": true,
+    "mustNotMention": ["max out", "1RM"],
+    "toneHint": "terse"
+  },
+  "notes": "High readiness + advanced athlete + minimal style: exercises the clean 'green light' path in its tightest form."
+}

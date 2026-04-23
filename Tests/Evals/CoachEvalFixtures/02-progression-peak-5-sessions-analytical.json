@@ -1,0 +1,15 @@
+{
+  "id": "progression-peak-5-sessions-analytical",
+  "intent": "progression",
+  "question": "Can I add weight to my pull today?",
+  "contextBlock": "## Training context\n- Athlete: Jordan (advanced)\n- Readiness: 88/100 — Peak recovery, strong appetite, sleep 8.2h.\n- Next up: Deadlift at 365lb x 3\n- Last 7 days: 5 sessions, avg RPE 8.1\n- Last session: 3 sets at 345lb, RPE 7.5, clean lockouts\n\n## Recent coaching notes\n- Bar speed increased 6% week-over-week on the top set.\n- Off-the-floor speed the bottleneck two weeks ago is no longer present.",
+  "style": "analytical",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": true,
+    "mustMentionReadinessOrRPE": true,
+    "mustNotMention": ["max out", "1RM", "failure"],
+    "toneHint": "data-driven"
+  },
+  "notes": "High readiness, advanced athlete, analytical style: exercises the data-driven rationale branch. Model should explain the 'why' using bar speed + RPE."
+}

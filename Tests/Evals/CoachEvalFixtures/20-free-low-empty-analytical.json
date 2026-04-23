@@ -1,0 +1,15 @@
+{
+  "id": "free-low-empty-analytical",
+  "intent": "free",
+  "question": "What should I do today?",
+  "contextBlock": "## Training context\n- Athlete: Blake (beginner)\n- Readiness: 45/100 — Low recovery, first week, sleep 4.5h.\n- Next up: Front Squat at 95lb x 5\n- No recent sessions logged",
+  "style": "analytical",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": true,
+    "mustMentionReadinessOrRPE": true,
+    "mustNotMention": ["max out", "push through", "1RM", "grind"],
+    "toneHint": "data-driven"
+  },
+  "notes": "Worst-case cold-start: low readiness, no history, free question. Exercises the conservative fallback path — model must give a concrete conservative recommendation, not punt."
+}
