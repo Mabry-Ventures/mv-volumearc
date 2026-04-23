@@ -2,10 +2,24 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSPrivacyCollectedDataTypes</key>
+	<!--
+		VolumeArcWatchWidgets (com.mabryventures.VolumeArc.watchkitapp.widgets)
+		privacy manifest. VOL-73.
+
+		Scope: same as the iOS widgets target — watch complications read
+		the shared WidgetSummarySnapshot via PlatformSurfaceDefaultsReader
+		(app-group UserDefaults). No HealthKit, microphone, or location.
+	-->
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
 	<array/>
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
+		<!--
+			UserDefaults: shared app-group snapshot read only. App
+			functionality (rendering the complication timeline).
+		-->
 		<dict>
 			<key>NSPrivacyAccessedAPIType</key>
 			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
@@ -15,9 +29,7 @@
 			</array>
 		</dict>
 	</array>
-	<key>NSPrivacyTracking</key>
-	<false/>
-	<key>NSPrivacyTrackingDomains</key>
+	<key>NSPrivacyCollectedDataTypes</key>
 	<array/>
 </dict>
 </plist>

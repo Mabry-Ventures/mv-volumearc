@@ -2,10 +2,30 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSPrivacyCollectedDataTypes</key>
+	<!--
+		VolumeArcWatch (com.mabryventures.VolumeArc.watchkitapp) privacy
+		manifest. VOL-73.
+
+		Scope notes:
+		- Microphone / SpeechRecognizer: NOT used on watchOS (voice
+		  coaching is phone-only). No audio data collection here.
+		- Location: not used anywhere in VolumeArc.
+		- HealthKit: HKWorkoutSession / HKLiveWorkoutBuilder are
+		  watchOS-specific per HealthStore.swift. Watch target carries
+		  NSHealthShareUsageDescription / NSHealthUpdateUsageDescription
+		  and will request access as the workout UI wires up.
+	-->
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
 	<array/>
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
+		<!--
+			UserDefaults: UserDefaultsWatchSessionStateStore,
+			UserDefaultsWatchPendingPayloadStore, and the shared app-group
+			snapshot reader. App functionality only.
+		-->
 		<dict>
 			<key>NSPrivacyAccessedAPIType</key>
 			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
@@ -15,9 +35,25 @@
 			</array>
 		</dict>
 	</array>
-	<key>NSPrivacyTracking</key>
-	<false/>
-	<key>NSPrivacyTrackingDomains</key>
-	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array>
+		<!--
+			HealthKit data on watchOS: workout sessions, heart rate,
+			active energy. Same rationale as the iOS target — app
+			functionality, not linked to identity, not tracking.
+		-->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeHealthAndFitness</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
