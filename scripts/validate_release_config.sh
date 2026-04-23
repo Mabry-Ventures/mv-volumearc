@@ -105,6 +105,75 @@ if ! grep -F 'static let containerIdentifier: String = "iCloud.com.mabryventures
   exit 1
 fi
 
+# VOL-90: the canonical SPM lockfile lives at repo root; the workspace
+# copy is seeded from it (by the ruby generator on every run and by CI
+# before the build). If someone bumps a dependency version in the
+# generator but forgets to refresh the tracked `Package.resolved` (or
+# vice versa), this catches the drift before a build silently resolves
+# a different version. Runs before the `-showBuildSettings` calls below
+# because those fail opaquely on lockfile/requirement conflicts — this
+# check surfaces the real reason.
+ROOT_LOCKFILE="Package.resolved"
+WORKSPACE_LOCKFILE="VolumeArcApple.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+
+[[ -f "$ROOT_LOCKFILE" ]] || {
+  echo "FAIL: Missing root Package.resolved (canonical SPM lockfile, per VOL-90)" >&2
+  exit 1
+}
+
+# Force a resolve after the generator seeded the workspace copy from
+# root. If the generator's requirement conflicts with the root pin
+# (e.g. someone bumped `sentry_requirement` in the generator but didn't
+# refresh the tracked lockfile), xcodebuild will rewrite the workspace
+# copy — which we then catch with the drift check below.
+xcodebuild \
+  -resolvePackageDependencies \
+  -project "VolumeArcApple.xcodeproj" \
+  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
+  >/dev/null 2>&1 || true
+
+if [[ ! -f "$WORKSPACE_LOCKFILE" ]]; then
+  echo "FAIL: Workspace Package.resolved was not generated — xcodebuild -resolvePackageDependencies failed" >&2
+  exit 1
+fi
+
+extract_sentry_field() {
+  # $1 = file, $2 = field (version|revision)
+  python3 -c "
+import json, sys
+with open('$1') as f:
+    data = json.load(f)
+pins = [p for p in data.get('pins', []) if p.get('identity') == 'sentry-cocoa']
+if not pins:
+    sys.exit(1)
+print(pins[0]['state'].get('$2', ''))
+" 2>/dev/null || echo ""
+}
+
+root_sentry_ver=$(extract_sentry_field "$ROOT_LOCKFILE" version)
+root_sentry_rev=$(extract_sentry_field "$ROOT_LOCKFILE" revision)
+ws_sentry_ver=$(extract_sentry_field "$WORKSPACE_LOCKFILE" version)
+ws_sentry_rev=$(extract_sentry_field "$WORKSPACE_LOCKFILE" revision)
+
+if [[ -z "$root_sentry_rev" || -z "$root_sentry_ver" ]]; then
+  echo "FAIL: Root $ROOT_LOCKFILE missing sentry-cocoa pin" >&2
+  exit 1
+fi
+if [[ -z "$ws_sentry_rev" || -z "$ws_sentry_ver" ]]; then
+  echo "FAIL: Workspace $WORKSPACE_LOCKFILE missing sentry-cocoa pin" >&2
+  exit 1
+fi
+if [[ "$root_sentry_ver" != "$ws_sentry_ver" || "$root_sentry_rev" != "$ws_sentry_rev" ]]; then
+  echo "FAIL: sentry-cocoa pin drifted between root and workspace Package.resolved (VOL-90)" >&2
+  echo "  root:      $root_sentry_ver @ $root_sentry_rev" >&2
+  echo "  workspace: $ws_sentry_ver @ $ws_sentry_rev" >&2
+  echo "  Refresh with:" >&2
+  echo "    xcodebuild -resolvePackageDependencies -project VolumeArcApple.xcodeproj" >&2
+  echo "    cp $WORKSPACE_LOCKFILE $ROOT_LOCKFILE" >&2
+  exit 1
+fi
+echo "Package.resolved: root and workspace agree on sentry-cocoa $root_sentry_ver"
+
 tmp_settings="$(mktemp)"
 trap 'rm -f "$tmp_settings"' EXIT
 

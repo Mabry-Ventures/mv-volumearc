@@ -64,6 +64,19 @@ jobs:
       - name: Generate Xcode project
         run: ruby scripts/generate_xcode_project.rb
 
+      - name: Seed SPM lockfile into workspace
+        # VOL-90: the canonical `Package.resolved` lives at repo root
+        # because the `.xcworkspace/` dir is gitignored (rebuilt by
+        # xcodebuild on every resolve). Seeding the workspace copy from
+        # the tracked root copy pins the Sentry version the generator
+        # declared — otherwise xcodebuild would re-resolve against the
+        # upstream index and could pick a different commit on every run.
+        # Belt-and-suspenders: the ruby generator also seeds, but having
+        # it here makes the intent visible and survives generator churn.
+        run: |
+          mkdir -p VolumeArcApple.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+          cp Package.resolved VolumeArcApple.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
       - name: Clear stale system DerivedData
         # Belt-and-suspenders: scripts now use per-job DerivedData via
         # -derivedDataPath (VOL-75 P2 / PR #42), so stale system-level
