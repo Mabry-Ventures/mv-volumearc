@@ -1,6 +1,7 @@
 # VolumeArc Platform — Canonical Reference
 
 [![CI](https://github.com/Mabry-Ventures/mv-volumearc/actions/workflows/ci.yml/badge.svg)](https://github.com/Mabry-Ventures/mv-volumearc/actions/workflows/ci.yml)
+[![coverage](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FMabry-Ventures%2Fmv-volumearc%2Fmain%2Fdocs%2Fcoverage-trend.json&label=coverage&query=%24.records%5B-1%3A%5D.coverage&suffix=%25&color=brightgreen)](docs/TESTING.md#coverage-artifacts)
 
 This is the canonical source of truth for the VolumeArc Apple platform. AI-powered strength training coach for iOS and watchOS. Tracks workouts, provides real-time coaching via voice and text, syncs across devices with CloudKit, and surfaces training signals through widgets and Live Activities.
 

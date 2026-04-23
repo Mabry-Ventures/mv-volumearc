@@ -14,6 +14,12 @@ xcuserdata/
 # The project is Ruby-generated, so this directory is rebuilt by xcodebuild on every run.
 VolumeArcApple.xcodeproj/project.xcworkspace/
 
+# VOL-90: the canonical SPM lockfile lives at repo root, not inside the
+# gitignored workspace dir. Keep it tracked — CI seeds the workspace
+# copy from it (see `.github/workflows/ci.yml` + `scripts/generate_xcode_project.rb`)
+# so every dev + CI resolves to the same Sentry pin.
+!/Package.resolved
+
 # Signing & credentials
 *.mobileprovision
 *.p8
