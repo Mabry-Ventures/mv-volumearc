@@ -35,6 +35,7 @@ import HealthKit
     #expect(result?.contains("42") == true)
 }
 
+<<<<<<< HEAD
 // VOL-80: Regression test. The phone read set must stay small — only workouts.
 // Adding heart rate, active energy, sleep, HRV, etc. on the phone requires a
 // consumer for that data AND an updated `NSHealthShareUsageDescription` string
@@ -72,3 +73,17 @@ import HealthKit
     #expect(watchIdentifiers == HealthKitAuthorizationScope.watchReadIdentifiers)
 }
 #endif
+=======
+@Test func legalLinksAreHTTPS() {
+    // VOL-71: both legal URLs must parse and use https. App Store review
+    // will reject legal links that fall back to http or are malformed, even
+    // if the destination pages themselves aren't live yet.
+    #expect(LegalLinks.termsOfService.scheme == "https")
+    #expect(LegalLinks.termsOfService.host == "volumearc.app")
+    #expect(LegalLinks.termsOfService.path == "/terms")
+
+    #expect(LegalLinks.privacyPolicy.scheme == "https")
+    #expect(LegalLinks.privacyPolicy.host == "volumearc.app")
+    #expect(LegalLinks.privacyPolicy.path == "/privacy")
+}
+>>>>>>> origin/main
