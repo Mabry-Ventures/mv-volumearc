@@ -88,8 +88,19 @@ configure_target(app_target, bundle_id: 'com.mabryventures.VolumeArc', extra: {
   # (CFBundleExecutable, MinimumOSVersion, UIDeviceFamily, etc.) and
   # merges the simple `INFOPLIST_KEY_*` values above.
   'INFOPLIST_FILE' => 'App/Info.plist',
-  'CODE_SIGN_ENTITLEMENTS' => 'App/VolumeArc.entitlements',
 })
+
+# VOL-70: APS environment must be `production` for Release-signed IPAs or
+# App Store Connect will reject uploads and silently drop remote
+# notifications. Split entitlements per configuration so Debug /
+# simulator builds keep `development` (required for APNs sandbox
+# tokens) and Release builds ship `production`. Override after
+# `configure_target` so this stays a one-line pin rather than a
+# restructure of the shared helper.
+app_target.build_configurations.each do |config|
+  entitlements = config.name == 'Release' ? 'App/VolumeArc.Release.entitlements' : 'App/VolumeArc.Debug.entitlements'
+  config.build_settings['CODE_SIGN_ENTITLEMENTS'] = entitlements
+end
 configure_target(watch_target, bundle_id: 'com.mabryventures.VolumeArc.watchkitapp', extra: {
   'TARGETED_DEVICE_FAMILY' => '4',
   'PRODUCT_NAME' => 'VolumeArcWatch',
