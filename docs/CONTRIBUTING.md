@@ -55,6 +55,10 @@
 - Add accessibility labels to interactive elements
 - Respect `@Environment(\.accessibilityReduceMotion)` for animations
 
+### Lint scope
+
+SwiftLint (`.swiftlint.yml`) covers the full first-party Swift surface: `App`, `Watch`, `Widgets`, `WatchWidgets`, `Tests`, and `VolumeArcNative/Sources`. The CI lint step runs non-strict against the whole scope — pre-existing violations are tracked in VOL-87's progressive cleanup burndown. Warning thresholds are kept intentionally tight so debt stays visible in the CI log even while error thresholds are relaxed. Do not widen thresholds or add per-file disable comments to paper over new violations; fix them instead.
+
 ## Testing
 
 - Unit tests for business logic
