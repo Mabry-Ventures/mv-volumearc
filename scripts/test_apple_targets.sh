@@ -39,6 +39,7 @@ xcodebuild \
   -sdk iphonesimulator \
   -destination "platform=iOS Simulator,name=iPhone 17" \
   -derivedDataPath "$DERIVED_DATA_PATH" \
+  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
   CODE_SIGNING_ALLOWED=NO \
   test
 
@@ -50,5 +51,6 @@ xcodebuild \
   -sdk iphonesimulator \
   -destination "platform=iOS Simulator,name=iPhone 17" \
   -derivedDataPath "$DERIVED_DATA_PATH" \
+  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
   CODE_SIGNING_ALLOWED=NO \
   test
