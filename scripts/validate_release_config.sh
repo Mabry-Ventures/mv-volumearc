@@ -137,12 +137,14 @@ for required in "${widget_required[@]}"; do
   fi
 done
 
+# VolumeArcAppTests scheme has no build target (tests-only), so -scheme +
+# -derivedDataPath would resolve against nothing. The tests target has no
+# direct SPM deps of its own, so plain -target works and doesn't need the
+# artifact cache.
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
-  -scheme "VolumeArcAppTests" \
+  -target "VolumeArcAppTests" \
   -configuration Debug \
-  -derivedDataPath "$DERIVED_DATA_PATH" \
-  -skipPackagePluginValidation \
   -showBuildSettings >"$tmp_settings"
 
 test_required=(
