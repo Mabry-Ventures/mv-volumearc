@@ -90,6 +90,7 @@ xcodebuild \
   -scheme "VolumeArcApp" \
   -configuration Release \
   -derivedDataPath "$DERIVED_DATA_PATH" \
+  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
   -skipPackagePluginValidation \
   -showBuildSettings >"$tmp_settings"
 
@@ -122,6 +123,7 @@ xcodebuild \
   -scheme "VolumeArcWatch" \
   -configuration Release \
   -derivedDataPath "$DERIVED_DATA_PATH" \
+  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
   -skipPackagePluginValidation \
   -showBuildSettings >"$tmp_settings"
 
@@ -143,6 +145,7 @@ xcodebuild \
   -scheme "VolumeArcWidgets" \
   -configuration Release \
   -derivedDataPath "$DERIVED_DATA_PATH" \
+  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
   -skipPackagePluginValidation \
   -showBuildSettings >"$tmp_settings"
 
@@ -188,6 +191,7 @@ xcodebuild \
   -scheme "VolumeArcApp" \
   -configuration Release \
   -derivedDataPath "$DERIVED_DATA_PATH" \
+  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
   -skipPackagePluginValidation \
   -showBuildSettings >"$tmp_settings"
 
