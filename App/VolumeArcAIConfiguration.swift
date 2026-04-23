@@ -5,13 +5,20 @@ enum VolumeArcAIConfiguration {
     private static let secureStore = VolumeArcSecureStore()
     private static let baseURLKey = "ai.relay.baseURL"
 
-    /// Hosts we will accept for the OpenAI relay base URL. The relay is
-    /// operated by Mabry Ventures — any other host would route prompt
-    /// traffic (and in principle user PII) to a third party and must be
-    /// rejected at read-time. Case-insensitive match; extend here when
-    /// adding new relay endpoints.
+    /// Hosts we will accept for the AI relay base URL. The relay is operated
+    /// by Mabry Ventures — any other host would route prompt traffic (and
+    /// in principle user PII) to a third party and must be rejected at
+    /// read-time. Case-insensitive match; extend here when adding new relay
+    /// endpoints.
+    ///
+    /// Current production target is `volumearc-ai-relay.jared-b6b.workers.dev`
+    /// (auto-assigned Cloudflare subdomain). `relay.volumearc.app` ships when
+    /// the custom domain is wired in Cloudflare — iOS accepts both so the
+    /// flip is zero-downtime. `relay.mabryventures.com` is kept as a legacy
+    /// fallback.
     static let allowedHosts: Set<String> = [
         "relay.volumearc.app",
+        "volumearc-ai-relay.jared-b6b.workers.dev",
         "relay.mabryventures.com",
     ]
 

@@ -33,9 +33,6 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 >
 > **Known hygiene gaps** (carried from prior audit):
 > - **VOL-52** (Backlog) — Test coverage enforcement gate in CI
-> - **VOL-61** (Backlog) — `FeatureFlagProvider` is dead code; flags gate nothing
-> - **VOL-66** (Backlog) — AI streaming is synthetic word-chunking, not real progressive streaming
-> - **VOL-69** (Backlog) — Liquid Glass claim — adopt real iOS 26 APIs or update docs
 >
 > **Infrastructure / release** (new): `Build & Test` must be a required status check, self-hosted runner needs SwiftLint install + SPM cache fix + Ruby upgrade, `CI_TAG_BUILD=1` needs to be set in the deploy job for version-bump enforcement to fire, add CODEOWNERS + Dependabot + PR/Issue templates.
 >
@@ -44,7 +41,7 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 | System | Status | Notes |
 |--------|--------|-------|
 | iPhone UI | Implemented | Full tab bar (Today, Workouts, Coach, Signals, Profile). `RootDashboardView` presents `OnboardingView` via `fullScreenCover` on first launch. `ProfileView` presents `PaywallView` via sheet on upgrade tap. Localized, accessible, Dynamic Type, hero transitions, toast presenter all working |
-| AI coaching | Implemented (synthetic streaming — VOL-66) | Three-provider chain works for non-streaming responses. All three providers (`OpenAIRelayCoachProvider`, `LocalHeuristicAICoachProvider`, `FoundationModelCoachProvider`) route their outbound prompts through `CoachPromptTemplate.render(intent:contextBlock:question:style:)` so the system prompt, intent envelope, structured context block, and template marker are identical across the cloud, on-device, and offline paths. `streamCoachResponse` is still synthetic word-chunking, not real progressive streaming |
+| AI coaching | Implemented | Three-provider chain with real progressive SSE streaming from the Cloudflare Worker relay to Gemini 3.1 Flash Lite (default) / Pro (premium tier). All three providers route through `CoachPromptTemplate` for identical system prompt / intent envelope / context block across cloud, on-device, and offline paths. Relay endpoint: `volumearc-ai-relay.jared-b6b.workers.dev` (see [`docs/RELAY.md`](RELAY.md)) |
 | Voice coaching | Implemented (single-turn) | `OpenAIRelayVoiceTransport` delegates to the same relay-backed `AICoachProvider` chain; `LiveVoiceCoachOrchestrator` exposes `speak(prompt:context:)` and lifecycle hooks. Live duplex audio is explicit future work |
 | Cloud sync | Implemented (entitlement-gated at runtime) | CloudKit container ID is a compile-time constant (`App/VolumeArcCloudConfiguration.swift`). `CKModifyRecordsOperation` push + `CKFetchRecordZoneChangesOperation` pull + cursor persistence work on device/TestFlight builds with entitlements. Every repository write path calls `stageUpsert` into `OutboundSyncQueue`, which `CloudSyncCoordinator` drains on `syncCycle`. Simulator Debug builds fall back to `UnavailableCloudSyncTransport` because they lack the entitlement |
 | Watch app | Implemented | HealthKit `HKWorkoutSession` + `HKLiveWorkoutBuilder`, rest timer, decisions, accessibility, offline payload queue, real phone/watch sync via WCSession |
