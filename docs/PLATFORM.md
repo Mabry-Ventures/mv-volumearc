@@ -25,14 +25,16 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 
 ## Implementation Status
 
-> **Status: Pre-production — hygiene and hardening.** The original post-95/95 launch blockers (VOL-55, 56, 57, 58, 59, 62, 63, 65, 67) shipped in PRs [#23](https://github.com/Mabry-Ventures/mv-volumearc/pull/23)–[#31](https://github.com/Mabry-Ventures/mv-volumearc/pull/31) between 2026-04-14 and 2026-04-20. The end-to-end wiring is now in place, but the app still has App Store blockers (production APS environment, paywall legal links, privacy manifest completeness, Sentry PII scrubbing) and hygiene gaps (dead feature flags, synthetic AI streaming, test coverage gate, file-size refactors). **Current open work is tracked in the Linear "Go-Live Readiness" project** on the VolumeArc team.
+> **Status: Pre-production — hygiene and hardening.** The original post-95/95 launch blockers (VOL-55, 56, 57, 58, 59, 62, 63, 65, 67) shipped in PRs [#23](https://github.com/Mabry-Ventures/mv-volumearc/pull/23)–[#31](https://github.com/Mabry-Ventures/mv-volumearc/pull/31) between 2026-04-14 and 2026-04-20. The end-to-end wiring is now in place, but the app still has App Store blockers (production APS environment, paywall legal links, privacy manifest completeness, Sentry PII scrubbing) and hygiene gaps (dead feature flags, synthetic AI streaming, file-size refactors). **Current open work is tracked in the Linear "Go-Live Readiness" project** on the VolumeArc team.
 >
 > ### Open items by theme
 >
 > **App Store submission blockers** (new, from 2026-04-22 audit): `aps-environment` hardcoded to `development`, paywall Terms/Privacy links non-functional, privacy manifest reason-coverage incomplete, Sentry crash reports not PII-scrubbed.
 >
 > **Known hygiene gaps** (carried from prior audit):
-> - **VOL-52** (Backlog) — Test coverage enforcement gate in CI
+> - **VOL-61** (Backlog) — `FeatureFlagProvider` is dead code; flags gate nothing
+> - **VOL-66** (Backlog) — AI streaming is synthetic word-chunking, not real progressive streaming
+> - **VOL-69** (Backlog) — Liquid Glass claim — adopt real iOS 26 APIs or update docs
 >
 > **Infrastructure / release** (new): `Build & Test` must be a required status check, self-hosted runner needs SwiftLint install + SPM cache fix + Ruby upgrade, `CI_TAG_BUILD=1` needs to be set in the deploy job for version-bump enforcement to fire, add CODEOWNERS + Dependabot + PR/Issue templates.
 >
@@ -41,7 +43,7 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 | System | Status | Notes |
 |--------|--------|-------|
 | iPhone UI | Implemented | Full tab bar (Today, Workouts, Coach, Signals, Profile). `RootDashboardView` presents `OnboardingView` via `fullScreenCover` on first launch. `ProfileView` presents `PaywallView` via sheet on upgrade tap. Localized, accessible, Dynamic Type, hero transitions, toast presenter all working |
-| AI coaching | Implemented | Three-provider chain with real progressive SSE streaming from the Cloudflare Worker relay to Gemini 3.1 Flash Lite (default) / Pro (premium tier). All three providers route through `CoachPromptTemplate` for identical system prompt / intent envelope / context block across cloud, on-device, and offline paths. Relay endpoint: `volumearc-ai-relay.jared-b6b.workers.dev` (see [`docs/RELAY.md`](RELAY.md)) |
+| AI coaching | Implemented (synthetic streaming — VOL-66) | Three-provider chain works for non-streaming responses. All three providers (`OpenAIRelayCoachProvider`, `LocalHeuristicAICoachProvider`, `FoundationModelCoachProvider`) route their outbound prompts through `CoachPromptTemplate.render(intent:contextBlock:question:style:)` so the system prompt, intent envelope, structured context block, and template marker are identical across the cloud, on-device, and offline paths. `streamCoachResponse` is still synthetic word-chunking, not real progressive streaming |
 | Voice coaching | Implemented (single-turn) | `OpenAIRelayVoiceTransport` delegates to the same relay-backed `AICoachProvider` chain; `LiveVoiceCoachOrchestrator` exposes `speak(prompt:context:)` and lifecycle hooks. Live duplex audio is explicit future work |
 | Cloud sync | Implemented (entitlement-gated at runtime) | CloudKit container ID is a compile-time constant (`App/VolumeArcCloudConfiguration.swift`). `CKModifyRecordsOperation` push + `CKFetchRecordZoneChangesOperation` pull + cursor persistence work on device/TestFlight builds with entitlements. Every repository write path calls `stageUpsert` into `OutboundSyncQueue`, which `CloudSyncCoordinator` drains on `syncCycle`. Simulator Debug builds fall back to `UnavailableCloudSyncTransport` because they lack the entitlement |
 | Watch app | Implemented | HealthKit `HKWorkoutSession` + `HKLiveWorkoutBuilder`, rest timer, decisions, accessibility, offline payload queue, real phone/watch sync via WCSession |
@@ -56,7 +58,7 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 | Feature flags | Defined but unused (VOL-61) | `LocalFeatureFlagProvider` ships and is stored on `WorkoutDashboardModel`, but no code anywhere calls `.isEnabled()`. Flags gate nothing |
 | Subscriptions | Implemented | StoreKit 2 store and `PaywallView` are wired, presented from `ProfileView`, and drive entitlement state. Terms/Privacy links open placeholder URLs (`https://volumearc.app/terms`, `/privacy`) via `LegalLinks` — marketing pages go live closer to launch (VOL-71). Guideline 3.1.2 auto-renewal disclosure present |
 | Build pipeline | Partial | Ruby-generated Xcode project, CI on self-hosted M4, Fastlane, archive script, hard-failing `validate_release_config.sh` on Info.plist keys/URL schemes/BGTask IDs. Open: SwiftLint not installed on runner (silently warn-skipped), `Build & Test` not a required status check, `CI_TAG_BUILD=1` not set in deploy job so version-bump enforcement never fires |
-| Testing | Partial (coverage gate pending — VOL-52) | ~80 unit + integration tests pass. XCUITest smoke suite runs on CI. `VolumeArcLaunchArguments` are live and wire into `VolumeArcLaunchBootstrapper`. Dashboard integration tests cover the create → log → complete chain against in-memory SwiftData. Coverage enforcement gate still open |
+| Testing | Implemented (80% VolumeArcCore coverage gate enforced — VOL-52) | ~290 unit + integration tests pass. XCUITest smoke suite runs on CI. `VolumeArcLaunchArguments` are live and wire into `VolumeArcLaunchBootstrapper`. Dashboard integration tests cover the create → log → complete chain against in-memory SwiftData. CI now blocks merges that drop `VolumeArcCore` line coverage below 80% via `scripts/check_coverage.sh`, which parses the xcresult bundle from `xcodebuild test -enableCodeCoverage YES`. See [`docs/TESTING.md`](TESTING.md#volumearccore-80-line-coverage-gate-vol-52) for the gate mechanics |
 | App Store readiness | Blockers open | `aps-environment` entitlement hardcoded to `development` (Release builds will fail production signing), privacy manifest reason-coverage for HealthKit + microphone incomplete, Sentry crash reports lack PII scrubbing. Paywall legal links now wired to placeholder URLs via `LegalLinks` (VOL-71 resolved — marketing pages stand up closer to launch). Tracked in Linear Go-Live Readiness project |
 
 ## Targets

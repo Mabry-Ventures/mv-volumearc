@@ -35,6 +35,13 @@ reset_app_state() {
 }
 
 # Unit tests
+# VOL-52: -enableCodeCoverage YES + -resultBundlePath give us an .xcresult
+# bundle that check_coverage.sh parses via `xcrun xccov view --report --json`
+# to enforce the 80% VolumeArcCore line-coverage gate. Remove any stale
+# xcresult from a prior run before this invocation — xcodebuild refuses to
+# write to an existing resultBundlePath.
+TEST_RESULT_BUNDLE="${TEST_RESULT_BUNDLE:-$DERIVED_DATA_PATH/TestResults.xcresult}"
+rm -rf "$TEST_RESULT_BUNDLE"
 reset_app_state
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
@@ -43,6 +50,8 @@ xcodebuild \
   -destination "platform=iOS Simulator,name=iPhone 17" \
   -derivedDataPath "$DERIVED_DATA_PATH" \
   -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
+  -enableCodeCoverage YES \
+  -resultBundlePath "$TEST_RESULT_BUNDLE" \
   CODE_SIGNING_ALLOWED=NO \
   test
 
