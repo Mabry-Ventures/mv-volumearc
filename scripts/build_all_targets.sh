@@ -24,6 +24,7 @@ xcodebuild \
   -sdk iphonesimulator \
   -configuration Debug \
   -derivedDataPath "$DERIVED_DATA_PATH" \
+  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
   CODE_SIGNING_ALLOWED=NO \
   build
 
@@ -33,6 +34,7 @@ xcodebuild \
   -sdk iphonesimulator \
   -configuration Debug \
   -derivedDataPath "$DERIVED_DATA_PATH" \
+  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
   CODE_SIGNING_ALLOWED=NO \
   build
 
@@ -42,6 +44,7 @@ xcodebuild \
   -sdk watchsimulator \
   -configuration Debug \
   -derivedDataPath "$DERIVED_DATA_PATH" \
+  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
   CODE_SIGNING_ALLOWED=NO \
   build
 
@@ -51,5 +54,6 @@ xcodebuild \
   -sdk watchsimulator \
   -configuration Debug \
   -derivedDataPath "$DERIVED_DATA_PATH" \
+  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
   CODE_SIGNING_ALLOWED=NO \
   build
