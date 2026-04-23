@@ -26,7 +26,7 @@ jobs:
     runs-on: [self-hosted, mv-shared]
     steps:
       - name: Request Codex review for current head SHA
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const owner = context.repo.owner;
@@ -65,7 +65,7 @@ jobs:
     runs-on: [self-hosted, mv-shared]
     steps:
       - name: Wait for Codex review signal
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           AI_LOGINS: '["codex","chatgpt-codex-connector[bot]"]'
           AI_NAME: Codex
@@ -181,7 +181,7 @@ jobs:
     runs-on: [self-hosted, mv-shared]
     steps:
       - name: Wait for CodeRabbit review signal
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           AI_LOGINS: '["coderabbitai[bot]","coderabbitai"]'
           AI_NAME: CodeRabbit

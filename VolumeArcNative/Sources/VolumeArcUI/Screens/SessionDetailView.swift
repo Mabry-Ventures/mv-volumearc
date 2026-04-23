@@ -44,6 +44,22 @@ public struct SessionDetailView: View {
     }
 
     private var metricGrid: some View {
+        // Two adjacent glass-backed metric cards. Wrap in `GlassEffectContainer`
+        // on iOS 26 so the system's coordinated glass renderer composes the
+        // two surfaces as a single material treatment instead of two separate
+        // glass passes that would visibly seam at the spacing gap.
+        Group {
+            if #available(iOS 26.0, *) {
+                GlassEffectContainer(spacing: VA.Space.md) {
+                    metricGridContent
+                }
+            } else {
+                metricGridContent
+            }
+        }
+    }
+
+    private var metricGridContent: some View {
         HStack(spacing: VA.Space.md) {
             VACard(style: .glass) {
                 VStack(alignment: .leading, spacing: VA.Space.xs) {

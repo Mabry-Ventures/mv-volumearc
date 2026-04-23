@@ -152,10 +152,12 @@ public extension View {
         self.shadow(color: shadow.color, radius: shadow.radius, x: shadow.x, y: shadow.y)
     }
 
-    /// Standard VA card styling with glass material and shadow.
+    /// Standard VA card styling with Liquid Glass material and shadow.
+    /// Glass falls back to a solid surface fill when the user has
+    /// `accessibilityReduceTransparency` enabled — see `VA.Materials`.
     func vaCardStyle(elevation: VA.Shadow = .sm, cornerRadius: CGFloat = VA.Radius.lg) -> some View {
         self
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .vaGlassBackground(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .vaShadow(elevation)
     }
 }

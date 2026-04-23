@@ -25,7 +25,7 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 
 ## Implementation Status
 
-> **Status: Pre-production — hygiene and hardening.** The original post-95/95 launch blockers (VOL-55, 56, 57, 58, 59, 62, 63, 65, 67) shipped in PRs [#23](https://github.com/Mabry-Ventures/mv-volumearc/pull/23)–[#31](https://github.com/Mabry-Ventures/mv-volumearc/pull/31) between 2026-04-14 and 2026-04-20. The end-to-end wiring is now in place, but the app still has App Store blockers (production APS environment, paywall legal links, privacy manifest completeness, Sentry PII scrubbing) and hygiene gaps (dead feature flags, synthetic AI streaming, unused `CoachPromptTemplate`, test coverage gate, file-size refactors). **Current open work is tracked in the Linear "Go-Live Readiness" project** on the VolumeArc team.
+> **Status: Pre-production — hygiene and hardening.** The original post-95/95 launch blockers (VOL-55, 56, 57, 58, 59, 62, 63, 65, 67) shipped in PRs [#23](https://github.com/Mabry-Ventures/mv-volumearc/pull/23)–[#31](https://github.com/Mabry-Ventures/mv-volumearc/pull/31) between 2026-04-14 and 2026-04-20. The end-to-end wiring is now in place, but the app still has App Store blockers (production APS environment, paywall legal links, privacy manifest completeness, Sentry PII scrubbing) and hygiene gaps (dead feature flags, synthetic AI streaming, test coverage gate, file-size refactors). **Current open work is tracked in the Linear "Go-Live Readiness" project** on the VolumeArc team.
 >
 > ### Open items by theme
 >
@@ -33,7 +33,7 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 >
 > **Known hygiene gaps** (carried from prior audit):
 > - **VOL-52** (Backlog) — Test coverage enforcement gate in CI
-> - **VOL-64** (Backlog) — `CoachPromptTemplate` exists but is never used
+> - **VOL-61** (Backlog) — `FeatureFlagProvider` is dead code; flags gate nothing
 > - **VOL-66** (Backlog) — AI streaming is synthetic word-chunking, not real progressive streaming
 > - **VOL-69** (Backlog) — Liquid Glass claim — adopt real iOS 26 APIs or update docs
 >
@@ -44,7 +44,7 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 | System | Status | Notes |
 |--------|--------|-------|
 | iPhone UI | Implemented | Full tab bar (Today, Workouts, Coach, Signals, Profile). `RootDashboardView` presents `OnboardingView` via `fullScreenCover` on first launch. `ProfileView` presents `PaywallView` via sheet on upgrade tap. Localized, accessible, Dynamic Type, hero transitions, toast presenter all working |
-| AI coaching | Implemented (synthetic streaming, dead template — VOL-64, VOL-66) | Three-provider chain works for non-streaming responses. `streamCoachResponse` is synthetic word-chunking, not real progressive streaming. `CoachPromptTemplate` is defined but unused — coach builds prompts ad-hoc |
+| AI coaching | Implemented (synthetic streaming — VOL-66) | Three-provider chain works for non-streaming responses. All three providers (`OpenAIRelayCoachProvider`, `LocalHeuristicAICoachProvider`, `FoundationModelCoachProvider`) route their outbound prompts through `CoachPromptTemplate.render(intent:contextBlock:question:style:)` so the system prompt, intent envelope, structured context block, and template marker are identical across the cloud, on-device, and offline paths. `streamCoachResponse` is still synthetic word-chunking, not real progressive streaming |
 | Voice coaching | Implemented (single-turn) | `OpenAIRelayVoiceTransport` delegates to the same relay-backed `AICoachProvider` chain; `LiveVoiceCoachOrchestrator` exposes `speak(prompt:context:)` and lifecycle hooks. Live duplex audio is explicit future work |
 | Cloud sync | Implemented (entitlement-gated at runtime) | CloudKit container ID is a compile-time constant (`App/VolumeArcCloudConfiguration.swift`). `CKModifyRecordsOperation` push + `CKFetchRecordZoneChangesOperation` pull + cursor persistence work on device/TestFlight builds with entitlements. Every repository write path calls `stageUpsert` into `OutboundSyncQueue`, which `CloudSyncCoordinator` drains on `syncCycle`. Simulator Debug builds fall back to `UnavailableCloudSyncTransport` because they lack the entitlement |
 | Watch app | Implemented | HealthKit `HKWorkoutSession` + `HKLiveWorkoutBuilder`, rest timer, decisions, accessibility, offline payload queue, real phone/watch sync via WCSession |
@@ -56,7 +56,7 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 | Secure storage | Implemented | Keychain with fallback, device ID stability |
 | Relay auth | Implemented | Actor-based session provider, token caching, expiration skew, real test coverage against production types |
 | Telemetry | Implemented (PII scrubbing pending) | Fanout sink architecture. `SentryTelemetrySink` forwards events as breadcrumbs and captures `.error` severity as Sentry messages. `UserDefaultsTelemetrySink` and `OSLogTelemetrySink` persist/log for diagnostics. `beforeSend` scrubbing for user-identifiable data is not yet configured |
-| Feature flags | Implemented | `LocalFeatureFlagProvider` (UserDefaults-backed) drives four runtime gates wired at launch via a shared `FlagGateTelemetry`: `voiceCoaching` swaps `LiveVoiceCoachOrchestrator` to `UnavailableVoiceTransport` when off; `cloudSync` short-circuits `CloudSyncCoordinator.syncCycle` with a no-op (queue + transport stay alive for runtime re-enable); `liveActivities` disables `VolumeArcLiveActivityController.startOrUpdate` / `restoreStoredStateIfAvailable`; `foundationModelCoach` drops `FoundationModelCoachProvider` from the provider chain so the chain collapses to `relay → local`. Each gate fires a one-shot `feature.flag.applied` telemetry event at `.info` severity on first resolution per launch |
+| Feature flags | Defined but unused (VOL-61) | `LocalFeatureFlagProvider` ships and is stored on `WorkoutDashboardModel`, but no code anywhere calls `.isEnabled()`. Flags gate nothing |
 | Subscriptions | Implemented | StoreKit 2 store and `PaywallView` are wired, presented from `ProfileView`, and drive entitlement state. Terms/Privacy links open placeholder URLs (`https://volumearc.app/terms`, `/privacy`) via `LegalLinks` — marketing pages go live closer to launch (VOL-71). Guideline 3.1.2 auto-renewal disclosure present |
 | Build pipeline | Partial | Ruby-generated Xcode project, CI on self-hosted M4, Fastlane, archive script, hard-failing `validate_release_config.sh` on Info.plist keys/URL schemes/BGTask IDs. Open: SwiftLint not installed on runner (silently warn-skipped), `Build & Test` not a required status check, `CI_TAG_BUILD=1` not set in deploy job so version-bump enforcement never fires |
 | Testing | Partial (coverage gate pending — VOL-52) | ~80 unit + integration tests pass. XCUITest smoke suite runs on CI. `VolumeArcLaunchArguments` are live and wire into `VolumeArcLaunchBootstrapper`. Dashboard integration tests cover the create → log → complete chain against in-memory SwiftData. Coverage enforcement gate still open |
@@ -83,7 +83,7 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 
 **Persistence** (`VolumeArcPersistenceController.swift`): SwiftData with cascading fallback -- CloudSynced -> LocalFallback -> InMemoryFallback -> Unavailable. Seeds default `UserProfileRecord` and `TrainingPlanRecord` on first launch.
 
-**AI coaching** (`VolumeArcAIRuntimeFactory.swift`): Three-tier provider chain with `AsyncThrowingStream` streaming, memory append via `CoachMemoryRepository`, and structured output parsing:
+**AI coaching** (`VolumeArcAIRuntimeFactory.swift`): Three-tier provider chain with `AsyncThrowingStream` streaming, memory append via `CoachMemoryRepository`, and structured output parsing. Every provider routes its outbound prompt through `CoachPromptTemplate.render(...)` so the system prompt, per-intent envelope, structured context block, and template marker are identical across the cloud, on-device, and offline paths — a regression that bypasses the template drops the marker and trips `VolumeArcCoachPromptTemplateTests`:
 1. `FoundationModelCoachProvider` (on-device, iOS 26.0+ only)
 2. `OpenAIRelayCoachProvider` (cloud relay)
 3. `LocalHeuristicAICoachProvider` (offline fallback)
@@ -121,18 +121,7 @@ Fanout sink: `InMemoryTelemetrySink` (bootstrap) + `UserDefaultsTelemetrySink` (
 
 ## Feature Flags
 
-`FeatureFlagProvider` protocol in `VolumeArcCore` with `LocalFeatureFlagProvider` (UserDefaults-backed). Flags: `voiceCoaching`, `cloudSync`, `liveActivities`, `foundationModelCoach`. Overridable per-flag for development; all default-on.
-
-**Runtime wiring (VOL-61).** `VolumeArcApp.init` constructs a single `FlagGateTelemetry` around the shared provider + telemetry sink and passes it by explicit DI to every gating surface:
-
-| Flag | Gate point | Off-state behavior |
-|------|-----------|--------------------|
-| `voiceCoaching` | `VolumeArcAIRuntimeFactory.makeVoiceCoach` | Installs `UnavailableVoiceTransport` (every call throws `AIRuntimeIntegrationError.relayUnavailable`). Orchestrator object stays alive |
-| `cloudSync` | `CloudSyncCoordinator.syncCycle` | Early-exit with `return 0`. Transport + outbound queue are not torn down — flipping the flag back on resumes sync on the next cycle without re-bootstrap |
-| `liveActivities` | `VolumeArcLiveActivityController.startOrUpdate` / `restoreStoredStateIfAvailable` | Methods become no-ops. `end()` intentionally stays active so already-running activities can tear down cleanly when the flag flips off |
-| `foundationModelCoach` | `VolumeArcAIRuntimeFactory.makeCoachProvider` | `FoundationModelCoachProvider` is skipped from the provider chain; chain collapses to `relay → local` |
-
-`FlagGateTelemetry.recordIfFirst(_:)` is the single choke point callers use — it resolves `isEnabled` and emits a one-shot `.info`-severity `feature.flag.applied` event (category: `feature.flag.applied`, name: flag raw value, metadata: `{flag, enabled}`) the first time each flag is resolved for the process lifetime. Dedupe is per-gate-instance, guarded by `NSLock`. The recorder is instantiated once at launch.
+`FeatureFlagProvider` protocol in `VolumeArcCore` with `LocalFeatureFlagProvider` (UserDefaults-backed). Flags: `voiceCoaching`, `cloudSync`, `liveActivities`, `foundationModelCoach`. Overridable per-flag for development. Wired into feature gates on the paywall, runtime factory, and live activity controller.
 
 ## Network Reachability
 
