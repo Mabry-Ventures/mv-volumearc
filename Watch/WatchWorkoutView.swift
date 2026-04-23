@@ -318,7 +318,8 @@ struct WatchWorkoutView: View {
                     .font(.title3.bold())
                     .accessibilityLabel("Exercise: \(model.autopilot.nextExerciseName)")
 
-                Text("\(Int(model.autopilot.nextTarget.weight))\(model.autopilot.nextTarget.unit) x \(model.autopilot.nextTarget.repRange.lowerBound)-\(model.autopilot.nextTarget.repRange.upperBound)")
+                let nextTarget = model.autopilot.nextTarget
+                Text("\(Int(nextTarget.weight))\(nextTarget.unit) x \(nextTarget.repRange.lowerBound)-\(nextTarget.repRange.upperBound)")
                     .font(.headline)
                     .foregroundStyle(.orange)
                     .accessibilityValue("\(Int(model.autopilot.nextTarget.weight)) pounds, \(model.autopilot.nextTarget.repRange.lowerBound) to \(model.autopilot.nextTarget.repRange.upperBound) reps")
