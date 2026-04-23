@@ -67,7 +67,7 @@ configure_target(app_target, bundle_id: 'com.mabryventures.VolumeArc', extra: {
   'PRODUCT_NAME' => 'VolumeArc',
   'TARGETED_DEVICE_FAMILY' => '1,2',
   'INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents' => 'YES',
-  'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc reads your workout and recovery data to personalize progression, readiness, and session planning.',
+  'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc reads your completed workouts from Apple Health to show your training history and calculate readiness.',
   'INFOPLIST_KEY_NSHealthUpdateUsageDescription' => 'VolumeArc writes completed workouts so your training history stays in sync with Apple Health.',
   'INFOPLIST_KEY_NSMicrophoneUsageDescription' => 'VolumeArc uses the microphone for voice coaching requests and voice workout logging.',
   'INFOPLIST_KEY_NSSpeechRecognitionUsageDescription' => 'VolumeArc uses speech recognition to understand live coaching requests and voice workout notes.',
@@ -107,7 +107,7 @@ configure_target(watch_target, bundle_id: 'com.mabryventures.VolumeArc.watchkita
   'INFOPLIST_KEY_WKApplication' => 'YES',
   'INFOPLIST_KEY_WKCompanionAppBundleIdentifier' => 'com.mabryventures.VolumeArc',
   'INFOPLIST_KEY_UISupportedInterfaceOrientations' => 'UIInterfaceOrientationPortrait',
-  'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc uses HealthKit on Apple Watch to run live workout sessions and keep your training history accurate.',
+  'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc reads workouts, heart rate, and active energy on Apple Watch so live strength sessions save with accurate training history, heart-rate charts, and calorie totals.',
   'INFOPLIST_KEY_NSHealthUpdateUsageDescription' => 'VolumeArc writes completed watch workouts to Apple Health.',
   'CODE_SIGN_ENTITLEMENTS' => 'Watch/VolumeArcWatch.entitlements',
 })
