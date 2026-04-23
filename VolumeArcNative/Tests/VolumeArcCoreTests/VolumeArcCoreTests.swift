@@ -1,5 +1,8 @@
 import Testing
 @testable import VolumeArcCore
+#if canImport(HealthKit)
+import HealthKit
+#endif
 
 @Test func progressionEngineEvaluatesReadiness() {
     let engine = ProgressionEngine()
@@ -31,3 +34,41 @@ import Testing
     #expect(result != nil)
     #expect(result?.contains("42") == true)
 }
+
+// VOL-80: Regression test. The phone read set must stay small — only workouts.
+// Adding heart rate, active energy, sleep, HRV, etc. on the phone requires a
+// consumer for that data AND an updated `NSHealthShareUsageDescription` string
+// in `scripts/generate_xcode_project.rb` that names the new category.
+@Test func phoneHealthKitReadScopeIsWorkoutsOnly() {
+    #expect(HealthKitAuthorizationScope.phoneReadIdentifiers == ["HKWorkoutTypeIdentifier"])
+}
+
+// VOL-80: Regression test. Watch adds heart rate + active energy so the live
+// workout session can save an HR chart and calorie total into Apple Health.
+// If you remove either, `HKLiveWorkoutDataSource` will silently drop the
+// matching channel from the saved workout.
+@Test func watchHealthKitReadScopeCoversLiveWorkoutQuantities() {
+    #expect(HealthKitAuthorizationScope.watchReadIdentifiers == [
+        "HKWorkoutTypeIdentifier",
+        "HKQuantityTypeIdentifierHeartRate",
+        "HKQuantityTypeIdentifierActiveEnergyBurned"
+    ])
+}
+
+@Test func healthKitWriteScopeIsWorkoutsOnly() {
+    #expect(HealthKitAuthorizationScope.sharedWriteIdentifiers == ["HKWorkoutTypeIdentifier"])
+}
+
+#if canImport(HealthKit)
+// VOL-80: Cross-check the runtime HKObjectType set matches the string
+// identifiers declared in `HealthKitAuthorizationScope`. Guards against the
+// two declarations drifting (e.g. someone adds a read type to the runtime
+// request and forgets to update the scope manifest the tests/usage-desc rely on).
+@Test func runtimeReadSetMatchesAuthorizationScope() {
+    let phoneIdentifiers = Set(HealthKitRuntimeStore.phoneReadTypes().map(\.identifier))
+    #expect(phoneIdentifiers == HealthKitAuthorizationScope.phoneReadIdentifiers)
+
+    let watchIdentifiers = Set(HealthKitRuntimeStore.watchReadTypes().map(\.identifier))
+    #expect(watchIdentifiers == HealthKitAuthorizationScope.watchReadIdentifiers)
+}
+#endif
