@@ -225,6 +225,11 @@ add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   'VolumeArcPremiumCatalog.swift',
   'VolumeArcRelaySessionProvider.swift',
   'VolumeArcSecureStore.swift',
+  # VOL-72: included in the test target so
+  # `VolumeArcSentryPIIScrubberTests` can unit-test the scrubber's
+  # logic against real `Event`/`Breadcrumb` instances. Guarded by
+  # `#if canImport(Sentry)` inside the file.
+  'VolumeArcSentryPIIScrubber.swift',
   'VolumeArcWidgetController.swift',
 ])
 
@@ -242,6 +247,16 @@ sentry_dep = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDepend
 sentry_dep.package = sentry_ref
 sentry_dep.product_name = 'Sentry'
 app_target.package_product_dependencies << sentry_dep
+
+# VOL-72: Sentry dependency also attached to the unit-test target so
+# `VolumeArcSentryPIIScrubberTests` can instantiate `Event` /
+# `Breadcrumb` for scrubber assertions. The scrubber source itself is
+# compiled into both targets via `add_selected_swift_sources` and
+# guarded by `#if canImport(Sentry)`.
+sentry_tests_dep = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+sentry_tests_dep.package = sentry_ref
+sentry_tests_dep.product_name = 'Sentry'
+app_tests_target.package_product_dependencies << sentry_tests_dep
 
 project.root_object.attributes['TargetAttributes'] ||= {}
 project.targets.each do |target|
