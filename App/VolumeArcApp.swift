@@ -53,7 +53,7 @@ struct VolumeArcApp: App {
     private let dashboardModel: WorkoutDashboardModel
     private let widgetController = VolumeArcWidgetController()
     #if canImport(ActivityKit)
-    private let liveActivityController = VolumeArcLiveActivityController()
+    private let liveActivityController: VolumeArcLiveActivityController
     #endif
     #if canImport(SwiftData)
     private let persistence = VolumeArcPersistenceController.shared
@@ -96,8 +96,6 @@ struct VolumeArcApp: App {
             }
         }
         #endif
-        let aiProvider = VolumeArcAIRuntimeFactory.makeCoachProvider()
-        let voiceCoach = VolumeArcAIRuntimeFactory.makeVoiceCoach()
         let healthStore = Self.makeHealthStore()
         let voicePermissionStore = Self.makeVoicePermissionStore()
         let accountSessionStore = Self.makeAccountSessionStore()
@@ -106,6 +104,20 @@ struct VolumeArcApp: App {
         let telemetrySink = Self.makeTelemetrySink(initialEvents: persistence.bootstrapTelemetryEvents)
         #else
         let telemetrySink = Self.makeTelemetrySink()
+        #endif
+        // VOL-61: single `FeatureFlagProvider` + `FlagGateTelemetry`
+        // constructed once and threaded by explicit DI into every gating
+        // surface — the runtime factory (voice + Foundation Models), the
+        // cloud-sync coordinator, the live-activity controller, and the
+        // dashboard model. No global singleton: the dashboard still
+        // exposes its own reference so UI / diagnostics can read / write
+        // overrides through the same store.
+        let featureFlags: FeatureFlagProvider = LocalFeatureFlagProvider()
+        let flagGate = FlagGateTelemetry(flags: featureFlags, telemetry: telemetrySink)
+        let aiProvider = VolumeArcAIRuntimeFactory.makeCoachProvider(flagGate: flagGate)
+        let voiceCoach = VolumeArcAIRuntimeFactory.makeVoiceCoach(flagGate: flagGate)
+        #if canImport(ActivityKit)
+        self.liveActivityController = VolumeArcLiveActivityController(flagGate: flagGate)
         #endif
         let surfaceStore = UserDefaultsPlatformSurfaceStateStore()
         #if canImport(StoreKit)
@@ -192,7 +204,8 @@ struct VolumeArcApp: App {
                 payloadApplier: syncApplier,
                 stateStore: syncStateStore,
                 outboundQueue: outboundQueue,
-                telemetrySink: telemetrySink
+                telemetrySink: telemetrySink,
+                flagGate: flagGate
             )
             self.dashboardModel = WorkoutDashboardModel(
                 aiProvider: aiProvider,
@@ -211,13 +224,15 @@ struct VolumeArcApp: App {
                 startupNoticeSeverity: Self.highestSeverity(in: startupSignals),
                 operationalSignals: startupSignals,
                 subscriptionStore: subscriptionStore,
-                voiceCoach: voiceCoach
+                voiceCoach: voiceCoach,
+                featureFlags: featureFlags
             )
         } else {
             let syncEngine = CloudSyncCoordinator(
                 transport: syncTransport,
                 stateStore: syncStateStore,
-                telemetrySink: telemetrySink
+                telemetrySink: telemetrySink,
+                flagGate: flagGate
             )
             self.dashboardModel = WorkoutDashboardModel(
                 aiProvider: aiProvider,
@@ -232,13 +247,15 @@ struct VolumeArcApp: App {
                 startupNoticeSeverity: Self.highestSeverity(in: startupSignals),
                 operationalSignals: startupSignals,
                 subscriptionStore: subscriptionStore,
-                voiceCoach: voiceCoach
+                voiceCoach: voiceCoach,
+                featureFlags: featureFlags
             )
         }
         #else
         let syncEngine = CloudSyncCoordinator(
             transport: syncTransport,
-            stateStore: syncStateStore
+            stateStore: syncStateStore,
+            flagGate: flagGate
         )
         self.dashboardModel = WorkoutDashboardModel(
             aiProvider: aiProvider,
@@ -250,7 +267,8 @@ struct VolumeArcApp: App {
             telemetrySink: telemetrySink,
             surfaceStore: surfaceStore,
             subscriptionStore: subscriptionStore,
-            voiceCoach: voiceCoach
+            voiceCoach: voiceCoach,
+            featureFlags: featureFlags
         )
         #endif
         #else
@@ -262,7 +280,8 @@ struct VolumeArcApp: App {
             notificationStore: notificationStore,
             telemetrySink: telemetrySink,
             surfaceStore: surfaceStore,
-            voiceCoach: voiceCoach
+            voiceCoach: voiceCoach,
+            featureFlags: featureFlags
         )
         #endif
     }

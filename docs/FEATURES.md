@@ -1,6 +1,6 @@
 # Feature Status
 
-> **⚠ Pre-production, hygiene phase.** The post-95/95 audit blockers (VOL-55, 56, 57, 58, 59, 62, 63, 65, 67) shipped in PRs [#23](https://github.com/Mabry-Ventures/mv-volumearc/pull/23)–[#31](https://github.com/Mabry-Ventures/mv-volumearc/pull/31). Remaining work (App Store submission blockers, CI hygiene, dead feature flags, synthetic streaming, coverage gate) is tracked in the Linear **Go-Live Readiness** project on the VolumeArc team. See [`PLATFORM.md`](PLATFORM.md#implementation-status) for the authoritative system-level status.
+> **⚠ Pre-production, hygiene phase.** The post-95/95 audit blockers (VOL-55, 56, 57, 58, 59, 62, 63, 65, 67) shipped in PRs [#23](https://github.com/Mabry-Ventures/mv-volumearc/pull/23)–[#31](https://github.com/Mabry-Ventures/mv-volumearc/pull/31). Remaining work (App Store submission blockers, CI hygiene, synthetic streaming, coverage gate) is tracked in the Linear **Go-Live Readiness** project on the VolumeArc team. See [`PLATFORM.md`](PLATFORM.md#implementation-status) for the authoritative system-level status.
 
 This is the granular per-feature checklist. For high-level system status, see [`PLATFORM.md`](PLATFORM.md). Update this file with every PR that changes feature completeness.
 
@@ -77,6 +77,7 @@ This is the granular per-feature checklist. For high-level system status, see [`
 | `InMemoryTelemetrySink` | ✅ | Bootstrap/runtime in-memory sink ships. |
 | `SentryTelemetrySink` | ✅ | Breadcrumb forwarding and error message capture are live. |
 | Startup signals | ✅ | Missing/degraded persistence, relay, CloudKit, and Sentry conditions surface operational signals. |
+| Feature-flag runtime gating | ✅ | `FeatureFlagProvider` + `FlagGateTelemetry` wire all four flags (`voiceCoaching`, `cloudSync`, `liveActivities`, `foundationModelCoach`) into the factory, cloud-sync coordinator, and live-activity controller. Off-state drops the relevant capability to its `Unavailable*` / no-op fallback. First resolution per flag per launch emits a `feature.flag.applied` `.info` telemetry event. |
 
 ## Infrastructure
 
