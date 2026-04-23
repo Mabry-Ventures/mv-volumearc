@@ -21,6 +21,38 @@ public enum WorkoutActivityType: String, Sendable {
     case mixedCardio
 }
 
+/// The set of HealthKit types the app asks authorization for, expressed as
+/// platform-agnostic identifiers so tests can assert the shape without
+/// importing HealthKit (HealthKit is unavailable on macOS test hosts).
+///
+/// Source of truth for VOL-80. Any change here should also update the
+/// matching `INFOPLIST_KEY_NSHealthShareUsageDescription` / `NSHealthUpdateUsageDescription`
+/// strings in `scripts/generate_xcode_project.rb`.
+public enum HealthKitAuthorizationScope {
+    /// Types the app asks permission to WRITE. Identical across iOS and watchOS.
+    public static let sharedWriteIdentifiers: Set<String> = [
+        "HKWorkoutTypeIdentifier"
+    ]
+
+    /// Types the app asks permission to READ on iPhone. Intentionally small:
+    /// only completed workouts, which feed readiness + coach context +
+    /// training history UI. No heart rate, no active energy — no phone-side
+    /// consumer reads them.
+    public static let phoneReadIdentifiers: Set<String> = [
+        "HKWorkoutTypeIdentifier"
+    ]
+
+    /// Types the app asks permission to READ on Apple Watch. Adds heart rate
+    /// + active energy on top of the phone set because `HKLiveWorkoutDataSource`
+    /// collects them during the live strength session so the saved workout
+    /// carries an HR chart and calorie total in Apple Health.
+    public static let watchReadIdentifiers: Set<String> = [
+        "HKWorkoutTypeIdentifier",
+        "HKQuantityTypeIdentifierHeartRate",
+        "HKQuantityTypeIdentifierActiveEnergyBurned"
+    ]
+}
+
 #if canImport(HealthKit)
 import HealthKit
 
@@ -44,17 +76,53 @@ public final class HealthKitRuntimeStore: HealthStore, @unchecked Sendable {
     public func requestAuthorization() async throws -> Bool {
         guard HKHealthStore.isHealthDataAvailable() else { return false }
 
+        // VOL-80: HealthKit read scope is least-privilege per platform.
+        //
+        // Shared (iOS + watchOS):
+        //   - HKWorkoutType — write: save completed workouts to Apple Health.
+        //                     read:  render training history, feed `ReadinessModel`
+        //                            (`VolumeArcCore/Workout/ReadinessModel.swift`) and
+        //                            `CoachContext` (`VolumeArcCore/AI/CoachPromptTemplate.swift`)
+        //                            via `WorkoutDashboardModel.buildCoachContext`.
+        //
+        // watchOS only:
+        //   - .heartRate            — consumed by `HKLiveWorkoutDataSource` in
+        //                             `startWorkoutSession` so the saved workout in Apple
+        //                             Health carries an HR chart. No phone-side consumer.
+        //   - .activeEnergyBurned   — consumed by the same data source so the saved
+        //                             workout carries kcal. No phone-side consumer.
+        //
+        // Heart rate and active energy are intentionally NOT requested on iOS because
+        // no phone-side surface (readiness, coach prompt, progression engine, UI)
+        // reads them. If you add a consumer, expand `HealthKitAuthorizationScope`
+        // and update the matching `INFOPLIST_KEY_NSHealthShareUsageDescription`
+        // in `scripts/generate_xcode_project.rb`.
         let typesToShare: Set<HKSampleType> = [HKObjectType.workoutType()]
-        var typesToRead: Set<HKObjectType> = [HKObjectType.workoutType()]
-        if let heartRate = HKObjectType.quantityType(forIdentifier: .heartRate) {
-            typesToRead.insert(heartRate)
-        }
-        if let activeEnergy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned) {
-            typesToRead.insert(activeEnergy)
-        }
+        #if os(watchOS)
+        let typesToRead = Self.watchReadTypes()
+        #else
+        let typesToRead = Self.phoneReadTypes()
+        #endif
 
         try await healthStore.requestAuthorization(toShare: typesToShare, read: typesToRead)
         return true
+    }
+
+    static func phoneReadTypes() -> Set<HKObjectType> {
+        // Mirrors `HealthKitAuthorizationScope.phoneReadIdentifiers`.
+        [HKObjectType.workoutType()]
+    }
+
+    static func watchReadTypes() -> Set<HKObjectType> {
+        // Mirrors `HealthKitAuthorizationScope.watchReadIdentifiers`.
+        var types: Set<HKObjectType> = [HKObjectType.workoutType()]
+        if let heartRate = HKObjectType.quantityType(forIdentifier: .heartRate) {
+            types.insert(heartRate)
+        }
+        if let activeEnergy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned) {
+            types.insert(activeEnergy)
+        }
+        return types
     }
 
     public func startWorkoutSession(activityType: WorkoutActivityType) async throws {
