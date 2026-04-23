@@ -115,9 +115,12 @@ struct VolumeArcApp: App {
             productIDs: VolumeArcPremiumCatalog.subscriptionProductIDs
         )
         #if canImport(SwiftData)
-        let startupSignals = Self.startupSignals(persistenceStatus: persistence.bootstrapStatus)
+        let startupSignals = Self.startupSignals(
+            persistenceStatus: persistence.bootstrapStatus,
+            telemetrySink: telemetrySink
+        )
         #else
-        let startupSignals = Self.startupSignals()
+        let startupSignals = Self.startupSignals(telemetrySink: telemetrySink)
         #endif
         #if canImport(SwiftData)
         if let container = persistence.container {
@@ -443,7 +446,8 @@ struct VolumeArcApp: App {
 
     #if canImport(SwiftData)
     private static func startupSignals(
-        persistenceStatus: VolumeArcPersistenceController.BootstrapStatus
+        persistenceStatus: VolumeArcPersistenceController.BootstrapStatus,
+        telemetrySink: TelemetrySink
     ) -> [OperationalSignalSummary] {
         var signals: [OperationalSignalSummary] = []
 
@@ -458,7 +462,7 @@ struct VolumeArcApp: App {
             )
         }
 
-        if let relayWarning = VolumeArcAIConfiguration.startupWarning {
+        if let relayWarning = VolumeArcAIConfiguration.startupWarning(recordingTo: telemetrySink) {
             signals.append(
                 OperationalSignalSummary(
                     id: "ai-relay",
@@ -495,10 +499,10 @@ struct VolumeArcApp: App {
         return signals
     }
     #else
-    private static func startupSignals() -> [OperationalSignalSummary] {
+    private static func startupSignals(telemetrySink: TelemetrySink) -> [OperationalSignalSummary] {
         var signals: [OperationalSignalSummary] = []
 
-        if let relayWarning = VolumeArcAIConfiguration.startupWarning {
+        if let relayWarning = VolumeArcAIConfiguration.startupWarning(recordingTo: telemetrySink) {
             signals.append(
                 OperationalSignalSummary(
                     id: "ai-relay",
