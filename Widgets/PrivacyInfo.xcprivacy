@@ -2,10 +2,25 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSPrivacyCollectedDataTypes</key>
+	<!--
+		VolumeArcWidgets (com.mabryventures.VolumeArc.widgets) privacy
+		manifest. VOL-73.
+
+		Scope: widgets read the shared WidgetSummarySnapshot via
+		PlatformSurfaceDefaultsReader (UserDefaults under the app group).
+		Widgets do NOT access HealthKit, microphone, location, or any
+		user identifiers directly.
+	-->
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
 	<array/>
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
+		<!--
+			UserDefaults: shared app-group snapshot read only. App
+			functionality (rendering the widget timeline).
+		-->
 		<dict>
 			<key>NSPrivacyAccessedAPIType</key>
 			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
@@ -15,9 +30,7 @@
 			</array>
 		</dict>
 	</array>
-	<key>NSPrivacyTracking</key>
-	<false/>
-	<key>NSPrivacyTrackingDomains</key>
+	<key>NSPrivacyCollectedDataTypes</key>
 	<array/>
 </dict>
 </plist>
