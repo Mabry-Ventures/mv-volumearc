@@ -61,4 +61,36 @@ final class VolumeArcAppConfigurationTests: XCTestCase {
         try store.save("updated", for: key)
         XCTAssertEqual(try store.load(key), "updated")
     }
+
+    // VOL-80: Regression guard. Phone read set is workouts-only. Expanding
+    // this set without a consumer (and an updated usage-description string in
+    // `scripts/generate_xcode_project.rb`) fails App Store review and is a
+    // least-privilege regression. If you add a type, update this assertion
+    // AND the usage-description string in the same PR.
+    func testPhoneHealthKitReadScopeStaysWorkoutsOnly() {
+        XCTAssertEqual(
+            HealthKitAuthorizationScope.phoneReadIdentifiers,
+            ["HKWorkoutTypeIdentifier"]
+        )
+    }
+
+    // VOL-80: Watch read set covers everything `HKLiveWorkoutDataSource` needs
+    // to populate the saved workout with an HR chart and calorie total.
+    func testWatchHealthKitReadScopeCoversLiveWorkoutQuantities() {
+        XCTAssertEqual(
+            HealthKitAuthorizationScope.watchReadIdentifiers,
+            [
+                "HKWorkoutTypeIdentifier",
+                "HKQuantityTypeIdentifierHeartRate",
+                "HKQuantityTypeIdentifierActiveEnergyBurned"
+            ]
+        )
+    }
+
+    func testHealthKitWriteScopeStaysWorkoutsOnly() {
+        XCTAssertEqual(
+            HealthKitAuthorizationScope.sharedWriteIdentifiers,
+            ["HKWorkoutTypeIdentifier"]
+        )
+    }
 }
