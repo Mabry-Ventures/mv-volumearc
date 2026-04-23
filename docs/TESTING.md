@@ -82,6 +82,20 @@ COVERAGE_THRESHOLD=85 ./scripts/check_coverage.sh   # try a tighter floor
 COVERAGE_TARGET=VolumeArcUI ./scripts/check_coverage.sh   # measure a different target
 ```
 
+### Coverage artifacts
+
+CI publishes three coverage surfaces per run so reviewers never need to scrape the raw log (VOL-97).
+
+**1. GitHub step summary.** `scripts/check_coverage.sh` writes a Markdown block to `$GITHUB_STEP_SUMMARY` on every run: the headline `VolumeArcCore: XX.XX%` number, the pass/fail gate, and a top-10 uncovered-files table. It lives on the workflow run page under the "Summary" tab.
+
+**2. xcresult artifact.** Every run (success or failure) uploads `TestResults-<run-id>` containing the full `.xcresult` bundle with 14-day retention. Download from the workflow run page, then `open TestResults.xcresult` in Xcode for the interactive per-line coverage browser. Useful when the top-10 table doesn't tell the whole story.
+
+**3. Sticky PR comment.** PR runs post (or update) a single coverage comment on the pull request showing `VolumeArcCore | XX.XX% | gate`. Gets rewritten on every re-run, so the comment always reflects the latest CI. Implemented via `actions/github-script` with a hidden `<!-- volumearc-coverage-comment -->` marker to find the comment on repeat runs.
+
+**4. Historical trend file.** After each merge to `main`, CI appends `{commit, date, coverage, passed}` to [`docs/coverage-trend.json`](coverage-trend.json) and commits it back. The coverage badge at the top of [`docs/PLATFORM.md`](PLATFORM.md) reads the tail record from that file via a dynamic-json shields.io endpoint, so the badge always reflects the most recent main-branch coverage number. The file is append-only — tampering with old records is a correctness bug.
+
+Permissions note: the trend-append step commits via `GITHUB_TOKEN` with job-level `permissions: contents: write`. If branch protection on `main` is later tightened to forbid bot pushes, flip the step to open a PR via a first-party action or disable it with a TODO.
+
 ### Inspecting coverage locally
 
 ```bash

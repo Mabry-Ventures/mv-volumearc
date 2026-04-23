@@ -1,0 +1,6 @@
+{
+  "target": "VolumeArcCore",
+  "threshold": 80,
+  "note": "Append-only log of VolumeArcCore line coverage per main-branch commit. Written by .github/workflows/ci.yml via scripts/check_coverage.sh. See docs/TESTING.md#coverage-artifacts.",
+  "records": []
+}
