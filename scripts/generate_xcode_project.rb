@@ -67,7 +67,7 @@ configure_target(app_target, bundle_id: 'com.mabryventures.VolumeArc', extra: {
   'PRODUCT_NAME' => 'VolumeArc',
   'TARGETED_DEVICE_FAMILY' => '1,2',
   'INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents' => 'YES',
-  'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc reads your workout and recovery data to personalize progression, readiness, and session planning.',
+  'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc reads your completed workouts from Apple Health to show your training history and calculate readiness.',
   'INFOPLIST_KEY_NSHealthUpdateUsageDescription' => 'VolumeArc writes completed workouts so your training history stays in sync with Apple Health.',
   'INFOPLIST_KEY_NSMicrophoneUsageDescription' => 'VolumeArc uses the microphone for voice coaching requests and voice workout logging.',
   'INFOPLIST_KEY_NSSpeechRecognitionUsageDescription' => 'VolumeArc uses speech recognition to understand live coaching requests and voice workout notes.',
@@ -88,15 +88,26 @@ configure_target(app_target, bundle_id: 'com.mabryventures.VolumeArc', extra: {
   # (CFBundleExecutable, MinimumOSVersion, UIDeviceFamily, etc.) and
   # merges the simple `INFOPLIST_KEY_*` values above.
   'INFOPLIST_FILE' => 'App/Info.plist',
-  'CODE_SIGN_ENTITLEMENTS' => 'App/VolumeArc.entitlements',
 })
+
+# VOL-70: APS environment must be `production` for Release-signed IPAs or
+# App Store Connect will reject uploads and silently drop remote
+# notifications. Split entitlements per configuration so Debug /
+# simulator builds keep `development` (required for APNs sandbox
+# tokens) and Release builds ship `production`. Override after
+# `configure_target` so this stays a one-line pin rather than a
+# restructure of the shared helper.
+app_target.build_configurations.each do |config|
+  entitlements = config.name == 'Release' ? 'App/VolumeArc.Release.entitlements' : 'App/VolumeArc.Debug.entitlements'
+  config.build_settings['CODE_SIGN_ENTITLEMENTS'] = entitlements
+end
 configure_target(watch_target, bundle_id: 'com.mabryventures.VolumeArc.watchkitapp', extra: {
   'TARGETED_DEVICE_FAMILY' => '4',
   'PRODUCT_NAME' => 'VolumeArcWatch',
   'INFOPLIST_KEY_WKApplication' => 'YES',
   'INFOPLIST_KEY_WKCompanionAppBundleIdentifier' => 'com.mabryventures.VolumeArc',
   'INFOPLIST_KEY_UISupportedInterfaceOrientations' => 'UIInterfaceOrientationPortrait',
-  'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc uses HealthKit on Apple Watch to run live workout sessions and keep your training history accurate.',
+  'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc reads workouts, heart rate, and active energy on Apple Watch so live strength sessions save with accurate training history, heart-rate charts, and calorie totals.',
   'INFOPLIST_KEY_NSHealthUpdateUsageDescription' => 'VolumeArc writes completed watch workouts to Apple Health.',
   'CODE_SIGN_ENTITLEMENTS' => 'Watch/VolumeArcWatch.entitlements',
 })
@@ -214,23 +225,40 @@ add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   'VolumeArcPremiumCatalog.swift',
   'VolumeArcRelaySessionProvider.swift',
   'VolumeArcSecureStore.swift',
+  # VOL-72: included in the test target so
+  # `VolumeArcSentryPIIScrubberTests` can unit-test the scrubber's
+  # logic against real `Event`/`Breadcrumb` instances. Guarded by
+  # `#if canImport(Sentry)` inside the file.
+  'VolumeArcSentryPIIScrubber.swift',
   'VolumeArcWidgetController.swift',
 ])
 
 # Sentry Swift Package dependency
+# Pinned to exact version per VOL-86: crash-reporting SDK must not silently
+# auto-upgrade. Dependabot (VOL-78) surfaces bumps as explicit PRs.
 sentry_url = 'https://github.com/getsentry/sentry-cocoa.git'
-sentry_requirement = { kind: 'upToNextMajorVersion', minimumVersion: '8.0.0' }
+sentry_requirement = { kind: 'exactVersion', version: '8.58.1' }
 sentry_ref = project.root_object.package_references.find { |r| r.repositoryURL == sentry_url }
 unless sentry_ref
   sentry_ref = project.new(Xcodeproj::Project::Object::XCRemoteSwiftPackageReference)
   sentry_ref.repositoryURL = sentry_url
-  sentry_ref.requirement = sentry_requirement
   project.root_object.package_references << sentry_ref
 end
+sentry_ref.requirement = sentry_requirement
 sentry_dep = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
 sentry_dep.package = sentry_ref
 sentry_dep.product_name = 'Sentry'
 app_target.package_product_dependencies << sentry_dep
+
+# VOL-72: Sentry dependency also attached to the unit-test target so
+# `VolumeArcSentryPIIScrubberTests` can instantiate `Event` /
+# `Breadcrumb` for scrubber assertions. The scrubber source itself is
+# compiled into both targets via `add_selected_swift_sources` and
+# guarded by `#if canImport(Sentry)`.
+sentry_tests_dep = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+sentry_tests_dep.package = sentry_ref
+sentry_tests_dep.product_name = 'Sentry'
+app_tests_target.package_product_dependencies << sentry_tests_dep
 
 project.root_object.attributes['TargetAttributes'] ||= {}
 project.targets.each do |target|
@@ -251,5 +279,22 @@ test_scheme.save_as(PROJECT_PATH, 'VolumeArcAppTests', true)
 ui_test_scheme = Xcodeproj::XCScheme.new
 ui_test_scheme.configure_with_targets(app_target, app_ui_tests_target)
 ui_test_scheme.save_as(PROJECT_PATH, 'VolumeArcAppUITests', true)
+
+# VOL-75 P2: per-target schemes so CI can pass `-scheme` (required by
+# `-derivedDataPath`). Without these, `build_all_targets.sh` has to use
+# `-target`, which incompatible with `-derivedDataPath` — forcing shared
+# system DerivedData and the concurrent-build races documented in the
+# runner hygiene umbrella.
+widget_scheme = Xcodeproj::XCScheme.new
+widget_scheme.configure_with_targets(widget_target, nil)
+widget_scheme.save_as(PROJECT_PATH, 'VolumeArcWidgets', true)
+
+watch_scheme = Xcodeproj::XCScheme.new
+watch_scheme.configure_with_targets(watch_target, nil)
+watch_scheme.save_as(PROJECT_PATH, 'VolumeArcWatch', true)
+
+watch_widgets_scheme = Xcodeproj::XCScheme.new
+watch_widgets_scheme.configure_with_targets(watch_widgets_target, nil)
+watch_widgets_scheme.save_as(PROJECT_PATH, 'VolumeArcWatchWidgets', true)
 
 puts "Generated #{PROJECT_PATH}"
