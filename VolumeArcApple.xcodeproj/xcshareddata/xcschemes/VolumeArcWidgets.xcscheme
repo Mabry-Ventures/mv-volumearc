@@ -14,7 +14,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "F77D1380A41B2AD90902C27E"
+               BlueprintIdentifier = "DB0404C7766E592B21F37450"
                BuildableName = "VolumeArcWidgets.appex"
                BlueprintName = "VolumeArcWidgets"
                ReferencedContainer = "container:VolumeArcApple.xcodeproj">
