@@ -61,37 +61,43 @@ struct NextWorkoutWidgetView: View {
     // MARK: - System Small (glanceable readiness + next lift)
 
     private var smallLayout: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: VA.Space.widgetTight) {
             HStack {
-                Text("VOLUMEARC")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                Text(String(
+                    localized: "VOLUMEARC",
+                    comment: "Widget branding lockup; product name rendered in all-caps (non-translatable brand mark)"
+                ))
+                    .font(VA.Typography.widgetMicroBadge)
                     .foregroundStyle(VA.Colors.primary)
-                    .tracking(0.5)
+                    .tracking(VA.Widget.microTracking)
                 Spacer()
                 streakBadge
             }
 
-            Spacer(minLength: 2)
+            Spacer(minLength: VA.Space.xxs)
 
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: VA.Space.xs) {
                 Text(entry.snapshot.readinessScore)
-                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                    .font(VA.Typography.widgetScoreLarge)
                     .foregroundStyle(VA.Colors.textPrimary)
                     .contentTransition(.numericText())
-                Text("READY")
-                    .font(.system(size: 10, weight: .semibold))
+                Text(String(
+                    localized: "READY",
+                    comment: "Widget all-caps badge next to the readiness score"
+                ))
+                    .font(VA.Typography.widgetMicroBadge)
                     .foregroundStyle(VA.Colors.textSecondary)
-                    .tracking(0.5)
+                    .tracking(VA.Widget.microTracking)
             }
 
             Text(entry.snapshot.nextWorkoutTitle)
-                .font(.system(size: 13, weight: .semibold))
+                .font(VA.Typography.widgetBody)
                 .foregroundStyle(VA.Colors.textPrimary)
                 .lineLimit(2)
         }
         .containerBackground(for: .widget) {
             LinearGradient(
-                colors: [VA.Colors.primary.opacity(0.12), VA.Colors.surfacePrimary],
+                colors: [VA.Colors.primary.opacity(VA.Widget.backgroundTint), VA.Colors.surfacePrimary],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -102,56 +108,76 @@ struct NextWorkoutWidgetView: View {
     // MARK: - System Medium (full summary)
 
     private var mediumLayout: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: VA.Space.widgetStack) {
             // Left: readiness ring
             ZStack {
                 Circle()
-                    .stroke(VA.Colors.primary.opacity(0.15), lineWidth: 8)
+                    .stroke(VA.Colors.primary.opacity(VA.Widget.ringBackOpacity), lineWidth: VA.Widget.ringStrokeMedium)
                 Circle()
                     .trim(from: 0, to: readinessFraction)
-                    .stroke(VA.Colors.primary, style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                    .stroke(
+                        VA.Colors.primary,
+                        style: StrokeStyle(lineWidth: VA.Widget.ringStrokeMedium, lineCap: .round)
+                    )
                     .rotationEffect(.degrees(-90))
-                VStack(spacing: 0) {
+                VStack(spacing: VA.Space.xxs) {
                     Text(entry.snapshot.readinessScore)
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
-                    Text("READY")
-                        .font(.system(size: 8, weight: .semibold))
+                        .font(VA.Typography.widgetScoreSmall)
+                    Text(String(
+                        localized: "READY",
+                        comment: "Widget all-caps badge next to the readiness score"
+                    ))
+                        .font(VA.Typography.widgetAccessoryLabel)
                         .foregroundStyle(VA.Colors.textSecondary)
-                        .tracking(0.5)
+                        .tracking(VA.Widget.microTracking)
                 }
             }
-            .frame(width: 72, height: 72)
-            .accessibilityLabel("Readiness score: \(entry.snapshot.readinessScore)")
+            .frame(width: VA.Widget.ringSizeMedium, height: VA.Widget.ringSizeMedium)
+            .accessibilityLabel(
+                String(
+                    localized: "Readiness score: \(entry.snapshot.readinessScore)",
+                    comment: "Widget readiness ring accessibility label; placeholder is the numeric score"
+                )
+            )
 
             // Right: workout details
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: VA.Space.xs) {
                 HStack {
-                    Text("NEXT")
-                        .font(.system(size: 9, weight: .semibold))
+                    Text(String(
+                        localized: "NEXT",
+                        comment: "Widget all-caps header labeling the next workout"
+                    ))
+                        .font(VA.Typography.widgetMicro)
                         .foregroundStyle(VA.Colors.primary)
-                        .tracking(0.5)
+                        .tracking(VA.Widget.microTracking)
                     Spacer()
                     streakBadge
                 }
 
                 Text(entry.snapshot.nextWorkoutTitle)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .font(VA.Typography.widgetHeadlineCompact)
                     .foregroundStyle(VA.Colors.textPrimary)
                     .lineLimit(1)
 
                 Text(entry.snapshot.primaryLiftForecast)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(VA.Typography.widgetBodyMedium)
                     .foregroundStyle(VA.Colors.primary)
                     .lineLimit(1)
 
-                HStack(spacing: 6) {
+                HStack(spacing: VA.Space.widgetTight) {
                     Label(entry.snapshot.nextActionTitle, systemImage: "play.fill")
                     Spacer()
-                    Label("Coach", systemImage: "waveform")
+                    Label(
+                        String(
+                            localized: "Coach",
+                            comment: "Widget label pointing to the in-app coach surface"
+                        ),
+                        systemImage: "waveform"
+                    )
                 }
-                .font(.system(size: 10, weight: .semibold))
+                .font(VA.Typography.widgetMetaCompact)
                 .foregroundStyle(VA.Colors.textSecondary)
-                .padding(.top, 2)
+                .padding(.top, VA.Space.xxs)
             }
         }
         .containerBackground(for: .widget) {
@@ -163,41 +189,50 @@ struct NextWorkoutWidgetView: View {
     // MARK: - System Large (training plan overview)
 
     private var largeLayout: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: VA.Space.widgetRow) {
             HStack {
-                Text("VOLUMEARC")
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                Text(String(
+                    localized: "VOLUMEARC",
+                    comment: "Widget branding lockup; product name rendered in all-caps (non-translatable brand mark)"
+                ))
+                    .font(VA.Typography.widgetHeroBadgeLarge)
                     .foregroundStyle(VA.Colors.primary)
-                    .tracking(0.5)
+                    .tracking(VA.Widget.microTracking)
                 Spacer()
                 streakBadge
             }
 
-            HStack(alignment: .top, spacing: 14) {
+            HStack(alignment: .top, spacing: VA.Space.widgetStack) {
                 ZStack {
-                    Circle().stroke(VA.Colors.primary.opacity(0.15), lineWidth: 10)
+                    Circle().stroke(VA.Colors.primary.opacity(VA.Widget.ringBackOpacity), lineWidth: VA.Widget.ringStrokeLarge)
                     Circle()
                         .trim(from: 0, to: readinessFraction)
-                        .stroke(VA.Colors.primary, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                        .stroke(
+                            VA.Colors.primary,
+                            style: StrokeStyle(lineWidth: VA.Widget.ringStrokeLarge, lineCap: .round)
+                        )
                         .rotationEffect(.degrees(-90))
-                    VStack(spacing: 0) {
+                    VStack(spacing: VA.Space.xxs) {
                         Text(entry.snapshot.readinessScore)
-                            .font(.system(size: 28, weight: .bold, design: .rounded))
-                        Text("READY")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(VA.Typography.widgetScoreMedium)
+                        Text(String(
+                            localized: "READY",
+                            comment: "Widget all-caps badge next to the readiness score"
+                        ))
+                            .font(VA.Typography.widgetMicro)
                             .foregroundStyle(VA.Colors.textSecondary)
-                            .tracking(0.5)
+                            .tracking(VA.Widget.microTracking)
                     }
                 }
-                .frame(width: 92, height: 92)
+                .frame(width: VA.Widget.ringSizeLarge, height: VA.Widget.ringSizeLarge)
 
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: VA.Space.widgetTight) {
                     Text(entry.snapshot.nextWorkoutTitle)
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .font(VA.Typography.widgetHeadline)
                         .foregroundStyle(VA.Colors.textPrimary)
                         .lineLimit(2)
                     Text(entry.snapshot.primaryLiftForecast)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(VA.Typography.widgetFootnote)
                         .foregroundStyle(VA.Colors.primary)
                         .lineLimit(2)
                 }
@@ -206,7 +241,7 @@ struct NextWorkoutWidgetView: View {
             Divider()
 
             Text(entry.snapshot.coachPrompt)
-                .font(.system(size: 12, weight: .regular))
+                .font(VA.Typography.widgetCoachBody)
                 .foregroundStyle(VA.Colors.textSecondary)
                 .italic()
                 .lineLimit(3)
@@ -216,11 +251,17 @@ struct NextWorkoutWidgetView: View {
             HStack {
                 Label(entry.snapshot.nextActionTitle, systemImage: "play.fill")
                 Spacer()
-                Label("Coach", systemImage: "waveform")
+                Label(
+                    String(
+                        localized: "Coach",
+                        comment: "Widget label pointing to the in-app coach surface"
+                    ),
+                    systemImage: "waveform"
+                )
                 Spacer()
                 Label(entry.snapshot.syncSummary, systemImage: "arrow.triangle.2.circlepath")
             }
-            .font(.system(size: 11, weight: .semibold))
+            .font(VA.Typography.widgetMeta)
             .foregroundStyle(VA.Colors.textSecondary)
         }
         .containerBackground(for: .widget) {
@@ -234,35 +275,48 @@ struct NextWorkoutWidgetView: View {
     private var accessoryCircular: some View {
         ZStack {
             AccessoryWidgetBackground()
-            VStack(spacing: 0) {
+            VStack(spacing: VA.Space.xxs) {
                 Text(entry.snapshot.readinessScore)
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                Text("READY")
-                    .font(.system(size: 8, weight: .semibold))
-                    .tracking(0.5)
+                    .font(VA.Typography.widgetAccessoryScore)
+                Text(String(
+                    localized: "READY",
+                    comment: "Widget all-caps badge next to the readiness score"
+                ))
+                    .font(VA.Typography.widgetAccessoryLabel)
+                    .tracking(VA.Widget.microTracking)
             }
         }
         .widgetURL(VolumeArcDeepLink.url(for: .signals))
     }
 
     private var accessoryRectangular: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("READINESS \(entry.snapshot.readinessScore)")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: VA.Space.xxs) {
+            Text(
+                String(
+                    localized: "READINESS \(entry.snapshot.readinessScore)",
+                    comment: "Accessory rectangular widget readiness headline; placeholder is the numeric score"
+                )
+            )
+                .font(VA.Typography.headline)
             Text(entry.snapshot.nextWorkoutTitle)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(VA.Typography.captionLarge)
+                .foregroundStyle(VA.Colors.textSecondary)
                 .lineLimit(1)
             Text(entry.snapshot.primaryLiftForecast)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(VA.Typography.caption)
+                .foregroundStyle(VA.Colors.textSecondary)
                 .lineLimit(1)
         }
         .widgetURL(VolumeArcDeepLink.url(for: .today))
     }
 
     private var accessoryInline: some View {
-        Text("\(entry.snapshot.nextWorkoutTitle) • Ready \(entry.snapshot.readinessScore)")
+        Text(
+            String(
+                localized: "\(entry.snapshot.nextWorkoutTitle) • Ready \(entry.snapshot.readinessScore)",
+                comment: "Accessory inline widget summary; placeholders are the next-workout title and readiness score"
+            )
+        )
             .widgetURL(VolumeArcDeepLink.url(for: .today))
     }
 
@@ -273,14 +327,22 @@ struct NextWorkoutWidgetView: View {
     }
 
     private var streakBadge: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: VA.Space.widgetHairline) {
             Image(systemName: "flame.fill")
-                .font(.system(size: 9, weight: .bold))
-            Text("\(entry.snapshot.streakDays)d")
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(VA.Typography.widgetStreakIcon)
+            Text(String(
+                localized: "\(entry.snapshot.streakDays)d",
+                comment: "Widget streak badge value; placeholder is the number of consecutive training days (e.g. '7d'). The 'd' suffix is shorthand for days."
+            ))
+                .font(VA.Typography.widgetStreakNumber)
         }
         .foregroundStyle(VA.Colors.primary)
-        .accessibilityLabel("Training streak: \(entry.snapshot.streakDays) days")
+        .accessibilityLabel(
+            String(
+                localized: "Training streak: ^[\(entry.snapshot.streakDays) day](inflect: true)",
+                comment: "Widget streak badge accessibility label; placeholder is the number of consecutive training days. Uses automatic grammar inflection for singular/plural agreement."
+            )
+        )
     }
 }
 
@@ -311,74 +373,99 @@ struct ActiveWorkoutLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: ActiveWorkoutAttributes.self) { context in
             // Lock screen / banner presentation
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: VA.Space.md) {
+                VStack(alignment: .leading, spacing: VA.Space.xs) {
                     Text(context.attributes.workoutTitle.uppercased())
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .font(VA.Typography.widgetHeroBadge)
                         .foregroundStyle(VA.Colors.primary)
-                        .tracking(0.5)
+                        .tracking(VA.Widget.microTracking)
                     Text(context.state.activeExerciseName)
-                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                        .font(VA.Typography.widgetActivityTitle)
                         .foregroundStyle(VA.Colors.textPrimary)
                     Text(context.state.targetSummary)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(VA.Typography.widgetBody)
                         .foregroundStyle(VA.Colors.primary)
                 }
                 Spacer()
                 if let rest = context.state.restSecondsRemaining {
-                    VStack(spacing: 0) {
-                        Text("\(rest)")
-                            .font(.system(size: 22, weight: .bold, design: .rounded).monospacedDigit())
+                    VStack(spacing: VA.Space.xxs) {
+                        Text(
+                            String(
+                                localized: "\(rest)",
+                                comment: "Live Activity rest-timer countdown; placeholder is the number of seconds remaining"
+                            )
+                        )
+                            .font(VA.Typography.widgetTimerDisplay)
                             .foregroundStyle(VA.Colors.textPrimary)
-                        Text("REST")
-                            .font(.system(size: 9, weight: .semibold))
+                        Text(String(
+                            localized: "REST",
+                            comment: "Live Activity all-caps badge labeling the rest countdown"
+                        ))
+                            .font(VA.Typography.widgetMicro)
                             .foregroundStyle(VA.Colors.textSecondary)
-                            .tracking(0.5)
+                            .tracking(VA.Widget.microTracking)
                     }
-                    .frame(width: 52, height: 52)
-                    .background(VA.Colors.primary.opacity(0.12))
+                    .frame(width: VA.Widget.activityPill, height: VA.Widget.activityPill)
+                    .background(VA.Colors.primary.opacity(VA.Widget.backgroundTint))
                     .clipShape(Circle())
                 }
             }
-            .padding(14)
+            .padding(VA.Space.widgetOuter)
             .activityBackgroundTint(VA.Colors.surfacePrimary)
             .activitySystemActionForegroundColor(VA.Colors.primary)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: VA.Space.xxs) {
                         Text(context.attributes.workoutTitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .font(VA.Typography.captionLarge)
+                            .foregroundStyle(VA.Colors.textSecondary)
                         Text(context.state.activeExerciseName)
-                            .font(.headline)
+                            .font(VA.Typography.headline)
                     }
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     if let rest = context.state.restSecondsRemaining {
-                        Text("\(rest)s")
-                            .font(.title3.monospacedDigit().bold())
+                        Text(
+                            String(
+                                localized: "\(rest)s",
+                                comment: "Dynamic Island rest-timer countdown; placeholder is the number of seconds remaining"
+                            )
+                        )
+                            .font(VA.Typography.dynamicIslandTitle.monospacedDigit())
                             .foregroundStyle(VA.Colors.primary)
                     } else {
-                        Text("GO")
-                            .font(.title3.bold())
+                        Text(String(
+                            localized: "GO",
+                            comment: "Dynamic Island rest-complete label when the rest timer hits zero"
+                        ))
+                            .font(VA.Typography.dynamicIslandTitle)
                             .foregroundStyle(VA.Colors.success)
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     Text(context.state.targetSummary)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .font(VA.Typography.footnote)
+                        .foregroundStyle(VA.Colors.textSecondary)
                 }
             } compactLeading: {
                 Image(systemName: "figure.strengthtraining.traditional")
                     .foregroundStyle(VA.Colors.primary)
             } compactTrailing: {
                 if let rest = context.state.restSecondsRemaining {
-                    Text("\(rest)s")
-                        .font(.caption.monospacedDigit().bold())
+                    Text(
+                        String(
+                            localized: "\(rest)s",
+                            comment: "Dynamic Island rest-timer countdown; placeholder is the number of seconds remaining"
+                        )
+                    )
+                        .font(VA.Typography.dynamicIslandCompact.monospacedDigit())
                 } else {
-                    Text("GO").font(.caption.bold())
+                    Text(String(
+                        localized: "GO",
+                        comment: "Dynamic Island rest-complete label when the rest timer hits zero"
+                    ))
+                        .font(VA.Typography.dynamicIslandCompact)
                 }
             } minimal: {
                 Image(systemName: "figure.strengthtraining.traditional")
