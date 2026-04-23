@@ -27,6 +27,25 @@
 ./scripts/validate_release_config.sh  # Validate release config
 ```
 
+## Build system: the Xcode project is generated
+
+`VolumeArcApple.xcodeproj` is produced from scratch by `ruby scripts/generate_xcode_project.rb`. **Never edit `project.pbxproj` or the scheme files by hand** — your change will be overwritten on the next regeneration. Add/remove targets, files, frameworks, build settings, and schemes in `scripts/generate_xcode_project.rb` and re-run the generator.
+
+### Deterministic output (VOL-95)
+
+Running the generator twice in a row produces **byte-identical** output. This is load-bearing for merge hygiene: without it, every regen would randomize all ~360 pbxproj object UUIDs plus every `xcscheme` `BlueprintIdentifier`, and every PR touching the project would collide with every other one.
+
+The determinism comes from two pieces in `scripts/generate_xcode_project.rb`:
+
+1. A monkey-patch on `Xcodeproj::Project::UUIDGenerator#uuid_for_path` that truncates the gem's MD5-based UUID to 24 chars (matching Xcode's native 12-byte convention).
+2. Two consecutive calls to `project.predictabilize_uuids` immediately before `project.save`, so all object UUIDs — and the subsequent scheme `BlueprintIdentifier` references — are hash-derived from the object graph, not from `SecureRandom`.
+
+Practical consequences:
+
+- You don't have to hand-commit pbxproj churn. After you change the generator, run `ruby scripts/generate_xcode_project.rb` and commit whatever diff it produces.
+- `scripts/test_xcode_project_determinism.sh` regenerates twice and diffs the SHA256 hashes. CI runs this gate on every PR (`.github/workflows/ci.yml`), so a non-deterministic regression fails fast.
+- If you touch the generator and CI's determinism gate starts failing, something you added (usually a Hash with Symbol keys on an attribute that `predictabilize_uuids` walks) is breaking the tree-hash path computation. Stick to String keys for attributes like `XCRemoteSwiftPackageReference.requirement`.
+
 ## Branch strategy
 
 - `main` — production branch, protected
