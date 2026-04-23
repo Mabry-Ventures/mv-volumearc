@@ -117,8 +117,13 @@ public struct VAToastView: View {
             Spacer(minLength: 0)
         }
         .padding(VA.Space.md)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+        // Toasts adopt real iOS 26 Liquid Glass with a tint matching the
+        // toast kind, so warning/error states read at a glance without losing
+        // the system's depth treatment.
+        .vaTintedGlassBackground(
+            toast.kind.tint.opacity(0.4),
+            in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous)
+        )
         .overlay(
             RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous)
                 .stroke(toast.kind.tint.opacity(0.3), lineWidth: 1)

@@ -117,8 +117,9 @@ public struct OnboardingView: View {
                     .textFieldStyle(.plain)
                     .font(VA.Typography.title2)
                     .padding(VA.Space.md)
-                    .background(.regularMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+                    .vaInteractiveGlassBackground(
+                        in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous)
+                    )
             }
 
             VStack(alignment: .leading, spacing: VA.Space.md) {
@@ -282,14 +283,7 @@ public struct OnboardingView: View {
                     .foregroundStyle(isSelected ? VA.Colors.primary : VA.Colors.textTertiary)
             }
             .padding(VA.Space.lg)
-            .background {
-                if isSelected {
-                    VA.Colors.primary.opacity(0.08)
-                } else {
-                    Rectangle().fill(.regularMaterial)
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+            .modifier(OnboardingSelectionRowBackgroundModifier(isSelected: isSelected))
             .overlay {
                 if isSelected {
                     RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous)
@@ -398,6 +392,23 @@ public struct OnboardingResult: Sendable {
             sessionTimeBudgetMinutes: sessionMinutes,
             weeklyTrainingDays: weeklyDays
         )
+    }
+}
+
+/// Selected onboarding rows pick up the brand-tinted overlay; unselected rows
+/// use real iOS 26 Liquid Glass via `vaGlassBackground`.
+private struct OnboardingSelectionRowBackgroundModifier: ViewModifier {
+    let isSelected: Bool
+
+    func body(content: Content) -> some View {
+        if isSelected {
+            content
+                .background(VA.Colors.primary.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+        } else {
+            content
+                .vaGlassBackground(in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+        }
     }
 }
 #endif
