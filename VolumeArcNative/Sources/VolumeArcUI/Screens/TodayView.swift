@@ -187,7 +187,14 @@ public struct TodayView: View {
                                 .font(VA.Typography.headline)
                                 .foregroundStyle(VA.Colors.textPrimary)
                             Text(String(
-                                localized: "\(Int(autopilot.nextTarget.weight))\(autopilot.nextTarget.unit) × \(autopilot.nextTarget.repRange.lowerBound)-\(autopilot.nextTarget.repRange.upperBound) @ RPE \(String(format: "%.1f", autopilot.nextTarget.targetRPE))",
+                                localized: {
+                                    let weight = Int(autopilot.nextTarget.weight)
+                                    let unit = autopilot.nextTarget.unit
+                                    let low = autopilot.nextTarget.repRange.lowerBound
+                                    let high = autopilot.nextTarget.repRange.upperBound
+                                    let rpe = String(format: "%.1f", autopilot.nextTarget.targetRPE)
+                                    return "\(weight)\(unit) × \(low)-\(high) @ RPE \(rpe)"
+                                }(),
                                 comment: "Target line: weight × rep range @ target RPE for the next set"
                             ))
                             .font(VA.Typography.monoDigit)
