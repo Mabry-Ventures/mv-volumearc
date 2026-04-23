@@ -1,0 +1,15 @@
+{
+  "id": "form-moderate-empty-minimal",
+  "intent": "form",
+  "question": "Form check on my deadlift setup?",
+  "contextBlock": "## Training context\n- Athlete: Quinn (beginner)\n- Readiness: 60/100 — Moderate recovery.\n- Next up: Conventional Deadlift at 185lb x 5\n- No recent sessions logged",
+  "style": "minimal",
+  "expectedAssertions": {
+    "maxSentences": 2,
+    "mustContainNumericContext": false,
+    "mustMentionReadinessOrRPE": false,
+    "mustNotMention": ["lift through the pain", "push through pain"],
+    "toneHint": "terse"
+  },
+  "notes": "Form question with zero session history + minimal style: exercises the 'thin data, one cue' branch. Model should acknowledge limited context without punting entirely."
+}

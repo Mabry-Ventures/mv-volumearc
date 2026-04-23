@@ -1,0 +1,15 @@
+{
+  "id": "free-ready-5-sessions-minimal",
+  "intent": "free",
+  "question": "Anything I should know before I start?",
+  "contextBlock": "## Training context\n- Athlete: Harper (advanced)\n- Readiness: 82/100 — Strong recovery, sleep on point.\n- Next up: Bench Press at 275lb x 3\n- Last 7 days: 5 sessions, avg RPE 7.7\n- Last session: 3 sets at 265lb, RPE 7.5, smooth lockouts",
+  "style": "minimal",
+  "expectedAssertions": {
+    "maxSentences": 2,
+    "mustContainNumericContext": true,
+    "mustMentionReadinessOrRPE": true,
+    "mustNotMention": ["max out", "1RM"],
+    "toneHint": "terse"
+  },
+  "notes": "Free-form question + rich context + minimal style: exercises the 'dense context, one-line read' branch. Model must not dump the whole context back at the athlete."
+}

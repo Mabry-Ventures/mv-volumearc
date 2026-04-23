@@ -1,0 +1,15 @@
+{
+  "id": "recovery-moderate-1-session-analytical",
+  "intent": "recovery",
+  "question": "How's my recovery looking for today?",
+  "contextBlock": "## Training context\n- Athlete: Avery (beginner)\n- Readiness: 60/100 — Recovery mid-range, HRV stable.\n- Next up: Goblet Squat at 60lb x 10\n- Last 7 days: 1 sessions, avg RPE 7.5\n- Last session: 3 sets at 55lb, RPE 7.2",
+  "style": "analytical",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": true,
+    "mustMentionReadinessOrRPE": true,
+    "mustNotMention": ["max out", "1RM"],
+    "toneHint": "data-driven"
+  },
+  "notes": "Moderate readiness + beginner, single recent session: exercises the 'data is thin, here's a conservative read' branch."
+}

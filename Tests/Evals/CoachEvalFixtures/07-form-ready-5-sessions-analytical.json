@@ -1,0 +1,15 @@
+{
+  "id": "form-ready-5-sessions-analytical",
+  "intent": "form",
+  "question": "How should I cue my squat depth today?",
+  "contextBlock": "## Training context\n- Athlete: Riley (intermediate)\n- Readiness: 82/100 — Peak-ish recovery, hips feel loose.\n- Next up: Back Squat at 255lb x 5\n- Last 7 days: 5 sessions, avg RPE 7.9\n- Last session: 4 sets at 245lb, RPE 7.8, depth inconsistent on reps 4–5\n\n## Recent coaching notes\n- Knees caving on late reps last session.\n- Ankle mobility drills added Monday.",
+  "style": "analytical",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": false,
+    "mustMentionReadinessOrRPE": false,
+    "mustNotMention": ["lift through the pain", "push through pain"],
+    "toneHint": "data-driven"
+  },
+  "notes": "Form question with specific lift context: exercises the cue-specificity branch — model should target squat depth, not generic advice."
+}

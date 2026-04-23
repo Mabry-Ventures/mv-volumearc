@@ -1,0 +1,16 @@
+{
+  "id": "substitution-ready-1-session-motivational",
+  "intent": "substitution",
+  "question": "What can I substitute for the bench today — rack is taken.",
+  "contextBlock": "## Training context\n- Athlete: Kai (intermediate)\n- Readiness: 82/100 — Fresh legs, solid sleep.\n- Next up: Bench Press at 205lb x 5\n- Last 7 days: 1 sessions, avg RPE 7.5\n- Last session: 3 sets at 200lb, RPE 7.3",
+  "style": "motivational",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": false,
+    "mustMentionReadinessOrRPE": false,
+    "mustNotMention": ["max out", "1RM"],
+    "toneHint": "encouraging",
+    "mustAnchorOnNextExercise": true
+  },
+  "notes": "Substitution for a specific lift (bench press): exercises the 'anchor on next-up exercise' branch. Response must propose a horizontal-push alternative, not a random lift."
+}

@@ -1,0 +1,15 @@
+{
+  "id": "deload-moderate-5-sessions-minimal",
+  "intent": "deload",
+  "question": "Should I back off this week?",
+  "contextBlock": "## Training context\n- Athlete: Morgan (intermediate)\n- Readiness: 60/100 — Moderate recovery, late-week grind showing.\n- Next up: Front Squat at 185lb x 5\n- Last 7 days: 5 sessions, avg RPE 8.2\n- Last session: 4 sets at 180lb, RPE 8.5",
+  "style": "minimal",
+  "expectedAssertions": {
+    "maxSentences": 2,
+    "mustContainNumericContext": true,
+    "mustMentionReadinessOrRPE": true,
+    "mustNotMention": ["max out", "1RM", "push through"],
+    "toneHint": "terse"
+  },
+  "notes": "Borderline deload call with minimal style: exercises the 'one insight, one action' pattern. Tightest sentence budget in the suite."
+}
