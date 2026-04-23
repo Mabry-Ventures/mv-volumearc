@@ -17,7 +17,8 @@ ruby "scripts/generate_xcode_project.rb" >/dev/null
 PROJECT="VolumeArcApple.xcodeproj/project.pbxproj"
 
 for path in \
-  "App/VolumeArc.entitlements" \
+  "App/VolumeArc.Debug.entitlements" \
+  "App/VolumeArc.Release.entitlements" \
   "Watch/VolumeArcWatch.entitlements" \
   "WatchWidgets/VolumeArcWatchWidgets.entitlements" \
   "Widgets/VolumeArcWidgets.entitlements"; do
@@ -60,8 +61,30 @@ for path in \
   fi
 done
 
-if ! grep -q "aps-environment" "App/VolumeArc.entitlements"; then
-  echo "WARNING: aps-environment not found in App/VolumeArc.entitlements — push notifications will not work" >&2
+for ent_path in "App/VolumeArc.Debug.entitlements" "App/VolumeArc.Release.entitlements"; do
+  if ! grep -q "aps-environment" "$ent_path"; then
+    echo "WARNING: aps-environment not found in $ent_path — push notifications will not work" >&2
+  fi
+done
+
+# VOL-70: Release entitlements must use production APS environment so
+# Release-signed IPAs don't get rejected by App Store Connect or
+# silently drop remote notifications. Debug stays `development` so
+# APNs sandbox tokens still work locally.
+if [[ -f "App/VolumeArc.Release.entitlements" ]]; then
+  APS_ENV=$(plutil -extract "aps-environment" raw -o - "App/VolumeArc.Release.entitlements" 2>/dev/null || echo "")
+  if [[ "$APS_ENV" != "production" ]]; then
+    echo "FAIL: App/VolumeArc.Release.entitlements must declare aps-environment = production (got '$APS_ENV')" >&2
+    exit 1
+  fi
+fi
+
+if [[ -f "App/VolumeArc.Debug.entitlements" ]]; then
+  APS_ENV_DEBUG=$(plutil -extract "aps-environment" raw -o - "App/VolumeArc.Debug.entitlements" 2>/dev/null || echo "")
+  if [[ "$APS_ENV_DEBUG" != "development" ]]; then
+    echo "FAIL: App/VolumeArc.Debug.entitlements must declare aps-environment = development (got '$APS_ENV_DEBUG')" >&2
+    exit 1
+  fi
 fi
 
 for forbidden in "DemoFixtures" "DemoServices" "VolumeArcDemoSupport"; do
@@ -103,7 +126,7 @@ xcodebuild \
 # file on disk still has every key.
 required_build_settings=(
   "PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc"
-  "CODE_SIGN_ENTITLEMENTS = App/VolumeArc.entitlements"
+  "CODE_SIGN_ENTITLEMENTS = App/VolumeArc.Release.entitlements"
   "INFOPLIST_FILE = App/Info.plist"
   "INFOPLIST_KEY_NSHealthShareUsageDescription = VolumeArc reads your workout and recovery data to personalize progression, readiness, and session planning."
   "INFOPLIST_KEY_NSHealthUpdateUsageDescription = VolumeArc writes completed workouts so your training history stays in sync with Apple Health."

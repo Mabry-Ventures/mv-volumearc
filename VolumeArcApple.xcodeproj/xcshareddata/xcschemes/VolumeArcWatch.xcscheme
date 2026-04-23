@@ -14,7 +14,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "E0F34E581DBD3E8E17E4FE59"
+               BlueprintIdentifier = "C6A404A16A251D737A3611CC"
                BuildableName = "VolumeArcWatch.app"
                BlueprintName = "VolumeArcWatch"
                ReferencedContainer = "container:VolumeArcApple.xcodeproj">
