@@ -77,6 +77,9 @@ jobs:
       - name: Run tests
         run: ./scripts/test_apple_targets.sh
 
+      - name: Coverage gate (VolumeArcCore >= 80%)
+        run: ./scripts/check_coverage.sh
+
       - name: Lint (SwiftLint)
         # VOL-77: hard-fail on actual SwiftLint errors (rules that exceed
         # their configured `error:` threshold). Warnings still surface in

@@ -25,14 +25,13 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 
 ## Implementation Status
 
-> **Status: Pre-production — hygiene and hardening.** The original post-95/95 launch blockers (VOL-55, 56, 57, 58, 59, 62, 63, 65, 67) shipped in PRs [#23](https://github.com/Mabry-Ventures/mv-volumearc/pull/23)–[#31](https://github.com/Mabry-Ventures/mv-volumearc/pull/31) between 2026-04-14 and 2026-04-20. The end-to-end wiring is now in place, but the app still has App Store blockers (production APS environment, paywall legal links, privacy manifest completeness, Sentry PII scrubbing) and hygiene gaps (dead feature flags, synthetic AI streaming, test coverage gate, file-size refactors). **Current open work is tracked in the Linear "Go-Live Readiness" project** on the VolumeArc team.
+> **Status: Pre-production — hygiene and hardening.** The original post-95/95 launch blockers (VOL-55, 56, 57, 58, 59, 62, 63, 65, 67) shipped in PRs [#23](https://github.com/Mabry-Ventures/mv-volumearc/pull/23)–[#31](https://github.com/Mabry-Ventures/mv-volumearc/pull/31) between 2026-04-14 and 2026-04-20. The end-to-end wiring is now in place, but the app still has App Store blockers (production APS environment, paywall legal links, privacy manifest completeness, Sentry PII scrubbing) and hygiene gaps (dead feature flags, synthetic AI streaming, file-size refactors). **Current open work is tracked in the Linear "Go-Live Readiness" project** on the VolumeArc team.
 >
 > ### Open items by theme
 >
 > **App Store submission blockers** (new, from 2026-04-22 audit): `aps-environment` hardcoded to `development`, paywall Terms/Privacy links non-functional, privacy manifest reason-coverage incomplete, Sentry crash reports not PII-scrubbed.
 >
 > **Known hygiene gaps** (carried from prior audit):
-> - **VOL-52** (Backlog) — Test coverage enforcement gate in CI
 > - **VOL-61** (Backlog) — `FeatureFlagProvider` is dead code; flags gate nothing
 > - **VOL-66** (Backlog) — AI streaming is synthetic word-chunking, not real progressive streaming
 > - **VOL-69** (Backlog) — Liquid Glass claim — adopt real iOS 26 APIs or update docs
@@ -59,7 +58,7 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 | Feature flags | Defined but unused (VOL-61) | `LocalFeatureFlagProvider` ships and is stored on `WorkoutDashboardModel`, but no code anywhere calls `.isEnabled()`. Flags gate nothing |
 | Subscriptions | Implemented | StoreKit 2 store and `PaywallView` are wired, presented from `ProfileView`, and drive entitlement state. Terms/Privacy links open placeholder URLs (`https://volumearc.app/terms`, `/privacy`) via `LegalLinks` — marketing pages go live closer to launch (VOL-71). Guideline 3.1.2 auto-renewal disclosure present |
 | Build pipeline | Partial | Ruby-generated Xcode project, CI on self-hosted M4, Fastlane, archive script, hard-failing `validate_release_config.sh` on Info.plist keys/URL schemes/BGTask IDs. Open: SwiftLint not installed on runner (silently warn-skipped), `Build & Test` not a required status check, `CI_TAG_BUILD=1` not set in deploy job so version-bump enforcement never fires |
-| Testing | Partial (coverage gate pending — VOL-52) | ~80 unit + integration tests pass. XCUITest smoke suite runs on CI. `VolumeArcLaunchArguments` are live and wire into `VolumeArcLaunchBootstrapper`. Dashboard integration tests cover the create → log → complete chain against in-memory SwiftData. Coverage enforcement gate still open |
+| Testing | Implemented (80% VolumeArcCore coverage gate enforced — VOL-52) | ~290 unit + integration tests pass. XCUITest smoke suite runs on CI. `VolumeArcLaunchArguments` are live and wire into `VolumeArcLaunchBootstrapper`. Dashboard integration tests cover the create → log → complete chain against in-memory SwiftData. CI now blocks merges that drop `VolumeArcCore` line coverage below 80% via `scripts/check_coverage.sh`, which parses the xcresult bundle from `xcodebuild test -enableCodeCoverage YES`. See [`docs/TESTING.md`](TESTING.md#volumearccore-80-line-coverage-gate-vol-52) for the gate mechanics |
 | App Store readiness | Blockers open | `aps-environment` entitlement hardcoded to `development` (Release builds will fail production signing), privacy manifest reason-coverage for HealthKit + microphone incomplete, Sentry crash reports lack PII scrubbing. Paywall legal links now wired to placeholder URLs via `LegalLinks` (VOL-71 resolved — marketing pages stand up closer to launch). Tracked in Linear Go-Live Readiness project |
 
 ## Targets
