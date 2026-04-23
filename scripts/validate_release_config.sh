@@ -4,6 +4,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+# VOL-75 P2: match per-job DerivedData used by build_all_targets.sh and
+# test_apple_targets.sh so xcodebuild -showBuildSettings can reach the
+# SPM artifacts those builds resolved. Without this, -showBuildSettings
+# falls back to system DerivedData (empty in CI) and fails with "file
+# not found at path: .../sentry-cocoa/.../xcframework.zip".
+DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT/.build/derived-data}"
+mkdir -p "$DERIVED_DATA_PATH"
+
 ruby "scripts/generate_xcode_project.rb" >/dev/null
 
 PROJECT="VolumeArcApple.xcodeproj/project.pbxproj"
@@ -79,8 +87,10 @@ trap 'rm -f "$tmp_settings"' EXIT
 
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
-  -target "VolumeArcApp" \
+  -scheme "VolumeArcApp" \
   -configuration Release \
+  -derivedDataPath "$DERIVED_DATA_PATH" \
+  -skipPackagePluginValidation \
   -showBuildSettings >"$tmp_settings"
 
 # VOL-56 (PR #24): `INFOPLIST_FILE = App/Info.plist` must stay wired so
@@ -109,8 +119,10 @@ done
 
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
-  -target "VolumeArcWatch" \
+  -scheme "VolumeArcWatch" \
   -configuration Release \
+  -derivedDataPath "$DERIVED_DATA_PATH" \
+  -skipPackagePluginValidation \
   -showBuildSettings >"$tmp_settings"
 
 watch_required=(
@@ -128,8 +140,10 @@ done
 
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
-  -target "VolumeArcWidgets" \
+  -scheme "VolumeArcWidgets" \
   -configuration Release \
+  -derivedDataPath "$DERIVED_DATA_PATH" \
+  -skipPackagePluginValidation \
   -showBuildSettings >"$tmp_settings"
 
 widget_required=(
@@ -145,6 +159,10 @@ for required in "${widget_required[@]}"; do
   fi
 done
 
+# VolumeArcAppTests scheme has no build target (tests-only), so -scheme +
+# -derivedDataPath would resolve against nothing. The tests target has no
+# direct SPM deps of its own, so plain -target works and doesn't need the
+# artifact cache.
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
   -target "VolumeArcAppTests" \
@@ -167,8 +185,10 @@ done
 # Re-read app Release build settings for deeper checks
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
-  -target "VolumeArcApp" \
+  -scheme "VolumeArcApp" \
   -configuration Release \
+  -derivedDataPath "$DERIVED_DATA_PATH" \
+  -skipPackagePluginValidation \
   -showBuildSettings >"$tmp_settings"
 
 # ENABLE_TESTABILITY must be NO in Release (allows debugger injection if YES).
