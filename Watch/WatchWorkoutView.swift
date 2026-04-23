@@ -15,7 +15,10 @@ final class WatchWorkoutModel: ObservableObject {
     @Published private(set) var readiness: ReadinessAssessment
     @Published var selectedAction: WorkoutAction = .hold
     @Published var restEndsAt = Date.now.addingTimeInterval(90)
-    @Published var coachPrompt = "Rack is taken. Best fallback?"
+    @Published var coachPrompt = String(
+        localized: "Rack is taken. Best fallback?",
+        comment: "Default prompt seeded in the watch coach cue field"
+    )
     @Published private(set) var sessionActive = false
     @Published private(set) var pendingSyncCount = 0
     @Published private(set) var statusMessage = String(localized: "Watch coach standing by.", comment: "Watch default status")
@@ -78,7 +81,10 @@ final class WatchWorkoutModel: ObservableObject {
         statusMessage = reachable
             ? (pendingSyncCount == 0
                 ? String(localized: "Connected to iPhone for live coaching.", comment: "Watch connected status")
-                : "Connected again. Replayed \(pendingSyncCount) queued updates.")
+                : String(
+                    localized: "Connected again. Replayed ^[\(pendingSyncCount) queued update](inflect: true).",
+                    comment: "Watch reconnect status showing how many queued updates were replayed. Uses automatic grammar inflection for singular/plural agreement."
+                ))
             : String(localized: "Phone unavailable. We’ll queue key updates.", comment: "Watch disconnected status")
         await persistState()
     }
@@ -123,7 +129,10 @@ final class WatchWorkoutModel: ObservableObject {
             try await coordinator.send(payload)
             statusMessage = decisionSummary(for: action)
         } catch {
-            statusMessage = "Decision saved on watch. We’ll sync it to phone when available."
+            statusMessage = String(
+                localized: "Decision saved on watch. We’ll sync it to phone when available.",
+                comment: "Watch decision offline status"
+            )
         }
         pendingSyncCount = await coordinator.pendingPayloadCount()
         await persistState()
@@ -189,11 +198,18 @@ final class WatchWorkoutModel: ObservableObject {
     func completeWorkout() async {
         await ensureSessionStarted()
         let completedAt = Date.now
+        let summaryLine = String(
+            localized: "\(autopilot.nextExerciseName) wrapped with \(selectedAction.rawValue) recommendation.",
+            comment: "Watch-originated session summary; first placeholder is the exercise name, second is the recommended action (increase/hold/decrease)"
+        )
         let payloadBody = SyncPayloadCodec.encode(
             WatchWorkoutSyncPayload(
                 workoutID: "active-strength-session",
                 receivedAt: completedAt,
-                title: "Watch Strength Session",
+                title: String(
+                    localized: "Watch Strength Session",
+                    comment: "Watch-originated session title that surfaces in iPhone session history"
+                ),
                 exerciseID: VolumeArcExerciseCatalog.backSquat.id,
                 exerciseName: autopilot.nextExerciseName,
                 set: WorkoutSetPerformance(
@@ -205,9 +221,9 @@ final class WatchWorkoutModel: ObservableObject {
                 recommendedAction: selectedAction,
                 durationMinutes: 32,
                 completionRate: 1,
-                summary: "\(autopilot.nextExerciseName) wrapped with \(selectedAction.rawValue) recommendation."
+                summary: summaryLine
             )
-        ) ?? "\(autopilot.nextExerciseName) wrapped with \(selectedAction.rawValue) recommendation."
+        ) ?? summaryLine
         let payload = WatchPayload(
             kind: .completedWorkout,
             workoutID: "active-strength-session",
@@ -283,18 +299,56 @@ private struct WatchRestTimerDisplay: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let remaining = max(Int(endsAt.timeIntervalSince(context.date)), 0)
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: VA.Space.sm) {
                 Text(String(localized: "Rest", comment: "Watch rest timer header"))
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Text(remaining == 0 ? String(localized: "Go time", comment: "Watch rest complete label") : "\(remaining)s")
-                    .font(.title2.bold())
-                    .foregroundStyle(remaining == 0 ? Color.green : Color.primary)
-                    .accessibilityLabel(remaining == 0 ? "Go time, rest complete" : "Rest timer")
-                    .accessibilityValue(remaining == 0 ? "Rest complete" : "\(remaining) seconds remaining")
-                Button(remaining == 0 ? "Restart Rest" : "Reset to 90s", action: onReset)
+                    .font(VA.Typography.caption)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                Text(
+                    remaining == 0
+                        ? String(localized: "Go time", comment: "Watch rest complete label")
+                        : String(
+                            localized: "\(remaining)s",
+                            comment: "Watch rest timer countdown value; the placeholder is the number of seconds remaining"
+                        )
+                )
+                    .font(VA.Typography.display)
+                    .foregroundStyle(remaining == 0 ? VA.Colors.success : VA.Colors.textPrimary)
+                    .accessibilityLabel(
+                        remaining == 0
+                            ? String(
+                                localized: "Go time, rest complete",
+                                comment: "Watch rest timer accessibility label when rest just finished"
+                            )
+                            : String(
+                                localized: "Rest timer",
+                                comment: "Watch rest timer accessibility label while counting down"
+                            )
+                    )
+                    .accessibilityValue(
+                        remaining == 0
+                            ? String(
+                                localized: "Rest complete",
+                                comment: "Watch rest timer accessibility value when rest just finished"
+                            )
+                            : String(
+                                localized: "^[\(remaining) second](inflect: true) remaining",
+                                comment: "Watch rest timer accessibility value; the placeholder is the seconds remaining. Uses automatic grammar inflection for singular/plural agreement."
+                            )
+                    )
+                Button(
+                    remaining == 0
+                        ? String(localized: "Restart Rest", comment: "Watch rest timer restart button label")
+                        : String(localized: "Reset to 90s", comment: "Watch rest timer reset button label"),
+                    action: onReset
+                )
                     .buttonStyle(.borderedProminent)
-                    .tint(.orange)
+                    .tint(VA.Colors.primary)
+                    .accessibilityHint(
+                        String(
+                            localized: "Resets the rest timer back to 90 seconds",
+                            comment: "Watch rest timer reset button hint"
+                        )
+                    )
             }
         }
     }
@@ -309,30 +363,53 @@ struct WatchWorkoutView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: VA.Space.lg) {
                 Text(String(localized: "Now", comment: "Watch current exercise header"))
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .font(VA.Typography.caption)
+                    .foregroundStyle(VA.Colors.textSecondary)
 
                 Text(model.autopilot.nextExerciseName)
-                    .font(.title3.bold())
-                    .accessibilityLabel("Exercise: \(model.autopilot.nextExerciseName)")
+                    .font(VA.Typography.title)
+                    .accessibilityLabel(
+                        String(
+                            localized: "Exercise: \(model.autopilot.nextExerciseName)",
+                            comment: "Watch current exercise accessibility label; placeholder is the exercise name"
+                        )
+                    )
 
                 let nextTarget = model.autopilot.nextTarget
-                Text("\(Int(nextTarget.weight))\(nextTarget.unit) x \(nextTarget.repRange.lowerBound)-\(nextTarget.repRange.upperBound)")
-                    .font(.headline)
-                    .foregroundStyle(.orange)
-                    .accessibilityValue("\(Int(model.autopilot.nextTarget.weight)) pounds, \(model.autopilot.nextTarget.repRange.lowerBound) to \(model.autopilot.nextTarget.repRange.upperBound) reps")
+                Text(
+                    String(
+                        localized: "\(Int(nextTarget.weight))\(nextTarget.unit) x \(nextTarget.repRange.lowerBound)-\(nextTarget.repRange.upperBound)",
+                        comment: "Watch next target weight and rep range (e.g., 225lb x 5-8). Placeholders: weight, unit, lower rep, upper rep"
+                    )
+                )
+                    .font(VA.Typography.headline)
+                    .foregroundStyle(VA.Colors.primary)
+                    .accessibilityValue(
+                        String(
+                            localized: "\(Int(model.autopilot.nextTarget.weight)) pounds, \(model.autopilot.nextTarget.repRange.lowerBound) to \(model.autopilot.nextTarget.repRange.upperBound) reps",
+                            comment: "Watch next target accessibility value; placeholders: weight in pounds, lower rep count, upper rep count"
+                        )
+                    )
 
                 Text(model.autopilot.bestCue)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(VA.Typography.body)
+                    .foregroundStyle(VA.Colors.textSecondary)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(model.sessionActive ? String(localized: "Session Live", comment: "Watch active session label") : String(localized: "Session Ready", comment: "Watch ready session label"))
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Button(model.sessionActive ? String(localized: "End Session", comment: "Watch end session button") : String(localized: "Start Session", comment: "Watch start session button")) {
+                VStack(alignment: .leading, spacing: VA.Space.sm) {
+                    Text(
+                        model.sessionActive
+                            ? String(localized: "Session Live", comment: "Watch active session label")
+                            : String(localized: "Session Ready", comment: "Watch ready session label")
+                    )
+                        .font(VA.Typography.caption)
+                        .foregroundStyle(VA.Colors.textSecondary)
+                    Button(
+                        model.sessionActive
+                            ? String(localized: "End Session", comment: "Watch end session button")
+                            : String(localized: "Start Session", comment: "Watch start session button")
+                    ) {
                         Task {
                             if model.sessionActive {
                                 await model.endSession()
@@ -342,7 +419,28 @@ struct WatchWorkoutView: View {
                         }
                     }
                     .buttonStyle(.bordered)
-                    .accessibilityLabel(model.sessionActive ? "End workout session" : "Start workout session")
+                    .accessibilityLabel(
+                        model.sessionActive
+                            ? String(
+                                localized: "End workout session",
+                                comment: "Watch end session button accessibility label"
+                            )
+                            : String(
+                                localized: "Start workout session",
+                                comment: "Watch start session button accessibility label"
+                            )
+                    )
+                    .accessibilityHint(
+                        model.sessionActive
+                            ? String(
+                                localized: "Ends the live watch workout and syncs the summary",
+                                comment: "Watch end session button accessibility hint"
+                            )
+                            : String(
+                                localized: "Begins a live watch workout and notifies the phone",
+                                comment: "Watch start session button accessibility hint"
+                            )
+                    )
 
                     Divider()
 
@@ -354,52 +452,103 @@ struct WatchWorkoutView: View {
                     Divider()
 
                     Text(String(localized: "Decision", comment: "Watch decision header"))
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .font(VA.Typography.caption)
+                        .foregroundStyle(VA.Colors.textSecondary)
 
-                    HStack(spacing: 8) {
-                        actionButton(title: "Up", icon: "arrow.up", action: .increase)
-                        actionButton(title: "Hold", icon: "equal", action: .hold)
-                        actionButton(title: "Down", icon: "arrow.down", action: .decrease)
+                    HStack(spacing: VA.Space.md) {
+                        actionButton(
+                            title: String(
+                                localized: "Up",
+                                comment: "Watch decision button — increase weight"
+                            ),
+                            icon: "arrow.up",
+                            action: .increase
+                        )
+                        actionButton(
+                            title: String(
+                                localized: "Hold",
+                                comment: "Watch decision button — hold weight"
+                            ),
+                            icon: "equal",
+                            action: .hold
+                        )
+                        actionButton(
+                            title: String(
+                                localized: "Down",
+                                comment: "Watch decision button — decrease weight"
+                            ),
+                            icon: "arrow.down",
+                            action: .decrease
+                        )
                     }
 
                     Text(model.decisionSummary(for: model.selectedAction))
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .font(VA.Typography.body)
+                        .foregroundStyle(VA.Colors.textSecondary)
 
                     Divider()
 
-                    Text("Readiness \(model.readiness.score)")
-                        .font(.headline)
-                        .accessibilityLabel("Readiness score \(model.readiness.score)")
+                    Text(
+                        String(
+                            localized: "Readiness \(model.readiness.score)",
+                            comment: "Watch readiness score label; placeholder is the numeric score"
+                        )
+                    )
+                        .font(VA.Typography.headline)
+                        .accessibilityLabel(
+                            String(
+                                localized: "Readiness score \(model.readiness.score)",
+                                comment: "Watch readiness accessibility label; placeholder is the numeric score"
+                            )
+                        )
                     Text(model.readiness.brief)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .font(VA.Typography.body)
+                        .foregroundStyle(VA.Colors.textSecondary)
 
-                    Text("Fallback: \(VolumeArcExerciseCatalog.frontSquat.name)")
-                        .font(.footnote.weight(.semibold))
-                    Text("If the rack is taken, keep the squat stimulus with front squats and trim one accessory.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    Text(
+                        String(
+                            localized: "Fallback: \(VolumeArcExerciseCatalog.frontSquat.name)",
+                            comment: "Watch fallback exercise suggestion; placeholder is the fallback lift name"
+                        )
+                    )
+                        .font(VA.Typography.footnote)
+                    Text(
+                        String(
+                            localized: "If the rack is taken, keep the squat stimulus with front squats and trim one accessory.",
+                            comment: "Watch fallback exercise rationale when the squat rack is unavailable"
+                        )
+                    )
+                        .font(VA.Typography.body)
+                        .foregroundStyle(VA.Colors.textSecondary)
 
                     Divider()
 
                     Text(model.statusMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .font(VA.Typography.body)
+                        .foregroundStyle(VA.Colors.textSecondary)
 
                     if model.pendingSyncCount > 0 {
-                        Text("\(model.pendingSyncCount) updates waiting for phone sync")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.orange)
-                            .accessibilityLabel("Pending sync updates")
+                        Text(
+                            String(
+                                localized: "^[\(model.pendingSyncCount) update](inflect: true) waiting for phone sync",
+                                comment: "Watch pending-sync indicator; placeholder is the count of queued updates. Uses automatic grammar inflection for singular/plural agreement."
+                            )
+                        )
+                            .font(VA.Typography.caption)
+                            .foregroundStyle(VA.Colors.primary)
+                            .accessibilityLabel(
+                                String(
+                                    localized: "Pending sync updates",
+                                    comment: "Watch pending sync indicator accessibility label"
+                                )
+                            )
                     }
 
                     Divider()
 
                     Text(String(localized: "Coach cue", comment: "Watch coach section header"))
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .font(VA.Typography.caption)
+                        .foregroundStyle(VA.Colors.textSecondary)
                     TextField(String(localized: "Ask for a fallback or load check", comment: "Watch coach prompt placeholder"), text: $model.coachPrompt)
                     Button(String(localized: "Send Cue Request", comment: "Watch send coach cue button")) {
                         Task {
@@ -407,6 +556,12 @@ struct WatchWorkoutView: View {
                         }
                     }
                     .buttonStyle(.bordered)
+                    .accessibilityHint(
+                        String(
+                            localized: "Sends your coach prompt to the phone",
+                            comment: "Watch coach cue send button accessibility hint"
+                        )
+                    )
 
                 Button(String(localized: "Complete on Watch", comment: "Watch complete workout button")) {
                     Task {
@@ -414,8 +569,18 @@ struct WatchWorkoutView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .accessibilityLabel("Complete workout on Watch")
-                .accessibilityHint("Finishes the session and queues the summary for phone sync")
+                .accessibilityLabel(
+                    String(
+                        localized: "Complete workout on Watch",
+                        comment: "Watch complete workout button accessibility label"
+                    )
+                )
+                .accessibilityHint(
+                    String(
+                        localized: "Finishes the session and queues the summary for phone sync",
+                        comment: "Watch complete workout button accessibility hint"
+                    )
+                )
             }
             .padding()
         }
@@ -430,34 +595,51 @@ struct WatchWorkoutView: View {
                 await model.choose(action)
             }
         } label: {
-            VStack(spacing: 4) {
+            VStack(spacing: VA.Space.xs) {
                 Image(systemName: icon)
                 Text(title)
-                    .font(.caption2.weight(.semibold))
+                    .font(VA.Typography.caption)
             }
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.bordered)
-        .tint(model.selectedAction == action ? .orange : .gray)
+        .tint(model.selectedAction == action ? VA.Colors.primary : VA.Colors.neutral)
         .accessibilityLabel(accessibilityLabelForAction(action))
         .accessibilityHint(accessibilityHintForAction(action))
     }
 
     private func accessibilityLabelForAction(_ action: WorkoutAction) -> String {
         switch action {
-        case .increase: return "Increase weight"
-        case .hold: return "Hold weight"
-        case .decrease: return "Decrease weight"
-        default: return action.rawValue
+        case .increase:
+            return String(localized: "Increase weight", comment: "Watch up button accessibility label")
+        case .hold:
+            return String(localized: "Hold weight", comment: "Watch hold button accessibility label")
+        case .decrease:
+            return String(localized: "Decrease weight", comment: "Watch down button accessibility label")
+        default:
+            return action.rawValue
         }
     }
 
     private func accessibilityHintForAction(_ action: WorkoutAction) -> String {
         switch action {
-        case .increase: return "Move up the load for the next set"
-        case .hold: return "Keep the same load for the next set"
-        case .decrease: return "Reduce the load for the next set"
-        default: return ""
+        case .increase:
+            return String(
+                localized: "Move up the load for the next set",
+                comment: "Watch up button accessibility hint"
+            )
+        case .hold:
+            return String(
+                localized: "Keep the same load for the next set",
+                comment: "Watch hold button accessibility hint"
+            )
+        case .decrease:
+            return String(
+                localized: "Reduce the load for the next set",
+                comment: "Watch down button accessibility hint"
+            )
+        default:
+            return ""
         }
     }
 }
