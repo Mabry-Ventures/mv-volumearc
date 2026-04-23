@@ -274,6 +274,12 @@ app_scheme.save_as(PROJECT_PATH, 'VolumeArcApp', true)
 
 test_scheme = Xcodeproj::XCScheme.new
 test_scheme.configure_with_targets(nil, app_tests_target)
+# VOL-52: enable code coverage so `xcodebuild test -enableCodeCoverage YES`
+# in `scripts/test_apple_targets.sh` produces an xcresult bundle with
+# per-target coverage data. `scripts/check_coverage.sh` reads it via
+# `xcrun xccov view --report --json` to enforce the 80% VolumeArcCore
+# line-coverage gate.
+test_scheme.test_action.code_coverage_enabled = true
 test_scheme.save_as(PROJECT_PATH, 'VolumeArcAppTests', true)
 
 ui_test_scheme = Xcodeproj::XCScheme.new
