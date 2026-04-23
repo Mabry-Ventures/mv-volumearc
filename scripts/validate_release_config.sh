@@ -273,6 +273,58 @@ for required_task in \
   fi
 done
 
+# VOL-85: Built-bundle Info.plist validation (hardening)
+#
+# The source App/Info.plist check above catches human-visible regressions
+# (someone deleting a required key in git). This check catches build-time
+# regressions (ProcessInfoPlistFile dropping or rewriting a key during
+# the Xcode build). Only runs when a built .app bundle exists in DerivedData,
+# so local devs who only run this script without building aren't forced
+# to archive.
+
+BUILT_APP_PLIST=""
+# Look in the standard DerivedData location for the app bundle Info.plist.
+for candidate in \
+  "$HOME/Library/Developer/Xcode/DerivedData"/VolumeArcApple-*/Build/Products/Release-iphoneos/VolumeArc.app/Info.plist \
+  "$HOME/Library/Developer/Xcode/DerivedData"/VolumeArcApple-*/Build/Products/Debug-iphonesimulator/VolumeArc.app/Info.plist; do
+  for match in $candidate; do
+    if [[ -f "$match" ]]; then
+      BUILT_APP_PLIST="$match"
+      break 2
+    fi
+  done
+done
+
+if [[ -n "$BUILT_APP_PLIST" ]]; then
+  echo "Validating built bundle Info.plist at $BUILT_APP_PLIST"
+  for required_key in \
+    "CFBundleURLTypes" \
+    "BGTaskSchedulerPermittedIdentifiers" \
+    "UIBackgroundModes"; do
+    if ! plutil -extract "$required_key" raw -o - "$BUILT_APP_PLIST" >/dev/null 2>&1; then
+      echo "FAIL: Built bundle Info.plist missing required key: $required_key" >&2
+      echo "       ($BUILT_APP_PLIST)" >&2
+      exit 1
+    fi
+  done
+  # Confirm both BGTask identifiers survived the build.
+  for required_task in \
+    "com.mabryventures.VolumeArc.appRefresh" \
+    "com.mabryventures.VolumeArc.appProcessing"; do
+    if ! plutil -convert xml1 -o - "$BUILT_APP_PLIST" 2>/dev/null | grep -qF "<string>$required_task</string>"; then
+      echo "FAIL: Built bundle Info.plist missing BGTask identifier: $required_task" >&2
+      exit 1
+    fi
+  done
+  # Confirm the URL scheme survived.
+  if ! plutil -extract "CFBundleURLTypes.0.CFBundleURLSchemes.0" raw -o - "$BUILT_APP_PLIST" 2>/dev/null | grep -qx "volumearc"; then
+    echo "FAIL: Built bundle Info.plist CFBundleURLTypes missing 'volumearc' scheme" >&2
+    exit 1
+  fi
+else
+  echo "INFO: No built .app bundle found in DerivedData; skipping built-bundle plist check. Run an xcodebuild first to exercise this validation."
+fi
+
 # Version bump check: if building for a tag, fail when VERSION matches the latest tag.
 # On branch/PR builds this stays a warning since it only matters at release time.
 if git describe --tags --abbrev=0 >/dev/null 2>&1; then
