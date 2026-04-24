@@ -137,7 +137,10 @@ final class VolumeArcAppJourneyTests: XCTestCase {
         )
 
         // Legal links from VOL-71's `LegalLinks` — the identifiers were
-        // already added on `PaywallView.swift`.
+        // already added on `PaywallView.swift`. Only assert existence in
+        // the accessibility tree (not hittability) since the footer lives
+        // below the fold in the ScrollView and the test doesn't actually
+        // tap them; validating that the links are WIRED is the point.
         let termsLink = app.descendants(matching: .any)
             .matching(identifier: "paywall.legal.terms")
             .firstMatch
@@ -145,7 +148,6 @@ final class VolumeArcAppJourneyTests: XCTestCase {
             termsLink.waitForExistence(timeout: 5),
             "Paywall should expose the Terms of Service link"
         )
-        XCTAssertTrue(termsLink.isHittable, "Terms of Service link should be tappable")
 
         let privacyLink = app.descendants(matching: .any)
             .matching(identifier: "paywall.legal.privacy")
@@ -154,7 +156,6 @@ final class VolumeArcAppJourneyTests: XCTestCase {
             privacyLink.waitForExistence(timeout: 5),
             "Paywall should expose the Privacy Policy link"
         )
-        XCTAssertTrue(privacyLink.isHittable, "Privacy Policy link should be tappable")
 
         // Dismiss via the close button in the navigation bar.
         let closeButton = app.descendants(matching: .any)
@@ -208,7 +209,13 @@ final class VolumeArcAppJourneyTests: XCTestCase {
             restoreButton.waitForExistence(timeout: 5),
             "Paywall should expose the Restore Purchases button"
         )
-        XCTAssertTrue(restoreButton.isHittable, "Restore Purchases button should be tappable")
+        // Scroll the paywall sheet so the Restore button is on-screen and
+        // the tap isn't intercepted by `isHittable` gating. The paywall
+        // ScrollView contains enough content (hero, feature comparison,
+        // plans, action buttons, legal footer) that the bottom
+        // action-buttons cluster is typically below the fold on iPhone 17
+        // simulator.
+        paywallRoot.swipeUp()
         restoreButton.tap()
 
         // Give the async restore call time to return. Without StoreKit

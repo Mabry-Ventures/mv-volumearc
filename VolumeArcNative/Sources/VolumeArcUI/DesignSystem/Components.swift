@@ -110,7 +110,13 @@ public struct VAButton: View {
     }
 
     public var body: some View {
-        Button(action: action) {
+        // VOL-93: apply the identifier to the inner `Button` element
+        // directly. Attempting to attach it outside
+        // `.accessibilityElement(children: .combine)` silently fails in
+        // XCUITest — the combined element reported the label but never
+        // the identifier. Keeping it on the native `Button` gets XCUITest
+        // queries for onboarding.continue / .finish / .back hitting.
+        let button = Button(action: action) {
             HStack(spacing: VA.Space.sm) {
                 if isLoading {
                     ProgressView()
@@ -132,25 +138,19 @@ public struct VAButton: View {
         }
         .buttonStyle(.plain)
         .disabled(isLoading || !isEnabled)
-        .scaleEffect(isPressed ? 0.97 : 1.0)
-        .opacity(isEnabled ? 1.0 : 0.5)
-        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in isPressed = true }
-                .onEnded { _ in isPressed = false }
-        )
-        .accessibilityElement(children: .combine)
         .accessibilityLabel(isLoading ? "\(title), loading" : title)
         .accessibilityHint(accessibilityHintText ?? "")
-        .accessibilityAddTraits(.isButton)
-        // VOL-93: the combined accessibility element swallows externally
-        // applied `.accessibilityIdentifier(…)`, so XCUITest queries against
-        // identifiers attached at the call site were silently missing the
-        // button. Thread the identifier through the initializer and apply
-        // it to the combined element directly so the journey suite can
-        // find onboarding.continue / onboarding.finish / onboarding.back.
-        .accessibilityIdentifier(accessibilityIdentifierValue ?? "")
+
+        return button
+            .modifier(VAButtonIdentifierModifier(identifier: accessibilityIdentifierValue))
+            .scaleEffect(isPressed ? 0.97 : 1.0)
+            .opacity(isEnabled ? 1.0 : 0.5)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in isPressed = true }
+                    .onEnded { _ in isPressed = false }
+            )
     }
 
     private var foregroundColor: Color {
@@ -158,6 +158,22 @@ public struct VAButton: View {
         case .primary, .destructive: return VA.Colors.textOnPrimary
         case .secondary: return VA.Colors.textPrimary
         case .ghost: return VA.Colors.primary
+        }
+    }
+}
+
+/// Attaches an accessibility identifier to the wrapped Button when one is
+/// supplied. Skipping the modifier entirely when the identifier is nil
+/// avoids clobbering call-site-applied identifiers on VAButtons that opt
+/// out of threading one through the initializer.
+private struct VAButtonIdentifierModifier: ViewModifier {
+    let identifier: String?
+
+    func body(content: Content) -> some View {
+        if let identifier {
+            content.accessibilityIdentifier(identifier)
+        } else {
+            content
         }
     }
 }
