@@ -26,20 +26,25 @@ All targets depend on `VolumeArcCore`. Only the iOS app and test target depend o
 
 ```
 VolumeArcCore/
-├── AI/                      # AICoachProvider, voice transport, OpenAI relay
-├── CloudSync/               # CloudKitSyncTransport, CloudSyncCoordinator, FileSyncStateStore
-├── FeatureFlags/            # FeatureFlagProvider protocol, LocalFeatureFlagProvider
+├── AI/                      # AICoachProvider (three-tier chain), CoachPromptTemplate, VoiceCoach
+├── CloudSync/               # CloudKitSyncTransport, CloudSyncCoordinator, CloudSyncTypes,
+│                            #   SyncPayloadApplier[+PerKind], SyncPayloadCodec (VOL-74 split — 6 files)
+├── FeatureFlags/            # FeatureFlagProvider protocol, LocalFeatureFlagProvider, FlagGateTelemetry
 ├── Health/                  # HealthStore protocol, NetworkReachabilityMonitor
+├── Legal/                   # LegalLinks (Terms / Privacy URLs used by PaywallView)
 ├── Navigation/              # DashboardNavigationModel, WorkoutDashboardModel, VolumeArcDeepLink
 ├── Notifications/           # NotificationStore, AccountSessionStore
-├── Persistence/             # SwiftData @Models, repositories, VolumeArcSchemaV1
+├── Persistence/             # SwiftData @Models, repositories, VolumeArcSchemaV1/V2/V3 + MigrationPlan
 ├── PlatformSurface/         # Widget/Live Activity shared state types
+├── Runtime/                 # VolumeArcAIRuntimeFactory and platform factory helpers
 ├── Subscriptions/           # StoreKitSubscriptionStore
 ├── Telemetry/               # TelemetrySink fanout, TelemetryEvent, OperationalSignal
 ├── Voice/                   # VoicePermissionStore, VoicePermissionStatus
 ├── Watch/                   # WatchConnectivityCoordinator, payload types
 └── Workout/                 # ProgressionEngine, ReadinessModel, ExerciseCatalog
 ```
+
+The three-tier AI provider chain lives under `AI/` and is assembled by `Runtime/VolumeArcAIRuntimeFactory`: `FoundationModelCoachProvider` (on-device, iOS 26+) → `OpenAIRelayCoachProvider` (cloud relay via `volumearc-ai-relay.jared-b6b.workers.dev`, SSE streaming) → `LocalHeuristicAICoachProvider` (offline fallback). `FlagGateTelemetry` in `FeatureFlags/` gates voice coaching, cloud sync, Live Activities, and the Foundation Models provider choice at runtime (VOL-61).
 
 ## VolumeArcUI modules
 

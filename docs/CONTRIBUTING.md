@@ -76,7 +76,9 @@ Practical consequences:
 
 ### Lint scope
 
-SwiftLint (`.swiftlint.yml`) covers the full first-party Swift surface: `App`, `Watch`, `Widgets`, `WatchWidgets`, `Tests`, and `VolumeArcNative/Sources`. The CI lint step runs non-strict against the whole scope — pre-existing violations are tracked in VOL-87's progressive cleanup burndown. Warning thresholds are kept intentionally tight so debt stays visible in the CI log even while error thresholds are relaxed. Do not widen thresholds or add per-file disable comments to paper over new violations; fix them instead.
+SwiftLint (`.swiftlint.yml`) covers the full first-party Swift surface: `App`, `Watch`, `Widgets`, `WatchWidgets`, `Tests`, and `VolumeArcNative/Sources` — the expanded scope landed in VOL-89 / PR #59. The CI lint step runs non-strict against the whole scope and hard-fails on any error-level violation (VOL-77 / PR #47). Pre-existing violations are tracked in VOL-87's progressive cleanup burndown. Warning thresholds are kept intentionally tight so debt stays visible in the CI log even while error thresholds are relaxed. Do not widen thresholds or add per-file disable comments to paper over new violations; fix them instead.
+
+A `Tests/.swiftlint.yml` override disables `implicitly_unwrapped_optional`, `force_unwrapping`, and length rules inside the test directory — the `var sut: SUT!` + `URL(string:)!` patterns are intentional contracts in XCTestCase code, not production bugs.
 
 ## Testing
 

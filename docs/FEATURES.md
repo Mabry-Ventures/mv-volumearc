@@ -1,6 +1,6 @@
 # Feature Status
 
-> **⚠ Pre-production, hygiene phase.** The post-95/95 audit blockers (VOL-55, 56, 57, 58, 59, 62, 63, 65, 67) shipped in PRs [#23](https://github.com/Mabry-Ventures/mv-volumearc/pull/23)–[#31](https://github.com/Mabry-Ventures/mv-volumearc/pull/31). Remaining work (App Store submission blockers, CI hygiene, synthetic streaming, coverage gate) is tracked in the Linear **Go-Live Readiness** project on the VolumeArc team. See [`PLATFORM.md`](PLATFORM.md#implementation-status) for the authoritative system-level status.
+> **⚠ Pre-production, hygiene phase.** The post-95/95 audit blockers (VOL-55, 56, 57, 58, 59, 62, 63, 65, 67) shipped in PRs [#23](https://github.com/Mabry-Ventures/mv-volumearc/pull/23)–[#31](https://github.com/Mabry-Ventures/mv-volumearc/pull/31). The Go-Live Readiness sweep (VOL-70 through VOL-77, VOL-89, VOL-95, VOL-100) closed the App Store submission blockers (production APS environment, paywall legal links, privacy manifest completeness, Sentry PII scrubbing) and the hygiene gaps (feature flag wiring, SSE streaming, Liquid Glass, SwiftLint scope, deterministic project generation, coach eval harness) in PRs [#43](https://github.com/Mabry-Ventures/mv-volumearc/pull/43)–[#63](https://github.com/Mabry-Ventures/mv-volumearc/pull/63). Remaining work (nightly eval CI, marketing pages, App Store metadata) is tracked in the Linear **Go-Live Readiness** / **Production Launch Quality** projects. See [`PLATFORM.md`](PLATFORM.md#implementation-status) for the authoritative system-level status.
 
 This is the granular per-feature checklist. For high-level system status, see [`PLATFORM.md`](PLATFORM.md). Update this file with every PR that changes feature completeness.
 
@@ -37,7 +37,7 @@ This is the granular per-feature checklist. For high-level system status, see [`
 | Voice transport | ✅ | `OpenAIRelayVoiceTransport` is live for single-turn voice → text → spoken response. Live duplex/WebRTC audio remains future work. |
 | Coach memory | ✅ | `CoachMemoryRepository` persists recent context and is appended during coaching turns. |
 | Streaming response UX | ✅ | `OpenAIRelayCoachProvider.streamCoachResponse` consumes `text/event-stream` from the `volumearc-ai-relay` Cloudflare Worker, parses `data: {"text":"..."}` frames, and yields Gemini tokens as they arrive. Non-streaming callers join the stream to a single string. Synthetic word-chunking is kept as the default-impl fallback for providers without native streaming. |
-| Evaluation harness | 📋 | Prompt-quality regression tooling is still planned. |
+| Evaluation harness | ✅ | Template-layer hermetic `CoachEvalTests` asserts marker, system prompt persona, intent envelope, and context preservation against 20 fixtures under `Tests/Evals/CoachEvalFixtures/`. Response-layer `scripts/run_coach_evals.sh` runs the fixtures against the live relay with a signing key (VOL-100 / PR #63). Nightly CI wiring is the only remaining follow-up. |
 | Privacy mode enforcement | 📋 | Privacy mode is modeled and surfaced in UI, but strict-mode prompt enforcement is not yet consistently applied in the dashboard coach path. |
 
 ## Data & progression
@@ -92,7 +92,7 @@ This is the granular per-feature checklist. For high-level system status, see [`
 | Versioning from git | ✅ | `VERSION` + git-derived build number flow ships. |
 | Localization (`String(localized:)`) | ✅ | Every user-facing string is localized with translator comments. No `.xcstrings` catalog file is generated yet, but the codebase is fully extractable. |
 | Accessibility labels | ✅ | Data displays, interactive controls, widgets, watch surfaces, and toast announcements have shipped accessibility coverage. |
-| Hard-failing release validation | ✅ | `scripts/validate_release_config.sh` hard-checks the checked-in `App/Info.plist` via `plutil -extract` for `CFBundleURLTypes`, `BGTaskSchedulerPermittedIdentifiers`, `UIBackgroundModes`, the `volumearc` URL scheme, and both BGTask identifiers. |
+| Hard-failing release validation | ✅ | `scripts/validate_release_config.sh` hard-checks the checked-in `App/Info.plist` via `plutil -extract` for `CFBundleURLTypes`, `BGTaskSchedulerPermittedIdentifiers`, `UIBackgroundModes`, the `volumearc` URL scheme, and both BGTask identifiers (VOL-85), and validates signed entitlements on the built `.app` via `codesign -d --entitlements -` for `aps-environment = production`, iCloud container identifier, HealthKit, and App Groups (VOL-92). Fastlane runs it against the archived bundle before TestFlight upload. |
 | Checked-in `App/Info.plist` (vs `INFOPLIST_KEY_*`) | ✅ | `App/Info.plist` is checked in and wired via `INFOPLIST_FILE`. Array-valued keys that `INFOPLIST_KEY_*` silently drops now live in the plist file. |
 | AI review gate (CodeRabbit Pro + Codex) on PRs | ✅ | Two-bot review gate is part of the protected-branch merge contract. CodeRabbit Pro is primary (server-side, auto-invoked on PR open/update); Codex Code Review is secondary (requested by `Request AI Reviews` workflow step). |
 
