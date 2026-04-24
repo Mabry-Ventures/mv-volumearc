@@ -179,7 +179,7 @@ The Xcode project is **generated** -- do not edit `project.pbxproj` by hand. Run
 
 ### Versioning
 
-`MARKETING_VERSION` is read from the `VERSION` file at the repo root (e.g., `1.0.0`). `CURRENT_PROJECT_VERSION` (build number) is derived from `git rev-list --count HEAD` by default, or from the `BUILD_NUMBER` environment variable when set (e.g., by CI). The `DEVELOPMENT_TEAM` can be passed as an env var for signing builds.
+`MARKETING_VERSION` is read from the `VERSION` file at the repo root (e.g., `1.0.0`). `CURRENT_PROJECT_VERSION` (build number) is pinned to `1` in the committed pbxproj so `ruby scripts/generate_xcode_project.rb` is a true no-op against `main` (VOL-106 — prior behavior derived it from `git rev-list --count HEAD`, which bumped on every merge and cascaded 300-line UUID churn through `predictabilize_uuids`). Release tooling overrides it at build time: `scripts/archive_for_distribution.sh` exports `BUILD_NUMBER=$(git rev-list --count HEAD)` into the generator and passes `CURRENT_PROJECT_VERSION=$BUILD_NUMBER` to `xcodebuild archive`; Fastlane's `ios beta` lane calls `increment_build_number` with the same count before `build_app`. So TestFlight/App Store uploads still ship the monotonic git count; only local dev builds see `CURRENT_PROJECT_VERSION = 1`. The `DEVELOPMENT_TEAM` can be passed as an env var for signing builds.
 
 ### Scripts
 
@@ -200,7 +200,7 @@ All build scripts call `generate_xcode_project.rb` first, so the project is alwa
 
 GitHub Actions CI runs on the shared `mv-shared` self-hosted runner pool (`runs-on: [self-hosted, mv-shared]`). The workflow (`.github/workflows/ci.yml`) triggers on pushes to `main`, pull requests, and version tags (`v*`).
 
-**CI pipeline:** Checkout → Pre-flight (Xcode / Ruby / xcodeproj / SwiftLint / disk headroom) → Generate Xcode project → Xcode project determinism gate (regenerate twice, diff SHA256 — VOL-95) → Seed SPM lockfile → Clear stale DerivedData → Build all targets (Debug) → Run unit + integration tests → XCUITest smoke suite → Coverage gate (VolumeArcCore ≥ 80% — VOL-52) → Upload xcresult + coverage-summary artifacts → Sticky PR coverage comment → Trend-append on main push → SwiftLint hard-fail → Validate release config. The two-bot AI review gate (CodeRabbit Pro primary + Codex Code Review secondary) runs in a separate workflow (`.github/workflows/ai-review-gate.yml`) and must post a review signal on the current head SHA within the wait window for the gate to pass.
+**CI pipeline:** Checkout → Pre-flight (Xcode / Ruby / xcodeproj / SwiftLint / disk headroom) → Generate Xcode project → Xcode project determinism gate (regenerate twice, diff SHA256 — VOL-95) → Xcode project no-op regen gate (regenerate over committed state, fail on any drift — VOL-106) → Seed SPM lockfile → Clear stale DerivedData → Build all targets (Debug) → Run unit + integration tests → XCUITest smoke suite → Coverage gate (VolumeArcCore ≥ 80% — VOL-52) → Upload xcresult + coverage-summary artifacts → Sticky PR coverage comment → Trend-append on main push → SwiftLint hard-fail → Validate release config. The two-bot AI review gate (CodeRabbit Pro primary + Codex Code Review secondary) runs in a separate workflow (`.github/workflows/ai-review-gate.yml`) and must post a review signal on the current head SHA within the wait window for the gate to pass.
 
 **TestFlight deploy:** On version tags (`v*`), a second job runs `fastlane ios beta` to archive, sign, and upload to TestFlight. Requires `DEVELOPMENT_TEAM` and `APP_STORE_CONNECT_API_KEY_PATH` secrets.
 
