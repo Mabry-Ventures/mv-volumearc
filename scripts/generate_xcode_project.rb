@@ -280,6 +280,12 @@ app_tests_target.resources_build_phase.add_file_reference(fixture_folder_ref, tr
 add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   'Intents/VolumeArcIntents.swift',
   'VolumeArcAIConfiguration.swift',
+  # VOL-91: included in the test target so
+  # `VolumeArcPremiumGatingTests` can exercise the premium-entitlement
+  # gating directly without spinning up `VolumeArcApp`. The factory
+  # closes over `VolumeArcAIConfiguration.relayConfiguration` which is
+  # also in this list.
+  'VolumeArcAIRuntimeFactory.swift',
   'VolumeArcCloudConfiguration.swift',
   'VolumeArcLiveActivityController.swift',
   'VolumeArcPersistenceController.swift',

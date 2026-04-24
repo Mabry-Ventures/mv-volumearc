@@ -11,7 +11,23 @@ enum VolumeArcAIRuntimeFactory {
     /// VOL-61: `flagGate` is optional for backwards compatibility with
     /// existing test setups; when nil, the factory falls back to its prior
     /// unconditional behavior (FM provider enabled when available).
-    static func makeCoachProvider(flagGate: FlagGateTelemetry? = nil) -> AICoachProvider {
+    ///
+    /// VOL-91: `subscriptionStore` decides which relay tier to install.
+    /// Premium entitlement → Gemini Pro (`X-Coach-Tier: pro`); free →
+    /// Gemini Flash Lite (`X-Coach-Tier: flash-lite`). Nil defaults to
+    /// flash-lite for legacy test call sites that predate the gating.
+    /// `premiumGate` records a one-shot `.info` event the first time the
+    /// gate resolves so dashboards can observe the tier distribution.
+    @MainActor
+    static func makeCoachProvider(
+        flagGate: FlagGateTelemetry? = nil,
+        subscriptionStore: (any PremiumEntitlementProviding)? = nil,
+        premiumGate: PremiumGateTelemetry? = nil
+    ) -> AICoachProvider {
+        let isPremium = subscriptionStore?.isPremium ?? false
+        premiumGate?.recordIfFirst("coach_tier", isPremium: isPremium)
+        let tier: CoachTier = isPremium ? .pro : .flashLite
+
         let relayProvider = VolumeArcAIConfiguration.relayConfiguration.map { configuration in
             let sessionProvider = VolumeArcRelaySessionProvider(
                 baseURL: configuration.baseURL,
@@ -19,7 +35,8 @@ enum VolumeArcAIRuntimeFactory {
             )
             return OpenAIRelayCoachProvider(
                 configuration: configuration,
-                credentialsProvider: sessionProvider
+                credentialsProvider: sessionProvider,
+                tier: tier
             )
         }
 
@@ -41,25 +58,46 @@ enum VolumeArcAIRuntimeFactory {
         return relayProvider ?? LocalHeuristicAICoachProvider()
     }
 
-    /// Build the voice-coaching orchestrator. The `.voiceCoaching` flag
-    /// short-circuits the relay-backed transport and installs
-    /// `UnavailableVoiceTransport` so every call throws
-    /// `AIRuntimeIntegrationError.relayUnavailable`. The coach object
-    /// remains alive (callers can still construct it) — flipping the flag
-    /// back on at runtime is a no-op until the next `makeVoiceCoach()`
-    /// invocation, which is acceptable since the factory runs once at
-    /// launch.
-    static func makeVoiceCoach(flagGate: FlagGateTelemetry? = nil) -> LiveVoiceCoachOrchestrator {
+    /// Build the voice-coaching orchestrator.
+    ///
+    /// VOL-61: the `.voiceCoaching` feature flag short-circuits the
+    /// relay-backed transport and installs `UnavailableVoiceTransport`
+    /// so every call throws `AIRuntimeIntegrationError.relayUnavailable`.
+    ///
+    /// VOL-91: live voice is a premium feature. The relay transport is
+    /// installed ONLY when `isPremium == true` AND `.voiceCoaching` is
+    /// on. Free users — and premium users with the flag toggled off —
+    /// get `UnavailableVoiceTransport`. The premium check gets a one-shot
+    /// `.info` event on `premium.entitlement.gated` / name `live_voice`.
+    ///
+    /// The coach object remains alive (callers can still construct it) —
+    /// flipping the flag or entitlement back on at runtime is a no-op
+    /// until the next `makeVoiceCoach()` invocation, which is acceptable
+    /// since the factory runs once at launch.
+    @MainActor
+    static func makeVoiceCoach(
+        flagGate: FlagGateTelemetry? = nil,
+        subscriptionStore: (any PremiumEntitlementProviding)? = nil,
+        premiumGate: PremiumGateTelemetry? = nil
+    ) -> LiveVoiceCoachOrchestrator {
         // Voice coaching is a single-turn text relay wrapped in an
         // orchestrator. Live duplex audio against the OpenAI Realtime API is a
         // planned future feature — the current path covers the "ask a
         // question by voice, hear a text-to-speech reply" loop, which the UI
         // can hand off to `AVSpeechSynthesizer` for playback.
         let voiceEnabled = flagGate?.recordIfFirst(.voiceCoaching) ?? true
+        let isPremium = subscriptionStore?.isPremium ?? false
+        premiumGate?.recordIfFirst("live_voice", isPremium: isPremium)
 
         let transport: RealtimeVoiceTransport
-        if voiceEnabled, VolumeArcAIConfiguration.relayConfiguration != nil {
-            transport = OpenAIRelayVoiceTransport(provider: makeCoachProvider(flagGate: flagGate))
+        if voiceEnabled, isPremium, VolumeArcAIConfiguration.relayConfiguration != nil {
+            transport = OpenAIRelayVoiceTransport(
+                provider: makeCoachProvider(
+                    flagGate: flagGate,
+                    subscriptionStore: subscriptionStore,
+                    premiumGate: premiumGate
+                )
+            )
         } else {
             transport = UnavailableVoiceTransport()
         }
@@ -73,7 +111,7 @@ private actor UnavailableVoiceTransport: RealtimeVoiceTransport {
         _ = context
         _ = userText
         throw AIRuntimeIntegrationError.relayUnavailable(
-            reason: "Voice coaching relay is not configured or disabled by feature flag."
+            reason: "Voice coaching relay is not configured, disabled by feature flag, or unavailable without a premium entitlement."
         )
     }
 }

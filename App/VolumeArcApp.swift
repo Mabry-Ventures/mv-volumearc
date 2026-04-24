@@ -112,10 +112,16 @@ struct VolumeArcApp: App {
         // dashboard model. No global singleton: the dashboard still
         // exposes its own reference so UI / diagnostics can read / write
         // overrides through the same store.
+        //
+        // VOL-91: shared `PremiumGateTelemetry` is threaded alongside the
+        // flag gate so the runtime factory can record a single `.info`
+        // event per premium-gated feature (coach_tier, live_voice) per
+        // launch. Instantiated before `subscriptionStore` (which is
+        // conditional on StoreKit) so the gate lifecycle is identical on
+        // both StoreKit-enabled and StoreKit-less builds.
         let featureFlags: FeatureFlagProvider = LocalFeatureFlagProvider()
         let flagGate = FlagGateTelemetry(flags: featureFlags, telemetry: telemetrySink)
-        let aiProvider = VolumeArcAIRuntimeFactory.makeCoachProvider(flagGate: flagGate)
-        let voiceCoach = VolumeArcAIRuntimeFactory.makeVoiceCoach(flagGate: flagGate)
+        let premiumGate = PremiumGateTelemetry(telemetry: telemetrySink)
         #if canImport(ActivityKit)
         self.liveActivityController = VolumeArcLiveActivityController(flagGate: flagGate)
         #endif
@@ -125,6 +131,21 @@ struct VolumeArcApp: App {
         let syncTransport = Self.makeSyncTransport()
         let subscriptionStore = StoreKitSubscriptionStore(
             productIDs: VolumeArcPremiumCatalog.subscriptionProductIDs
+        )
+        // VOL-91: construct AI runtime AFTER the subscription store so the
+        // factory can gate coach tier + voice transport on the user's
+        // premium entitlement. Order of the factory calls matters — the
+        // first one emits the `coach_tier` telemetry event; the second
+        // reuses the dedupe guard in `PremiumGateTelemetry`.
+        let aiProvider = VolumeArcAIRuntimeFactory.makeCoachProvider(
+            flagGate: flagGate,
+            subscriptionStore: subscriptionStore,
+            premiumGate: premiumGate
+        )
+        let voiceCoach = VolumeArcAIRuntimeFactory.makeVoiceCoach(
+            flagGate: flagGate,
+            subscriptionStore: subscriptionStore,
+            premiumGate: premiumGate
         )
         #if canImport(SwiftData)
         let startupSignals = Self.startupSignals(
@@ -272,6 +293,21 @@ struct VolumeArcApp: App {
         )
         #endif
         #else
+        // VOL-91: without StoreKit, premium entitlement is always false —
+        // factory falls back to flash-lite + Unavailable voice transport.
+        // Still thread `premiumGate` so the one-shot telemetry event
+        // fires with `premium=false`, which is the correct state for
+        // non-StoreKit builds (macOS previews, Linux-style CI).
+        let aiProvider = VolumeArcAIRuntimeFactory.makeCoachProvider(
+            flagGate: flagGate,
+            subscriptionStore: nil,
+            premiumGate: premiumGate
+        )
+        let voiceCoach = VolumeArcAIRuntimeFactory.makeVoiceCoach(
+            flagGate: flagGate,
+            subscriptionStore: nil,
+            premiumGate: premiumGate
+        )
         self.dashboardModel = WorkoutDashboardModel(
             aiProvider: aiProvider,
             accountSessionStore: accountSessionStore,
