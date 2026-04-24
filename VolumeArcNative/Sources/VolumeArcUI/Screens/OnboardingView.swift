@@ -321,22 +321,30 @@ public struct OnboardingView: View {
             if step != .welcome {
                 VAButton(
                     String(localized: "Back", comment: "Onboarding back button"),
-                    style: .ghost
+                    style: .ghost,
+                    // VOL-93: identifier threaded through VAButton's init so it
+                    // attaches to the combined accessibility element rather
+                    // than the outer modifier wrapper.
+                    accessibilityIdentifier: "onboarding.back"
                 ) {
                     withAnimation(VAAnimation.standard) {
                         step = Step(rawValue: step.rawValue - 1) ?? .welcome
                     }
                 }
                 .frame(maxWidth: 100)
-                // VOL-93: stable identifier for the XCUITest journey suite.
-                .accessibilityIdentifier("onboarding.back")
             }
 
+            // VOL-93: on the final step the button says "Get Started"; on
+            // every other step it says "Continue". The identifier changes
+            // with the step so the test can distinguish the final commit
+            // from intermediate taps. Threaded through VAButton's init so
+            // it attaches to the combined accessibility element.
             VAButton(
                 step == .done
                     ? String(localized: "Get Started", comment: "Onboarding final button to finish onboarding")
                     : String(localized: "Continue", comment: "Onboarding step-forward button"),
-                style: .primary
+                style: .primary,
+                accessibilityIdentifier: step == .done ? "onboarding.finish" : "onboarding.continue"
             ) {
                 VAHaptics.tap()
                 if step == .done {
@@ -347,12 +355,6 @@ public struct OnboardingView: View {
                     }
                 }
             }
-            // VOL-93: stable identifier for the XCUITest journey suite.
-            // On the final step the button says "Get Started"; on every
-            // other step it says "Continue". The identifier changes with
-            // the step so the test can distinguish the final commit from
-            // intermediate taps.
-            .accessibilityIdentifier(step == .done ? "onboarding.finish" : "onboarding.continue")
         }
     }
 

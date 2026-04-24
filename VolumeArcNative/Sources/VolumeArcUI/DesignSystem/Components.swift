@@ -85,6 +85,7 @@ public struct VAButton: View {
     private let style: Style
     private let isLoading: Bool
     private let accessibilityHintText: String?
+    private let accessibilityIdentifierValue: String?
     private let action: () -> Void
 
     @State private var isPressed = false
@@ -96,6 +97,7 @@ public struct VAButton: View {
         style: Style = .primary,
         isLoading: Bool = false,
         accessibilityHint: String? = nil,
+        accessibilityIdentifier: String? = nil,
         action: @escaping () -> Void
     ) {
         self.title = title
@@ -103,6 +105,7 @@ public struct VAButton: View {
         self.style = style
         self.isLoading = isLoading
         self.accessibilityHintText = accessibilityHint
+        self.accessibilityIdentifierValue = accessibilityIdentifier
         self.action = action
     }
 
@@ -141,6 +144,13 @@ public struct VAButton: View {
         .accessibilityLabel(isLoading ? "\(title), loading" : title)
         .accessibilityHint(accessibilityHintText ?? "")
         .accessibilityAddTraits(.isButton)
+        // VOL-93: the combined accessibility element swallows externally
+        // applied `.accessibilityIdentifier(…)`, so XCUITest queries against
+        // identifiers attached at the call site were silently missing the
+        // button. Thread the identifier through the initializer and apply
+        // it to the combined element directly so the journey suite can
+        // find onboarding.continue / onboarding.finish / onboarding.back.
+        .accessibilityIdentifier(accessibilityIdentifierValue ?? "")
     }
 
     private var foregroundColor: Color {

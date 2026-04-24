@@ -21,7 +21,14 @@ public struct PaywallView: View {
     public var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: VA.Space.xl) {
+                // VOL-93: eager VStack (not LazyVStack) so the XCUITest
+                // journey suite can locate the legal footer + Restore
+                // Purchases button even when they're below the fold. The
+                // paywall has a fixed, known-small set of children (hero,
+                // feature comparison, plans, action buttons, legal), so
+                // the eager-render cost is negligible — LazyVStack's
+                // memory/scroll-perf win is marginal at 5 elements.
+                VStack(alignment: .leading, spacing: VA.Space.xl) {
                     hero
                     featureComparison
                     plans
