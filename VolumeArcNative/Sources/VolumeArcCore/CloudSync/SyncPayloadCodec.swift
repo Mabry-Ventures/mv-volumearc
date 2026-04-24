@@ -391,7 +391,8 @@ public enum SyncPayloadCodec {
                 availableEquipmentCSV: legacyEquipment,
                 preferredRepRangeLower: (fields["preferredRepRangeLower"] as? Int) ?? (fields["preferredRepRangeLower"] as? NSNumber)?.intValue ?? 5,
                 preferredRepRangeUpper: (fields["preferredRepRangeUpper"] as? Int) ?? (fields["preferredRepRangeUpper"] as? NSNumber)?.intValue ?? 8,
-                sessionTimeBudgetMinutes: (fields["sessionTimeBudgetMinutes"] as? Int) ?? (fields["sessionTimeBudgetMinutes"] as? NSNumber)?.intValue ?? 60,
+                sessionTimeBudgetMinutes: (fields["sessionTimeBudgetMinutes"] as? Int)
+                    ?? (fields["sessionTimeBudgetMinutes"] as? NSNumber)?.intValue ?? 60,
                 weeklyTrainingDays: (fields["weeklyTrainingDays"] as? Int) ?? (fields["weeklyTrainingDays"] as? NSNumber)?.intValue ?? 4,
                 onboardingCompleted: (fields["onboardingCompleted"] as? Bool) ?? (fields["onboardingCompleted"] as? NSNumber)?.boolValue ?? false,
                 updatedAt: updatedAt

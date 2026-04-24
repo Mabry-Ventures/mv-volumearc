@@ -201,8 +201,12 @@ struct VolumeArcApp: App {
                 effectiveTransport = syncTransport
             } else {
                 outboundQueue = NoOpOutboundSyncQueue()
+                let storageMode = persistence.bootstrapStatus.storageMode.rawValue
                 effectiveTransport = UnavailableCloudSyncTransport(
-                    reason: "Storage mode is \(persistence.bootstrapStatus.storageMode.rawValue); outbound sync is disabled until cloud-backed persistence is available."
+                    reason: """
+                        Storage mode is \(storageMode); outbound sync is \
+                        disabled until cloud-backed persistence is available.
+                        """
                 )
             }
             let repository = SwiftDataWorkoutRepository(container: container, outboundQueue: outboundQueue)

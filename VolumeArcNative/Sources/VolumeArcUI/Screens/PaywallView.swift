@@ -100,7 +100,7 @@ public struct PaywallView: View {
                     .foregroundStyle(VA.Colors.textSecondary)
                     .tracking(0.5)
 
-                ForEach(premiumFeatures, id: \.title) { feature in
+                ForEach(premiumFeatures) { feature in
                     HStack(alignment: .top, spacing: VA.Space.md) {
                         Image(systemName: feature.icon)
                             .font(.system(size: 20, weight: .semibold))
@@ -120,32 +120,54 @@ public struct PaywallView: View {
         }
     }
 
-    private var premiumFeatures: [(icon: String, title: String, description: String)] {
+    private struct PremiumFeature: Identifiable {
+        let icon: String
+        let title: String
+        let description: String
+        var id: String { title }
+    }
+
+    private var premiumFeatures: [PremiumFeature] {
         [
-            (
-                "waveform.and.mic",
-                String(localized: "Live Voice Coaching", comment: "Premium feature name — voice coach"),
-                String(localized: "Talk to your coach hands-free between sets.", comment: "Premium feature description — voice coach")
+            PremiumFeature(
+                icon: "waveform.and.mic",
+                title: String(localized: "Live Voice Coaching", comment: "Premium feature name — voice coach"),
+                description: String(
+                    localized: "Talk to your coach hands-free between sets.",
+                    comment: "Premium feature description — voice coach"
+                )
             ),
-            (
-                "icloud.fill",
-                String(localized: "Cloud Sync", comment: "Premium feature name — CloudKit sync"),
-                String(localized: "Your training history on every device, always in sync.", comment: "Premium feature description — CloudKit sync")
+            PremiumFeature(
+                icon: "icloud.fill",
+                title: String(localized: "Cloud Sync", comment: "Premium feature name — CloudKit sync"),
+                description: String(
+                    localized: "Your training history on every device, always in sync.",
+                    comment: "Premium feature description — CloudKit sync"
+                )
             ),
-            (
-                "chart.line.uptrend.xyaxis",
-                String(localized: "Advanced Signals", comment: "Premium feature name — advanced signals"),
-                String(localized: "Readiness breakdown, volume trends, progression curves.", comment: "Premium feature description — advanced signals")
+            PremiumFeature(
+                icon: "chart.line.uptrend.xyaxis",
+                title: String(localized: "Advanced Signals", comment: "Premium feature name — advanced signals"),
+                description: String(
+                    localized: "Readiness breakdown, volume trends, progression curves.",
+                    comment: "Premium feature description — advanced signals"
+                )
             ),
-            (
-                "brain",
-                String(localized: "Foundation Models", comment: "Premium feature name — on-device AI"),
-                String(localized: "On-device AI coaching with full privacy.", comment: "Premium feature description — on-device AI")
+            PremiumFeature(
+                icon: "brain",
+                title: String(localized: "Foundation Models", comment: "Premium feature name — on-device AI"),
+                description: String(
+                    localized: "On-device AI coaching with full privacy.",
+                    comment: "Premium feature description — on-device AI"
+                )
             ),
-            (
-                "star.circle.fill",
-                String(localized: "Priority Support", comment: "Premium feature name — priority support"),
-                String(localized: "First in line when you need help.", comment: "Premium feature description — priority support")
+            PremiumFeature(
+                icon: "star.circle.fill",
+                title: String(localized: "Priority Support", comment: "Premium feature name — priority support"),
+                description: String(
+                    localized: "First in line when you need help.",
+                    comment: "Premium feature description — priority support"
+                )
             ),
         ]
     }
@@ -262,6 +284,10 @@ public struct PaywallView: View {
             }
             .font(VA.Typography.button)
             .foregroundStyle(VA.Colors.primary)
+            // VOL-93: stable identifier for the XCUITest journey suite so
+            // `testRestorePurchasesFlow` can locate and tap the button
+            // without relying on a localized title.
+            .accessibilityIdentifier("paywall.restore")
 
             if let error = subscriptionStore.lastPurchaseError {
                 Text(error)

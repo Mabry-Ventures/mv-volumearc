@@ -181,6 +181,13 @@ enum VolumeArcLaunchBootstrapper {
         try context.save()
     }
 
+    private struct HistoryTemplate {
+        let title: String
+        let exercise: String
+        let baseWeight: Double
+        let reps: Int
+    }
+
     /// VOL-99: produces a deterministic sequence of completed workouts
     /// spaced one day apart, walking backwards from the anchor. Used
     /// by perf-test mode to populate the dashboard with enough history
@@ -190,14 +197,14 @@ enum VolumeArcLaunchBootstrapper {
         relativeTo anchor: Date
     ) -> [WorkoutRecord] {
         guard count > 0 else { return [] }
-        let templates: [(title: String, exercise: String, baseWeight: Double, reps: Int)] = [
-            ("Lower Strength", "back-squat", 225, 5),
-            ("Upper Strength", "bench-press", 155, 5),
-            ("Lower Volume", "back-squat", 205, 8),
-            ("Upper Volume", "bench-press", 135, 8),
-            ("Pull Strength", "barbell-row", 145, 5),
-            ("Hinge Day", "romanian-deadlift", 185, 6),
-            ("Accessory", "walking-lunge", 40, 10),
+        let templates: [HistoryTemplate] = [
+            HistoryTemplate(title: "Lower Strength", exercise: "back-squat", baseWeight: 225, reps: 5),
+            HistoryTemplate(title: "Upper Strength", exercise: "bench-press", baseWeight: 155, reps: 5),
+            HistoryTemplate(title: "Lower Volume", exercise: "back-squat", baseWeight: 205, reps: 8),
+            HistoryTemplate(title: "Upper Volume", exercise: "bench-press", baseWeight: 135, reps: 8),
+            HistoryTemplate(title: "Pull Strength", exercise: "barbell-row", baseWeight: 145, reps: 5),
+            HistoryTemplate(title: "Hinge Day", exercise: "romanian-deadlift", baseWeight: 185, reps: 6),
+            HistoryTemplate(title: "Accessory", exercise: "walking-lunge", baseWeight: 40, reps: 10),
         ]
         let hourStart: TimeInterval = -170 * 60 * 60
 
@@ -239,36 +246,84 @@ enum VolumeArcLaunchBootstrapper {
         )
     }
 
+    /// Helper that mirrors the `SeedLoggedSet(exerciseID:set:)` construction
+    /// used throughout `deterministicWorkouts`; keeps each seed row readable
+    /// on a single logical line (VOL-87).
+    private static func seedSet(
+        _ exerciseID: String,
+        weight: Double,
+        reps: Int,
+        rpe: Double,
+        completedAt: Date
+    ) -> SeedLoggedSet {
+        SeedLoggedSet(
+            exerciseID: exerciseID,
+            set: WorkoutSetPerformance(
+                weight: weight,
+                reps: reps,
+                rpe: rpe,
+                completedAt: completedAt
+            )
+        )
+    }
+
     private static func deterministicWorkouts(relativeTo anchor: Date) -> [WorkoutRecord] {
-        [
+        let lowerStrengthStart = anchor.addingTimeInterval(-(25 * 60 * 60))
+        let upperStrengthStart = anchor.addingTimeInterval(-(73 * 60 * 60))
+        let lowerVolumeStart = anchor.addingTimeInterval(-(121 * 60 * 60))
+        return [
             makeWorkout(
                 title: "Lower Strength",
                 startedAt: anchor.addingTimeInterval(-(26 * 60 * 60)),
-                completedAt: anchor.addingTimeInterval(-(25 * 60 * 60)),
+                completedAt: lowerStrengthStart,
                 sets: [
-                    SeedLoggedSet(exerciseID: "back-squat", set: WorkoutSetPerformance(weight: 225, reps: 5, rpe: 7.5, completedAt: anchor.addingTimeInterval(-(25 * 60 * 60)))),
-                    SeedLoggedSet(exerciseID: "back-squat", set: WorkoutSetPerformance(weight: 225, reps: 5, rpe: 8.0, completedAt: anchor.addingTimeInterval(-(25 * 60 * 60) + 120))),
-                    SeedLoggedSet(exerciseID: "romanian-deadlift", set: WorkoutSetPerformance(weight: 185, reps: 8, rpe: 7.0, completedAt: anchor.addingTimeInterval(-(25 * 60 * 60) + 360))),
+                    seedSet("back-squat", weight: 225, reps: 5, rpe: 7.5, completedAt: lowerStrengthStart),
+                    seedSet(
+                        "back-squat",
+                        weight: 225, reps: 5, rpe: 8.0,
+                        completedAt: lowerStrengthStart.addingTimeInterval(120)
+                    ),
+                    seedSet(
+                        "romanian-deadlift",
+                        weight: 185, reps: 8, rpe: 7.0,
+                        completedAt: lowerStrengthStart.addingTimeInterval(360)
+                    ),
                 ]
             ),
             makeWorkout(
                 title: "Upper Strength",
                 startedAt: anchor.addingTimeInterval(-(74 * 60 * 60)),
-                completedAt: anchor.addingTimeInterval(-(73 * 60 * 60)),
+                completedAt: upperStrengthStart,
                 sets: [
-                    SeedLoggedSet(exerciseID: "bench-press", set: WorkoutSetPerformance(weight: 155, reps: 5, rpe: 7.5, completedAt: anchor.addingTimeInterval(-(73 * 60 * 60)))),
-                    SeedLoggedSet(exerciseID: "bench-press", set: WorkoutSetPerformance(weight: 155, reps: 5, rpe: 8.0, completedAt: anchor.addingTimeInterval(-(73 * 60 * 60) + 120))),
-                    SeedLoggedSet(exerciseID: "barbell-row", set: WorkoutSetPerformance(weight: 135, reps: 8, rpe: 7.0, completedAt: anchor.addingTimeInterval(-(73 * 60 * 60) + 360))),
+                    seedSet("bench-press", weight: 155, reps: 5, rpe: 7.5, completedAt: upperStrengthStart),
+                    seedSet(
+                        "bench-press",
+                        weight: 155, reps: 5, rpe: 8.0,
+                        completedAt: upperStrengthStart.addingTimeInterval(120)
+                    ),
+                    seedSet(
+                        "barbell-row",
+                        weight: 135, reps: 8, rpe: 7.0,
+                        completedAt: upperStrengthStart.addingTimeInterval(360)
+                    ),
                 ]
             ),
             makeWorkout(
                 title: "Lower Volume",
                 startedAt: anchor.addingTimeInterval(-(122 * 60 * 60)),
-                completedAt: anchor.addingTimeInterval(-(121 * 60 * 60)),
+                completedAt: lowerVolumeStart,
                 sets: [
-                    SeedLoggedSet(exerciseID: "back-squat", set: WorkoutSetPerformance(weight: 205, reps: 8, rpe: 7.0, completedAt: anchor.addingTimeInterval(-(121 * 60 * 60)))),
-                    SeedLoggedSet(exerciseID: "walking-lunge", set: WorkoutSetPerformance(weight: 40, reps: 10, rpe: 6.5, completedAt: anchor.addingTimeInterval(-(121 * 60 * 60) + 180))),
-                    SeedLoggedSet(exerciseID: "walking-lunge", set: WorkoutSetPerformance(weight: 40, reps: 10, rpe: 7.0, completedAt: anchor.addingTimeInterval(-(121 * 60 * 60) + 360))),
+                    seedSet("back-squat", weight: 205, reps: 8, rpe: 7.0, completedAt: lowerVolumeStart),
+                    seedSet(
+                        "walking-lunge",
+                        weight: 40, reps: 10, rpe: 6.5,
+                        completedAt: lowerVolumeStart.addingTimeInterval(180)
+                    ),
+                    seedSet(
+                        "walking-lunge",
+                        weight: 40, reps: 10, rpe: 7.0,
+                        completedAt: lowerVolumeStart.addingTimeInterval(360)
+                    ),
                 ]
             ),
         ]

@@ -332,7 +332,11 @@ struct NextWorkoutWidgetView: View {
                 .font(VA.Typography.widgetStreakIcon)
             Text(String(
                 localized: "\(entry.snapshot.streakDays)d",
-                comment: "Widget streak badge value; placeholder is the number of consecutive training days (e.g. '7d'). The 'd' suffix is shorthand for days."
+                comment: """
+                    Widget streak badge value; placeholder is the number of \
+                    consecutive training days (e.g. '7d'). The 'd' suffix is \
+                    shorthand for days.
+                    """
             ))
                 .font(VA.Typography.widgetStreakNumber)
         }
@@ -340,7 +344,11 @@ struct NextWorkoutWidgetView: View {
         .accessibilityLabel(
             String(
                 localized: "Training streak: ^[\(entry.snapshot.streakDays) day](inflect: true)",
-                comment: "Widget streak badge accessibility label; placeholder is the number of consecutive training days. Uses automatic grammar inflection for singular/plural agreement."
+                comment: """
+                    Widget streak badge accessibility label; placeholder is \
+                    the number of consecutive training days. Uses automatic \
+                    grammar inflection for singular/plural agreement.
+                    """
             )
         )
     }

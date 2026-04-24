@@ -292,7 +292,11 @@ public struct LocalHeuristicAICoachProvider: AICoachProvider {
 
     private func defaultResponse(from context: String) -> String {
         if context.contains("Readiness") {
-            return "Based on what I'm seeing, hold the target load and move each rep well. Ask me something specific and I'll give you a sharper read."
+            return """
+                Based on what I'm seeing, hold the target load and move each \
+                rep well. Ask me something specific and I'll give you a \
+                sharper read.
+                """
         }
         return "Log a couple of sets so I have something to work with, then ask me again."
     }

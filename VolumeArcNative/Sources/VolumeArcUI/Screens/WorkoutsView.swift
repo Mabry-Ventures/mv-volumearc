@@ -77,7 +77,11 @@ public struct WorkoutsView: View {
                         .foregroundStyle(VA.Colors.textPrimary)
                     Text(String(
                         localized: "^[\(model.loggedSetCountThisSession) sets](inflect: true) logged",
-                        comment: "Active session subtitle showing how many sets have been logged. Uses Apple's inflection syntax for plural agreement."
+                        comment: """
+                            Active session subtitle showing how many sets have \
+                            been logged. Uses Apple's inflection syntax for \
+                            plural agreement.
+                            """
                     ))
                         .font(VA.Typography.footnote)
                         .foregroundStyle(VA.Colors.textSecondary)
