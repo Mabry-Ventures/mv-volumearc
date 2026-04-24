@@ -69,6 +69,31 @@ HealthKit, CloudKit, iCloud containers, and App Groups are identical across both
 
 End-to-end verification (that the production APS token works end-to-end with APNs) only happens on a signed archive and TestFlight build — local simulator runs always use the Debug entitlements.
 
+### Built-bundle validation (VOL-85, VOL-92)
+
+`scripts/validate_release_config.sh` runs two complementary layers of built-artifact checks:
+
+**Info.plist (VOL-85):** after a build, the script glob-searches `~/Library/Developer/Xcode/DerivedData/VolumeArcApple-*/Build/Products/{Release-iphoneos,Debug-iphonesimulator}/VolumeArc.app/Info.plist` and asserts `CFBundleURLTypes` still registers the `volumearc://` scheme, `BGTaskSchedulerPermittedIdentifiers` still lists both the `appRefresh` and `appProcessing` identifiers, and `UIBackgroundModes` survived. Catches Xcode's `ProcessInfoPlistFile` step dropping or rewriting a key at build time, independent of what's on disk in git.
+
+**Signed entitlements (VOL-92):** for the same built `.app`, the script runs `codesign -d --entitlements - --xml` and asserts the embedded entitlements include:
+
+- `aps-environment = production` (hard-fail on `development` — a Release IPA with sandbox APS silently drops every APNs push on TestFlight/App Store)
+- `com.apple.developer.icloud-container-identifiers` contains `iCloud.com.mabryventures.VolumeArc`
+- `com.apple.developer.healthkit` is boolean `true`
+- `com.apple.security.application-groups` contains `group.com.mabryventures.volumearc`
+- Signed `aps-environment` matches `App/VolumeArc.Release.entitlements` (catches stale-build-settings drift)
+
+The watch bundle (`VolumeArcWatch.app`) is validated for HealthKit and App Groups only (it ships with a slimmer entitlements file). Widget and watchWidget extensions are intentionally out of scope for this pass — follow-up.
+
+**When it runs:**
+- Locally, any time you invoke `./scripts/validate_release_config.sh`. Without a built `.app` in DerivedData, the built-bundle sections log an `INFO: ...` message and skip gracefully — devs running the validator without archiving aren't forced to.
+- In the `fastlane ios beta` lane (tag builds), the validator runs after `build_app` (gym) but before `upload_to_testflight`, with `VOLUMEARC_BUILT_APP_PATH` and `VOLUMEARC_BUILT_WATCH_PATH` pointing at the signed bundle inside the `.xcarchive`. A regression fails the lane before anything hits App Store Connect.
+- Debug simulator builds are unsigned, so `codesign -d --entitlements -` returns empty output. The script detects this and logs `INFO: Built app bundle is unsigned (likely Debug simulator); skipping signed-entitlement assertions.` — no false positives.
+
+**To exercise the signed-entitlement section locally**, produce a signed `.app` first. Either:
+- Run a full archive: `./scripts/archive_for_distribution.sh` (requires the team's Apple Developer signing identity), or
+- Adhoc-sign an existing Debug bundle for manual testing: `codesign -s - --entitlements App/VolumeArc.Release.entitlements --force <path-to-VolumeArc.app>`, then `VOLUMEARC_BUILT_APP_PATH=<path> ./scripts/validate_release_config.sh`.
+
 ## Dependency lockfile
 
 VolumeArc tracks its SPM lockfile at **`Package.resolved`** in the repo root. This is the source of truth for every dependency the app links — right now that's just `sentry-cocoa`, but the same discipline applies to anything added via `scripts/generate_xcode_project.rb`.

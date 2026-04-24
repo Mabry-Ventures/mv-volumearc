@@ -47,6 +47,29 @@ platform :ios do
       include_bitcode: false
     )
 
+    # VOL-92: validate signed entitlements on the archived bundle before
+    # uploading. gym populates Actions.lane_context[SharedValues::XCODEBUILD_ARCHIVE]
+    # — the archive's Products/Applications/*.app is the canonical signed
+    # bundle, so point the validator at it via the VOLUMEARC_BUILT_APP_PATH
+    # override. If gym didn't record an archive (edge case), the validator
+    # falls back to its DerivedData discovery logic. Fails the lane before
+    # upload if aps-environment drifted to development, the iCloud container
+    # identifier vanished, HealthKit was stripped, or the App Group
+    # disappeared in signing.
+    archive_path = Actions.lane_context[SharedValues::XCODEBUILD_ARCHIVE]
+    if archive_path && File.directory?(archive_path)
+      built_app = Dir.glob(File.join(archive_path, "Products/Applications/*.app")).first
+      built_watch = Dir.glob(File.join(archive_path, "Products/Applications/*.app/Watch/*.app")).first
+      ENV["VOLUMEARC_BUILT_APP_PATH"] = built_app if built_app
+      ENV["VOLUMEARC_BUILT_WATCH_PATH"] = built_watch if built_watch
+    end
+    sh("../scripts/validate_release_config.sh")
+
+    # VOL-96: wait for App Store Connect build processing instead of
+    # fire-and-forget. We previously returned success the moment the
+    # upload completed, even if ASC rejected the build during processing
+    # (which happens 2-15 minutes later). Now we block up to 30 minutes
+    # and translate ITMS validation errors into a human-readable fail.
     begin
       upload_to_testflight(
         skip_waiting_for_build_processing: false,
