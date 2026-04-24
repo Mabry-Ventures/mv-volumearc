@@ -1,0 +1,5 @@
+{
+  "$schema": "https://mabryventures.com/schemas/volumearc-performance-trend-v1.json",
+  "description": "VOL-99 performance-suite trend data. Each entry is one run of scripts/test_performance.sh (gated to tag builds in CI). scripts/check_performance.sh appends a new entry after extracting per-metric means from the .xcresult bundle. Entries are append-only \u2014 rewrites would break the merge strategy.",
+  "runs": []
+}

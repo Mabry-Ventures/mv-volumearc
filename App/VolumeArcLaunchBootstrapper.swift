@@ -5,13 +5,29 @@ import VolumeArcCore
 
 @MainActor
 enum VolumeArcLaunchBootstrapper {
+    /// VOL-99: number of deterministic history sessions seeded when
+    /// `-PerfTestMode 1` is set. The perf suite's scroll test
+    /// asserts frame rate / hitches while scrolling this many rows
+    /// on the Today tab, matching the Linear acceptance criteria
+    /// ("scrolling through workout history with 50 sessions loaded").
+    static let perfTestSessionCount: Int = 50
+
     static func applyLaunchArguments(
         to container: ModelContainer,
         isUITestMode: Bool,
         skipOnboarding: Bool,
-        seedFixtures: Bool
+        seedFixtures: Bool,
+        isPerfTestMode: Bool = false
     ) throws {
-        guard isUITestMode || skipOnboarding || seedFixtures else { return }
+        // VOL-99: perf mode implies a deterministic seed, skipped
+        // onboarding, and UI test mode (for accessibility identifiers
+        // and no permission prompts). Unpack it into the regular flags
+        // so the existing branch structure stays minimally changed.
+        let resolvedUITestMode = isUITestMode || isPerfTestMode
+        let resolvedSkipOnboarding = skipOnboarding || isPerfTestMode
+        let resolvedSeedFixtures = seedFixtures || isPerfTestMode
+
+        guard resolvedUITestMode || resolvedSkipOnboarding || resolvedSeedFixtures else { return }
 
         // Reset persisted state before applying any deterministic seed. The
         // seed path (`seedDeterministicFixtures`) inserts new workouts and
@@ -22,20 +38,23 @@ enum VolumeArcLaunchBootstrapper {
         // `isUITestMode` alone also resets, for any test setup that doesn't
         // need fixtures but still wants a clean slate (e.g., the onboarding
         // gate test that verifies first-launch behavior).
-        if isUITestMode || seedFixtures {
+        if resolvedUITestMode || resolvedSeedFixtures {
             try resetState(in: container)
         }
 
-        if skipOnboarding || seedFixtures {
+        if resolvedSkipOnboarding || resolvedSeedFixtures {
             try seedBaseState(
                 into: container,
-                profile: seedFixtures ? deterministicUserProfile() : VolumeArcProductDefaults.userProfile,
-                onboardingCompleted: skipOnboarding
+                profile: resolvedSeedFixtures ? deterministicUserProfile() : VolumeArcProductDefaults.userProfile,
+                onboardingCompleted: resolvedSkipOnboarding
             )
         }
 
-        if seedFixtures {
-            try seedDeterministicFixtures(into: container)
+        if resolvedSeedFixtures {
+            try seedDeterministicFixtures(
+                into: container,
+                extraSessionCount: isPerfTestMode ? perfTestSessionCount : 0
+            )
         }
     }
 
@@ -109,7 +128,10 @@ enum VolumeArcLaunchBootstrapper {
         try context.save()
     }
 
-    private static func seedDeterministicFixtures(into container: ModelContainer) throws {
+    private static func seedDeterministicFixtures(
+        into container: ModelContainer,
+        extraSessionCount: Int = 0
+    ) throws {
         let context = ModelContext(container)
         let calendar = Calendar.current
         let anchor = calendar.startOfDay(for: .now).addingTimeInterval(18 * 60 * 60)
@@ -144,7 +166,63 @@ enum VolumeArcLaunchBootstrapper {
         for workout in deterministicWorkouts(relativeTo: anchor) {
             context.insert(workout)
         }
+
+        // VOL-99: seed an additional deterministic history pool when
+        // perf-test mode asks for it. The scroll perf test needs a
+        // realistic list length (50 rows) to expose hitches and
+        // frame-rate regressions; the three default fixtures above are
+        // not enough.
+        if extraSessionCount > 0 {
+            for workout in deterministicHistoryPool(count: extraSessionCount, relativeTo: anchor) {
+                context.insert(workout)
+            }
+        }
+
         try context.save()
+    }
+
+    /// VOL-99: produces a deterministic sequence of completed workouts
+    /// spaced one day apart, walking backwards from the anchor. Used
+    /// by perf-test mode to populate the dashboard with enough history
+    /// to exercise the scroll performance gate.
+    private static func deterministicHistoryPool(
+        count: Int,
+        relativeTo anchor: Date
+    ) -> [WorkoutRecord] {
+        guard count > 0 else { return [] }
+        let templates: [(title: String, exercise: String, baseWeight: Double, reps: Int)] = [
+            ("Lower Strength", "back-squat", 225, 5),
+            ("Upper Strength", "bench-press", 155, 5),
+            ("Lower Volume", "back-squat", 205, 8),
+            ("Upper Volume", "bench-press", 135, 8),
+            ("Pull Strength", "barbell-row", 145, 5),
+            ("Hinge Day", "romanian-deadlift", 185, 6),
+            ("Accessory", "walking-lunge", 40, 10),
+        ]
+        let hourStart: TimeInterval = -170 * 60 * 60
+
+        return (0..<count).map { index in
+            let template = templates[index % templates.count]
+            let sessionStart = anchor.addingTimeInterval(hourStart - TimeInterval(index) * 24 * 60 * 60)
+            let sessionEnd = sessionStart.addingTimeInterval(55 * 60)
+            let sets: [SeedLoggedSet] = (0..<3).map { setIndex in
+                SeedLoggedSet(
+                    exerciseID: template.exercise,
+                    set: WorkoutSetPerformance(
+                        weight: template.baseWeight,
+                        reps: template.reps,
+                        rpe: 7.0 + Double(setIndex) * 0.5,
+                        completedAt: sessionStart.addingTimeInterval(TimeInterval(setIndex) * 120)
+                    )
+                )
+            }
+            return makeWorkout(
+                title: template.title,
+                startedAt: sessionStart,
+                completedAt: sessionEnd,
+                sets: sets
+            )
+        }
     }
 
     private static func deterministicUserProfile() -> UserProfileDefaults {

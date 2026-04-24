@@ -270,9 +270,52 @@ jobs:
       - name: Validate release configuration
         run: ./scripts/validate_release_config.sh
 
+  perf-regression:
+    # VOL-99: performance regression suite. Tag-gated because each
+    # measured test runs multiple iterations — running it on every PR
+    # would balloon CI time for no signal on non-perf changes. The gate
+    # hard-fails tag builds (preventing TestFlight deploy) when any
+    # metric exceeds its fail threshold declared in
+    # `docs/performance-budgets.json`.
+    name: Performance budgets (VOL-99)
+    needs: build-and-test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: [self-hosted, mv-shared]
+    timeout-minutes: 45
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Pre-flight
+        run: |
+          set -euo pipefail
+          ruby --version
+          xcodebuild -version
+          gem list xcodeproj --installed --version '>= 1.0' >/dev/null
+        shell: bash
+
+      - name: Run performance suite
+        run: ./scripts/test_performance.sh
+
+      - name: Enforce performance budgets
+        run: ./scripts/check_performance.sh
+
+      - name: Upload perf xcresult on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-results-${{ github.sha }}
+          path: .build/perf-results.xcresult
+          retention-days: 14
+
   deploy-testflight:
     name: Deploy to TestFlight
-    needs: build-and-test
+    needs: [build-and-test, perf-regression]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: [self-hosted, mv-shared]
     timeout-minutes: 45

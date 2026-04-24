@@ -45,6 +45,15 @@ enum VolumeArcLaunchArguments {
     static var seedFixtures: Bool {
         flagEnabled("-SeedFixtures")
     }
+
+    /// `-PerfTestMode 1` — VOL-99. Seeds a 50-session history and enables
+    /// the full recent-sessions list on the Today tab so the scroll
+    /// performance test (`VolumeArcPerfTests.testTodayScrollPerformance`)
+    /// has real rows to scroll through. Implies `-SeedFixtures 1` and
+    /// `-SkipOnboarding 1` via the bootstrapper.
+    static var isPerfTestMode: Bool {
+        flagEnabled("-PerfTestMode")
+    }
 }
 
 @main
@@ -61,6 +70,11 @@ struct VolumeArcApp: App {
 
     init() {
         VolumeArcRuntimeFlags.isDeterministicMode = VolumeArcLaunchArguments.isUITestMode
+        // VOL-99: mirror `-PerfTestMode` onto the runtime flag so
+        // `VolumeArcCore` and `VolumeArcUI` can adapt fetch limits and
+        // list caps without taking a new dependency on the launch
+        // argument layer.
+        VolumeArcRuntimeFlags.isPerformanceTestMode = VolumeArcLaunchArguments.isPerfTestMode
         #if canImport(Sentry)
         VolumeArcSentryConfiguration.bootstrapIfNeeded()
         #endif
@@ -78,7 +92,8 @@ struct VolumeArcApp: App {
                     to: container,
                     isUITestMode: VolumeArcLaunchArguments.isUITestMode,
                     skipOnboarding: VolumeArcLaunchArguments.skipOnboarding,
-                    seedFixtures: VolumeArcLaunchArguments.seedFixtures
+                    seedFixtures: VolumeArcLaunchArguments.seedFixtures,
+                    isPerfTestMode: VolumeArcLaunchArguments.isPerfTestMode
                 )
             } catch {
                 // Surface bootstrap failure rather than silently swallowing
@@ -86,11 +101,12 @@ struct VolumeArcApp: App {
                 // otherwise cause flaky, non-reproducible test behavior and
                 // hide the root cause.
                 NSLog(
-                    "[VolumeArc] Launch bootstrap failed: %@ (isUITestMode=%@, skipOnboarding=%@, seedFixtures=%@)",
+                    "[VolumeArc] Launch bootstrap failed: %@ (isUITestMode=%@, skipOnboarding=%@, seedFixtures=%@, isPerfTestMode=%@)",
                     error.localizedDescription,
                     String(describing: VolumeArcLaunchArguments.isUITestMode),
                     String(describing: VolumeArcLaunchArguments.skipOnboarding),
-                    String(describing: VolumeArcLaunchArguments.seedFixtures)
+                    String(describing: VolumeArcLaunchArguments.seedFixtures),
+                    String(describing: VolumeArcLaunchArguments.isPerfTestMode)
                 )
                 assertionFailure("Launch bootstrap failed: \(error)")
             }
