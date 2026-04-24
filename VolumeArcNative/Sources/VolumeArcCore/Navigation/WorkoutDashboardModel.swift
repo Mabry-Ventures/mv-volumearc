@@ -184,7 +184,12 @@ public final class WorkoutDashboardModel: ObservableObject {
             let profile = try userProfileRepository.athleteProfile()
             self.athlete = profile
 
-            let sessions = try workoutRepository.recentSessions(limit: 20)
+            // VOL-99: the perf suite seeds a larger history pool and
+            // asserts scroll performance on the Today tab. Bump the fetch
+            // limit when `-PerfTestMode 1` is active so the rows exist in
+            // memory for XCTest to scroll past.
+            let sessionFetchLimit = VolumeArcRuntimeFlags.isPerformanceTestMode ? 60 : 20
+            let sessions = try workoutRepository.recentSessions(limit: sessionFetchLimit)
             self.recentSessions = sessions
 
             self.readiness = progressionEngine.evaluateReadiness(from: sessions, athlete: profile)
