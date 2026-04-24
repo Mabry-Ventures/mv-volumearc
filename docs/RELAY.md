@@ -56,7 +56,7 @@ Each iOS install generates a stable UUID at first launch (persisted to Keychain)
 - ✅ Rate limits by device so a single extracted token can't DOS the relay
 - ⚠️ A determined attacker who reverse-engineers a TestFlight IPA can extract the signing key and mint arbitrary bearer tokens. The 30-req/10-min-per-device KV rate limit is our only defense in depth.
 
-**Production hardening (follow-up [VOL-89] or similar):** migrate to Apple's [App Attest](https://developer.apple.com/documentation/devicecheck) so the Worker validates each request is from a genuine VolumeArc build. At that point we can drop the shared signing key entirely.
+**Production hardening (future follow-up):** migrate to Apple's [App Attest](https://developer.apple.com/documentation/devicecheck) so the Worker validates each request is from a genuine VolumeArc build. At that point we can drop the shared signing key entirely. Not yet ticketed — file a new Linear ticket under the VolumeArc team when it's sprint-worthy.
 
 ## Rate limiting
 
