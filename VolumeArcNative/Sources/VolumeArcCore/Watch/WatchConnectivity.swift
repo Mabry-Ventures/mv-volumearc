@@ -88,7 +88,7 @@ import WatchConnectivity
 public final class WatchConnectivitySessionTransport: NSObject, WatchSessionTransport, WCSessionDelegate, @unchecked Sendable {
     private let session: WCSession
 
-    public override init() {
+    override public init() {
         self.session = WCSession.default
         super.init()
         session.delegate = self

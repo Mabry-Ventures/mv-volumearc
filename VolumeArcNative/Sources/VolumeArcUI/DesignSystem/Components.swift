@@ -543,7 +543,7 @@ public struct VACoachBubble: View {
 
     private var typingIndicator: some View {
         HStack(spacing: 4) {
-            ForEach(0..<3, id: \.self) { index in
+            ForEach(0..<3, id: \.self) { _ in
                 Circle()
                     .fill(VA.Colors.textSecondary)
                     .frame(width: 5, height: 5)

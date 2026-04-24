@@ -1660,6 +1660,11 @@ final class VolumeArcCloudSyncTests: XCTestCase {
         XCTAssertEqual(lhs.updatedAt.timeIntervalSince1970, rhs.updatedAt.timeIntervalSince1970, accuracy: 0.001, file: file, line: line)
     }
 
+    // VOL-87: test helper that mirrors the `WorkoutRecord` field set; a
+    // parameter struct would just rewrap the same call sites without
+    // improving readability, so accept the 8 parameters and disable the
+    // lint at the declaration.
+    // swiftlint:disable:next function_parameter_count
     private static func updateWorkout(
         identifier: String,
         in container: ModelContainer,

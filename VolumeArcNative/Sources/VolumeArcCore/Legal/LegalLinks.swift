@@ -14,9 +14,11 @@ import Foundation
 public enum LegalLinks {
     /// Terms of Service landing page. Force-unwrapped because the literal is
     /// a valid URL — this can never fail at runtime.
+    // swiftlint:disable:next force_unwrapping
     public static let termsOfService = URL(string: "https://volumearc.app/terms")!
 
     /// Privacy Policy landing page. Force-unwrapped because the literal is a
     /// valid URL — this can never fail at runtime.
+    // swiftlint:disable:next force_unwrapping
     public static let privacyPolicy = URL(string: "https://volumearc.app/privacy")!
 }

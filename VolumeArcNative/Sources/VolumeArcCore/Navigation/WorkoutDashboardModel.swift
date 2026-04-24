@@ -512,10 +512,11 @@ public final class WorkoutDashboardModel: ObservableObject {
             : recentSessions.map(\.averageRPE).reduce(0, +) / Double(recentSessions.count)
 
         let lastSessionSummary: String? = recentSessions
-            .sorted { $0.date > $1.date }
-            .first
+            .max(by: { $0.date < $1.date })
             .map { session in
-                "\(session.completedSetCount) sets, \(Int(session.totalVolumeLoad))lb total, RPE \(String(format: "%.1f", session.averageRPE))"
+                let volume = Int(session.totalVolumeLoad)
+                let rpe = String(format: "%.1f", session.averageRPE)
+                return "\(session.completedSetCount) sets, \(volume)lb total, RPE \(rpe)"
             }
 
         var memories: [String] = []
@@ -526,7 +527,11 @@ public final class WorkoutDashboardModel: ObservableObject {
         #endif
 
         let nextExercise = autopilot?.nextExerciseName
-        let nextTarget = autopilot.map { "\(Int($0.nextTarget.weight))lb × \($0.nextTarget.repRange.lowerBound)-\($0.nextTarget.repRange.upperBound)" }
+        let nextTarget: String? = autopilot.map { state in
+            let weight = Int(state.nextTarget.weight)
+            let reps = state.nextTarget.repRange
+            return "\(weight)lb × \(reps.lowerBound)-\(reps.upperBound)"
+        }
 
         let context = CoachContext(
             athleteName: athleteName,
