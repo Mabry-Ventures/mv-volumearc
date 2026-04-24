@@ -47,12 +47,28 @@ public struct CoachView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: VA.Space.md) {
-                        ForEach(model.coachMessages) { message in
+                        ForEach(Array(model.coachMessages.enumerated()), id: \.element.id) { offset, message in
                             VACoachBubble(
                                 sender: message.sender == .user ? .user : .coach,
                                 content: message.content
                             )
                             .id(message.id)
+                            // VOL-99: tag the first coach reply bubble
+                            // ONLY once its content is non-empty so
+                            // `testCoachFirstTokenLatency` can measure
+                            // first-token latency via XCUITest
+                            // `waitForExistence`. The bubble is
+                            // pre-inserted with empty content when
+                            // streaming starts, so gating the ID on
+                            // "coach && !empty" produces a clean rising
+                            // edge at first token.
+                            .accessibilityIdentifier(
+                                message.sender == .coach
+                                    && offset == 1
+                                    && !message.content.isEmpty
+                                    ? "coach.firstResponse"
+                                    : "coach.message.\(offset)"
+                            )
                         }
                         if model.isCoachStreaming {
                             VACoachBubble(
@@ -63,6 +79,7 @@ public struct CoachView: View {
                                 ),
                                 isStreaming: true
                             )
+                            .accessibilityIdentifier("coach.streamingIndicator")
                         }
                     }
                     .padding(VA.Space.lg)
@@ -175,6 +192,10 @@ public struct CoachView: View {
                 )
                 .lineLimit(1...4)
                 .focused($inputFocused)
+                // VOL-99: perf test types into this field before timing
+                // the first-token latency; identifier lets XCUITest find
+                // it in the composer HStack.
+                .accessibilityIdentifier("coach.input")
 
             Button {
                 sendMessage()
@@ -185,9 +206,13 @@ public struct CoachView: View {
             }
             .disabled(!canSend)
             .buttonStyle(.plain)
+            // VOL-99: perf test taps this to dispatch the coach request
+            // and start the first-token latency measurement.
+            .accessibilityIdentifier("coach.send")
         }
         .padding(VA.Space.md)
         .background(VA.Colors.surfacePrimary)
+        .accessibilityIdentifier("coach.composer")
     }
 
     private var canSend: Bool {
