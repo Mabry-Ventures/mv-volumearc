@@ -47,17 +47,18 @@ final class VolumeArcAppJourneyTests: XCTestCase {
         )
 
         // Tap "Continue" through the four non-final steps, then
-        // "Get Started" to finish. The continue and finish buttons share
-        // `onboarding.continue` / `onboarding.finish` identifiers so the
-        // test doesn't depend on localized titles.
-        //
-        // We query `onboarding.continue` repeatedly because SwiftUI
-        // rebuilds the button's identity between steps (`withAnimation`
-        // + state change) — the hit-testable element changes every tap.
+        // "Get Started" to finish. The VAButton design-system wrapper
+        // funnels its accessibility identifier through the native
+        // Button, so we prefer the identifier lookup but fall back to
+        // the button's localized label if the identifier lookup misses
+        // (SwiftUI's `.accessibilityElement(children: .combine)` path on
+        // VAButton can occasionally drop the identifier depending on
+        // SwiftUI runtime revision — VOL-114 tracks fixing that
+        // upstream).
         for _ in 0..<4 {
-            let continueButton = app.descendants(matching: .any)
-                .matching(identifier: "onboarding.continue")
-                .firstMatch
+            let continueByID = app.buttons.matching(identifier: "onboarding.continue").firstMatch
+            let continueByLabel = app.buttons["Continue"]
+            let continueButton = continueByID.waitForExistence(timeout: 3) ? continueByID : continueByLabel
             XCTAssertTrue(
                 continueButton.waitForExistence(timeout: 10),
                 "Onboarding should expose a continue button on each non-final step"
@@ -65,9 +66,9 @@ final class VolumeArcAppJourneyTests: XCTestCase {
             continueButton.tap()
         }
 
-        let finishButton = app.descendants(matching: .any)
-            .matching(identifier: "onboarding.finish")
-            .firstMatch
+        let finishByID = app.buttons.matching(identifier: "onboarding.finish").firstMatch
+        let finishByLabel = app.buttons["Get Started"]
+        let finishButton = finishByID.waitForExistence(timeout: 3) ? finishByID : finishByLabel
         XCTAssertTrue(
             finishButton.waitForExistence(timeout: 10),
             "Onboarding should expose a finish button on the last step"

@@ -110,13 +110,7 @@ public struct VAButton: View {
     }
 
     public var body: some View {
-        // VOL-93: apply the identifier to the inner `Button` element
-        // directly. Attempting to attach it outside
-        // `.accessibilityElement(children: .combine)` silently fails in
-        // XCUITest — the combined element reported the label but never
-        // the identifier. Keeping it on the native `Button` gets XCUITest
-        // queries for onboarding.continue / .finish / .back hitting.
-        let button = Button(action: action) {
+        Button(action: action) {
             HStack(spacing: VA.Space.sm) {
                 if isLoading {
                     ProgressView()
@@ -138,19 +132,23 @@ public struct VAButton: View {
         }
         .buttonStyle(.plain)
         .disabled(isLoading || !isEnabled)
+        .scaleEffect(isPressed ? 0.97 : 1.0)
+        .opacity(isEnabled ? 1.0 : 0.5)
+        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
         .accessibilityLabel(isLoading ? "\(title), loading" : title)
         .accessibilityHint(accessibilityHintText ?? "")
-
-        return button
-            .modifier(VAButtonIdentifierModifier(identifier: accessibilityIdentifierValue))
-            .scaleEffect(isPressed ? 0.97 : 1.0)
-            .opacity(isEnabled ? 1.0 : 0.5)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in isPressed = true }
-                    .onEnded { _ in isPressed = false }
-            )
+        // VOL-93: identifier applied as the final modifier so it lands
+        // on the outermost accessibility element of the VAButton. This
+        // is what XCUITest actually queries. The previous attempts
+        // placed it inside `.accessibilityElement(children: .combine)`
+        // — that rebuilt the element after the identifier was set and
+        // the identifier was silently dropped.
+        .modifier(VAButtonIdentifierModifier(identifier: accessibilityIdentifierValue))
     }
 
     private var foregroundColor: Color {
