@@ -328,6 +328,8 @@ public struct OnboardingView: View {
                     }
                 }
                 .frame(maxWidth: 100)
+                // VOL-93: stable identifier for the XCUITest journey suite.
+                .accessibilityIdentifier("onboarding.back")
             }
 
             VAButton(
@@ -345,6 +347,12 @@ public struct OnboardingView: View {
                     }
                 }
             }
+            // VOL-93: stable identifier for the XCUITest journey suite.
+            // On the final step the button says "Get Started"; on every
+            // other step it says "Continue". The identifier changes with
+            // the step so the test can distinguish the final commit from
+            // intermediate taps.
+            .accessibilityIdentifier(step == .done ? "onboarding.finish" : "onboarding.continue")
         }
     }
 
