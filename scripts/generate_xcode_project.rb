@@ -71,6 +71,9 @@ widgets_group = project.main_group.new_group('Widgets', 'Widgets')
 tests_root_group = project.main_group.new_group('Tests', 'Tests')
 tests_group = tests_root_group.new_group('VolumeArcAppTests', 'VolumeArcAppTests')
 ui_tests_group = tests_root_group.new_group('VolumeArcAppUITests', 'VolumeArcAppUITests')
+# VOL-99: performance regression suite group. Hosts
+# `Tests/VolumeArcAppPerfTests/VolumeArcPerfTests.swift`.
+perf_tests_group = tests_root_group.new_group('VolumeArcAppPerfTests', 'VolumeArcAppPerfTests')
 shared_group = project.main_group.new_group('Shared Native Package Sources')
 core_group = shared_group.new_group('VolumeArcCore', PACKAGE_ROOT.join('Sources/VolumeArcCore').relative_path_from(ROOT).to_s)
 ui_group = shared_group.new_group('VolumeArcUI', PACKAGE_ROOT.join('Sources/VolumeArcUI').relative_path_from(ROOT).to_s)
@@ -83,6 +86,12 @@ watch_widgets_target = project.new_target(:app_extension, 'VolumeArcWatchWidgets
 widget_target = project.new_target(:app_extension, 'VolumeArcWidgets', :ios, IOS_DEPLOYMENT_TARGET, nil, :swift, 'VolumeArcWidgets')
 app_tests_target = project.new_target(:unit_test_bundle, 'VolumeArcAppTests', :ios, IOS_DEPLOYMENT_TARGET, nil, :swift, 'VolumeArcAppTests')
 app_ui_tests_target = project.new_target(:ui_test_bundle, 'VolumeArcAppUITests', :ios, IOS_DEPLOYMENT_TARGET, nil, :swift, 'VolumeArcAppUITests')
+# VOL-99: performance regression target. Lives as a sibling of the
+# smoke UI test target so it can launch `VolumeArcApp` as the host
+# and use `XCTMetric`-family APIs. Tag-gated in CI via
+# `.github/workflows/ci.yml` because each measured test runs several
+# iterations — running on every PR would balloon CI cost.
+app_perf_tests_target = project.new_target(:ui_test_bundle, 'VolumeArcAppPerfTests', :ios, IOS_DEPLOYMENT_TARGET, nil, :swift, 'VolumeArcAppPerfTests')
 
 def configure_target(target, bundle_id: nil, extra: {})
   target.build_configurations.each do |config|
@@ -188,6 +197,14 @@ configure_target(app_ui_tests_target, bundle_id: 'com.mabryventures.VolumeArc.ui
   'SKIP_INSTALL' => 'YES',
   'TEST_TARGET_NAME' => 'VolumeArcApp',
 })
+configure_target(app_perf_tests_target, bundle_id: 'com.mabryventures.VolumeArc.perftests', extra: {
+  'PRODUCT_NAME' => 'VolumeArcAppPerfTests',
+  'GENERATE_INFOPLIST_FILE' => 'YES',
+  'CODE_SIGNING_ALLOWED' => 'NO',
+  'CODE_SIGNING_REQUIRED' => 'NO',
+  'SKIP_INSTALL' => 'YES',
+  'TEST_TARGET_NAME' => 'VolumeArcApp',
+})
 
 ui_target.add_dependency(core_target)
 ui_target.frameworks_build_phase.add_file_reference(core_target.product_reference, true)
@@ -208,6 +225,7 @@ app_tests_target.add_dependency(ui_target)
 app_tests_target.frameworks_build_phase.add_file_reference(core_target.product_reference, true)
 app_tests_target.frameworks_build_phase.add_file_reference(ui_target.product_reference, true)
 app_ui_tests_target.add_dependency(app_target)
+app_perf_tests_target.add_dependency(app_target)
 
 widget_target.add_system_framework('WidgetKit')
 widget_target.add_system_framework('AppIntents')
@@ -228,6 +246,7 @@ app_tests_target.add_system_framework('Security')
 app_tests_target.add_system_framework('AppIntents')
 app_tests_target.add_system_framework('ActivityKit')
 app_ui_tests_target.add_system_framework('XCTest')
+app_perf_tests_target.add_system_framework('XCTest')
 
 def add_swift_sources(group, target, base_dir)
   refs = Dir[base_dir.join('**/*.swift').to_s].sort.map do |file|
@@ -257,6 +276,7 @@ add_swift_sources(watch_widgets_group, watch_widgets_target, ROOT.join('WatchWid
 add_swift_sources(widgets_group, widget_target, ROOT.join('Widgets'))
 add_swift_sources(tests_group, app_tests_target, ROOT.join('Tests/VolumeArcAppTests'))
 add_swift_sources(ui_tests_group, app_ui_tests_target, ROOT.join('Tests/VolumeArcAppUITests'))
+add_swift_sources(perf_tests_group, app_perf_tests_target, ROOT.join('Tests/VolumeArcAppPerfTests'))
 add_resource(app_group, app_target, 'PrivacyInfo.xcprivacy')
 add_resource(watch_group, watch_target, 'PrivacyInfo.xcprivacy')
 add_resource(watch_widgets_group, watch_widgets_target, 'PrivacyInfo.xcprivacy')
@@ -361,6 +381,15 @@ test_scheme.save_as(PROJECT_PATH, 'VolumeArcAppTests', true)
 ui_test_scheme = Xcodeproj::XCScheme.new
 ui_test_scheme.configure_with_targets(app_target, app_ui_tests_target)
 ui_test_scheme.save_as(PROJECT_PATH, 'VolumeArcAppUITests', true)
+
+# VOL-99: dedicated perf scheme. `scripts/test_performance.sh`
+# (invoked by the tag-gated `perf-regression` CI job) selects it via
+# `-scheme VolumeArcAppPerfTests`. Kept separate from the smoke UI
+# scheme so the perf suite's longer measured-run time is isolated from
+# the PR-gating UI smoke run.
+perf_test_scheme = Xcodeproj::XCScheme.new
+perf_test_scheme.configure_with_targets(app_target, app_perf_tests_target)
+perf_test_scheme.save_as(PROJECT_PATH, 'VolumeArcAppPerfTests', true)
 
 # VOL-75 P2: per-target schemes so CI can pass `-scheme` (required by
 # `-derivedDataPath`). Without these, `build_all_targets.sh` has to use
