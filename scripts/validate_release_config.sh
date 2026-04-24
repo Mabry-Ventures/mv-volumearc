@@ -394,6 +394,200 @@ else
   echo "INFO: No built .app bundle found in DerivedData; skipping built-bundle plist check. Run an xcodebuild first to exercise this validation."
 fi
 
+# VOL-92: Built-bundle signed entitlement validation
+#
+# The VOL-85 plist check above catches Info.plist regressions. This catches
+# entitlement regressions in the signed .app: aps-environment drifting from
+# production back to development, missing iCloud container ID, missing
+# HealthKit / App Groups entitlement — any of which silently ship a broken
+# TestFlight build (remote notifications stop, CloudKit writes fail,
+# HealthKit queries return empty). `codesign -d --entitlements -` prints
+# the entitlements embedded in the signed binary to stdout; Debug
+# simulator builds are unsigned and produce empty stdout, which we skip
+# gracefully so devs who never archive locally aren't forced to.
+#
+# Discovery mirrors VOL-85 — prefer the Release iphoneos bundle first,
+# then fall back to debug-iphonesimulator (which will skip gracefully).
+# Widget / watchWidget extensions are intentionally out of scope
+# (follow-up per VOL-92 PR).
+
+BUILT_APP_BUNDLE=""
+for candidate in \
+  "$HOME/Library/Developer/Xcode/DerivedData"/VolumeArcApple-*/Build/Products/Release-iphoneos/VolumeArc.app \
+  "$HOME/Library/Developer/Xcode/DerivedData"/VolumeArcApple-*/Build/Products/Debug-iphoneos/VolumeArc.app \
+  "$HOME/Library/Developer/Xcode/DerivedData"/VolumeArcApple-*/Build/Products/Release-iphonesimulator/VolumeArc.app \
+  "$HOME/Library/Developer/Xcode/DerivedData"/VolumeArcApple-*/Build/Products/Debug-iphonesimulator/VolumeArc.app; do
+  for match in $candidate; do
+    if [[ -d "$match" ]]; then
+      BUILT_APP_BUNDLE="$match"
+      break 2
+    fi
+  done
+done
+
+# Allow explicit override from Fastlane (post-gym) — point at the freshly
+# archived .app so validation runs against the exact artifact we're about
+# to upload, not whatever DerivedData leftover happens to be around.
+if [[ -n "${VOLUMEARC_BUILT_APP_PATH:-}" && -d "$VOLUMEARC_BUILT_APP_PATH" ]]; then
+  BUILT_APP_BUNDLE="$VOLUMEARC_BUILT_APP_PATH"
+fi
+
+# Extract entitlements XML to stdout (stderr = the `Executable=...` noise).
+# Returns empty string for unsigned bundles (Debug sim). Wrapped in a
+# function so we can reuse for the watch bundle.
+extract_entitlements_xml() {
+  local bundle_path="$1"
+  codesign -d --entitlements - --xml "$bundle_path" 2>/dev/null || true
+}
+
+# plutil uses `.` as a keypath separator, so any entitlement key containing
+# dots (e.g. `com.apple.developer.healthkit`) must have those dots escaped
+# when passed to -extract. Without this, plutil walks a non-existent nested
+# key path and reports "No value at that key path" for every Apple-domain
+# entitlement.
+escape_plutil_keypath() {
+  printf '%s' "$1" | sed 's/\./\\./g'
+}
+
+validate_signed_entitlement_bool_true() {
+  # $1 = xml, $2 = entitlement key, $3 = bundle label (for error)
+  local xml="$1" key="$2" label="$3"
+  local tmp escaped
+  tmp="$(mktemp)"
+  printf '%s' "$xml" >"$tmp"
+  escaped="$(escape_plutil_keypath "$key")"
+  if ! plutil -extract "$escaped" raw -o - "$tmp" 2>/dev/null | grep -qx "true"; then
+    rm -f "$tmp"
+    echo "FAIL: $label signed entitlements missing or false for '$key' (expected boolean true)" >&2
+    exit 1
+  fi
+  rm -f "$tmp"
+}
+
+validate_signed_entitlement_contains_string() {
+  # $1 = xml, $2 = array key, $3 = expected string, $4 = bundle label
+  # Arrays are awkward to index via plutil -extract (depends on the
+  # element position), so just round-trip the XML and grep for the literal
+  # <string>value</string>. False positives across keys are a non-concern
+  # because the entitlement file has a small, well-known shape.
+  local xml="$1" key="$2" expected="$3" label="$4"
+  local tmp
+  tmp="$(mktemp)"
+  printf '%s' "$xml" >"$tmp"
+  if ! plutil -convert xml1 -o - "$tmp" 2>/dev/null | grep -qF "<string>$expected</string>"; then
+    rm -f "$tmp"
+    echo "FAIL: $label signed entitlements '$key' missing required value '$expected'" >&2
+    exit 1
+  fi
+  rm -f "$tmp"
+}
+
+if [[ -n "$BUILT_APP_BUNDLE" ]]; then
+  echo "Validating built bundle signed entitlements at $BUILT_APP_BUNDLE"
+  app_entitlements_xml="$(extract_entitlements_xml "$BUILT_APP_BUNDLE")"
+  if [[ -z "$app_entitlements_xml" ]]; then
+    # Unsigned bundle (typical for Debug iphonesimulator). Not a failure —
+    # the VOL-85 plist section already ran against this bundle; entitlement
+    # validation only applies to signed archives.
+    echo "INFO: Built app bundle is unsigned (likely Debug simulator); skipping signed-entitlement assertions. Run ./scripts/archive_for_distribution.sh or a Release device build to exercise this validation."
+  else
+    # Hard-fail: aps-environment MUST be production in the signed Release
+    # bundle. Shipping a TestFlight build with `development` means the
+    # relay's production APNs tokens silently won't reach the device.
+    signed_aps="$(printf '%s' "$app_entitlements_xml" | plutil -extract "aps-environment" raw -o - - 2>/dev/null || echo "")"
+    if [[ -z "$signed_aps" ]]; then
+      echo "FAIL: Built bundle signed entitlements missing aps-environment key" >&2
+      exit 1
+    fi
+    if [[ "$signed_aps" != "production" ]]; then
+      echo "FAIL: Built bundle signed aps-environment must be 'production' (got '$signed_aps'). Release IPAs with 'development' silently drop APNs traffic on TestFlight/App Store." >&2
+      exit 1
+    fi
+
+    # Must match the Release entitlements file on disk — catches the case
+    # where someone edits the source file to `production` but the signed
+    # bundle was built from stale settings (or the wrong entitlements
+    # file was picked up during CODE_SIGN_ENTITLEMENTS resolution).
+    if [[ -f "App/VolumeArc.Release.entitlements" ]]; then
+      file_aps="$(plutil -extract "aps-environment" raw -o - "App/VolumeArc.Release.entitlements" 2>/dev/null || echo "")"
+      if [[ "$signed_aps" != "$file_aps" ]]; then
+        echo "FAIL: Signed aps-environment ('$signed_aps') disagrees with App/VolumeArc.Release.entitlements ('$file_aps')" >&2
+        exit 1
+      fi
+    fi
+
+    # iCloud container identifier — losing this means CloudKit writes
+    # silently fail (transport falls back to Unavailable at runtime).
+    validate_signed_entitlement_contains_string \
+      "$app_entitlements_xml" \
+      "com.apple.developer.icloud-container-identifiers" \
+      "iCloud.com.mabryventures.VolumeArc" \
+      "app bundle"
+
+    # HealthKit — losing this means every HKWorkoutSession / HKHealthStore
+    # request throws authorization errors at runtime.
+    validate_signed_entitlement_bool_true \
+      "$app_entitlements_xml" \
+      "com.apple.developer.healthkit" \
+      "app bundle"
+
+    # App Groups — losing this means the widget and watch extension can't
+    # read the shared defaults the iOS app writes, so widgets render empty.
+    validate_signed_entitlement_contains_string \
+      "$app_entitlements_xml" \
+      "com.apple.security.application-groups" \
+      "group.com.mabryventures.volumearc" \
+      "app bundle"
+
+    echo "Built bundle signed entitlements: aps-environment=production, iCloud container present, HealthKit present, App Groups present."
+  fi
+fi
+
+# Watch bundle — scoped to entitlements HealthKit + App Groups per
+# VOL-92 (extensions/widget checks are explicit follow-ups).
+BUILT_WATCH_BUNDLE=""
+for candidate in \
+  "$HOME/Library/Developer/Xcode/DerivedData"/VolumeArcApple-*/Build/Products/Release-watchos/VolumeArcWatch.app \
+  "$HOME/Library/Developer/Xcode/DerivedData"/VolumeArcApple-*/Build/Products/Debug-watchos/VolumeArcWatch.app \
+  "$HOME/Library/Developer/Xcode/DerivedData"/VolumeArcApple-*/Build/Products/Release-watchsimulator/VolumeArcWatch.app \
+  "$HOME/Library/Developer/Xcode/DerivedData"/VolumeArcApple-*/Build/Products/Debug-watchsimulator/VolumeArcWatch.app; do
+  for match in $candidate; do
+    if [[ -d "$match" ]]; then
+      BUILT_WATCH_BUNDLE="$match"
+      break 2
+    fi
+  done
+done
+
+if [[ -n "${VOLUMEARC_BUILT_WATCH_PATH:-}" && -d "$VOLUMEARC_BUILT_WATCH_PATH" ]]; then
+  BUILT_WATCH_BUNDLE="$VOLUMEARC_BUILT_WATCH_PATH"
+fi
+
+if [[ -n "$BUILT_WATCH_BUNDLE" ]]; then
+  echo "Validating built watch bundle signed entitlements at $BUILT_WATCH_BUNDLE"
+  watch_entitlements_xml="$(extract_entitlements_xml "$BUILT_WATCH_BUNDLE")"
+  if [[ -z "$watch_entitlements_xml" ]]; then
+    echo "INFO: Built watch bundle is unsigned; skipping signed-entitlement assertions."
+  else
+    validate_signed_entitlement_bool_true \
+      "$watch_entitlements_xml" \
+      "com.apple.developer.healthkit" \
+      "watch bundle"
+
+    validate_signed_entitlement_contains_string \
+      "$watch_entitlements_xml" \
+      "com.apple.security.application-groups" \
+      "group.com.mabryventures.volumearc" \
+      "watch bundle"
+
+    echo "Built watch bundle signed entitlements: HealthKit present, App Groups present."
+  fi
+fi
+
+if [[ -z "$BUILT_APP_BUNDLE" && -z "$BUILT_WATCH_BUNDLE" ]]; then
+  echo "INFO: No built .app bundles found in DerivedData; skipping signed-entitlement checks. Run ./scripts/archive_for_distribution.sh (or \`fastlane ios beta\`) to exercise this validation."
+fi
+
 # Version bump check: if building for a tag, fail when VERSION matches the latest tag.
 # On branch/PR builds this stays a warning since it only matters at release time.
 if git describe --tags --abbrev=0 >/dev/null 2>&1; then

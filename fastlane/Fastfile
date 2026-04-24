@@ -18,6 +18,11 @@ platform :ios do
   end
 
   desc "Build and upload to TestFlight"
+  # Waits for App Store Connect processing (up to 30 minutes) so tag builds
+  # fail loudly when processing is rejected instead of silently succeeding
+  # with a rejected upload. Emits `build_number=<N>` to GITHUB_OUTPUT (when
+  # running under GitHub Actions) so downstream jobs can reference the
+  # processed TestFlight build number.
   lane :beta do
     version = File.read("../VERSION").strip
     build_number = sh("git rev-list --count HEAD").strip
@@ -42,21 +47,121 @@ platform :ios do
       include_bitcode: false
     )
 
-    upload_to_testflight(
-      skip_waiting_for_build_processing: true,
-      api_key_path: ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+    # VOL-92: validate signed entitlements on the archived bundle before
+    # uploading. gym populates Actions.lane_context[SharedValues::XCODEBUILD_ARCHIVE]
+    # — the archive's Products/Applications/*.app is the canonical signed
+    # bundle, so point the validator at it via the VOLUMEARC_BUILT_APP_PATH
+    # override. If gym didn't record an archive (edge case), the validator
+    # falls back to its DerivedData discovery logic. Fails the lane before
+    # upload if aps-environment drifted to development, the iCloud container
+    # identifier vanished, HealthKit was stripped, or the App Group
+    # disappeared in signing.
+    archive_path = Actions.lane_context[SharedValues::XCODEBUILD_ARCHIVE]
+    if archive_path && File.directory?(archive_path)
+      built_app = Dir.glob(File.join(archive_path, "Products/Applications/*.app")).first
+      built_watch = Dir.glob(File.join(archive_path, "Products/Applications/*.app/Watch/*.app")).first
+      ENV["VOLUMEARC_BUILT_APP_PATH"] = built_app if built_app
+      ENV["VOLUMEARC_BUILT_WATCH_PATH"] = built_watch if built_watch
+    end
+    sh("../scripts/validate_release_config.sh")
+
+    # VOL-96: wait for App Store Connect build processing instead of
+    # fire-and-forget. We previously returned success the moment the
+    # upload completed, even if ASC rejected the build during processing
+    # (which happens 2-15 minutes later). Now we block up to 30 minutes
+    # and translate ITMS validation errors into a human-readable fail.
+    begin
+      upload_to_testflight(
+        skip_waiting_for_build_processing: false,
+        wait_processing_interval: 30,
+        # 30 minute ceiling for App Store Connect processing. If processing
+        # exceeds this window we fail loudly rather than silently succeed.
+        wait_processing_timeout_duration: 1800,
+        api_key_path: ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+      )
+    rescue => e
+      message = e.message.to_s
+      clean_reason =
+        if message.include?("Invalid") || message.match?(/ITMS-\d+/)
+          # App Store Connect returns ITMS-xxxxx codes for validation errors.
+          itms = message[/ITMS-\d+[^\n]*/]
+          itms ? "App Store Connect rejected processing: #{itms}" : message
+        elsif message.downcase.include?("timeout") || message.downcase.include?("timed out")
+          "App Store Connect processing exceeded the 30-minute timeout. " \
+            "Check https://appstoreconnect.apple.com for the build status."
+        else
+          "App Store Connect processing failed: #{message.lines.first&.strip || message}"
+        end
+      UI.user_error!(clean_reason)
+    end
+
+    # Capture the freshly processed build number and expose it to GitHub
+    # Actions so downstream jobs (release notes, Slack notify, changelog)
+    # can reference it without re-querying App Store Connect.
+    latest_build = lane_context[SharedValues::LATEST_TESTFLIGHT_BUILD_NUMBER]
+    if latest_build && ENV["GITHUB_OUTPUT"] && !ENV["GITHUB_OUTPUT"].empty?
+      File.open(ENV["GITHUB_OUTPUT"], "a") do |f|
+        f.puts("build_number=#{latest_build}")
+      end
+      UI.success("Emitted build_number=#{latest_build} to GITHUB_OUTPUT")
+    elsif latest_build
+      UI.message("Latest TestFlight build number: #{latest_build}")
+    else
+      UI.important(
+        "Upload succeeded but LATEST_TESTFLIGHT_BUILD_NUMBER was not set; " \
+          "skipping GITHUB_OUTPUT emission."
+      )
+    end
+  end
+
+  desc "Generate App Store screenshots via snapshot"
+  # Runs `snapshot` against the device matrix declared in fastlane/Snapfile
+  # (see that file for devices/locales). Screenshots are written to
+  # fastlane/screenshots/ and picked up automatically by `deliver`.
+  #
+  # NOTE (VOL-96b follow-up): this lane requires a `SnapshotHelper.swift`
+  # in the VolumeArcAppUITests target plus UI test flows that call
+  # `snapshot("name")` at the screens we want captured. Until that helper
+  # and the capture flows land, this lane will fail fast with a clear
+  # message rather than silently producing empty artifacts. Do not add
+  # screenshot generation to the beta lane — only release.
+  lane :screenshots do
+    helper_path = File.expand_path(
+      "../Tests/VolumeArcAppUITests/SnapshotHelper.swift",
+      __dir__
+    )
+    unless File.exist?(helper_path)
+      UI.user_error!(
+        "SnapshotHelper.swift is missing from Tests/VolumeArcAppUITests/. " \
+          "Screenshot capture is stubbed pending VOL-96b — add the helper " \
+          "and `snapshot(...)` call sites, then re-run `fastlane screenshots`."
+      )
+    end
+
+    capture_ios_screenshots(
+      project: "VolumeArcApple.xcodeproj",
+      scheme: "VolumeArcAppUITests",
+      output_directory: "fastlane/screenshots",
+      clear_previous_screenshots: true,
+      concurrent_simulators: true,
+      stop_after_first_error: true
     )
   end
 
   desc "Submit to App Store review"
+  # Release runs beta first (waits for processing), then generates and
+  # uploads screenshots before submitting for review. `deliver` picks
+  # screenshots up automatically from fastlane/screenshots/.
   lane :release do
     beta
+    screenshots
 
     deliver(
       submit_for_review: true,
       automatic_release: false,
       force: true,
-      skip_screenshots: true,
+      skip_screenshots: false,
+      screenshots_path: "fastlane/screenshots",
       api_key_path: ENV["APP_STORE_CONNECT_API_KEY_PATH"]
     )
   end
