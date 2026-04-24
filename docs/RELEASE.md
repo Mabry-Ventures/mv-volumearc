@@ -32,12 +32,31 @@ Automated via Fastlane on tag push.
    - Archives with `CODE_SIGNING_ALLOWED=YES`
    - Exports to `.ipa`
    - Uploads to TestFlight via App Store Connect API
+   - **Waits for App Store Connect processing** (up to 30 min, see below)
    - Uploads dSYMs to Sentry
 
 Required CI secrets:
 - `DEVELOPMENT_TEAM` — Apple team ID (e.g., A886EMZZW6)
 - `APP_STORE_CONNECT_API_KEY_PATH` — path to the `.p8` key file on the runner
 - `VOLUMEARC_PAT` — personal access token (only needed if cross-repo checkout returns)
+
+### Wait-for-processing behavior (VOL-96)
+
+`fastlane ios beta` no longer sets `skip_waiting_for_build_processing`. After the `.ipa` is uploaded, Fastlane polls App Store Connect every 30 seconds until the build finishes processing or the **30-minute timeout** elapses (`wait_processing_timeout_duration: 1800`).
+
+- **Success:** the lane captures `SharedValues::LATEST_TESTFLIGHT_BUILD_NUMBER` and, when running under GitHub Actions, appends `build_number=<N>` to `$GITHUB_OUTPUT`. Downstream workflow steps can read it via `${{ steps.<id>.outputs.build_number }}` — e.g. for release-notes, Slack notifications, or tagging the processed build back on the commit.
+- **Failure:** if App Store Connect rejects processing (ITMS-xxxxx error) or the 30-minute timeout is reached, the lane calls `UI.user_error!` with a clean message. This replaces the old silent-success behavior where a rejected upload looked green in CI. Tag builds now fail loudly; fix the reported issue and re-tag to retry.
+
+Reading the GitHub Actions output:
+
+```yaml
+- name: Upload to TestFlight
+  id: testflight
+  run: bundle exec fastlane ios beta
+
+- name: Echo processed build number
+  run: echo "Processed build ${{ steps.testflight.outputs.build_number }}"
+```
 
 ### Signing & entitlements (VOL-70)
 
@@ -103,9 +122,45 @@ Commit the updated `Package.resolved` alongside the generator change.
 
 1. Verify TestFlight build is stable with at least 3 testers
 2. Tag with `-rc` suffix if doing a release candidate
-3. Run `fastlane ios release` which submits for review
+3. Run `fastlane ios release` which:
+   - Runs the `beta` lane (waits for processing, fails loudly on rejection)
+   - Runs the `screenshots` lane (see below) to regenerate App Store listing assets
+   - Submits for review via `deliver` with `skip_screenshots: false` so the fresh artifacts upload with the metadata
 4. Monitor App Store Connect for review status
 5. Release manually when approved
+
+### Screenshots lane (VOL-96)
+
+`fastlane ios screenshots` drives `snapshot` against the device matrix declared in [`fastlane/Snapfile`](../fastlane/Snapfile). Output lives in `fastlane/screenshots/` and is picked up automatically by `deliver` during the `release` lane.
+
+Current matrix:
+
+| Device | App Store class |
+| --- | --- |
+| iPhone 17 | 6.1" |
+| iPhone 17 Pro Max | 6.9" |
+| Apple Watch Series 11 (46mm) | watchOS |
+
+Current languages: `en-US`.
+
+#### Adding a new locale
+
+1. Add the locale code to the `languages([...])` array in `fastlane/Snapfile` (e.g. `"de-DE"`).
+2. Ensure the UI test flows launch the app with the matching `-AppleLanguages` / `-AppleLocale` arguments so `snapshot("name")` captures the localized screens.
+3. Run `fastlane ios screenshots` locally to confirm the new folder appears under `fastlane/screenshots/<locale>/`.
+4. Commit the Snapfile change alongside any App Store metadata (`fastlane/metadata/<locale>/`) that accompanies the launch.
+
+#### VOL-96b follow-up (SnapshotHelper wiring)
+
+The lane is wired into `release`, but it currently fails fast with an actionable message because the XCUITest target does not yet include `SnapshotHelper.swift` or any `snapshot("name")` call sites. Until VOL-96b lands:
+
+- Running `fastlane ios release` will **block at the screenshots step** with the error `SnapshotHelper.swift is missing from Tests/VolumeArcAppUITests/`.
+- To ship a release in the meantime, temporarily invoke `fastlane ios beta` plus `fastlane ios deliver` with `skip_screenshots: true` (the old behavior), or land VOL-96b first.
+
+VOL-96b scope:
+1. Drop `SnapshotHelper.swift` (from the fastlane repo) into `Tests/VolumeArcAppUITests/`.
+2. Add `setupSnapshot(app)` to the UI test `setUp` and `snapshot("01Dashboard")`-style calls at each screen we want captured.
+3. Ensure `scripts/generate_xcode_project.rb` adds the helper to the UI test target (it will pick it up via the existing `add_swift_sources` glob).
 
 ## Rollback
 
