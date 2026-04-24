@@ -1,5 +1,22 @@
 import Foundation
 
+/// Read-only view of the caller's premium-entitlement state. The factory
+/// uses this to decide which AI tier / transport to install at launch —
+/// intentionally scoped to a single `Bool` so tests can pass a simple
+/// mock without depending on StoreKit.
+///
+/// VOL-91: `StoreKitSubscriptionStore` is the production conformer; tests
+/// substitute an in-memory implementation. Isolated to `@MainActor`
+/// because `StoreKitSubscriptionStore.isPremium` is published state —
+/// the factory reads this at launch from `VolumeArcApp.init`, which is
+/// itself main-actor-bound, so the isolation lines up without forcing
+/// callers into a background hop.
+@MainActor
+public protocol PremiumEntitlementProviding: AnyObject {
+    /// `true` when the user has an active premium entitlement.
+    var isPremium: Bool { get }
+}
+
 #if canImport(StoreKit)
 import StoreKit
 
@@ -7,7 +24,7 @@ import StoreKit
 /// Loads products on init, exposes purchase status as @Published state,
 /// and listens for transaction updates.
 @MainActor
-public final class StoreKitSubscriptionStore: ObservableObject {
+public final class StoreKitSubscriptionStore: ObservableObject, PremiumEntitlementProviding {
     public let productIDs: [String]
 
     @Published public private(set) var products: [Product] = []
@@ -118,7 +135,8 @@ public final class StoreKitSubscriptionStore: ObservableObject {
     }
 }
 #else
-public final class StoreKitSubscriptionStore {
+@MainActor
+public final class StoreKitSubscriptionStore: PremiumEntitlementProviding {
     public let productIDs: [String]
     public var isPremium: Bool { false }
 
