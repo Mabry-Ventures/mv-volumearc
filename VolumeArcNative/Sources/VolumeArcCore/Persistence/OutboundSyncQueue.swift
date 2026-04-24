@@ -18,7 +18,11 @@ public enum OutboundQueueStagingError: Error, LocalizedError {
     public var errorDescription: String? {
         switch self {
         case let .payloadEncodingFailed(recordType, recordIdentifier):
-            return "Failed to encode outbound queue payload for \(recordType) \(recordIdentifier); refusing to commit local write without a matching sync row."
+            return """
+                Failed to encode outbound queue payload for \(recordType) \
+                \(recordIdentifier); refusing to commit local write without \
+                a matching sync row.
+                """
         }
     }
 }

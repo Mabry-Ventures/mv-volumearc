@@ -83,7 +83,11 @@ final class WatchWorkoutModel: ObservableObject {
                 ? String(localized: "Connected to iPhone for live coaching.", comment: "Watch connected status")
                 : String(
                     localized: "Connected again. Replayed ^[\(pendingSyncCount) queued update](inflect: true).",
-                    comment: "Watch reconnect status showing how many queued updates were replayed. Uses automatic grammar inflection for singular/plural agreement."
+                    comment: """
+                        Watch reconnect status showing how many queued \
+                        updates were replayed. Uses automatic grammar \
+                        inflection for singular/plural agreement.
+                        """
                 ))
             : String(localized: "Phone unavailable. We’ll queue key updates.", comment: "Watch disconnected status")
         await persistState()
@@ -189,7 +193,10 @@ final class WatchWorkoutModel: ObservableObject {
             try await coordinator.send(payload)
             statusMessage = String(localized: "Coach prompt sent to iPhone.", comment: "Coach cue sent status")
         } catch {
-            statusMessage = String(localized: "Coach prompt queued on watch until phone reconnects.", comment: "Coach cue offline status")
+            statusMessage = String(
+                localized: "Coach prompt queued on watch until phone reconnects.",
+                comment: "Coach cue offline status"
+            )
         }
         pendingSyncCount = await coordinator.pendingPayloadCount()
         await persistState()
@@ -200,7 +207,11 @@ final class WatchWorkoutModel: ObservableObject {
         let completedAt = Date.now
         let summaryLine = String(
             localized: "\(autopilot.nextExerciseName) wrapped with \(selectedAction.rawValue) recommendation.",
-            comment: "Watch-originated session summary; first placeholder is the exercise name, second is the recommended action (increase/hold/decrease)"
+            comment: """
+                Watch-originated session summary; first placeholder is the \
+                exercise name, second is the recommended action \
+                (increase/hold/decrease)
+                """
         )
         let payloadBody = SyncPayloadCodec.encode(
             WatchWorkoutSyncPayload(
@@ -332,7 +343,12 @@ private struct WatchRestTimerDisplay: View {
                             )
                             : String(
                                 localized: "^[\(remaining) second](inflect: true) remaining",
-                                comment: "Watch rest timer accessibility value; the placeholder is the seconds remaining. Uses automatic grammar inflection for singular/plural agreement."
+                                comment: """
+                                    Watch rest timer accessibility value; the \
+                                    placeholder is the seconds remaining. Uses \
+                                    automatic grammar inflection for \
+                                    singular/plural agreement.
+                                    """
                             )
                     )
                 Button(
@@ -378,18 +394,29 @@ struct WatchWorkoutView: View {
                     )
 
                 let nextTarget = model.autopilot.nextTarget
+                let weight = Int(nextTarget.weight)
+                let repLower = nextTarget.repRange.lowerBound
+                let repUpper = nextTarget.repRange.upperBound
                 Text(
                     String(
-                        localized: "\(Int(nextTarget.weight))\(nextTarget.unit) x \(nextTarget.repRange.lowerBound)-\(nextTarget.repRange.upperBound)",
-                        comment: "Watch next target weight and rep range (e.g., 225lb x 5-8). Placeholders: weight, unit, lower rep, upper rep"
+                        localized: "\(weight)\(nextTarget.unit) x \(repLower)-\(repUpper)",
+                        comment: """
+                            Watch next target weight and rep range (e.g., \
+                            225lb x 5-8). Placeholders: weight, unit, lower \
+                            rep, upper rep
+                            """
                     )
                 )
                     .font(VA.Typography.headline)
                     .foregroundStyle(VA.Colors.primary)
                     .accessibilityValue(
                         String(
-                            localized: "\(Int(model.autopilot.nextTarget.weight)) pounds, \(model.autopilot.nextTarget.repRange.lowerBound) to \(model.autopilot.nextTarget.repRange.upperBound) reps",
-                            comment: "Watch next target accessibility value; placeholders: weight in pounds, lower rep count, upper rep count"
+                            localized: "\(weight) pounds, \(repLower) to \(repUpper) reps",
+                            comment: """
+                                Watch next target accessibility value; \
+                                placeholders: weight in pounds, lower rep \
+                                count, upper rep count
+                                """
                         )
                     )
 
@@ -531,7 +558,12 @@ struct WatchWorkoutView: View {
                         Text(
                             String(
                                 localized: "^[\(model.pendingSyncCount) update](inflect: true) waiting for phone sync",
-                                comment: "Watch pending-sync indicator; placeholder is the count of queued updates. Uses automatic grammar inflection for singular/plural agreement."
+                                comment: """
+                                    Watch pending-sync indicator; placeholder \
+                                    is the count of queued updates. Uses \
+                                    automatic grammar inflection for \
+                                    singular/plural agreement.
+                                    """
                             )
                         )
                             .font(VA.Typography.caption)
@@ -549,7 +581,13 @@ struct WatchWorkoutView: View {
                     Text(String(localized: "Coach cue", comment: "Watch coach section header"))
                         .font(VA.Typography.caption)
                         .foregroundStyle(VA.Colors.textSecondary)
-                    TextField(String(localized: "Ask for a fallback or load check", comment: "Watch coach prompt placeholder"), text: $model.coachPrompt)
+                    TextField(
+                        String(
+                            localized: "Ask for a fallback or load check",
+                            comment: "Watch coach prompt placeholder"
+                        ),
+                        text: $model.coachPrompt
+                    )
                     Button(String(localized: "Send Cue Request", comment: "Watch send coach cue button")) {
                         Task {
                             await model.requestCoachCue()

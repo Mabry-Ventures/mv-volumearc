@@ -35,6 +35,12 @@ public final class DashboardNavigationModel: ObservableObject {
     @Published public var selectedTab: DashboardTab = .today
     @Published public var coachPrompt: String?
     @Published public var showOnboarding: Bool = false
+    /// VOL-93: when true, `RootDashboardView` presents the paywall over
+    /// the dashboard as a sheet. Mirrors `showOnboarding` so XCUITests
+    /// can launch with `-ShowPaywallOnLaunch 1` and assert the paywall
+    /// appears without having to drive a user-initiated tap through the
+    /// profile tab.
+    @Published public var showPaywall: Bool = false
 
     public init() {}
 
@@ -53,6 +59,10 @@ public final class DashboardNavigationModel: ObservableObject {
 
     public func openProfile() {
         selectedTab = .profile
+    }
+
+    public func openPaywall() {
+        showPaywall = true
     }
 
     public func clearCoachPrompt() {
@@ -96,7 +106,13 @@ public enum VolumeArcDeepLink {
     }
 
     public static func url(for destination: Destination) -> URL {
+        // All URL(string:) + URLComponents literals below are static, valid
+        // deep-link strings that cannot fail at runtime. Force-unwrapping
+        // is the idiomatic choice per Apple's own sample code; the
+        // alternatives (fatalError fallback, preconditionFailure, Optional
+        // return) add cognitive load without improving safety.
         switch destination {
+        // swiftlint:disable force_unwrapping
         case .today: return URL(string: "volumearc://today")!
         case .nextWorkout: return URL(string: "volumearc://nextWorkout")!
         case let .coach(prompt):
@@ -105,6 +121,7 @@ public enum VolumeArcDeepLink {
             return components.url!
         case .signals: return URL(string: "volumearc://signals")!
         case let .action(action): return URL(string: "volumearc://action/\(action.rawValue)")!
+        // swiftlint:enable force_unwrapping
         }
     }
 }

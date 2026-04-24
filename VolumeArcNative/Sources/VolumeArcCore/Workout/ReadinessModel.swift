@@ -35,7 +35,7 @@ public struct ReadinessModel: Sendable {
         score += frequencyImpact
 
         // Factor 2: Rest since last session
-        let lastSession = sessions.sorted { $0.date > $1.date }.first
+        let lastSession = sessions.max(by: { $0.date < $1.date })
         let restImpact = restScoreImpact(lastSession: lastSession, now: now)
         let restDetail: String
         if let lastSession {

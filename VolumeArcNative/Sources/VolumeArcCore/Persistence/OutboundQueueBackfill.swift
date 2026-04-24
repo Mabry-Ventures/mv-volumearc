@@ -36,7 +36,16 @@ public enum OutboundQueueBackfill {
     /// Run the backfill if it hasn't already run (as recorded by
     /// `userDefaults.bool(forKey: flagKey)`). After a successful save,
     /// sets the flag to skip future runs.
+    ///
+    /// VOL-87: the four per-kind loops here share the `existingKeys`,
+    /// `context`, and `encodeFailures` counters. Splitting them into
+    /// helpers would force each helper to return a `(Int, Bool)`
+    /// accumulator and force the fixup #25/#26 seeded-default heuristics
+    /// to live away from the insert call, obscuring the record-level
+    /// parity the comments document. The body length and complexity are
+    /// accepted here.
     @MainActor
+    // swiftlint:disable:next function_body_length cyclomatic_complexity
     public static func performIfNeeded(
         container: ModelContainer,
         userDefaults: UserDefaults,

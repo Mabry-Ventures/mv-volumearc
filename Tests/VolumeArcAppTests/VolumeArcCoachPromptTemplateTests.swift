@@ -227,11 +227,16 @@ private final class CapturedRelayRequest: @unchecked Sendable {
 /// canned 200 OK. Lets us assert what the provider sends without making a
 /// real network call.
 private final class CapturingURLProtocol: URLProtocol, @unchecked Sendable {
+    // swiftlint:disable static_over_final_class
+    // `URLProtocol.canInit(with:)` and `canonicalRequest(for:)` are declared
+    // as `class func`; overrides must match the dispatch kind and therefore
+    // cannot be `static`.
     override class func canInit(with request: URLRequest) -> Bool {
         request.url?.host == "relay.test.invalid"
     }
 
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    // swiftlint:enable static_over_final_class
 
     override func startLoading() {
         // URLSession strips the httpBodyStream into a separate channel for
@@ -262,7 +267,7 @@ private final class CapturingURLProtocol: URLProtocol, @unchecked Sendable {
             httpVersion: "HTTP/1.1",
             headerFields: ["Content-Type": "application/json"]
         )!
-        let payload = #"{"text":"ok"}"#.data(using: .utf8)!
+        let payload = Data(#"{"text":"ok"}"#.utf8)
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: payload)
         client?.urlProtocolDidFinishLoading(self)

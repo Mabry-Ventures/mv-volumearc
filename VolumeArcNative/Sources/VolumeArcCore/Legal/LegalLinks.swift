@@ -12,11 +12,14 @@ import Foundation
 /// review requires these links to be wired up even before the pages are live
 /// so reviewers can see intent.
 public enum LegalLinks {
-    /// Terms of Service landing page. Force-unwrapped because the literal is
-    /// a valid URL — this can never fail at runtime.
+    // swiftlint:disable force_unwrapping
+    // The URL literals below are static, valid https:// strings that cannot
+    // fail at runtime; force-unwrapping is idiomatic for this pattern.
+
+    /// Terms of Service landing page.
     public static let termsOfService = URL(string: "https://volumearc.app/terms")!
 
-    /// Privacy Policy landing page. Force-unwrapped because the literal is a
-    /// valid URL — this can never fail at runtime.
+    /// Privacy Policy landing page.
     public static let privacyPolicy = URL(string: "https://volumearc.app/privacy")!
+    // swiftlint:enable force_unwrapping
 }

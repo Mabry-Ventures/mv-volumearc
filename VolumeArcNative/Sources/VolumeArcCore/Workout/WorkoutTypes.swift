@@ -201,7 +201,7 @@ public struct ExerciseHistory: Sendable {
 
     /// The most recent session, if any.
     public var lastSession: ExerciseSession? {
-        sessions.sorted { $0.date > $1.date }.first
+        sessions.max(by: { $0.date < $1.date })
     }
 
     /// The top working weight across all recorded sessions.

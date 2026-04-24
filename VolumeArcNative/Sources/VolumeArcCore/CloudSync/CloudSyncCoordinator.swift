@@ -81,6 +81,14 @@ public actor CloudSyncCoordinator {
     /// Every drained row is still deleted from the queue on success —
     /// including the superseded ones that didn't make it into the
     /// coalesced batch — so nothing stays queued after a successful push.
+    ///
+    /// VOL-87: this function coordinates queue-draining, coalescing,
+    /// quarantine, push, and per-key cleanup — every step of which
+    /// depends on the same `drainedChanges` / `quarantinedIDs` /
+    /// `quarantinedKeys` locals. Extracting helpers would force each
+    /// step to rewrap + unwrap the same tuple, obscuring the VOL-67
+    /// fixups documented inline. The body length is accepted here.
+    // swiftlint:disable:next function_body_length
     public func push(limit: Int = 50, additionalRecords: [CloudSyncRecord] = []) async throws -> Int {
         guard transport.isAvailable else { return 0 }
 

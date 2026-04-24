@@ -163,31 +163,7 @@ public struct DefaultSyncPayloadApplier: Sendable {
         // entity store; at most one hit is expected.
         let context = ModelContext(workoutRepository.container)
 
-        // VOL-67 Codex P2 (fixup #7): accept both the current canonical
-        // singleton identifier and the pre-rename legacy long form.
-        // A legacy CK delete callback for "userProfile" must still
-        // resolve to the profile entity and clear the canonical
-        // "profile" queue row.
-        let profileCanonical = CloudSyncRecord.Kind.userProfile.defaultIdentifier
-        let planCanonical = CloudSyncRecord.Kind.trainingPlan.defaultIdentifier
-        let isProfileIdentifier = (identifier == profileCanonical || identifier == "userProfile")
-        let isPlanIdentifier = (identifier == planCanonical || identifier == "trainingPlan")
-
-        if isProfileIdentifier {
-            var profileDescriptor = FetchDescriptor<UserProfileRecord>()
-            profileDescriptor.fetchLimit = 1
-            if let profile = try context.fetch(profileDescriptor).first {
-                context.delete(profile)
-            }
-        }
-
-        if isPlanIdentifier {
-            var planDescriptor = FetchDescriptor<TrainingPlanRecord>()
-            planDescriptor.fetchLimit = 1
-            if let plan = try context.fetch(planDescriptor).first {
-                context.delete(plan)
-            }
-        }
+        try deleteMatchingSingletons(identifier: identifier, in: context)
 
         var workoutDescriptor = FetchDescriptor<WorkoutRecord>(
             predicate: #Predicate<WorkoutRecord> { workout in
@@ -218,6 +194,11 @@ public struct DefaultSyncPayloadApplier: Sendable {
         // identifier only when the inbound ID looks like that singleton
         // (so a workout-UUID delete doesn't spuriously clear a queued
         // profile row).
+        let profileCanonical = CloudSyncRecord.Kind.userProfile.defaultIdentifier
+        let planCanonical = CloudSyncRecord.Kind.trainingPlan.defaultIdentifier
+        let isProfileIdentifier = (identifier == profileCanonical || identifier == "userProfile")
+        let isPlanIdentifier = (identifier == planCanonical || identifier == "trainingPlan")
+
         try outboundQueue?.invalidateEntries(
             recordType: CloudSyncRecord.Kind.workout.rawValue,
             recordIdentifier: identifier,
@@ -241,6 +222,34 @@ public struct DefaultSyncPayloadApplier: Sendable {
                 recordIdentifier: planCanonical,
                 olderThan: nil
             )
+        }
+    }
+
+    /// VOL-67 Codex P2 (fixup #7) / VOL-87 extract: accept both the current
+    /// canonical singleton identifier and the pre-rename legacy long form. A
+    /// legacy CK delete callback for "userProfile" must still resolve to the
+    /// profile entity and clear the canonical "profile" queue row.
+    @MainActor
+    private func deleteMatchingSingletons(identifier: String, in context: ModelContext) throws {
+        let profileCanonical = CloudSyncRecord.Kind.userProfile.defaultIdentifier
+        let planCanonical = CloudSyncRecord.Kind.trainingPlan.defaultIdentifier
+        let isProfileIdentifier = (identifier == profileCanonical || identifier == "userProfile")
+        let isPlanIdentifier = (identifier == planCanonical || identifier == "trainingPlan")
+
+        if isProfileIdentifier {
+            var profileDescriptor = FetchDescriptor<UserProfileRecord>()
+            profileDescriptor.fetchLimit = 1
+            if let profile = try context.fetch(profileDescriptor).first {
+                context.delete(profile)
+            }
+        }
+
+        if isPlanIdentifier {
+            var planDescriptor = FetchDescriptor<TrainingPlanRecord>()
+            planDescriptor.fetchLimit = 1
+            if let plan = try context.fetch(planDescriptor).first {
+                context.delete(plan)
+            }
         }
     }
 

@@ -137,8 +137,12 @@ public struct TodayView: View {
                 localized: "Strength Session",
                 comment: "Default workout title when no plan name is available"
             )
+            let weight = Int(autopilot.nextTarget.weight)
+            let unit = autopilot.nextTarget.unit
+            let repRange = autopilot.nextTarget.repRange
+            let rpe = String(format: "%.1f", autopilot.nextTarget.targetRPE)
             let targetLine = String(
-                localized: "\(Int(autopilot.nextTarget.weight))\(autopilot.nextTarget.unit) × \(autopilot.nextTarget.repRange.lowerBound)-\(autopilot.nextTarget.repRange.upperBound) @ RPE \(String(format: "%.1f", autopilot.nextTarget.targetRPE))",
+                localized: "\(weight)\(unit) × \(repRange.lowerBound)-\(repRange.upperBound) @ RPE \(rpe)",
                 comment: "Target line: weight × rep range @ target RPE for the next set"
             )
             NavigationLink {
@@ -213,6 +217,12 @@ public struct TodayView: View {
                 .matchedTransitionSource(id: "next-workout-hero", in: heroNamespace)
             }
             .buttonStyle(.plain)
+            // VOL-93: stable identifier for the XCUITest journey suite so
+            // `testOnboardingToFirstWorkout` can assert the dashboard has a
+            // workout ready once onboarding finishes. Pinned at the
+            // NavigationLink root so the entire hero card lookup resolves
+            // reliably regardless of SwiftUI's inner hosting layer.
+            .accessibilityIdentifier("today.nextWorkoutCard")
         } else {
             VACard(style: .flat) {
                 VAEmptyState(
@@ -313,9 +323,13 @@ public struct TodayView: View {
                         Text(session.date.formatted(.dateTime.weekday(.wide).month().day()))
                             .font(VA.Typography.headline)
                             .foregroundStyle(VA.Colors.textPrimary)
+                        let rpeText = String(format: "%.1f", session.averageRPE)
                         Text(String(
-                            localized: "^[\(session.completedSetCount) sets](inflect: true) • \(session.durationMinutes)min • RPE \(String(format: "%.1f", session.averageRPE))",
-                            comment: "Session summary metrics showing sets, duration, and average RPE — sets uses plural agreement"
+                            localized: "^[\(session.completedSetCount) sets](inflect: true) • \(session.durationMinutes)min • RPE \(rpeText)",
+                            comment: """
+                                Session summary metrics showing sets, duration, \
+                                and average RPE — sets uses plural agreement
+                                """
                         ))
                         .font(VA.Typography.footnote)
                         .foregroundStyle(VA.Colors.textSecondary)

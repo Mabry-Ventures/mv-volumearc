@@ -105,7 +105,11 @@ public struct CoachView: View {
                         .foregroundStyle(VA.Colors.textPrimary)
                 }
                 Text(String(
-                    localized: "Ask anything about your training — load selection, form cues, recovery, or how last week looks. I'll pull from your recent sessions to give you a grounded answer.",
+                    localized: """
+                        Ask anything about your training — load selection, \
+                        form cues, recovery, or how last week looks. I'll pull \
+                        from your recent sessions to give you a grounded answer.
+                        """,
                     comment: "Coach welcome card description"
                 ))
                     .font(VA.Typography.body)

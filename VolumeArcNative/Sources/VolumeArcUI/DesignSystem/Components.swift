@@ -85,6 +85,7 @@ public struct VAButton: View {
     private let style: Style
     private let isLoading: Bool
     private let accessibilityHintText: String?
+    private let accessibilityIdentifierValue: String?
     private let action: () -> Void
 
     @State private var isPressed = false
@@ -96,6 +97,7 @@ public struct VAButton: View {
         style: Style = .primary,
         isLoading: Bool = false,
         accessibilityHint: String? = nil,
+        accessibilityIdentifier: String? = nil,
         action: @escaping () -> Void
     ) {
         self.title = title
@@ -103,6 +105,7 @@ public struct VAButton: View {
         self.style = style
         self.isLoading = isLoading
         self.accessibilityHintText = accessibilityHint
+        self.accessibilityIdentifierValue = accessibilityIdentifier
         self.action = action
     }
 
@@ -137,10 +140,15 @@ public struct VAButton: View {
                 .onChanged { _ in isPressed = true }
                 .onEnded { _ in isPressed = false }
         )
-        .accessibilityElement(children: .combine)
         .accessibilityLabel(isLoading ? "\(title), loading" : title)
         .accessibilityHint(accessibilityHintText ?? "")
-        .accessibilityAddTraits(.isButton)
+        // VOL-93: identifier applied as the final modifier so it lands
+        // on the outermost accessibility element of the VAButton. This
+        // is what XCUITest actually queries. The previous attempts
+        // placed it inside `.accessibilityElement(children: .combine)`
+        // — that rebuilt the element after the identifier was set and
+        // the identifier was silently dropped.
+        .modifier(VAButtonIdentifierModifier(identifier: accessibilityIdentifierValue))
     }
 
     private var foregroundColor: Color {
@@ -148,6 +156,22 @@ public struct VAButton: View {
         case .primary, .destructive: return VA.Colors.textOnPrimary
         case .secondary: return VA.Colors.textPrimary
         case .ghost: return VA.Colors.primary
+        }
+    }
+}
+
+/// Attaches an accessibility identifier to the wrapped Button when one is
+/// supplied. Skipping the modifier entirely when the identifier is nil
+/// avoids clobbering call-site-applied identifiers on VAButtons that opt
+/// out of threading one through the initializer.
+private struct VAButtonIdentifierModifier: ViewModifier {
+    let identifier: String?
+
+    func body(content: Content) -> some View {
+        if let identifier {
+            content.accessibilityIdentifier(identifier)
+        } else {
+            content
         }
     }
 }
@@ -543,7 +567,7 @@ public struct VACoachBubble: View {
 
     private var typingIndicator: some View {
         HStack(spacing: 4) {
-            ForEach(0..<3, id: \.self) { index in
+            ForEach(0..<3, id: \.self) { _ in
                 Circle()
                     .fill(VA.Colors.textSecondary)
                     .frame(width: 5, height: 5)

@@ -285,7 +285,6 @@ final class CapturingTelemetrySink: TelemetrySink, @unchecked Sendable {
 /// Telemetry sink that silently discards every event. Use in tests that
 /// don't care about telemetry but still need to supply a sink dependency.
 struct DroppingTelemetrySink: TelemetrySink {
-    init() {}
     func record(_ event: TelemetryEvent) {}
 }
 
