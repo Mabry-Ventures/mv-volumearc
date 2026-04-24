@@ -189,40 +189,59 @@ final class VolumeArcPersistenceController {
     private static func makeContainer(for schema: Schema) -> (container: ModelContainer?, status: BootstrapStatus) {
         var attempts: [(StorageMode, Error)] = []
 
-        // VOL-59 fixup: only attempt the cloud-synced configuration
-        // when the process actually carries a CloudKit entitlement.
-        // Without it, SwiftData's CloudKit mirror traps the process
-        // during `ModelContainer` init — we can't try/catch our way
-        // around that. When we skip this branch, record a synthetic
-        // "entitlement unavailable" error so the telemetry metadata
-        // explains why bootstrap fell through to `.localFallback`
-        // instead of reporting a healthy "Cloud-backed persistence
-        // ready" state (which would be a lie — CloudKit is off).
-        if VolumeArcCloudConfiguration.hasCloudKitEntitlement {
-            do {
-                return (
-                    container: try ModelContainer(
-                        for: schema,
-                        migrationPlan: VolumeArcSchemaMigrationPlan.self,
-                        configurations: [
-                            primaryConfiguration(schema: syncableSchema()),
-                            outboundQueueConfiguration(schema: outboundQueueSchema(), isStoredInMemoryOnly: false),
-                        ]
-                    ),
-                    status: BootstrapStatus(
-                        storageMode: .cloudSynced,
-                        severity: .info,
-                        message: "Cloud-backed persistence ready.",
-                        metadata: ["storageMode": StorageMode.cloudSynced.rawValue]
-                    )
-                )
-            } catch {
-                attempts.append((.cloudSynced, error))
-            }
-        } else {
-            attempts.append((.cloudSynced, VolumeArcPersistenceBootstrapError.cloudKitEntitlementUnavailable))
+        if let cloud = tryCloudSyncedContainer(for: schema, attempts: &attempts) {
+            return cloud
         }
+        if let local = tryLocalFallbackContainer(for: schema, attempts: &attempts) {
+            return local
+        }
+        return tryInMemoryFallbackContainer(for: schema, attempts: &attempts)
+    }
 
+    /// VOL-59 fixup: only attempt the cloud-synced configuration
+    /// when the process actually carries a CloudKit entitlement.
+    /// Without it, SwiftData's CloudKit mirror traps the process
+    /// during `ModelContainer` init — we can't try/catch our way
+    /// around that. When we skip this branch, record a synthetic
+    /// "entitlement unavailable" error so the telemetry metadata
+    /// explains why bootstrap fell through to `.localFallback`
+    /// instead of reporting a healthy "Cloud-backed persistence
+    /// ready" state (which would be a lie — CloudKit is off).
+    private static func tryCloudSyncedContainer(
+        for schema: Schema,
+        attempts: inout [(StorageMode, Error)]
+    ) -> (container: ModelContainer?, status: BootstrapStatus)? {
+        guard VolumeArcCloudConfiguration.hasCloudKitEntitlement else {
+            attempts.append((.cloudSynced, VolumeArcPersistenceBootstrapError.cloudKitEntitlementUnavailable))
+            return nil
+        }
+        do {
+            return (
+                container: try ModelContainer(
+                    for: schema,
+                    migrationPlan: VolumeArcSchemaMigrationPlan.self,
+                    configurations: [
+                        primaryConfiguration(schema: syncableSchema()),
+                        outboundQueueConfiguration(schema: outboundQueueSchema(), isStoredInMemoryOnly: false),
+                    ]
+                ),
+                status: BootstrapStatus(
+                    storageMode: .cloudSynced,
+                    severity: .info,
+                    message: "Cloud-backed persistence ready.",
+                    metadata: ["storageMode": StorageMode.cloudSynced.rawValue]
+                )
+            )
+        } catch {
+            attempts.append((.cloudSynced, error))
+            return nil
+        }
+    }
+
+    private static func tryLocalFallbackContainer(
+        for schema: Schema,
+        attempts: inout [(StorageMode, Error)]
+    ) -> (container: ModelContainer?, status: BootstrapStatus)? {
         do {
             return (
                 container: try ModelContainer(
@@ -233,14 +252,23 @@ final class VolumeArcPersistenceController {
                 status: BootstrapStatus(
                     storageMode: .localFallback,
                     severity: .warning,
-                    message: "Cloud sync is unavailable, so VolumeArc is using a local on-device store until persistence recovers.",
+                    message: """
+                        Cloud sync is unavailable, so VolumeArc is using a \
+                        local on-device store until persistence recovers.
+                        """,
                     metadata: metadata(for: .localFallback, attempts: attempts)
                 )
             )
         } catch {
             attempts.append((.localFallback, error))
+            return nil
         }
+    }
 
+    private static func tryInMemoryFallbackContainer(
+        for schema: Schema,
+        attempts: inout [(StorageMode, Error)]
+    ) -> (container: ModelContainer?, status: BootstrapStatus) {
         do {
             return (
                 container: try ModelContainer(
@@ -251,7 +279,10 @@ final class VolumeArcPersistenceController {
                 status: BootstrapStatus(
                     storageMode: .inMemoryFallback,
                     severity: .warning,
-                    message: "Persistent storage is unavailable, so VolumeArc is running in temporary memory-only mode.",
+                    message: """
+                        Persistent storage is unavailable, so VolumeArc is \
+                        running in temporary memory-only mode.
+                        """,
                     metadata: metadata(for: .inMemoryFallback, attempts: attempts)
                 )
             )
@@ -262,7 +293,10 @@ final class VolumeArcPersistenceController {
                 status: BootstrapStatus(
                     storageMode: .unavailable,
                     severity: .error,
-                    message: "SwiftData could not start, so VolumeArc is using in-memory repositories until storage becomes available.",
+                    message: """
+                        SwiftData could not start, so VolumeArc is using \
+                        in-memory repositories until storage becomes available.
+                        """,
                     metadata: metadata(for: .unavailable, attempts: attempts)
                 )
             )

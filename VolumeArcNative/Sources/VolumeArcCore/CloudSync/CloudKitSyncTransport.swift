@@ -53,6 +53,13 @@ public final class CloudKitSyncTransport: CloudSyncTransport, @unchecked Sendabl
         }
     }
 
+    // VOL-87: this function is a CloudKit closure-driven operation handler
+    // that depends on `changedRecords`, `deletedRecordIDs`, `nextCursor`,
+    // and `legacySynthesisSkips` as shared mutable state. Extracting its
+    // bodies into helpers would force those out to the instance or into
+    // an actor, which would obscure the VOL-67 fixups without removing
+    // any real complexity. The body length is documented here.
+    // swiftlint:disable:next function_body_length
     public func pullChanges(since cursor: String?) async throws -> CloudSyncPullResult {
         try await ensureZoneExists()
 
