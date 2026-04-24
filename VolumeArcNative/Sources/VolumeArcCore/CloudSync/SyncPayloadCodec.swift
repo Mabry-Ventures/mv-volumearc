@@ -106,19 +106,19 @@ public enum SyncPayloadCodec {
         }
     }
 
-    private struct UserProfileEnvelope: Codable, Equatable, Sendable {
+    struct UserProfileEnvelope: Codable, Equatable, Sendable {
         let profile: UserProfilePayload
     }
 
-    private struct WorkoutEnvelope: Codable, Equatable, Sendable {
+    struct WorkoutEnvelope: Codable, Equatable, Sendable {
         let workout: WorkoutPayload
     }
 
-    private struct TrainingPlanEnvelope: Codable, Equatable, Sendable {
+    struct TrainingPlanEnvelope: Codable, Equatable, Sendable {
         let plan: TrainingPlanPayload
     }
 
-    private struct CoachMemoryEnvelope: Codable, Equatable, Sendable {
+    struct CoachMemoryEnvelope: Codable, Equatable, Sendable {
         let memory: CoachMemoryPayload
     }
 
