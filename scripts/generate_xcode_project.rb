@@ -57,9 +57,18 @@ PROJECT_PATH = ROOT.join('VolumeArcApple.xcodeproj')
 IOS_DEPLOYMENT_TARGET = '26.0'
 WATCHOS_DEPLOYMENT_TARGET = '26.4'
 MARKETING_VERSION = File.read(ROOT.join('VERSION')).strip
-BUILD_NUMBER = ENV.fetch('BUILD_NUMBER') {
-  `git -C "#{ROOT}" rev-list --count HEAD 2>/dev/null`.strip.then { |n| n.empty? ? '1' : n }
-}
+# VOL-106: the committed pbxproj must be a pure function of the source tree
+# and this script — no git-derived inputs. Before this, BUILD_NUMBER fell
+# back to `git rev-list --count HEAD`, which bumps with every merge; that
+# changed every XCBuildConfiguration's tree_hash, cascaded through
+# predictabilize_uuids, and reshuffled ~300 lines of UUIDs on every regen
+# against main. Default to '1' so `ruby scripts/generate_xcode_project.rb`
+# is a true no-op. Release tooling that actually ships builds
+# (`scripts/archive_for_distribution.sh`, fastlane `increment_build_number`,
+# and `xcodebuild CURRENT_PROJECT_VERSION=…` at archive time) passes the
+# monotonic build number explicitly and overrides the pbxproj value, so
+# TestFlight/App Store uploads keep their real build numbers.
+BUILD_NUMBER = ENV.fetch('BUILD_NUMBER', '1')
 
 FileUtils.rm_rf(PROJECT_PATH)
 project = Xcodeproj::Project.new(PROJECT_PATH)

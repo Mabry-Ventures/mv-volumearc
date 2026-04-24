@@ -1317,49 +1317,53 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		05124021D318555B97AF9AC3 /* Release */ = {
+		019F46C7238E648B75CB21BC /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				APPLICATION_EXTENSION_API_ONLY = YES;
-				CLANG_ENABLE_OBJC_WEAK = NO;
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGN_ENTITLEMENTS = Widgets/VolumeArcWidgets.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Watch/VolumeArcWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 73;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier = "com.apple.widgetkit-extension";
-				INFOPLIST_KEY_NSExtension_NSExtensionPrincipalClass = "$(PRODUCT_MODULE_NAME).VolumeArcWidgets";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "VolumeArc reads workouts, heart rate, and active energy on Apple Watch so live strength sessions save with accurate training history, heart-rate charts, and calorie totals.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "VolumeArc writes completed watch workouts to Apple Health.";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_WKApplication = YES;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.mabryventures.VolumeArc;
 				MARKETING_VERSION = 1.0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.widgets;
-				PRODUCT_NAME = VolumeArcWidgets;
-				SDKROOT = iphoneos;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.watchkitapp;
+				PRODUCT_NAME = VolumeArcWatch;
+				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 6.0;
-				VALIDATE_PRODUCT = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.4;
 			};
-			name = Release;
+			name = Debug;
 		};
-		1394DA6855850C0E470EA50D /* Release */ = {
+		24356D799A179C184CAAD738 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 73;
-				DEFINES_MODULE = YES;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0.1;
-				OTHER_LDFLAGS = "-ObjC";
+				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.tests;
+				PRODUCT_NAME = VolumeArcAppTests;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
@@ -1425,81 +1429,69 @@
 			};
 			name = Debug;
 		};
-		3C3F0515969A1E8753397304 /* Debug */ = {
+		2D2F9368F1146A2EF2E6CB37 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_ENTITLEMENTS = Widgets/VolumeArcWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 73;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier = "com.apple.widgetkit-extension";
+				INFOPLIST_KEY_NSExtension_NSExtensionPrincipalClass = "$(PRODUCT_MODULE_NAME).VolumeArcWidgets";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.perftests;
-				PRODUCT_NAME = VolumeArcAppPerfTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.widgets;
+				PRODUCT_NAME = VolumeArcWidgets;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 6.0;
-				TEST_TARGET_NAME = VolumeArcApp;
+				VALIDATE_PRODUCT = YES;
 			};
-			name = Debug;
+			name = Release;
 		};
-		4DBB057A1F18B076E68DE6B2 /* Debug */ = {
+		3A7EC0F792CD7EE81D310459 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_ENTITLEMENTS = App/VolumeArc.Debug.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 73;
-				DEFINES_MODULE = YES;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = App/Info.plist;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "VolumeArc reads your completed workouts from Apple Health to show your training history and calculate readiness.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "VolumeArc writes completed workouts so your training history stays in sync with Apple Health.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "VolumeArc uses the microphone for voice coaching requests and voice workout logging.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "VolumeArc uses speech recognition to understand live coaching requests and voice workout notes.";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MARKETING_VERSION = 1.0.1;
-				OTHER_LDFLAGS = "-ObjC";
+				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc;
+				PRODUCT_NAME = VolumeArc;
 				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
-		4FA91B45D9D5BA9614090534 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGN_ENTITLEMENTS = WatchWidgets/VolumeArcWatchWidgets.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 73;
-				DEVELOPMENT_TEAM = "";
-				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier = "com.apple.widgetkit-extension";
-				MARKETING_VERSION = 1.0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.watchkitapp.widgets;
-				PRODUCT_NAME = VolumeArcWatchWidgets;
-				SDKROOT = watchos;
-				SKIP_INSTALL = YES;
-				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = 4;
-				VALIDATE_PRODUCT = YES;
-				WATCHOS_DEPLOYMENT_TARGET = 26.4;
-			};
-			name = Release;
-		};
-		6266E5C2C4D3F58FBDB397E1 /* Release */ = {
+		3CE50D74B548A38BFFB96068 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 73;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1511,77 +1503,41 @@
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 6.0;
 				TEST_TARGET_NAME = VolumeArcApp;
-				VALIDATE_PRODUCT = YES;
-			};
-			name = Release;
-		};
-		6442A6C7869DA7AFF01252B4 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 73;
-				DEVELOPMENT_TEAM = "";
-				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.perftests;
-				PRODUCT_NAME = VolumeArcAppPerfTests;
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				SWIFT_VERSION = 6.0;
-				TEST_TARGET_NAME = VolumeArcApp;
-				VALIDATE_PRODUCT = YES;
-			};
-			name = Release;
-		};
-		6E03B439A9897276FA3772A2 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 73;
-				DEFINES_MODULE = YES;
-				DEVELOPMENT_TEAM = "";
-				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.0.1;
-				OTHER_LDFLAGS = "-ObjC";
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
-		7D8DF1EC8859B9EF06F3E7B0 /* Release */ = {
+		3E0EDF876AABCBF9B516F850 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_ENTITLEMENTS = App/VolumeArc.Release.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 73;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = App/Info.plist;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "VolumeArc reads your completed workouts from Apple Health to show your training history and calculate readiness.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "VolumeArc writes completed workouts so your training history stays in sync with Apple Health.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "VolumeArc uses the microphone for voice coaching requests and voice workout logging.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "VolumeArc uses speech recognition to understand live coaching requests and voice workout notes.";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MARKETING_VERSION = 1.0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.tests;
-				PRODUCT_NAME = VolumeArcAppTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc;
+				PRODUCT_NAME = VolumeArc;
 				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
 		};
-		8322901BC34C8671BD7E8690 /* Release */ = {
+		4F256C73A936C17F32F8008C /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
@@ -1590,7 +1546,7 @@
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGN_ENTITLEMENTS = Watch/VolumeArcWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 73;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1611,35 +1567,36 @@
 			};
 			name = Release;
 		};
-		84FA27E7B37829B74DE0DF96 /* Debug */ = {
+		5B9C84CDF24492A7536EF646 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 73;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.uitests;
-				PRODUCT_NAME = VolumeArcAppUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.perftests;
+				PRODUCT_NAME = VolumeArcAppPerfTests;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 6.0;
 				TEST_TARGET_NAME = VolumeArcApp;
+				VALIDATE_PRODUCT = YES;
 			};
-			name = Debug;
+			name = Release;
 		};
-		AF276DC1658DD3F510D6A27A /* Release */ = {
+		5E47BF4424CC64B3D2BD3812 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 73;
+				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = "";
 				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
@@ -1654,6 +1611,163 @@
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
+		};
+		64333C36F641361030DC37CA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_ENTITLEMENTS = WatchWidgets/VolumeArcWatchWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier = "com.apple.widgetkit-extension";
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.watchkitapp.widgets;
+				PRODUCT_NAME = VolumeArcWatchWidgets;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 26.4;
+			};
+			name = Release;
+		};
+		6A3A83743EB28F7B406651C7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = "";
+				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0.1;
+				OTHER_LDFLAGS = "-ObjC";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		6C9D1537D462E7974BF59982 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = "";
+				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0.1;
+				OTHER_LDFLAGS = "-ObjC";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		7EB44EED747CD33A057DA203 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = "";
+				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0.1;
+				OTHER_LDFLAGS = "-ObjC";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		8942ABE28EB75F47119EB41A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.perftests;
+				PRODUCT_NAME = VolumeArcAppPerfTests;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = VolumeArcApp;
+			};
+			name = Debug;
+		};
+		9775FBAB4AEA6334B010692F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_ENTITLEMENTS = Widgets/VolumeArcWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier = "com.apple.widgetkit-extension";
+				INFOPLIST_KEY_NSExtension_NSExtensionPrincipalClass = "$(PRODUCT_MODULE_NAME).VolumeArcWidgets";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.widgets;
+				PRODUCT_NAME = VolumeArcWidgets;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		C60C51100D82A4E16E948ED8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_ENTITLEMENTS = WatchWidgets/VolumeArcWatchWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier = "com.apple.widgetkit-extension";
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.watchkitapp.widgets;
+				PRODUCT_NAME = VolumeArcWatchWidgets;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.4;
+			};
+			name = Debug;
 		};
 		C85CB69B8AF0B7E240D13DCB /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -1709,14 +1823,14 @@
 			};
 			name = Release;
 		};
-		CB887620E13E9C88589C67FF /* Debug */ = {
+		DC7C553C589C1028201AAB3D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 73;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1730,139 +1844,25 @@
 			};
 			name = Debug;
 		};
-		CC501881C2D1906968DA72A4 /* Debug */ = {
+		E289F00C1D34A775596CFDEC /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGN_ENTITLEMENTS = Watch/VolumeArcWatch.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 73;
-				DEVELOPMENT_TEAM = "";
-				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "VolumeArc reads workouts, heart rate, and active energy on Apple Watch so live strength sessions save with accurate training history, heart-rate charts, and calorie totals.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "VolumeArc writes completed watch workouts to Apple Health.";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
-				INFOPLIST_KEY_WKApplication = YES;
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.mabryventures.VolumeArc;
-				MARKETING_VERSION = 1.0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.watchkitapp;
-				PRODUCT_NAME = VolumeArcWatch;
-				SDKROOT = watchos;
-				SKIP_INSTALL = YES;
-				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = 4;
-				WATCHOS_DEPLOYMENT_TARGET = 26.4;
-			};
-			name = Debug;
-		};
-		D34CB6DFB9415988015AD56F /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGN_ENTITLEMENTS = WatchWidgets/VolumeArcWatchWidgets.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 73;
-				DEVELOPMENT_TEAM = "";
-				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier = "com.apple.widgetkit-extension";
-				MARKETING_VERSION = 1.0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.watchkitapp.widgets;
-				PRODUCT_NAME = VolumeArcWatchWidgets;
-				SDKROOT = watchos;
-				SKIP_INSTALL = YES;
-				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = 4;
-				WATCHOS_DEPLOYMENT_TARGET = 26.4;
-			};
-			name = Debug;
-		};
-		DD23D421E67FD0235439C354 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGN_ENTITLEMENTS = App/VolumeArc.Debug.entitlements;
+				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 73;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = App/Info.plist;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "VolumeArc reads your completed workouts from Apple Health to show your training history and calculate readiness.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "VolumeArc writes completed workouts so your training history stays in sync with Apple Health.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "VolumeArc uses the microphone for voice coaching requests and voice workout logging.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "VolumeArc uses speech recognition to understand live coaching requests and voice workout notes.";
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc;
-				PRODUCT_NAME = VolumeArc;
-				SDKROOT = iphoneos;
-				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		EDA2F8CD8170931FD41EA68B /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				APPLICATION_EXTENSION_API_ONLY = YES;
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGN_ENTITLEMENTS = Widgets/VolumeArcWidgets.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 73;
-				DEVELOPMENT_TEAM = "";
-				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier = "com.apple.widgetkit-extension";
-				INFOPLIST_KEY_NSExtension_NSExtensionPrincipalClass = "$(PRODUCT_MODULE_NAME).VolumeArcWidgets";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.widgets;
-				PRODUCT_NAME = VolumeArcWidgets;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.uitests;
+				PRODUCT_NAME = VolumeArcAppUITests;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 6.0;
-			};
-			name = Debug;
-		};
-		FB2A7D211F16948034045865 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGN_ENTITLEMENTS = App/VolumeArc.Release.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 73;
-				DEVELOPMENT_TEAM = "";
-				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = App/Info.plist;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "VolumeArc reads your completed workouts from Apple Health to show your training history and calculate readiness.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "VolumeArc writes completed workouts so your training history stays in sync with Apple Health.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "VolumeArc uses the microphone for voice coaching requests and voice workout logging.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "VolumeArc uses speech recognition to understand live coaching requests and voice workout notes.";
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc;
-				PRODUCT_NAME = VolumeArc;
-				SDKROOT = iphoneos;
-				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = VolumeArcApp;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
@@ -1873,8 +1873,8 @@
 		1B3A432C52560404D393672A /* Build configuration list for PBXNativeTarget "VolumeArcAppPerfTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				6442A6C7869DA7AFF01252B4 /* Release */,
-				3C3F0515969A1E8753397304 /* Debug */,
+				5B9C84CDF24492A7536EF646 /* Release */,
+				8942ABE28EB75F47119EB41A /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -1882,8 +1882,8 @@
 		37E513E2271867ACE018768F /* Build configuration list for PBXNativeTarget "VolumeArcWidgets" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				05124021D318555B97AF9AC3 /* Release */,
-				EDA2F8CD8170931FD41EA68B /* Debug */,
+				2D2F9368F1146A2EF2E6CB37 /* Release */,
+				9775FBAB4AEA6334B010692F /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -1891,8 +1891,8 @@
 		4306F8AC4E8CD634B6A96556 /* Build configuration list for PBXNativeTarget "VolumeArcApp" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				FB2A7D211F16948034045865 /* Release */,
-				DD23D421E67FD0235439C354 /* Debug */,
+				3E0EDF876AABCBF9B516F850 /* Release */,
+				3A7EC0F792CD7EE81D310459 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -1900,8 +1900,8 @@
 		5BAB17B4683743A03248DFB5 /* Build configuration list for PBXNativeTarget "VolumeArcWatch" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				8322901BC34C8671BD7E8690 /* Release */,
-				CC501881C2D1906968DA72A4 /* Debug */,
+				4F256C73A936C17F32F8008C /* Release */,
+				019F46C7238E648B75CB21BC /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -1909,8 +1909,8 @@
 		67EF61019525EAFA258328C9 /* Build configuration list for PBXNativeTarget "VolumeArcWatchWidgets" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				4FA91B45D9D5BA9614090534 /* Release */,
-				D34CB6DFB9415988015AD56F /* Debug */,
+				64333C36F641361030DC37CA /* Release */,
+				C60C51100D82A4E16E948ED8 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -1918,8 +1918,8 @@
 		6A62A016185F2B210EA171A2 /* Build configuration list for PBXNativeTarget "VolumeArcAppUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				6266E5C2C4D3F58FBDB397E1 /* Release */,
-				84FA27E7B37829B74DE0DF96 /* Debug */,
+				E289F00C1D34A775596CFDEC /* Release */,
+				3CE50D74B548A38BFFB96068 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -1927,8 +1927,8 @@
 		89BED7062363E973496EFC3E /* Build configuration list for PBXNativeTarget "VolumeArcAppTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				7D8DF1EC8859B9EF06F3E7B0 /* Release */,
-				CB887620E13E9C88589C67FF /* Debug */,
+				24356D799A179C184CAAD738 /* Release */,
+				DC7C553C589C1028201AAB3D /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -1936,8 +1936,8 @@
 		8D5BC643B83FEE4CCDAC7FEE /* Build configuration list for PBXNativeTarget "VolumeArcCore" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				1394DA6855850C0E470EA50D /* Release */,
-				4DBB057A1F18B076E68DE6B2 /* Debug */,
+				7EB44EED747CD33A057DA203 /* Release */,
+				6C9D1537D462E7974BF59982 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -1945,8 +1945,8 @@
 		8DA49C9DCB76475845C2D60F /* Build configuration list for PBXNativeTarget "VolumeArcUI" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				AF276DC1658DD3F510D6A27A /* Release */,
-				6E03B439A9897276FA3772A2 /* Debug */,
+				5E47BF4424CC64B3D2BD3812 /* Release */,
+				6A3A83743EB28F7B406651C7 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
