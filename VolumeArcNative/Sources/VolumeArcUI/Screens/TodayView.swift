@@ -35,6 +35,9 @@ public struct TodayView: View {
             }
             .padding(VA.Space.lg)
         }
+        // VOL-99: identifier for the perf scroll test to find the
+        // ScrollView and swipe across it.
+        .accessibilityIdentifier("today.scroll")
         .background(VA.Colors.surfaceSecondary)
         .navigationTitle(DashboardTab.today.title)
         .navigationBarTitleDisplayMode(.large)
@@ -259,6 +262,9 @@ public struct TodayView: View {
                     comment: "Default coach prompt when opening from quick action"
                 ))
             }
+            // VOL-99: `testCoachFirstTokenLatency` taps this to route
+            // into the Coach tab, so it needs a stable identifier.
+            .accessibilityIdentifier("today.askCoach")
         }
     }
 
@@ -283,7 +289,13 @@ public struct TodayView: View {
                     .foregroundStyle(VA.Colors.textSecondary)
                 }
             } else {
-                ForEach(Array(model.recentSessions.prefix(3).enumerated()), id: \.offset) { _, session in
+                // VOL-99: perf-test mode renders the full recent-session
+                // pool so the scroll perf test can measure frame rate
+                // and hitches across a realistic list length (50 rows).
+                let visibleSessions = VolumeArcRuntimeFlags.isPerformanceTestMode
+                    ? Array(model.recentSessions)
+                    : Array(model.recentSessions.prefix(3))
+                ForEach(Array(visibleSessions.enumerated()), id: \.offset) { _, session in
                     sessionRow(session)
                 }
             }
