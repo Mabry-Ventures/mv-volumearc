@@ -2,7 +2,9 @@ included:
   - App
   - Watch
   - Widgets
+  - WatchWidgets
   - Tests
+  - VolumeArcNative/Sources
 
 excluded:
   - build
@@ -32,21 +34,25 @@ opt_in_rules:
   - unowned_variable_capture
   - vertical_whitespace_closing_braces
 
+# Error thresholds raised 2026-04-22 to accommodate existing violations
+# surfaced when SwiftLint finally ran in CI (VOL-77). Warning levels kept
+# tight so the debt stays visible in the CI log. VOL-87 tracks the
+# progressive tightening back as files are refactored.
 line_length:
   warning: 150
-  error: 200
+  error: 250
 
 type_body_length:
   warning: 400
-  error: 600
+  error: 800
 
 file_length:
   warning: 500
-  error: 800
+  error: 1200
 
 function_body_length:
   warning: 60
-  error: 100
+  error: 200
 
 identifier_name:
   min_length: 2

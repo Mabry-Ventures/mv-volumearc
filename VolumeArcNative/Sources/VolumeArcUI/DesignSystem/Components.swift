@@ -20,23 +20,37 @@ public struct VACard<Content: View>: View {
     }
 
     public var body: some View {
-        content
-            .padding(VA.Space.lg)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(background)
-            .clipShape(RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous))
-            .vaShadow(shadow)
+        // The glass case routes through `.vaGlassBackground(...)` so it uses
+        // the real iOS 26 Liquid Glass APIs (and respects
+        // `accessibilityReduceTransparency`). Other cases use a flat fill
+        // background painted into the same shape.
+        Group {
+            if style == .glass {
+                content
+                    .padding(VA.Space.lg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .vaGlassBackground(in: RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous))
+            } else {
+                content
+                    .padding(VA.Space.lg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(nonGlassBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous))
+            }
+        }
+        .vaShadow(shadow)
     }
 
     @ViewBuilder
-    private var background: some View {
+    private var nonGlassBackground: some View {
         switch style {
         case .flat:
             VA.Colors.surfaceSecondary
         case .elevated:
             VA.Colors.surfacePrimary
         case .glass:
-            Rectangle().fill(.regularMaterial)
+            // Unreachable — handled above by `vaGlassBackground`.
+            Color.clear
         case .accent:
             LinearGradient(
                 colors: [VA.Colors.primary.opacity(0.15), VA.Colors.primary.opacity(0.05)],
@@ -111,8 +125,7 @@ public struct VAButton: View {
             .frame(maxWidth: .infinity)
             .frame(minHeight: 50)
             .padding(.horizontal, VA.Space.lg)
-            .background(backgroundView)
-            .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+            .modifier(VAButtonBackgroundModifier(style: style))
         }
         .buttonStyle(.plain)
         .disabled(isLoading || !isEnabled)
@@ -130,29 +143,44 @@ public struct VAButton: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    @ViewBuilder
-    private var backgroundView: some View {
-        switch style {
-        case .primary:
-            LinearGradient(
-                colors: [VA.Colors.primary, VA.Colors.primary.opacity(0.85)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        case .secondary:
-            Rectangle().fill(.regularMaterial)
-        case .destructive:
-            VA.Colors.error
-        case .ghost:
-            Color.clear
-        }
-    }
-
     private var foregroundColor: Color {
         switch style {
         case .primary, .destructive: return VA.Colors.textOnPrimary
         case .secondary: return VA.Colors.textPrimary
         case .ghost: return VA.Colors.primary
+        }
+    }
+}
+
+/// Paints the right background for a `VAButton`. The `.secondary` style uses
+/// the real iOS 26 interactive Liquid Glass via `.vaInteractiveGlassBackground`;
+/// other styles use a flat fill or gradient clipped to the button shape.
+private struct VAButtonBackgroundModifier: ViewModifier {
+    let style: VAButton.Style
+
+    func body(content: Content) -> some View {
+        switch style {
+        case .secondary:
+            content.vaInteractiveGlassBackground(
+                in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous)
+            )
+        case .primary:
+            content
+                .background(
+                    LinearGradient(
+                        colors: [VA.Colors.primary, VA.Colors.primary.opacity(0.85)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+        case .destructive:
+            content
+                .background(VA.Colors.error)
+                .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+        case .ghost:
+            content
+                .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
         }
     }
 }
@@ -453,20 +481,7 @@ public struct VACoachBubble: View {
                 Spacer(minLength: 60)
             }
 
-            VStack(alignment: .leading, spacing: VA.Space.xs) {
-                Text(content)
-                    .font(VA.Typography.body)
-                    .foregroundStyle(sender == .user ? VA.Colors.textOnPrimary : VA.Colors.textPrimary)
-                    .multilineTextAlignment(.leading)
-
-                if isStreaming {
-                    typingIndicator
-                }
-            }
-            .padding(.horizontal, VA.Space.md)
-            .padding(.vertical, VA.Space.md)
-            .background(bubbleBackground)
-            .clipShape(RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous))
+            bubbleContent
 
             if sender == .user {
                 Spacer().frame(width: 0)
@@ -477,6 +492,32 @@ public struct VACoachBubble: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabelText)
         .accessibilityAddTraits(.isStaticText)
+    }
+
+    @ViewBuilder
+    private var bubbleContent: some View {
+        let stack = VStack(alignment: .leading, spacing: VA.Space.xs) {
+            Text(content)
+                .font(VA.Typography.body)
+                .foregroundStyle(sender == .user ? VA.Colors.textOnPrimary : VA.Colors.textPrimary)
+                .multilineTextAlignment(.leading)
+
+            if isStreaming {
+                typingIndicator
+            }
+        }
+        .padding(.horizontal, VA.Space.md)
+        .padding(.vertical, VA.Space.md)
+
+        if sender == .user {
+            stack
+                .background(VA.Colors.primary)
+                .clipShape(RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous))
+        } else {
+            // Coach bubble uses real iOS 26 Liquid Glass.
+            stack
+                .vaGlassBackground(in: RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous))
+        }
     }
 
     private var accessibilityLabelText: String {
@@ -497,15 +538,6 @@ public struct VACoachBubble: View {
             Image(systemName: "waveform")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Color.white)
-        }
-    }
-
-    @ViewBuilder
-    private var bubbleBackground: some View {
-        if sender == .user {
-            VA.Colors.primary
-        } else {
-            Rectangle().fill(.regularMaterial)
         }
     }
 

@@ -1,0 +1,16 @@
+{
+  "id": "substitution-moderate-5-sessions-minimal",
+  "intent": "substitution",
+  "question": "Swap for pull-ups — bar is occupied.",
+  "contextBlock": "## Training context\n- Athlete: Rowan (intermediate)\n- Readiness: 60/100 — Moderate recovery.\n- Next up: Pull-ups at BW x 8\n- Last 7 days: 5 sessions, avg RPE 8.0\n- Last session: 4 sets BW x 7, RPE 8.2",
+  "style": "minimal",
+  "expectedAssertions": {
+    "maxSentences": 2,
+    "mustContainNumericContext": false,
+    "mustMentionReadinessOrRPE": false,
+    "mustNotMention": ["max out", "1RM"],
+    "toneHint": "terse",
+    "mustAnchorOnNextExercise": true
+  },
+  "notes": "Substitution with minimal style: exercises tightest substitution response. Model should propose lat-pulldown or row alternative without padding."
+}

@@ -1,0 +1,15 @@
+{
+  "id": "free-moderate-1-session-analytical",
+  "intent": "free",
+  "question": "What's one thing I should focus on this block?",
+  "contextBlock": "## Training context\n- Athlete: Emerson (intermediate)\n- Readiness: 72/100 — Decent recovery, sleep holding steady.\n- Next up: Overhead Press at 145lb x 5\n- Last 7 days: 1 sessions, avg RPE 7.9\n- Last session: 3 sets at 140lb, RPE 7.9, bar drift on rep 5",
+  "style": "analytical",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": true,
+    "mustMentionReadinessOrRPE": false,
+    "mustNotMention": ["max out", "1RM"],
+    "toneHint": "data-driven"
+  },
+  "notes": "Open-ended strategic question with partial history: exercises the 'synthesize specific insight from limited data' branch. Tests that the model doesn't resort to generic training-block advice."
+}

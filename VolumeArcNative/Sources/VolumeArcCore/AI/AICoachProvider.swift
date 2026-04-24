@@ -70,34 +70,146 @@ public protocol OpenAIRelayCredentialsProviding: Sendable {
     func authorizationHeaderValue() async throws -> String
 }
 
+public enum CoachTier: String, Sendable {
+    case flashLite = "flash-lite"
+    case pro = "pro"
+}
+
+/// Relay-backed coach provider that talks to `volumearc-ai-relay` via SSE.
+///
+/// VOL-66: real progressive streaming. `streamCoachResponse(for:context:)`
+/// now consumes `text/event-stream` from the Worker and yields token chunks
+/// as Gemini emits them. The non-streaming `coachResponse` joins the stream
+/// to a single string for callers that don't need progressive UI.
+///
+/// Despite the `OpenAI` in the name (kept for stability against in-flight
+/// branches), the Worker now proxies to Gemini 3.1 Flash Lite / Pro. The
+/// type name is intentionally model-agnostic and will be renamed to
+/// `CloudRelayCoachProvider` in a separate churn-free cleanup pass.
 public struct OpenAIRelayCoachProvider: AICoachProvider {
     private let configuration: OpenAIRelayConfiguration
     private let credentialsProvider: OpenAIRelayCredentialsProviding
+    private let coachingStyle: CoachingStyle
+    private let tier: CoachTier
+    private let session: URLSession
 
-    public init(configuration: OpenAIRelayConfiguration, credentialsProvider: OpenAIRelayCredentialsProviding) {
+    public init(
+        configuration: OpenAIRelayConfiguration,
+        credentialsProvider: OpenAIRelayCredentialsProviding,
+        coachingStyle: CoachingStyle = .motivational,
+        tier: CoachTier = .flashLite,
+        session: URLSession = .shared
+    ) {
         self.configuration = configuration
         self.credentialsProvider = credentialsProvider
+        self.coachingStyle = coachingStyle
+        self.tier = tier
+        self.session = session
     }
 
     public func coachResponse(for prompt: String, context: String) async throws -> String {
-        let auth = try await credentialsProvider.authorizationHeaderValue()
-        var request = URLRequest(url: configuration.baseURL.appending(path: "relay/coach"))
-        request.httpMethod = "POST"
-        request.setValue(auth, forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 30
-
-        let body: [String: String] = ["prompt": prompt, "context": context]
-        request.httpBody = try JSONEncoder().encode(body)
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            let message = String(data: data, encoding: .utf8) ?? "Unknown"
-            throw AIRuntimeIntegrationError.relayRequestFailed(statusCode: (response as? HTTPURLResponse)?.statusCode ?? 0, message: message)
+        var full = ""
+        for try await chunk in streamCoachResponse(for: prompt, context: context) {
+            full += chunk
         }
+        return full
+    }
 
-        struct CoachResponse: Decodable { let text: String }
-        return try JSONDecoder().decode(CoachResponse.self, from: data).text
+    public func streamCoachResponse(for prompt: String, context: String) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let auth = try await credentialsProvider.authorizationHeaderValue()
+                    var request = URLRequest(url: configuration.baseURL.appending(path: "v1/coach"))
+                    request.httpMethod = "POST"
+                    request.setValue(auth, forHTTPHeaderField: "Authorization")
+                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    request.setValue(tier.rawValue, forHTTPHeaderField: "X-Coach-Tier")
+                    request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+                    request.timeoutInterval = 60
+
+                    // VOL-64: render the prompt on-device and send it
+                    // pre-rendered so the template marker + system prompt
+                    // are the single source of truth. Worker uses these
+                    // verbatim and layers Gemini safety settings on top.
+                    let intent = CoachPromptTemplate.inferIntent(from: prompt)
+                    let renderedPrompt = CoachPromptTemplate.render(
+                        intent: intent,
+                        contextBlock: context,
+                        question: prompt,
+                        style: coachingStyle
+                    )
+                    let systemPrompt = CoachPromptTemplate.systemPrompt(style: coachingStyle)
+                    let body: [String: String] = [
+                        "intent": intent.rawValue,
+                        "question": prompt,
+                        "contextBlock": context,
+                        "style": coachingStyle.rawValue,
+                        "prompt": renderedPrompt,
+                        "system": systemPrompt
+                    ]
+                    request.httpBody = try JSONEncoder().encode(body)
+
+                    let (stream, response) = try await session.bytes(for: request)
+                    guard let http = response as? HTTPURLResponse else {
+                        continuation.finish(throwing: AIRuntimeIntegrationError.invalidHTTPResponse)
+                        return
+                    }
+                    guard (200..<300).contains(http.statusCode) else {
+                        continuation.finish(
+                            throwing: AIRuntimeIntegrationError.relayRequestFailed(
+                                statusCode: http.statusCode,
+                                message: "Relay returned HTTP \(http.statusCode)"
+                            )
+                        )
+                        return
+                    }
+
+                    var buffer = ""
+                    for try await line in stream.lines {
+                        if Task.isCancelled { break }
+                        if line.isEmpty {
+                            // Event terminator — process accumulated data line if any.
+                            if !buffer.isEmpty {
+                                let trimmed = buffer
+                                buffer = ""
+                                if let text = Self.extractText(from: trimmed) {
+                                    continuation.yield(text)
+                                }
+                            }
+                            continue
+                        }
+                        if line.hasPrefix("data:") {
+                            buffer = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
+                        } else if line.hasPrefix("event: done") {
+                            break
+                        } else if line.hasPrefix("event: error") {
+                            continuation.finish(
+                                throwing: AIRuntimeIntegrationError.relayRequestFailed(
+                                    statusCode: http.statusCode,
+                                    message: "Relay emitted error event"
+                                )
+                            )
+                            return
+                        }
+                    }
+                    // Flush any trailing data line without a blank terminator.
+                    if !buffer.isEmpty, let text = Self.extractText(from: buffer) {
+                        continuation.yield(text)
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    private static func extractText(from dataLine: String) -> String? {
+        guard let data = dataLine.data(using: .utf8) else { return nil }
+        struct Chunk: Decodable { let text: String? }
+        return (try? JSONDecoder().decode(Chunk.self, from: data))?.text
     }
 }
 
@@ -107,25 +219,45 @@ public struct OpenAIRelayCoachProvider: AICoachProvider {
 /// This is the offline fallback — rule-based, not generative. A user without
 /// network connectivity still gets a useful, contextual response instead of
 /// canned filler.
+///
+/// VOL-64: still routes every input through `CoachPromptTemplate.render(...)`
+/// before dispatching, even though the response itself is rule-based. The
+/// rendered prompt is what the heuristic dispatch and the readiness extractor
+/// read, so the same intent classification and same context shape feed both
+/// the offline path and the cloud relay path. A regression that bypasses the
+/// template here drops the template marker and trips the integration test.
 public struct LocalHeuristicAICoachProvider: AICoachProvider {
-    public init() {}
+    private let coachingStyle: CoachingStyle
+
+    public init(coachingStyle: CoachingStyle = .motivational) {
+        self.coachingStyle = coachingStyle
+    }
 
     public func coachResponse(for prompt: String, context: String) async throws -> String {
-        let lowered = prompt.lowercased()
+        // Route through the template so the same intent classification and
+        // context shape used by the cloud path also drive the offline path.
+        let intent = CoachPromptTemplate.inferIntent(from: prompt)
+        let rendered = CoachPromptTemplate.render(
+            intent: intent,
+            contextBlock: context,
+            question: prompt,
+            style: coachingStyle
+        )
 
-        if lowered.contains("ready") || lowered.contains("recovery") || lowered.contains("tired") || lowered.contains("fatigue") {
-            return readinessResponse(from: context)
+        // The rendered prompt embeds the original context block verbatim, so
+        // `extractReadinessScore` keeps working against the rendered string.
+        switch intent {
+        case .recovery:
+            return readinessResponse(from: rendered)
+        case .progression:
+            return progressionResponse(from: rendered)
+        case .form:
+            return cueResponse(from: rendered)
+        case .deload:
+            return deloadResponse(from: rendered)
+        case .substitution, .free:
+            return defaultResponse(from: rendered)
         }
-        if lowered.contains("heavy") || lowered.contains("heavier") || lowered.contains("more weight") || lowered.contains("add") || lowered.contains(" up") {
-            return progressionResponse(from: context)
-        }
-        if lowered.contains("form") || lowered.contains("cue") || lowered.contains("technique") {
-            return cueResponse(from: context)
-        }
-        if lowered.contains("deload") || lowered.contains("back off") || lowered.contains("easier") {
-            return deloadResponse(from: context)
-        }
-        return defaultResponse(from: context)
     }
 
     private func readinessResponse(from context: String) -> String {
@@ -180,15 +312,27 @@ import FoundationModels
 @available(iOS 26.0, visionOS 26.0, *)
 public struct FoundationModelCoachProvider: AICoachProvider {
     private let fallback: AICoachProvider
+    private let coachingStyle: CoachingStyle
 
-    public init(fallback: AICoachProvider) {
+    public init(fallback: AICoachProvider, coachingStyle: CoachingStyle = .motivational) {
         self.fallback = fallback
+        self.coachingStyle = coachingStyle
     }
 
     public func coachResponse(for prompt: String, context: String) async throws -> String {
         do {
             let session = LanguageModelSession()
-            let response = try await session.respond(to: "\(context)\n\nUser question: \(prompt)")
+            // VOL-64: hand the on-device session the same templated prompt
+            // the cloud relay sees — system prompt, intent envelope, context
+            // block, and template marker — so on-device responses match the
+            // shape of cloud responses for the same input.
+            let rendered = CoachPromptTemplate.render(
+                intent: CoachPromptTemplate.inferIntent(from: prompt),
+                contextBlock: context,
+                question: prompt,
+                style: coachingStyle
+            )
+            let response = try await session.respond(to: rendered)
             return response.content
         } catch {
             return try await fallback.coachResponse(for: prompt, context: context)

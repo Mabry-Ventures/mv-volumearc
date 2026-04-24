@@ -69,12 +69,15 @@ struct VolumeArcComplicationView: View {
     private var circularView: some View {
         ZStack {
             AccessoryWidgetBackground()
-            VStack(spacing: 0) {
+            VStack(spacing: VA.Space.xxs) {
                 Text(entry.snapshot.readinessScore)
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
-                Text("READY")
-                    .font(.system(size: 8, weight: .semibold))
-                    .tracking(0.5)
+                    .font(VA.Typography.scoreDisplay)
+                Text(String(
+                    localized: "READY",
+                    comment: "Watch complication all-caps badge next to the readiness score"
+                ))
+                    .font(VA.Typography.microLabel)
+                    .tracking(VA.Tracking.microLabel)
             }
         }
         .widgetURL(VolumeArcDeepLink.url(for: .signals))
@@ -82,30 +85,40 @@ struct VolumeArcComplicationView: View {
 
     private var cornerView: some View {
         Text(entry.snapshot.readinessScore)
-            .font(.system(size: 20, weight: .bold, design: .rounded))
+            .font(VA.Typography.scoreCompact)
             .widgetLabel {
                 Text(entry.snapshot.nextWorkoutTitle)
-                    .font(.caption)
+                    .font(VA.Typography.rectCaption)
             }
             .widgetURL(VolumeArcDeepLink.url(for: .today))
     }
 
     private var inlineView: some View {
-        Text("\(entry.snapshot.nextWorkoutTitle) • \(entry.snapshot.readinessScore)")
+        Text(
+            String(
+                localized: "\(entry.snapshot.nextWorkoutTitle) • \(entry.snapshot.readinessScore)",
+                comment: "Accessory inline watch complication summary; placeholders are the next-workout title and the readiness score"
+            )
+        )
             .widgetURL(VolumeArcDeepLink.url(for: .today))
     }
 
     private var rectangularView: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("READY \(entry.snapshot.readinessScore)")
-                .font(.headline.monospacedDigit())
+        VStack(alignment: .leading, spacing: VA.Space.xs) {
+            Text(
+                String(
+                    localized: "READY \(entry.snapshot.readinessScore)",
+                    comment: "Accessory rectangular watch complication headline; placeholder is the readiness score"
+                )
+            )
+                .font(VA.Typography.rectHeadline)
             Text(entry.snapshot.nextWorkoutTitle)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(VA.Typography.rectCaption)
+                .foregroundStyle(VA.Colors.textSecondary)
                 .lineLimit(1)
             Text(entry.snapshot.primaryLiftForecast)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(VA.Typography.rectFootnote)
+                .foregroundStyle(VA.Colors.textSecondary)
                 .lineLimit(1)
         }
         .widgetURL(VolumeArcDeepLink.url(for: .today))
@@ -119,8 +132,18 @@ struct VolumeArcWatchComplication: Widget {
         StaticConfiguration(kind: kind, provider: VolumeArcWatchComplicationProvider()) { entry in
             VolumeArcComplicationView(entry: entry)
         }
-        .configurationDisplayName("VolumeArc")
-        .description("Readiness score and next workout at a glance.")
+        .configurationDisplayName(
+            String(
+                localized: "VolumeArc",
+                comment: "Watch complication display name; product name (non-translatable brand mark)"
+            )
+        )
+        .description(
+            String(
+                localized: "Readiness score and next workout at a glance.",
+                comment: "Watch complication description shown in the add-complication picker"
+            )
+        )
         .supportedFamilies([
             .accessoryCircular,
             .accessoryCorner,

@@ -77,12 +77,102 @@ public enum VA {
         /// Captions, badges, timestamps. Scales with .caption2.
         public static let caption = Font.system(.caption2, design: .default, weight: .semibold)
 
+        /// Larger caption (headline companion). Scales with .caption.
+        public static let captionLarge = Font.system(.caption, design: .default, weight: .regular)
+
         /// Monospaced variant for numbers that should align vertically. Scales with .body.
         public static let monoDigit = Font.system(.body, design: .monospaced).monospacedDigit()
 
         /// Display with monospaced digits for rest timer. Scales with .largeTitle.
         public static let timerDisplay = Font.system(.largeTitle, design: .rounded, weight: .bold)
             .monospacedDigit()
+
+        // MARK: Widget / Live Activity scale
+        //
+        // Widget surfaces intentionally use fixed point sizes rather than
+        // Dynamic Type — the WidgetKit layout budget is fixed and Dynamic
+        // Type scaling would overflow the small/medium/large bounds. These
+        // tokens codify the exact sizes we ship so no widget view has to
+        // reach for `.system(size:)` directly.
+
+        /// Widget display number (readiness score, small/medium layouts).
+        public static let widgetScoreLarge = Font.system(size: 36, weight: .bold, design: .rounded)
+
+        /// Widget display number (readiness score, medium ring).
+        public static let widgetScoreMedium = Font.system(size: 28, weight: .bold, design: .rounded)
+
+        /// Widget display number (readiness score, accessory / ring center).
+        public static let widgetScoreSmall = Font.system(size: 22, weight: .bold, design: .rounded)
+
+        /// Live Activity rest-timer display (monospaced for digit alignment).
+        public static let widgetTimerDisplay = Font.system(size: 22, weight: .bold, design: .rounded)
+            .monospacedDigit()
+
+        /// Active exercise title in Live Activity banner.
+        public static let widgetActivityTitle = Font.system(size: 17, weight: .bold, design: .rounded)
+
+        /// Primary headline in widget medium/large layouts.
+        public static let widgetHeadline = Font.system(size: 18, weight: .bold, design: .rounded)
+
+        /// Secondary headline in widget medium layouts.
+        public static let widgetHeadlineCompact = Font.system(size: 16, weight: .semibold, design: .rounded)
+
+        /// Body in widget / accessory rectangular copy.
+        public static let widgetBody = Font.system(size: 13, weight: .semibold)
+
+        /// Medium-weight supporting copy in widgets.
+        public static let widgetBodyMedium = Font.system(size: 12, weight: .medium)
+
+        /// Coach prompt copy in widget large layout.
+        public static let widgetCoachBody = Font.system(size: 12, weight: .regular)
+
+        /// Supporting copy in widgets (next-lift forecast, status).
+        public static let widgetFootnote = Font.system(size: 13, weight: .semibold)
+
+        /// Supporting copy at small size (streak count, meta labels).
+        public static let widgetFootnoteSmall = Font.system(size: 12, weight: .semibold)
+
+        /// Small meta copy in widget large layout (row icons + labels).
+        public static let widgetMeta = Font.system(size: 11, weight: .semibold)
+
+        /// Chip/meta copy at compact widget small layout.
+        public static let widgetMetaCompact = Font.system(size: 10, weight: .semibold)
+
+        /// Accessory small body (dynamic island etc.).
+        public static let widgetMicro = Font.system(size: 9, weight: .semibold)
+
+        /// Streak count number.
+        public static let widgetStreakNumber = Font.system(size: 11, weight: .bold, design: .rounded)
+
+        /// Streak icon sizing.
+        public static let widgetStreakIcon = Font.system(size: 9, weight: .bold)
+
+        /// Tracking-style hero label ("VOLUMEARC", "READY").
+        public static let widgetHeroBadgeLarge = Font.system(size: 11, weight: .semibold, design: .rounded)
+
+        /// Tracking-style hero label at medium size.
+        public static let widgetHeroBadge = Font.system(size: 10, weight: .semibold, design: .rounded)
+
+        /// Micro ALL-CAPS badges ("READY", "REST", "NEXT").
+        public static let widgetMicroBadge = Font.system(size: 10, weight: .semibold)
+
+        /// Micro ALL-CAPS badges at smallest family.
+        public static let widgetMicroBadgeXS = Font.system(size: 9, weight: .semibold)
+
+        /// Accessory circular score inset label.
+        public static let widgetAccessoryLabel = Font.system(size: 8, weight: .semibold)
+
+        /// Accessory circular score glyph.
+        public static let widgetAccessoryScore = Font.system(size: 20, weight: .bold, design: .rounded)
+
+        /// Accessory circular score glyph (watchOS complication scale).
+        public static let complicationScore = Font.system(size: 22, weight: .bold, design: .rounded)
+
+        /// Dynamic Island prominent countdown / GO label (monospaced-friendly).
+        public static let dynamicIslandTitle = Font.title3.bold()
+
+        /// Dynamic Island compact trailing label (rest seconds / GO).
+        public static let dynamicIslandCompact = Font.caption.bold()
     }
 
     // MARK: - Spacing (4pt grid)
@@ -96,6 +186,59 @@ public enum VA {
         public static let xl: CGFloat = 24
         public static let xxl: CGFloat = 32
         public static let xxxl: CGFloat = 48
+
+        // MARK: Widget scale
+        //
+        // Widgets have their own spacing rhythm because container budgets
+        // are tight. These tokens are off-grid by design so we can hold
+        // the shipping layout exactly while still routing through VA.Space.
+
+        /// Streak badge inner gap (icon-to-number).
+        public static let widgetHairline: CGFloat = 3
+
+        /// Widget body rhythm (small layout gaps).
+        public static let widgetTight: CGFloat = 6
+
+        /// Widget row gap (medium/large ring-to-copy).
+        public static let widgetRow: CGFloat = 10
+
+        /// Widget hstack gap (dynamic island / live activity stacks).
+        public static let widgetStack: CGFloat = 14
+
+        /// Widget outer padding (live activity banner).
+        public static let widgetOuter: CGFloat = 14
+    }
+
+    // MARK: - Widget layout (fixed-size chrome)
+    //
+    // WidgetKit enforces fixed bounds on every family; we codify the ring
+    // dimensions and pill sizes so no widget view has to reach for a raw
+    // CGFloat. Stroke widths mirror the ring radii rhythm.
+
+    public enum Widget {
+        /// Readiness ring size on system medium layout.
+        public static let ringSizeMedium: CGFloat = 72
+
+        /// Readiness ring size on system large layout.
+        public static let ringSizeLarge: CGFloat = 92
+
+        /// Readiness pill (Live Activity leading accessory).
+        public static let activityPill: CGFloat = 52
+
+        /// Ring stroke width on system medium layout.
+        public static let ringStrokeMedium: CGFloat = 8
+
+        /// Ring stroke width on system large layout.
+        public static let ringStrokeLarge: CGFloat = 10
+
+        /// Tracking applied to ALL-CAPS micro labels ("READY", "NEXT").
+        public static let microTracking: CGFloat = 0.5
+
+        /// Background-tint opacity used for ring backs and pill fills.
+        public static let backgroundTint: Double = 0.12
+
+        /// Ring-back stroke opacity.
+        public static let ringBackOpacity: Double = 0.15
     }
 
     // MARK: - Corner radius
@@ -152,10 +295,12 @@ public extension View {
         self.shadow(color: shadow.color, radius: shadow.radius, x: shadow.x, y: shadow.y)
     }
 
-    /// Standard VA card styling with glass material and shadow.
+    /// Standard VA card styling with Liquid Glass material and shadow.
+    /// Glass falls back to a solid surface fill when the user has
+    /// `accessibilityReduceTransparency` enabled — see `VA.Materials`.
     func vaCardStyle(elevation: VA.Shadow = .sm, cornerRadius: CGFloat = VA.Radius.lg) -> some View {
         self
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .vaGlassBackground(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .vaShadow(elevation)
     }
 }

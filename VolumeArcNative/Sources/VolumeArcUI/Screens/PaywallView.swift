@@ -227,14 +227,7 @@ public struct PaywallView: View {
                 Spacer()
             }
             .padding(VA.Space.lg)
-            .background {
-                if isSelected {
-                    VA.Colors.primary.opacity(0.08)
-                } else {
-                    Rectangle().fill(.regularMaterial)
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+            .modifier(PaywallPlanCardBackgroundModifier(isSelected: isSelected))
             .overlay {
                 if isSelected {
                     RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous)
@@ -300,23 +293,75 @@ public struct PaywallView: View {
 
     private var legalLinks: some View {
         VStack(spacing: VA.Space.xs) {
+            // App Store Review Guideline 3.1.2 disclosure — auto-renewal, billing,
+            // cancellation, and where to manage the subscription.
             Text(String(
-                localized: "Subscriptions auto-renew unless cancelled at least 24 hours before the period ends. Manage in Settings → Apple ID → Subscriptions.",
-                comment: "App Store required auto-renew disclosure on the paywall"
+                localized: """
+                    Payment will be charged to your Apple ID account at confirmation of purchase. \
+                    Subscriptions automatically renew unless auto-renew is turned off at least 24 hours \
+                    before the end of the current period. Your account will be charged for renewal \
+                    within 24 hours prior to the end of the current period. You can manage and cancel \
+                    your subscriptions by going to Settings → Apple ID → Subscriptions after purchase.
+                """,
+                comment: "App Store Guideline 3.1.2 required auto-renew disclosure on the paywall"
             ))
             .font(VA.Typography.caption)
             .foregroundStyle(VA.Colors.textTertiary)
             .multilineTextAlignment(.center)
 
             HStack(spacing: VA.Space.md) {
-                Text(String(localized: "Terms of Service", comment: "Paywall footer link label"))
+                Link(
+                    String(localized: "Terms of Service", comment: "Paywall footer link label"),
+                    destination: LegalLinks.termsOfService
+                )
+                .accessibilityLabel(Text(String(
+                    localized: "Terms of Service",
+                    comment: "Accessibility label for paywall Terms of Service link"
+                )))
+                .accessibilityHint(Text(String(
+                    localized: "Opens the Terms of Service in your browser",
+                    comment: "Accessibility hint for paywall Terms of Service link"
+                )))
+                .accessibilityIdentifier("paywall.legal.terms")
+
                 Text("•")
-                Text(String(localized: "Privacy Policy", comment: "Paywall footer link label"))
+
+                Link(
+                    String(localized: "Privacy Policy", comment: "Paywall footer link label"),
+                    destination: LegalLinks.privacyPolicy
+                )
+                .accessibilityLabel(Text(String(
+                    localized: "Privacy Policy",
+                    comment: "Accessibility label for paywall Privacy Policy link"
+                )))
+                .accessibilityHint(Text(String(
+                    localized: "Opens the Privacy Policy in your browser",
+                    comment: "Accessibility hint for paywall Privacy Policy link"
+                )))
+                .accessibilityIdentifier("paywall.legal.privacy")
             }
             .font(VA.Typography.caption)
-            .foregroundStyle(VA.Colors.textSecondary)
+            .foregroundStyle(VA.Colors.primary)
         }
         .padding(.top, VA.Space.md)
+    }
+}
+
+/// Selected plans show the brand-tinted overlay; unselected plans use real
+/// iOS 26 Liquid Glass via `vaGlassBackground`. Lifted into a dedicated
+/// `ViewModifier` so the call site in `PaywallView` stays declarative.
+private struct PaywallPlanCardBackgroundModifier: ViewModifier {
+    let isSelected: Bool
+
+    func body(content: Content) -> some View {
+        if isSelected {
+            content
+                .background(VA.Colors.primary.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+        } else {
+            content
+                .vaGlassBackground(in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+        }
     }
 }
 #endif

@@ -60,16 +60,66 @@ Unit tests should:
 
 ## Coverage expectations
 
-| Layer | Coverage target |
-|-------|-----------------|
-| `VolumeArcCore` business logic | 80%+ |
-| `VolumeArcCore` data models | 60%+ |
-| Host app wiring | 40%+ (exercised by integration tests and UI smoke) |
-| UI views | 30%+ (via integration coverage and XCUITest smoke) |
+| Layer | Coverage target | Enforced |
+|-------|-----------------|----------|
+| `VolumeArcCore` business logic | **80%+** | **Yes (VOL-52, CI gate)** |
+| `VolumeArcCore` data models | 60%+ | No (folded into the 80% module gate) |
+| Host app wiring | 40%+ (exercised by integration tests and UI smoke) | No |
+| UI views | 30%+ (via integration coverage and XCUITest smoke) | No |
 
-Measure with `xcodebuild -enableCodeCoverage YES`.
+### VolumeArcCore 80% line-coverage gate (VOL-52)
 
-These targets are guidance today. **VOL-52** is the one remaining push-to-95 sprint ticket that would enforce coverage thresholds in CI.
+`scripts/test_apple_targets.sh` runs `xcodebuild test -enableCodeCoverage YES -resultBundlePath …`, producing a `TestResults.xcresult` bundle in `${DERIVED_DATA_PATH}` (defaults to `./.build/derived-data`). The CI workflow then runs `scripts/check_coverage.sh`, which:
+
+1. Calls `xcrun xccov view --report --json $TEST_RESULT_BUNDLE` to extract per-target coverage data.
+2. Looks for the `libVolumeArcCore.a` target (VolumeArcCore is built as a static library, so xccov reports it under that name) and prints its line coverage rounded to two decimals.
+3. Fails the build if the line coverage drops below `${COVERAGE_THRESHOLD:-80}`.
+
+The threshold is hard-coded to **80%** in CI. Override it locally for diagnostic runs:
+
+```bash
+COVERAGE_THRESHOLD=85 ./scripts/check_coverage.sh   # try a tighter floor
+COVERAGE_TARGET=VolumeArcUI ./scripts/check_coverage.sh   # measure a different target
+```
+
+### Coverage artifacts
+
+CI publishes three coverage surfaces per run so reviewers never need to scrape the raw log (VOL-97).
+
+**1. GitHub step summary.** `scripts/check_coverage.sh` writes a Markdown block to `$GITHUB_STEP_SUMMARY` on every run: the headline `VolumeArcCore: XX.XX%` number, the pass/fail gate, and a top-10 uncovered-files table. It lives on the workflow run page under the "Summary" tab.
+
+**2. xcresult artifact.** Every run (success or failure) uploads `TestResults-<run-id>` containing the full `.xcresult` bundle with 14-day retention. Download from the workflow run page, then `open TestResults.xcresult` in Xcode for the interactive per-line coverage browser. Useful when the top-10 table doesn't tell the whole story.
+
+**3. Sticky PR comment.** PR runs post (or update) a single coverage comment on the pull request showing `VolumeArcCore | XX.XX% | gate`. Gets rewritten on every re-run, so the comment always reflects the latest CI. Implemented via `actions/github-script` with a hidden `<!-- volumearc-coverage-comment -->` marker to find the comment on repeat runs.
+
+**4. Historical trend file.** After each merge to `main`, CI appends `{commit, date, coverage, passed}` to [`docs/coverage-trend.json`](coverage-trend.json) and commits it back. The coverage badge at the top of [`docs/PLATFORM.md`](PLATFORM.md) reads the tail record from that file via a dynamic-json shields.io endpoint, so the badge always reflects the most recent main-branch coverage number. The file is append-only — tampering with old records is a correctness bug.
+
+Permissions note: the trend-append step commits via `GITHUB_TOKEN` with job-level `permissions: contents: write`. If branch protection on `main` is later tightened to forbid bot pushes, flip the step to open a PR via a first-party action or disable it with a TODO.
+
+### Inspecting coverage locally
+
+```bash
+./scripts/test_apple_targets.sh
+./scripts/check_coverage.sh
+
+# Open the xcresult bundle in Xcode for an interactive coverage browser:
+open .build/derived-data/TestResults.xcresult
+
+# Or list per-target totals from the command line:
+xcrun xccov view --report --only-targets .build/derived-data/TestResults.xcresult
+
+# And per-file totals for VolumeArcCore:
+xcrun xccov view --report --files-for-target libVolumeArcCore.a .build/derived-data/TestResults.xcresult
+```
+
+The Xcode Test Navigator's "Coverage" tab also surfaces per-line covered/uncovered annotations once the xcresult bundle is open.
+
+### Adding new code without dropping the gate
+
+When adding new VolumeArcCore code:
+- Add tests in the same PR. The CI gate fires before review, so an untested module landed alone will fail the build.
+- Prefer pure-logic unit tests over end-to-end integration tests for new code paths — they're cheaper to write and don't add to the simulator runtime.
+- Use the `Mocks.swift` doubles (`FailingAICoachProvider`, `CapturingTelemetrySink`, `RecordingHealthStore`, etc.) to exercise fallback / error paths without standing up real infrastructure.
 
 ## Flaky test policy
 

@@ -53,7 +53,7 @@ struct VolumeArcApp: App {
     private let dashboardModel: WorkoutDashboardModel
     private let widgetController = VolumeArcWidgetController()
     #if canImport(ActivityKit)
-    private let liveActivityController = VolumeArcLiveActivityController()
+    private let liveActivityController: VolumeArcLiveActivityController
     #endif
     #if canImport(SwiftData)
     private let persistence = VolumeArcPersistenceController.shared
@@ -96,8 +96,6 @@ struct VolumeArcApp: App {
             }
         }
         #endif
-        let aiProvider = VolumeArcAIRuntimeFactory.makeCoachProvider()
-        let voiceCoach = VolumeArcAIRuntimeFactory.makeVoiceCoach()
         let healthStore = Self.makeHealthStore()
         let voicePermissionStore = Self.makeVoicePermissionStore()
         let accountSessionStore = Self.makeAccountSessionStore()
@@ -107,6 +105,20 @@ struct VolumeArcApp: App {
         #else
         let telemetrySink = Self.makeTelemetrySink()
         #endif
+        // VOL-61: single `FeatureFlagProvider` + `FlagGateTelemetry`
+        // constructed once and threaded by explicit DI into every gating
+        // surface — the runtime factory (voice + Foundation Models), the
+        // cloud-sync coordinator, the live-activity controller, and the
+        // dashboard model. No global singleton: the dashboard still
+        // exposes its own reference so UI / diagnostics can read / write
+        // overrides through the same store.
+        let featureFlags: FeatureFlagProvider = LocalFeatureFlagProvider()
+        let flagGate = FlagGateTelemetry(flags: featureFlags, telemetry: telemetrySink)
+        let aiProvider = VolumeArcAIRuntimeFactory.makeCoachProvider(flagGate: flagGate)
+        let voiceCoach = VolumeArcAIRuntimeFactory.makeVoiceCoach(flagGate: flagGate)
+        #if canImport(ActivityKit)
+        self.liveActivityController = VolumeArcLiveActivityController(flagGate: flagGate)
+        #endif
         let surfaceStore = UserDefaultsPlatformSurfaceStateStore()
         #if canImport(StoreKit)
         let syncStateStore = FileSyncStateStore(url: Self.syncStateStoreURL())
@@ -115,9 +127,12 @@ struct VolumeArcApp: App {
             productIDs: VolumeArcPremiumCatalog.subscriptionProductIDs
         )
         #if canImport(SwiftData)
-        let startupSignals = Self.startupSignals(persistenceStatus: persistence.bootstrapStatus)
+        let startupSignals = Self.startupSignals(
+            persistenceStatus: persistence.bootstrapStatus,
+            telemetrySink: telemetrySink
+        )
         #else
-        let startupSignals = Self.startupSignals()
+        let startupSignals = Self.startupSignals(telemetrySink: telemetrySink)
         #endif
         #if canImport(SwiftData)
         if let container = persistence.container {
@@ -154,7 +169,20 @@ struct VolumeArcApp: App {
                 )
             }
             let repository = SwiftDataWorkoutRepository(container: container, outboundQueue: outboundQueue)
-            let coachMemoryRepository = SwiftDataCoachMemoryRepository(container: container, outboundQueue: outboundQueue)
+            let coachMemoryRepository = SwiftDataCoachMemoryRepository(
+                container: container,
+                outboundQueue: outboundQueue,
+                telemetrySink: telemetrySink
+            )
+            // VOL-79: one-shot retention sweep at launch to clean up
+            // pre-policy rows on existing installs. Non-blocking so we
+            // don't delay first frame on devices with large coach-memory
+            // backlogs. `try?` because prune failures are already
+            // surfaced to the telemetry sink inside the repository and
+            // MUST NOT surface as a launch crash.
+            Task { @MainActor in
+                try? coachMemoryRepository.pruneLegacyRows()
+            }
             let userProfileRepository = SwiftDataUserProfileRepository(container: container, outboundQueue: outboundQueue)
             let trainingPlanRepository = SwiftDataTrainingPlanRepository(container: container, outboundQueue: outboundQueue)
             let syncApplier = DefaultSyncPayloadApplier(
@@ -176,7 +204,8 @@ struct VolumeArcApp: App {
                 payloadApplier: syncApplier,
                 stateStore: syncStateStore,
                 outboundQueue: outboundQueue,
-                telemetrySink: telemetrySink
+                telemetrySink: telemetrySink,
+                flagGate: flagGate
             )
             self.dashboardModel = WorkoutDashboardModel(
                 aiProvider: aiProvider,
@@ -195,13 +224,15 @@ struct VolumeArcApp: App {
                 startupNoticeSeverity: Self.highestSeverity(in: startupSignals),
                 operationalSignals: startupSignals,
                 subscriptionStore: subscriptionStore,
-                voiceCoach: voiceCoach
+                voiceCoach: voiceCoach,
+                featureFlags: featureFlags
             )
         } else {
             let syncEngine = CloudSyncCoordinator(
                 transport: syncTransport,
                 stateStore: syncStateStore,
-                telemetrySink: telemetrySink
+                telemetrySink: telemetrySink,
+                flagGate: flagGate
             )
             self.dashboardModel = WorkoutDashboardModel(
                 aiProvider: aiProvider,
@@ -216,13 +247,15 @@ struct VolumeArcApp: App {
                 startupNoticeSeverity: Self.highestSeverity(in: startupSignals),
                 operationalSignals: startupSignals,
                 subscriptionStore: subscriptionStore,
-                voiceCoach: voiceCoach
+                voiceCoach: voiceCoach,
+                featureFlags: featureFlags
             )
         }
         #else
         let syncEngine = CloudSyncCoordinator(
             transport: syncTransport,
-            stateStore: syncStateStore
+            stateStore: syncStateStore,
+            flagGate: flagGate
         )
         self.dashboardModel = WorkoutDashboardModel(
             aiProvider: aiProvider,
@@ -234,7 +267,8 @@ struct VolumeArcApp: App {
             telemetrySink: telemetrySink,
             surfaceStore: surfaceStore,
             subscriptionStore: subscriptionStore,
-            voiceCoach: voiceCoach
+            voiceCoach: voiceCoach,
+            featureFlags: featureFlags
         )
         #endif
         #else
@@ -246,7 +280,8 @@ struct VolumeArcApp: App {
             notificationStore: notificationStore,
             telemetrySink: telemetrySink,
             surfaceStore: surfaceStore,
-            voiceCoach: voiceCoach
+            voiceCoach: voiceCoach,
+            featureFlags: featureFlags
         )
         #endif
     }
@@ -430,7 +465,8 @@ struct VolumeArcApp: App {
 
     #if canImport(SwiftData)
     private static func startupSignals(
-        persistenceStatus: VolumeArcPersistenceController.BootstrapStatus
+        persistenceStatus: VolumeArcPersistenceController.BootstrapStatus,
+        telemetrySink: TelemetrySink
     ) -> [OperationalSignalSummary] {
         var signals: [OperationalSignalSummary] = []
 
@@ -445,7 +481,7 @@ struct VolumeArcApp: App {
             )
         }
 
-        if let relayWarning = VolumeArcAIConfiguration.startupWarning {
+        if let relayWarning = VolumeArcAIConfiguration.startupWarning(recordingTo: telemetrySink) {
             signals.append(
                 OperationalSignalSummary(
                     id: "ai-relay",
@@ -482,10 +518,10 @@ struct VolumeArcApp: App {
         return signals
     }
     #else
-    private static func startupSignals() -> [OperationalSignalSummary] {
+    private static func startupSignals(telemetrySink: TelemetrySink) -> [OperationalSignalSummary] {
         var signals: [OperationalSignalSummary] = []
 
-        if let relayWarning = VolumeArcAIConfiguration.startupWarning {
+        if let relayWarning = VolumeArcAIConfiguration.startupWarning(recordingTo: telemetrySink) {
             signals.append(
                 OperationalSignalSummary(
                     id: "ai-relay",

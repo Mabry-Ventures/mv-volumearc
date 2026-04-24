@@ -80,12 +80,17 @@ public final class WorkoutDashboardModel: ObservableObject {
         startupNoticeSeverity: TelemetrySeverity? = nil,
         operationalSignals: [OperationalSignalSummary] = [],
         subscriptionStore: StoreKitSubscriptionStore,
-        voiceCoach: LiveVoiceCoachOrchestrator
+        voiceCoach: LiveVoiceCoachOrchestrator,
+        // VOL-61: optional so existing test sites keep compiling without
+        // changes. App-level wiring now threads the same provider used by
+        // the launch-scoped flag gate so the dashboard and the gating
+        // surfaces read a consistent flag state.
+        featureFlags: FeatureFlagProvider? = nil
     ) {
         self.aiProvider = aiProvider
         self.voiceCoach = voiceCoach
         self.telemetrySink = telemetrySink
-        self.featureFlags = LocalFeatureFlagProvider()
+        self.featureFlags = featureFlags ?? LocalFeatureFlagProvider()
         self.workoutRepository = repository
         self.coachMemoryRepository = coachMemoryRepository
         self.userProfileRepository = userProfileRepository
@@ -113,12 +118,13 @@ public final class WorkoutDashboardModel: ObservableObject {
         startupNoticeSeverity: TelemetrySeverity? = nil,
         operationalSignals: [OperationalSignalSummary] = [],
         subscriptionStore: StoreKitSubscriptionStore,
-        voiceCoach: LiveVoiceCoachOrchestrator
+        voiceCoach: LiveVoiceCoachOrchestrator,
+        featureFlags: FeatureFlagProvider? = nil
     ) {
         self.aiProvider = aiProvider
         self.voiceCoach = voiceCoach
         self.telemetrySink = telemetrySink
-        self.featureFlags = LocalFeatureFlagProvider()
+        self.featureFlags = featureFlags ?? LocalFeatureFlagProvider()
         #if canImport(SwiftData)
         self.workoutRepository = nil
         self.coachMemoryRepository = nil
@@ -142,12 +148,13 @@ public final class WorkoutDashboardModel: ObservableObject {
         notificationStore: NotificationStore,
         telemetrySink: TelemetrySink,
         surfaceStore: PlatformSurfaceStateStore,
-        voiceCoach: LiveVoiceCoachOrchestrator
+        voiceCoach: LiveVoiceCoachOrchestrator,
+        featureFlags: FeatureFlagProvider? = nil
     ) {
         self.aiProvider = aiProvider
         self.voiceCoach = voiceCoach
         self.telemetrySink = telemetrySink
-        self.featureFlags = LocalFeatureFlagProvider()
+        self.featureFlags = featureFlags ?? LocalFeatureFlagProvider()
         #if canImport(SwiftData)
         self.workoutRepository = nil
         self.coachMemoryRepository = nil

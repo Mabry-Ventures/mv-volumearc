@@ -1,0 +1,46 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "volumearc-ai-relay"
+main = "src/worker.ts"
+compatibility_date = "2026-04-23"
+compatibility_flags = ["nodejs_compat"]
+
+# Default deploy target: workers.dev subdomain auto-assigned by Cloudflare.
+# When `volumearc.app` is added as a zone to this Cloudflare account,
+# uncomment the `routes` block below and redeploy to promote to the
+# custom domain. No iOS change required — the allowlist in
+# VolumeArcAIConfiguration already accepts both.
+#
+# [[routes]]
+# pattern = "relay.volumearc.app/*"
+# custom_domain = true
+
+# Rate limit KV namespace. Created via `wrangler kv:namespace create RATE_LIMIT`
+# or the Cloudflare MCP `kv_namespace_create` tool. The `id` is populated
+# by the one-time setup; `preview_id` is only used in local `wrangler dev`.
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "efcd4b67b0984a219559ffa37c65ceed"
+
+[observability]
+enabled = true
+
+# Secrets (configured via `wrangler secret put <NAME>`):
+#   GEMINI_API_KEY     — Google AI Studio API key, never in source
+#   RELAY_SIGNING_KEY  — 32+ byte random string used to HMAC-sign device
+#                        bearer tokens. Rotating invalidates every iOS
+#                        client session until they refresh.
+
+[vars]
+# Model selection. Can be overridden per-request via X-Coach-Tier header
+# (`flash-lite` default / `pro` premium). Swapping models here is a deploy
+# away — no iOS release needed.
+# Gemini 3.1 is currently shipped as -preview. These tags are documented
+# in Google AI Studio. Switch to unqualified names (or -latest aliases)
+# once Google promotes them to stable. Swapping a model is a deploy, no
+# iOS release.
+MODEL_DEFAULT = "gemini-3.1-flash-lite-preview"
+MODEL_PREMIUM = "gemini-3.1-pro-preview"
+MAX_OUTPUT_TOKENS = "800"
+REQUEST_TIMEOUT_MS = "60000"
+RATE_LIMIT_MAX_REQUESTS = "30"
+RATE_LIMIT_WINDOW_SECONDS = "600"

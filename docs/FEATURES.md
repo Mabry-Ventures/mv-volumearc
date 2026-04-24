@@ -1,6 +1,6 @@
 # Feature Status
 
-> **⚠ Pre-production after post-95/95 audit (2026-04-14).** Several rows below were marked ✅ before an independent audit found broken end-to-end wiring. Affected rows are now downgraded to 🚧 with a link to the active VOL ticket. See [`PLATFORM.md`](PLATFORM.md#implementation-status) for the launch-blocker list.
+> **⚠ Pre-production, hygiene phase.** The post-95/95 audit blockers (VOL-55, 56, 57, 58, 59, 62, 63, 65, 67) shipped in PRs [#23](https://github.com/Mabry-Ventures/mv-volumearc/pull/23)–[#31](https://github.com/Mabry-Ventures/mv-volumearc/pull/31). Remaining work (App Store submission blockers, CI hygiene, synthetic streaming, coverage gate) is tracked in the Linear **Go-Live Readiness** project on the VolumeArc team. See [`PLATFORM.md`](PLATFORM.md#implementation-status) for the authoritative system-level status.
 
 This is the granular per-feature checklist. For high-level system status, see [`PLATFORM.md`](PLATFORM.md). Update this file with every PR that changes feature completeness.
 
@@ -20,7 +20,7 @@ This is the granular per-feature checklist. For high-level system status, see [`
 | Coach chat | ✅ | Real text coach, streaming response UX, memory-backed prompts, and relay/local/on-device fallback chain. |
 | Signals / readiness | ✅ | Readiness breakdown, volume chart, and frequency heatmap ship in the Signals surface. |
 | Profile / settings | ✅ | Profile header, training settings, edit profile flow, diagnostics entry point, and subscription gating surfaces are live. |
-| Onboarding flow | 🚧 [VOL-57](https://linear.app/mabry-ventures/issue/VOL-57) | View is fully built but `RootDashboardView` never presents it. First-launch users skip onboarding entirely. |
+| Onboarding flow | ✅ | `RootDashboardView` presents `OnboardingView` via `fullScreenCover` on first launch, keyed off `DashboardNavigationModel.showOnboarding`. |
 | watchOS workout UI | ✅ | Real HealthKit workout session, rest timer, coach cues, action decisions, accessibility labels, and offline replay. |
 | Widgets (systemSmall/systemMedium/watchOS) | ✅ | `NextWorkoutWidget` and watch widgets read real shared snapshots via `PlatformSurfaceDefaultsReader`. |
 | Live Activities | ✅ | `ActiveWorkoutLiveActivity` publishes real session state with lock screen and Dynamic Island layouts. |
@@ -30,12 +30,13 @@ This is the granular per-feature checklist. For high-level system status, see [`
 | Feature | Status | Notes |
 |---------|--------|-------|
 | AI provider chain (Foundation Models → Relay → Local) | ✅ | Runtime factory selects the three-provider chain with graceful fallback. |
-| `OpenAIRelayCoachProvider` | ✅ | Real HTTP relay-backed coach provider in production use. |
-| `LocalHeuristicAICoachProvider` | ✅ | Real rule-based offline fallback grounded in readiness and recent-session context. |
-| `FoundationModelCoachProvider` | ✅ | On-device provider is wired and falls back cleanly when unavailable or failing. |
+| `OpenAIRelayCoachProvider` | ✅ | Real HTTP relay-backed coach provider in production use. Routes outbound prompts through `CoachPromptTemplate.render(...)`. |
+| `LocalHeuristicAICoachProvider` | ✅ | Real rule-based offline fallback grounded in readiness and recent-session context. Dispatches against the templated prompt so its intent classification stays in lockstep with the cloud path. |
+| `FoundationModelCoachProvider` | ✅ | On-device provider is wired and falls back cleanly when unavailable or failing. Hands the on-device session the same templated prompt the relay sees. |
+| `CoachPromptTemplate` adoption | ✅ | Single `render(intent:contextBlock:question:style:)` entry point. System prompt + per-intent envelope + structured context block + template marker land in every outbound prompt across all three providers. Verified by `VolumeArcCoachPromptTemplateTests`. |
 | Voice transport | ✅ | `OpenAIRelayVoiceTransport` is live for single-turn voice → text → spoken response. Live duplex/WebRTC audio remains future work. |
 | Coach memory | ✅ | `CoachMemoryRepository` persists recent context and is appended during coaching turns. |
-| Streaming response UX | 🚧 [VOL-66](https://linear.app/mabry-ventures/issue/VOL-66) | `AsyncThrowingStream` plumbing exists, but the default implementation is synthetic word-chunking (call non-streaming endpoint, sleep 30ms between words). No real progressive streaming from the relay. |
+| Streaming response UX | ✅ | `OpenAIRelayCoachProvider.streamCoachResponse` consumes `text/event-stream` from the `volumearc-ai-relay` Cloudflare Worker, parses `data: {"text":"..."}` frames, and yields Gemini tokens as they arrive. Non-streaming callers join the stream to a single string. Synthetic word-chunking is kept as the default-impl fallback for providers without native streaming. |
 | Evaluation harness | 📋 | Prompt-quality regression tooling is still planned. |
 | Privacy mode enforcement | 📋 | Privacy mode is modeled and surfaced in UI, but strict-mode prompt enforcement is not yet consistently applied in the dashboard coach path. |
 
@@ -57,14 +58,14 @@ This is the granular per-feature checklist. For high-level system status, see [`
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| `CloudSyncCoordinator` | 🚧 [VOL-55](https://linear.app/mabry-ventures/issue/VOL-55), [VOL-67](https://linear.app/mabry-ventures/issue/VOL-67) | Push/pull cycle, cursor persistence, and apply path exist in code. CloudKit container ID is missing from the built `Info.plist`, so the coordinator falls back to unconfigured at runtime. |
-| `CloudKitSyncTransport` | 🚧 [VOL-55](https://linear.app/mabry-ventures/issue/VOL-55) | `CKModifyRecordsOperation` and `CKFetchRecordZoneChangesOperation` calls exist; runtime container is unconfigured (see above). |
+| `CloudSyncCoordinator` | ✅ | Push/pull cycle with outbound queue drain, cursor persistence, and apply path ship. Entitlement-gated via `VolumeArcCloudConfiguration.hasCloudKitEntitlement` so simulator Debug builds fall back cleanly. |
+| `CloudKitSyncTransport` | ✅ | `CKModifyRecordsOperation` push and `CKFetchRecordZoneChangesOperation` pull are wired against the hardcoded container identifier in `VolumeArcCloudConfiguration`. |
 | `FileSyncStateStore` | ✅ | Real disk-backed sync cursor persistence across launches. |
-| `DefaultSyncPayloadApplier` | 🚧 [VOL-67](https://linear.app/mabry-ventures/issue/VOL-67) | Applies a partial subset of workout state on the inbound side. Sets, RPE, and aggregates are not fully round-tripped. |
-| Outbound sync record generation | 🚧 [VOL-67](https://linear.app/mabry-ventures/issue/VOL-67) | Local writes through the SwiftData repositories do not produce outbound `CloudSyncRecord`s — sync is one-way (pull only). |
+| `DefaultSyncPayloadApplier` | ✅ | Round-trips workout records, sets, RPE, and aggregate updates (Phase 3b burndown in [PR #27](https://github.com/Mabry-Ventures/mv-volumearc/pull/27)). |
+| Outbound sync record generation | ✅ | Every repository write path (`create`, `appendSet`, `complete`, profile upsert, training plan upsert, coach memory append) calls `stageUpsert` into `OutboundSyncQueue` which `CloudSyncCoordinator.syncCycle` drains. |
 | `WatchConnectivityCoordinator` | ✅ | Real `WCSession` transport plus offline pending-payload queue and replay behavior. |
 | `NetworkReachabilityMonitor` | ✅ | Real `NWPathMonitor` wrapper and app startup wiring for sync/connectivity decisions. |
-| Background sync (`BGAppRefreshTask` + `BGProcessingTask`) | 🚧 [VOL-56](https://linear.app/mabry-ventures/issue/VOL-56) | Task registration code exists. The built `Info.plist` is missing `BGTaskSchedulerPermittedIdentifiers` and `UIBackgroundModes`, so iOS rejects the registrations at runtime. |
+| Background sync (`BGAppRefreshTask` + `BGProcessingTask`) | ✅ | Task registration code in `App/VolumeArcBackgroundTasks.swift`; `App/Info.plist` declares both task identifiers and the `UIBackgroundModes` iOS requires. |
 
 ## Observability
 
@@ -76,6 +77,7 @@ This is the granular per-feature checklist. For high-level system status, see [`
 | `InMemoryTelemetrySink` | ✅ | Bootstrap/runtime in-memory sink ships. |
 | `SentryTelemetrySink` | ✅ | Breadcrumb forwarding and error message capture are live. |
 | Startup signals | ✅ | Missing/degraded persistence, relay, CloudKit, and Sentry conditions surface operational signals. |
+| Feature-flag runtime gating | ✅ | `FeatureFlagProvider` + `FlagGateTelemetry` wire all four flags (`voiceCoaching`, `cloudSync`, `liveActivities`, `foundationModelCoach`) into the factory, cloud-sync coordinator, and live-activity controller. Off-state drops the relevant capability to its `Unavailable*` / no-op fallback. First resolution per flag per launch emits a `feature.flag.applied` `.info` telemetry event. |
 
 ## Infrastructure
 
@@ -90,9 +92,9 @@ This is the granular per-feature checklist. For high-level system status, see [`
 | Versioning from git | ✅ | `VERSION` + git-derived build number flow ships. |
 | Localization (`String(localized:)`) | ✅ | Every user-facing string is localized with translator comments. No `.xcstrings` catalog file is generated yet, but the codebase is fully extractable. |
 | Accessibility labels | ✅ | Data displays, interactive controls, widgets, watch surfaces, and toast announcements have shipped accessibility coverage. |
-| Hard-failing release validation | 🚧 [VOL-60](https://linear.app/mabry-ventures/issue/VOL-60) | Release config validation runs but checks `xcodebuild -showBuildSettings`, not the built `.app/Info.plist`. Masks the Info.plist failures (VOL-55, VOL-56). |
-| Checked-in `Info.plist` (vs `INFOPLIST_KEY_*`) | 🚧 [VOL-59](https://linear.app/mabry-ventures/issue/VOL-59) | Currently uses `INFOPLIST_KEY_*` build settings, which silently drop custom keys and stringify array values. Umbrella fix for VOL-55, VOL-56. |
-| AI review gate (Gemini + Codex) on PRs | ✅ | Two-bot review gate is part of the protected-branch merge contract. |
+| Hard-failing release validation | ✅ | `scripts/validate_release_config.sh` hard-checks the checked-in `App/Info.plist` via `plutil -extract` for `CFBundleURLTypes`, `BGTaskSchedulerPermittedIdentifiers`, `UIBackgroundModes`, the `volumearc` URL scheme, and both BGTask identifiers. |
+| Checked-in `App/Info.plist` (vs `INFOPLIST_KEY_*`) | ✅ | `App/Info.plist` is checked in and wired via `INFOPLIST_FILE`. Array-valued keys that `INFOPLIST_KEY_*` silently drops now live in the plist file. |
+| AI review gate (CodeRabbit Pro + Codex) on PRs | ✅ | Two-bot review gate is part of the protected-branch merge contract. CodeRabbit Pro is primary (server-side, auto-invoked on PR open/update); Codex Code Review is secondary (requested by `Request AI Reviews` workflow step). |
 
 ## Design
 
@@ -100,7 +102,7 @@ This is the granular per-feature checklist. For high-level system status, see [`
 |---------|--------|-------|
 | Design tokens | ✅ | `VA.Colors`, `VA.Typography`, `VA.Space`, `VA.Radius`, and `VA.Shadow` define the visual system. |
 | Core components | ✅ | Shared cards, buttons, metric displays, progress rings, states, and coach bubbles ship in `VolumeArcUI`. |
-| Liquid Glass materials | ✅ | Material-backed UI is live on supported iOS surfaces. |
+| Liquid Glass materials | ✅ | Real iOS 26 Liquid Glass APIs (`SwiftUI.Glass`, `View.glassEffect`, `GlassEffectContainer`) ship across `VACard`, `VAToast`, `VACoachBubble`, the next-workout hero, paywall plan rows, onboarding rows, coach prompts/composer, and session metric grid. Routed through `VA.Materials.glass / glassInteractive / tintedGlass(_:)` design tokens with a solid-fill fallback for `accessibilityReduceTransparency`. |
 | Haptics system | ✅ | Centralized `VAHaptics` patterns ship across training interactions. |
 | Motion system | ✅ | Shared spring tokens and motion helpers ship. |
 | Dark mode | ✅ | Tokens adapt correctly in light and dark appearance. |

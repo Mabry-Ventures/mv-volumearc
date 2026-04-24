@@ -1,0 +1,15 @@
+{
+  "id": "deload-low-5-sessions-analytical",
+  "intent": "deload",
+  "question": "Time for a deload this week?",
+  "contextBlock": "## Training context\n- Athlete: Casey (intermediate)\n- Readiness: 45/100 — Accumulated fatigue, poor sleep trend.\n- Next up: Overhead Press at 135lb x 5\n- Last 7 days: 5 sessions, avg RPE 8.7\n- Last session: 4 sets at 130lb, RPE 9.0, bar drift forward\n\n## Recent coaching notes\n- RPE creeping up week-over-week (7.9 → 8.3 → 8.7).\n- Complained of lingering elbow soreness on Tuesday.",
+  "style": "analytical",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": true,
+    "mustMentionReadinessOrRPE": true,
+    "mustNotMention": ["push through", "grind it out", "max out", "1RM"],
+    "toneHint": "data-driven"
+  },
+  "notes": "Low readiness + high recent RPE + 5 sessions = clear deload case. Analytical tone expected to cite the RPE trend explicitly."
+}

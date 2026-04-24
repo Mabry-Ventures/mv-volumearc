@@ -4,12 +4,21 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+# VOL-75 P2: match per-job DerivedData used by build_all_targets.sh and
+# test_apple_targets.sh so xcodebuild -showBuildSettings can reach the
+# SPM artifacts those builds resolved. Without this, -showBuildSettings
+# falls back to system DerivedData (empty in CI) and fails with "file
+# not found at path: .../sentry-cocoa/.../xcframework.zip".
+DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT/.build/derived-data}"
+mkdir -p "$DERIVED_DATA_PATH"
+
 ruby "scripts/generate_xcode_project.rb" >/dev/null
 
 PROJECT="VolumeArcApple.xcodeproj/project.pbxproj"
 
 for path in \
-  "App/VolumeArc.entitlements" \
+  "App/VolumeArc.Debug.entitlements" \
+  "App/VolumeArc.Release.entitlements" \
   "Watch/VolumeArcWatch.entitlements" \
   "WatchWidgets/VolumeArcWatchWidgets.entitlements" \
   "Widgets/VolumeArcWidgets.entitlements"; do
@@ -19,19 +28,63 @@ for path in \
   }
 done
 
+# VOL-73: every target must ship a well-formed PrivacyInfo.xcprivacy
+# with at minimum a non-empty NSPrivacyAccessedAPITypes array (even
+# widget extensions touch UserDefaults via the shared app-group
+# snapshot, so every target has at least one declared reason).
+# Apple rejects submissions on missing or malformed manifests, so this
+# check is hard-failing.
 for path in \
   "App/PrivacyInfo.xcprivacy" \
   "Watch/PrivacyInfo.xcprivacy" \
   "WatchWidgets/PrivacyInfo.xcprivacy" \
   "Widgets/PrivacyInfo.xcprivacy"; do
   [[ -f "$path" ]] || {
-    echo "Missing required privacy manifest: $path" >&2
+    echo "FAIL: Missing required privacy manifest: $path" >&2
     exit 1
   }
+  if ! plutil -lint "$path" >/dev/null; then
+    echo "FAIL: $path is not a valid plist" >&2
+    exit 1
+  fi
+  api_count="$(plutil -extract NSPrivacyAccessedAPITypes raw -o - "$path" 2>/dev/null || echo "")"
+  if [[ -z "$api_count" || "$api_count" -lt 1 ]]; then
+    echo "FAIL: $path missing or empty NSPrivacyAccessedAPITypes" >&2
+    exit 1
+  fi
+  # NSPrivacyCollectedDataTypes must exist (may be an empty array for
+  # passive extensions like widgets) so App Store Connect doesn't
+  # reject on a missing key. plutil returns the array count on success.
+  if ! plutil -extract NSPrivacyCollectedDataTypes raw -o - "$path" >/dev/null 2>&1; then
+    echo "FAIL: $path missing NSPrivacyCollectedDataTypes key" >&2
+    exit 1
+  fi
 done
 
-if ! grep -q "aps-environment" "App/VolumeArc.entitlements"; then
-  echo "WARNING: aps-environment not found in App/VolumeArc.entitlements — push notifications will not work" >&2
+for ent_path in "App/VolumeArc.Debug.entitlements" "App/VolumeArc.Release.entitlements"; do
+  if ! grep -q "aps-environment" "$ent_path"; then
+    echo "WARNING: aps-environment not found in $ent_path — push notifications will not work" >&2
+  fi
+done
+
+# VOL-70: Release entitlements must use production APS environment so
+# Release-signed IPAs don't get rejected by App Store Connect or
+# silently drop remote notifications. Debug stays `development` so
+# APNs sandbox tokens still work locally.
+if [[ -f "App/VolumeArc.Release.entitlements" ]]; then
+  APS_ENV=$(plutil -extract "aps-environment" raw -o - "App/VolumeArc.Release.entitlements" 2>/dev/null || echo "")
+  if [[ "$APS_ENV" != "production" ]]; then
+    echo "FAIL: App/VolumeArc.Release.entitlements must declare aps-environment = production (got '$APS_ENV')" >&2
+    exit 1
+  fi
+fi
+
+if [[ -f "App/VolumeArc.Debug.entitlements" ]]; then
+  APS_ENV_DEBUG=$(plutil -extract "aps-environment" raw -o - "App/VolumeArc.Debug.entitlements" 2>/dev/null || echo "")
+  if [[ "$APS_ENV_DEBUG" != "development" ]]; then
+    echo "FAIL: App/VolumeArc.Debug.entitlements must declare aps-environment = development (got '$APS_ENV_DEBUG')" >&2
+    exit 1
+  fi
 fi
 
 for forbidden in "DemoFixtures" "DemoServices" "VolumeArcDemoSupport"; do
@@ -52,13 +105,85 @@ if ! grep -F 'static let containerIdentifier: String = "iCloud.com.mabryventures
   exit 1
 fi
 
+# VOL-90: the canonical SPM lockfile lives at repo root; the workspace
+# copy is seeded from it (by the ruby generator on every run and by CI
+# before the build). If someone bumps a dependency version in the
+# generator but forgets to refresh the tracked `Package.resolved` (or
+# vice versa), this catches the drift before a build silently resolves
+# a different version. Runs before the `-showBuildSettings` calls below
+# because those fail opaquely on lockfile/requirement conflicts — this
+# check surfaces the real reason.
+ROOT_LOCKFILE="Package.resolved"
+WORKSPACE_LOCKFILE="VolumeArcApple.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+
+[[ -f "$ROOT_LOCKFILE" ]] || {
+  echo "FAIL: Missing root Package.resolved (canonical SPM lockfile, per VOL-90)" >&2
+  exit 1
+}
+
+# Force a resolve after the generator seeded the workspace copy from
+# root. If the generator's requirement conflicts with the root pin
+# (e.g. someone bumped `sentry_requirement` in the generator but didn't
+# refresh the tracked lockfile), xcodebuild will rewrite the workspace
+# copy — which we then catch with the drift check below.
+xcodebuild \
+  -resolvePackageDependencies \
+  -project "VolumeArcApple.xcodeproj" \
+  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
+  >/dev/null 2>&1 || true
+
+if [[ ! -f "$WORKSPACE_LOCKFILE" ]]; then
+  echo "FAIL: Workspace Package.resolved was not generated — xcodebuild -resolvePackageDependencies failed" >&2
+  exit 1
+fi
+
+extract_sentry_field() {
+  # $1 = file, $2 = field (version|revision)
+  python3 -c "
+import json, sys
+with open('$1') as f:
+    data = json.load(f)
+pins = [p for p in data.get('pins', []) if p.get('identity') == 'sentry-cocoa']
+if not pins:
+    sys.exit(1)
+print(pins[0]['state'].get('$2', ''))
+" 2>/dev/null || echo ""
+}
+
+root_sentry_ver=$(extract_sentry_field "$ROOT_LOCKFILE" version)
+root_sentry_rev=$(extract_sentry_field "$ROOT_LOCKFILE" revision)
+ws_sentry_ver=$(extract_sentry_field "$WORKSPACE_LOCKFILE" version)
+ws_sentry_rev=$(extract_sentry_field "$WORKSPACE_LOCKFILE" revision)
+
+if [[ -z "$root_sentry_rev" || -z "$root_sentry_ver" ]]; then
+  echo "FAIL: Root $ROOT_LOCKFILE missing sentry-cocoa pin" >&2
+  exit 1
+fi
+if [[ -z "$ws_sentry_rev" || -z "$ws_sentry_ver" ]]; then
+  echo "FAIL: Workspace $WORKSPACE_LOCKFILE missing sentry-cocoa pin" >&2
+  exit 1
+fi
+if [[ "$root_sentry_ver" != "$ws_sentry_ver" || "$root_sentry_rev" != "$ws_sentry_rev" ]]; then
+  echo "FAIL: sentry-cocoa pin drifted between root and workspace Package.resolved (VOL-90)" >&2
+  echo "  root:      $root_sentry_ver @ $root_sentry_rev" >&2
+  echo "  workspace: $ws_sentry_ver @ $ws_sentry_rev" >&2
+  echo "  Refresh with:" >&2
+  echo "    xcodebuild -resolvePackageDependencies -project VolumeArcApple.xcodeproj" >&2
+  echo "    cp $WORKSPACE_LOCKFILE $ROOT_LOCKFILE" >&2
+  exit 1
+fi
+echo "Package.resolved: root and workspace agree on sentry-cocoa $root_sentry_ver"
+
 tmp_settings="$(mktemp)"
 trap 'rm -f "$tmp_settings"' EXIT
 
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
-  -target "VolumeArcApp" \
+  -scheme "VolumeArcApp" \
   -configuration Release \
+  -derivedDataPath "$DERIVED_DATA_PATH" \
+  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
+  -skipPackagePluginValidation \
   -showBuildSettings >"$tmp_settings"
 
 # VOL-56 (PR #24): `INFOPLIST_FILE = App/Info.plist` must stay wired so
@@ -70,9 +195,9 @@ xcodebuild \
 # file on disk still has every key.
 required_build_settings=(
   "PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc"
-  "CODE_SIGN_ENTITLEMENTS = App/VolumeArc.entitlements"
+  "CODE_SIGN_ENTITLEMENTS = App/VolumeArc.Release.entitlements"
   "INFOPLIST_FILE = App/Info.plist"
-  "INFOPLIST_KEY_NSHealthShareUsageDescription = VolumeArc reads your workout and recovery data to personalize progression, readiness, and session planning."
+  "INFOPLIST_KEY_NSHealthShareUsageDescription = VolumeArc reads your completed workouts from Apple Health to show your training history and calculate readiness."
   "INFOPLIST_KEY_NSHealthUpdateUsageDescription = VolumeArc writes completed workouts so your training history stays in sync with Apple Health."
   "INFOPLIST_KEY_NSMicrophoneUsageDescription = VolumeArc uses the microphone for voice coaching requests and voice workout logging."
   "INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = VolumeArc uses speech recognition to understand live coaching requests and voice workout notes."
@@ -87,8 +212,11 @@ done
 
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
-  -target "VolumeArcWatch" \
+  -scheme "VolumeArcWatch" \
   -configuration Release \
+  -derivedDataPath "$DERIVED_DATA_PATH" \
+  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
+  -skipPackagePluginValidation \
   -showBuildSettings >"$tmp_settings"
 
 watch_required=(
@@ -106,8 +234,11 @@ done
 
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
-  -target "VolumeArcWidgets" \
+  -scheme "VolumeArcWidgets" \
   -configuration Release \
+  -derivedDataPath "$DERIVED_DATA_PATH" \
+  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
+  -skipPackagePluginValidation \
   -showBuildSettings >"$tmp_settings"
 
 widget_required=(
@@ -123,6 +254,10 @@ for required in "${widget_required[@]}"; do
   fi
 done
 
+# VolumeArcAppTests scheme has no build target (tests-only), so -scheme +
+# -derivedDataPath would resolve against nothing. The tests target has no
+# direct SPM deps of its own, so plain -target works and doesn't need the
+# artifact cache.
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
   -target "VolumeArcAppTests" \
@@ -145,8 +280,11 @@ done
 # Re-read app Release build settings for deeper checks
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
-  -target "VolumeArcApp" \
+  -scheme "VolumeArcApp" \
   -configuration Release \
+  -derivedDataPath "$DERIVED_DATA_PATH" \
+  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
+  -skipPackagePluginValidation \
   -showBuildSettings >"$tmp_settings"
 
 # ENABLE_TESTABILITY must be NO in Release (allows debugger injection if YES).
@@ -203,6 +341,58 @@ for required_task in \
     exit 1
   fi
 done
+
+# VOL-85: Built-bundle Info.plist validation (hardening)
+#
+# The source App/Info.plist check above catches human-visible regressions
+# (someone deleting a required key in git). This check catches build-time
+# regressions (ProcessInfoPlistFile dropping or rewriting a key during
+# the Xcode build). Only runs when a built .app bundle exists in DerivedData,
+# so local devs who only run this script without building aren't forced
+# to archive.
+
+BUILT_APP_PLIST=""
+# Look in the standard DerivedData location for the app bundle Info.plist.
+for candidate in \
+  "$HOME/Library/Developer/Xcode/DerivedData"/VolumeArcApple-*/Build/Products/Release-iphoneos/VolumeArc.app/Info.plist \
+  "$HOME/Library/Developer/Xcode/DerivedData"/VolumeArcApple-*/Build/Products/Debug-iphonesimulator/VolumeArc.app/Info.plist; do
+  for match in $candidate; do
+    if [[ -f "$match" ]]; then
+      BUILT_APP_PLIST="$match"
+      break 2
+    fi
+  done
+done
+
+if [[ -n "$BUILT_APP_PLIST" ]]; then
+  echo "Validating built bundle Info.plist at $BUILT_APP_PLIST"
+  for required_key in \
+    "CFBundleURLTypes" \
+    "BGTaskSchedulerPermittedIdentifiers" \
+    "UIBackgroundModes"; do
+    if ! plutil -extract "$required_key" raw -o - "$BUILT_APP_PLIST" >/dev/null 2>&1; then
+      echo "FAIL: Built bundle Info.plist missing required key: $required_key" >&2
+      echo "       ($BUILT_APP_PLIST)" >&2
+      exit 1
+    fi
+  done
+  # Confirm both BGTask identifiers survived the build.
+  for required_task in \
+    "com.mabryventures.VolumeArc.appRefresh" \
+    "com.mabryventures.VolumeArc.appProcessing"; do
+    if ! plutil -convert xml1 -o - "$BUILT_APP_PLIST" 2>/dev/null | grep -qF "<string>$required_task</string>"; then
+      echo "FAIL: Built bundle Info.plist missing BGTask identifier: $required_task" >&2
+      exit 1
+    fi
+  done
+  # Confirm the URL scheme survived.
+  if ! plutil -extract "CFBundleURLTypes.0.CFBundleURLSchemes.0" raw -o - "$BUILT_APP_PLIST" 2>/dev/null | grep -qx "volumearc"; then
+    echo "FAIL: Built bundle Info.plist CFBundleURLTypes missing 'volumearc' scheme" >&2
+    exit 1
+  fi
+else
+  echo "INFO: No built .app bundle found in DerivedData; skipping built-bundle plist check. Run an xcodebuild first to exercise this validation."
+fi
 
 # Version bump check: if building for a tag, fail when VERSION matches the latest tag.
 # On branch/PR builds this stays a warning since it only matters at release time.

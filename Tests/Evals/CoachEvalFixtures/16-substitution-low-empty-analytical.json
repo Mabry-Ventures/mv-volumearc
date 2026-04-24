@@ -1,0 +1,17 @@
+{
+  "id": "substitution-low-empty-analytical",
+  "intent": "substitution",
+  "question": "What's an alternative for the squat today — my knees are iffy.",
+  "contextBlock": "## Training context\n- Athlete: Parker (beginner)\n- Readiness: 45/100 — Low recovery, left knee stiff.\n- Next up: Back Squat at 155lb x 5\n- No recent sessions logged",
+  "style": "analytical",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": false,
+    "mustMentionReadinessOrRPE": false,
+    "mustNotMention": ["push through pain", "lift through pain", "no pain no gain"],
+    "toneHint": "data-driven",
+    "mustAnchorOnNextExercise": true,
+    "mustFlagPainSignal": true
+  },
+  "notes": "Substitution + pain language + zero history: hardest substitution case. Model must propose a knee-friendly pattern AND flag the pain signal AND not pretend to have data it doesn't."
+}

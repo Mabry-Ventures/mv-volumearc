@@ -1,0 +1,15 @@
+{
+  "id": "recovery-moderate-empty-motivational",
+  "intent": "recovery",
+  "question": "How am I feeling coming into today?",
+  "contextBlock": "## Training context\n- Athlete: Sage (beginner)\n- Readiness: 72/100 — Decent recovery, first training week.\n- Next up: Back Squat at 135lb x 8\n- No recent sessions logged",
+  "style": "motivational",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": true,
+    "mustMentionReadinessOrRPE": true,
+    "mustNotMention": ["max out", "1RM", "push through"],
+    "toneHint": "encouraging"
+  },
+  "notes": "New user with readiness but no session history: exercises the cold-start branch — model must not pretend to cite history that doesn't exist."
+}
