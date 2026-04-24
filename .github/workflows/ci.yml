@@ -72,6 +72,18 @@ jobs:
         # fast instead of wasting 20+ minutes of runner time.
         run: ./scripts/test_xcode_project_determinism.sh
 
+      - name: Xcode project no-op regen gate
+        # VOL-106: the determinism gate above only proves two fresh runs
+        # match each other -- it passes even when the committed pbxproj
+        # has drifted from what the generator produces. This gate catches
+        # the drift: regenerate over the committed project and fail on
+        # any diff. Prevents `ruby scripts/generate_xcode_project.rb`
+        # from producing 300-line UUID churn on PR branches because a
+        # contributor added a source file without regenerating, or a
+        # volatile input (e.g. `git rev-list --count HEAD`) leaked back
+        # into the generator.
+        run: ./scripts/test_xcode_project_regen_idempotent.sh
+
       - name: Seed SPM lockfile into workspace
         # VOL-90: the canonical `Package.resolved` lives at repo root
         # because the `.xcworkspace/` dir is gitignored (rebuilt by
