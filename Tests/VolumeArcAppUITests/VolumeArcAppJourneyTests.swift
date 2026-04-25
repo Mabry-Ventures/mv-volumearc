@@ -46,20 +46,72 @@ final class VolumeArcAppJourneyTests: XCTestCase {
             "Onboarding cover should be visible on first launch"
         )
 
-        // VOL-93 / VOL-115: the onboarding step-through loop currently
-        // fails on the profile step — the text-field focus brings up the
-        // keyboard, which covers the Continue button, and XCUITest's
-        // `.tap()` scroll-to-visible fails with `kAXErrorCannotComplete`
-        // because the container isn't a ScrollView. The remaining
-        // tap-through logic is correct and lands with a proper form
-        // keyboard dismiss + action-row scroll strategy under VOL-115.
+        // Tap "Continue" through the four non-final steps, then
+        // "Get Started" to finish.
         //
-        // For this PR we prove the onboarding cover appears, which is the
-        // critical launch-time gate, and file the journey completion as a
-        // follow-up so the PR lands the infrastructure (launch args,
-        // identifiers, helper class, paywall + restore assertions)
-        // without getting blocked on a simulator-keyboard flake.
-        throw XCTSkip("Full onboarding tap-through blocked on keyboard-covers-button flake; tracked as VOL-115. The onboarding-cover-appears smoke assertion above still runs.")
+        // VOL-114 fixed VAButton's accessibility identifier propagation,
+        // so the identifier-based query is now reliable.
+        //
+        // VOL-115: profile step text fields auto-focus and bring up the
+        // keyboard, which can cover the Continue button. Dismiss the
+        // keyboard before each tap by tapping a non-field area, then
+        // proceed. This keeps XCUITest's `kAXScrollToVisibleAction` from
+        // failing on covered buttons.
+        //
+        // 4 = `OnboardingView.Step.allCases.count - 1` (welcome → profile →
+        // preferences → coachingStyle → done). The last step shows
+        // "Get Started" / `onboarding.finish`, not Continue, so it's
+        // tapped separately below. If a step is added or removed, update
+        // this loop bound — the coupling is intentional rather than read
+        // at runtime so the test stays a black-box smoke gate.
+        for _ in 0..<4 {
+            dismissKeyboardIfPresent(in: app)
+            let continueButton = app.descendants(matching: .any)
+                .matching(identifier: "onboarding.continue").firstMatch
+            XCTAssertTrue(
+                continueButton.waitForExistence(timeout: 10),
+                "Onboarding should expose a continue button on each non-final step"
+            )
+            continueButton.tap()
+        }
+
+        dismissKeyboardIfPresent(in: app)
+        let finishButton = app.descendants(matching: .any)
+            .matching(identifier: "onboarding.finish").firstMatch
+        XCTAssertTrue(
+            finishButton.waitForExistence(timeout: 10),
+            "Onboarding should expose a finish button on the last step"
+        )
+        finishButton.tap()
+
+        // Dashboard appears once `model.updateProfile` persists the new
+        // profile and `model.isOnboardingComplete` flips to true. The
+        // `.onChange` in `RootDashboardView` drives cover dismissal.
+        let dashboard = app.otherElements["root.dashboard"]
+        XCTAssertTrue(
+            dashboard.waitForExistence(timeout: 15),
+            "Dashboard should appear within 15s after onboarding completes"
+        )
+
+        // Sanity check: onboarding cover is gone.
+        XCTAssertTrue(
+            onboardingRoot.waitForNonExistence(timeout: 5),
+            "Onboarding cover should dismiss once onboarding is complete"
+        )
+    }
+
+    /// VOL-115: dismiss the on-screen keyboard if one is present so it
+    /// doesn't cover the action-row buttons. Tapping the navigation bar
+    /// region resigns first responder without accidentally hitting any
+    /// other interactive element.
+    private func dismissKeyboardIfPresent(in app: XCUIApplication) {
+        guard app.keyboards.firstMatch.exists else { return }
+        // Use a coordinate-based tap on the top-left where there's no
+        // interactive content. Tapping the keyboard's Return key is
+        // unreliable across iOS versions; tapping a known-empty region
+        // works on every layout.
+        let topLeft = app.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.05))
+        topLeft.tap()
     }
 
     // MARK: - 2. Paywall presentation and dismissal

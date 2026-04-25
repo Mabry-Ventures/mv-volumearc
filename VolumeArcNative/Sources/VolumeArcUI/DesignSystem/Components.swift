@@ -88,7 +88,6 @@ public struct VAButton: View {
     private let accessibilityIdentifierValue: String?
     private let action: () -> Void
 
-    @State private var isPressed = false
     @Environment(\.isEnabled) private var isEnabled
 
     public init(
@@ -110,6 +109,18 @@ public struct VAButton: View {
     }
 
     public var body: some View {
+        // VOL-114: previous implementation tracked press state via
+        // `.simultaneousGesture(DragGesture(...))` and applied the
+        // visual scale/opacity effects on the wrapping View. That
+        // gesture wrapper absorbed `.accessibilityIdentifier(...)`
+        // modifiers attached AFTER it — XCUITest queries against
+        // `app.buttons[id]` would fail because the identifier landed
+        // on the gesture container, not the Button itself.
+        //
+        // The fix moves press-feedback into a custom ButtonStyle so the
+        // Button stays the outermost accessibility element. Identifier,
+        // label, and hint modifiers attach directly to it and propagate
+        // cleanly. No more gesture-container interception.
         Button(action: action) {
             HStack(spacing: VA.Space.sm) {
                 if isLoading {
@@ -130,24 +141,11 @@ public struct VAButton: View {
             .padding(.horizontal, VA.Space.lg)
             .modifier(VAButtonBackgroundModifier(style: style))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(VAButtonPressStyle())
         .disabled(isLoading || !isEnabled)
-        .scaleEffect(isPressed ? 0.97 : 1.0)
         .opacity(isEnabled ? 1.0 : 0.5)
-        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in isPressed = true }
-                .onEnded { _ in isPressed = false }
-        )
         .accessibilityLabel(isLoading ? "\(title), loading" : title)
         .accessibilityHint(accessibilityHintText ?? "")
-        // VOL-93: identifier applied as the final modifier so it lands
-        // on the outermost accessibility element of the VAButton. This
-        // is what XCUITest actually queries. The previous attempts
-        // placed it inside `.accessibilityElement(children: .combine)`
-        // — that rebuilt the element after the identifier was set and
-        // the identifier was silently dropped.
         .modifier(VAButtonIdentifierModifier(identifier: accessibilityIdentifierValue))
     }
 
@@ -157,6 +155,19 @@ public struct VAButton: View {
         case .secondary: return VA.Colors.textPrimary
         case .ghost: return VA.Colors.primary
         }
+    }
+}
+
+/// VOL-114: replaces the old `.simultaneousGesture(DragGesture(...))` +
+/// `.scaleEffect(isPressed)` press-feedback approach. A custom ButtonStyle
+/// reads `configuration.isPressed` natively, so we don't need a gesture
+/// wrapper that would absorb downstream `.accessibilityIdentifier(...)`.
+/// VAButton stays a clean Button at the accessibility layer.
+private struct VAButtonPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 
