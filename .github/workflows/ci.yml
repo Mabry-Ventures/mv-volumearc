@@ -49,6 +49,17 @@ jobs:
         continue-on-error: true
         uses: actions/checkout@v6
 
+      - name: Verify checkout succeeded
+        run: |
+          set -euo pipefail
+          test -d .git || { echo "::error::.git directory missing after checkout"; exit 1; }
+          head_sha=$(git rev-parse HEAD)
+          if [ "$head_sha" != "$GITHUB_SHA" ]; then
+            echo "::error::Checkout HEAD $head_sha does not match GITHUB_SHA $GITHUB_SHA"
+            exit 1
+          fi
+        shell: bash
+
       - name: Pre-flight
         # VOL-75: fail fast if the runner is missing something required.
         # Cheaper than a 20-minute build that dies at step 6 on a sick runner.
