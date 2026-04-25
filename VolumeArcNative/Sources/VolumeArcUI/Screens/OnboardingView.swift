@@ -18,13 +18,35 @@ public struct OnboardingView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
+            // VOL-114: progressBar carries the `onboarding.root` identifier
+            // instead of attaching it to the outer VStack. Previously the
+            // outer identifier propagated to every descendant — so every
+            // Button inside OnboardingView ended up with identifier
+            // `onboarding.root` and the per-button identifiers
+            // (onboarding.continue / onboarding.finish / onboarding.back)
+            // were silently replaced. Putting it on the progress bar keeps
+            // the smoke-test gate ("`onboarding.root` exists when the cover
+            // is presented") working AND lets the action-row buttons keep
+            // their journey-test identifiers.
             progressBar
-            Spacer()
-            stepContent
-                .padding(VA.Space.xl)
-            Spacer()
+                .accessibilityIdentifier("onboarding.root")
+            // VOL-115: wrap the step content in a ScrollView so that text
+            // fields inside the profile step can be scrolled past the
+            // keyboard, and the action row stays reachable. Pinning the
+            // action row outside the ScrollView keeps Continue / Get
+            // Started always-visible regardless of step content height.
+            ScrollView {
+                VStack(spacing: 0) {
+                    Spacer(minLength: VA.Space.xl)
+                    stepContent
+                        .padding(VA.Space.xl)
+                    Spacer(minLength: VA.Space.xl)
+                }
+                .frame(maxWidth: .infinity)
+            }
             actionRow
                 .padding(VA.Space.lg)
+                .background(.ultraThinMaterial)
         }
         .background(
             LinearGradient(
@@ -37,7 +59,6 @@ public struct OnboardingView: View {
             )
             .ignoresSafeArea()
         )
-        .accessibilityIdentifier("onboarding.root")
     }
 
     // MARK: - Progress bar
