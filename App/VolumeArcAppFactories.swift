@@ -1,0 +1,249 @@
+import SwiftUI
+#if canImport(SwiftData)
+import SwiftData
+#endif
+#if canImport(StoreKit)
+import StoreKit
+#endif
+#if canImport(Network)
+import Network
+#endif
+import VolumeArcCore
+import VolumeArcUI
+
+// VOL-113: factories that VolumeArcApp.init() calls during launch live
+// here in an extension so the @main shell stays under the SwiftLint
+// file_length warning. Pre-split these were `private static` on the
+// struct; moving to a separate file required relaxing visibility to
+// `internal` (the default) so they cross the file boundary. They're
+// still on the same module-private struct, so no API surface change.
+extension VolumeArcApp {
+    static func makeHealthStore() -> HealthStore {
+        #if canImport(HealthKit)
+        HealthKitRuntimeStore()
+        #else
+        UnavailableHealthStore()
+        #endif
+    }
+
+    static func makeVoicePermissionStore() -> VoicePermissionStore {
+        #if canImport(AVFoundation) && canImport(Speech)
+        VolumeArcVoicePermissionStore()
+        #else
+        UnavailableVoicePermissionStore()
+        #endif
+    }
+
+    static func makeAccountSessionStore() -> AccountSessionStore {
+        UserDefaultsAccountSessionStore()
+    }
+
+    #if canImport(Network)
+    static let reachabilityMonitor = NetworkReachabilityMonitor()
+
+    static func startNetworkReachabilityMonitor() {
+        reachabilityMonitor.start { path in
+            // Post a notification so observers can react to connectivity changes.
+            NotificationCenter.default.post(
+                name: .volumeArcReachabilityChanged,
+                object: nil,
+                userInfo: ["isReachable": path.status == .satisfied]
+            )
+        }
+    }
+    #endif
+
+    static func makeSyncTransport() -> CloudSyncTransport {
+        // VOL-55: containerIdentifier is now a compile-time constant, so
+        // this always has a valid value. We keep the emptiness check for
+        // future flexibility in case the constant ever needs to be read
+        // from a different source.
+        let containerIdentifier = VolumeArcCloudConfiguration.containerIdentifier
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard containerIdentifier.isEmpty == false else {
+            return UnavailableCloudSyncTransport(
+                reason: VolumeArcCloudConfiguration.startupWarning
+                    ?? "Cloud sync is unavailable on this build."
+            )
+        }
+
+        // VOL-59 fixup: `CKContainer(identifier:)` traps the process
+        // (SIGTRAP / brk 1) if the caller's effective entitlements don't
+        // grant access to the requested container. On simulator Debug
+        // builds with `CODE_SIGNING_ALLOWED = NO`, the binary is ad-hoc
+        // signed without any entitlements, so the CloudKit attach path
+        // crashes the app on launch during `VolumeArcApp.init()`. Gate
+        // the transport on the runtime entitlement check so the app
+        // degrades to `UnavailableCloudSyncTransport` in unsigned /
+        // unentitled builds instead of crashing. This also covers the
+        // XCTest-hosted app process where the xctest runner inherits
+        // no entitlements.
+        guard VolumeArcCloudConfiguration.hasCloudKitEntitlement else {
+            return UnavailableCloudSyncTransport(
+                reason: "Cloud sync is unavailable because this build does not carry a CloudKit entitlement."
+            )
+        }
+
+        return CloudKitSyncTransport(
+            containerIdentifier: containerIdentifier,
+            zoneName: VolumeArcCloudConfiguration.syncZoneName
+        )
+    }
+
+    #if canImport(SwiftData)
+    static func startupSignals(
+        persistenceStatus: VolumeArcPersistenceController.BootstrapStatus,
+        telemetrySink: TelemetrySink
+    ) -> [OperationalSignalSummary] {
+        var signals: [OperationalSignalSummary] = []
+
+        if persistenceStatus.isDegraded {
+            signals.append(
+                OperationalSignalSummary(
+                    id: "persistence-bootstrap",
+                    title: "Storage",
+                    message: persistenceStatus.message,
+                    severity: persistenceStatus.severity
+                )
+            )
+        }
+
+        if let relayWarning = VolumeArcAIConfiguration.startupWarning(recordingTo: telemetrySink) {
+            signals.append(
+                OperationalSignalSummary(
+                    id: "ai-relay",
+                    title: "AI Relay",
+                    message: relayWarning,
+                    severity: .warning
+                )
+            )
+        }
+
+        if let cloudWarning = VolumeArcCloudConfiguration.startupWarning {
+            signals.append(
+                OperationalSignalSummary(
+                    id: "cloudkit-config",
+                    title: "Cloud Sync",
+                    message: cloudWarning,
+                    severity: .warning
+                )
+            )
+        }
+
+        #if canImport(Sentry)
+        if let sentryWarning = VolumeArcSentryConfiguration.startupWarning {
+            signals.append(
+                OperationalSignalSummary(
+                    id: "sentry-config",
+                    title: "Crash Reporting",
+                    message: sentryWarning,
+                    severity: .warning
+                )
+            )
+        }
+        #endif
+        return signals
+    }
+    #else
+    static func startupSignals(telemetrySink: TelemetrySink) -> [OperationalSignalSummary] {
+        var signals: [OperationalSignalSummary] = []
+
+        if let relayWarning = VolumeArcAIConfiguration.startupWarning(recordingTo: telemetrySink) {
+            signals.append(
+                OperationalSignalSummary(
+                    id: "ai-relay",
+                    title: "AI Relay",
+                    message: relayWarning,
+                    severity: .warning
+                )
+            )
+        }
+
+        if let cloudWarning = VolumeArcCloudConfiguration.startupWarning {
+            signals.append(
+                OperationalSignalSummary(
+                    id: "cloudkit-config",
+                    title: "Cloud Sync",
+                    message: cloudWarning,
+                    severity: .warning
+                )
+            )
+        }
+
+        #if canImport(Sentry)
+        if let sentryWarning = VolumeArcSentryConfiguration.startupWarning {
+            signals.append(
+                OperationalSignalSummary(
+                    id: "sentry-config",
+                    title: "Crash Reporting",
+                    message: sentryWarning,
+                    severity: .warning
+                )
+            )
+        }
+        #endif
+        return signals
+    }
+    #endif
+
+    static func combinedStartupNotice(from signals: [OperationalSignalSummary]) -> String? {
+        guard signals.isEmpty == false else { return nil }
+        return signals.map(\.message).joined(separator: " ")
+    }
+
+    static func highestSeverity(in signals: [OperationalSignalSummary]) -> TelemetrySeverity? {
+        signals
+            .map(\.severity)
+            .max(by: { severityRank($0) < severityRank($1) })
+    }
+
+    static func severityRank(_ severity: TelemetrySeverity) -> Int {
+        switch severity {
+        case .info:
+            return 0
+        case .warning:
+            return 1
+        case .error:
+            return 2
+        }
+    }
+
+    static func syncStateStoreURL() -> URL {
+        let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+        return applicationSupport
+            .appendingPathComponent("VolumeArc", isDirectory: true)
+            .appendingPathComponent("sync-state.json", isDirectory: false)
+    }
+
+    static func makeNotificationStore() -> NotificationStore {
+        #if canImport(UserNotifications)
+        UserNotificationCenterStore()
+        #else
+        InMemoryNotificationStore()
+        #endif
+    }
+
+    static func makeTelemetrySink(initialEvents: [TelemetryEvent] = []) -> TelemetrySink {
+        if VolumeArcRuntimeFlags.isDeterministicMode {
+            return InMemoryTelemetrySink(events: initialEvents)
+        }
+
+        let persistent = UserDefaultsTelemetrySink()
+        var sinks: [TelemetrySink] = []
+        if initialEvents.isEmpty == false {
+            sinks.append(InMemoryTelemetrySink(events: initialEvents))
+        }
+        sinks.append(persistent)
+        #if canImport(OSLog)
+        sinks.append(OSLogTelemetrySink())
+        #endif
+        #if canImport(Sentry)
+        if VolumeArcSentryConfiguration.isConfigured {
+            sinks.append(SentryTelemetrySink())
+        }
+        #endif
+        return sinks.count == 1 ? persistent : FanoutTelemetrySink(sinks: sinks)
+    }
+}
