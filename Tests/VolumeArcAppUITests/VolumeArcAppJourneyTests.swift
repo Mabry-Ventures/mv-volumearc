@@ -57,6 +57,13 @@ final class VolumeArcAppJourneyTests: XCTestCase {
         // keyboard before each tap by tapping a non-field area, then
         // proceed. This keeps XCUITest's `kAXScrollToVisibleAction` from
         // failing on covered buttons.
+        //
+        // 4 = `OnboardingView.Step.allCases.count - 1` (welcome → profile →
+        // preferences → coachingStyle → done). The last step shows
+        // "Get Started" / `onboarding.finish`, not Continue, so it's
+        // tapped separately below. If a step is added or removed, update
+        // this loop bound — the coupling is intentional rather than read
+        // at runtime so the test stays a black-box smoke gate.
         for _ in 0..<4 {
             dismissKeyboardIfPresent(in: app)
             let continueButton = app.descendants(matching: .any)

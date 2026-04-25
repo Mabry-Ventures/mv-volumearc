@@ -44,9 +44,16 @@ public struct OnboardingView: View {
                 }
                 .frame(maxWidth: .infinity)
             }
+            // VOL-115: pin the action row's background through the VA
+            // design-system Liquid Glass token (`vaGlassBackground`)
+            // instead of a hardcoded `.ultraThinMaterial`. Hits the same
+            // visual result on iOS 26 (`Glass.regular`) but routes through
+            // the shared modifier that handles
+            // `accessibilityReduceTransparency` fallback to a solid VA
+            // surface fill — keeps the design-system contract intact.
             actionRow
                 .padding(VA.Space.lg)
-                .background(.ultraThinMaterial)
+                .vaGlassBackground(in: Rectangle())
         }
         .background(
             LinearGradient(
