@@ -88,8 +88,7 @@ public actor CloudSyncCoordinator {
     /// `quarantinedKeys` locals. Extracting helpers would force each
     /// step to rewrap + unwrap the same tuple, obscuring the VOL-67
     /// fixups documented inline. The body length is accepted here.
-    // swiftlint:disable:next function_body_length
-    public func push(limit: Int = 50, additionalRecords: [CloudSyncRecord] = []) async throws -> Int {
+    public func push(limit: Int = 50, additionalRecords: [CloudSyncRecord] = []) async throws -> Int { // swiftlint:disable:this function_body_length
         guard transport.isAvailable else { return 0 }
 
         var records = additionalRecords

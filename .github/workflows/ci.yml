@@ -267,17 +267,19 @@ jobs:
           echo "::warning::Failed to push coverage-trend update after 3 attempts."
 
       - name: Lint (SwiftLint)
-        # VOL-77: hard-fail on actual SwiftLint errors (rules that exceed
-        # their configured `error:` threshold). Warnings still surface in
-        # the CI log for reviewer visibility, but don't block merge —
-        # running with `--strict` would upgrade every warning to a hard
-        # fail, which flagged ~20 pre-existing length violations on the
-        # first run. Tracked separately for progressive tightening so we
-        # don't burn this PR on an unrelated cleanup.
+        # VOL-113: `--strict` re-enabled now that all warnings clear.
+        # Original `--strict` was dropped under VOL-77 to keep the SwiftLint
+        # gate from blocking PR #47 on ~20 pre-existing length violations.
+        # VOL-87 + VOL-113 finished the cleanup — VolumeArcApp.swift is split
+        # into VolumeArcApp.swift (@main shell) + VolumeArcAppFactories.swift
+        # (platform makers); the four remaining big files (WatchWorkoutView,
+        # WorkoutDashboardModel, DataModels, Components) have their length
+        # thresholds documented in `.swiftlint.yml`. From here every warning
+        # is a hard-fail so debt can't silently accumulate.
         #
         # Pre-flight above asserts the binary is on PATH, so we always
         # lint — no silent skip.
-        run: swiftlint lint
+        run: swiftlint lint --strict
 
       - name: Validate release configuration
         run: ./scripts/validate_release_config.sh

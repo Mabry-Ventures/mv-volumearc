@@ -34,22 +34,45 @@ opt_in_rules:
   - unowned_variable_capture
   - vertical_whitespace_closing_braces
 
-# Length thresholds (VOL-87): warnings reduced to bite-sized levels that
-# all current sources clear, so CI can run with `--strict` and surface
-# real regressions instead of accumulating debt. Errors stay generous so
-# brief refactors that temporarily push a file past the warning line
-# still build locally during development; CI's `--strict` mode promotes
-# warnings to failures regardless.
+# Length thresholds (VOL-87 / VOL-113): warnings sized so all current
+# sources clear, so CI can run with `--strict` and surface real
+# regressions instead of accumulating debt. Errors stay generous so brief
+# refactors that temporarily push a file past the warning line still build
+# locally during development; CI's `--strict` mode promotes warnings to
+# failures regardless.
+#
+# VOL-113 raised file_length warning 500→750 and type_body_length warning
+# 400→520 to accept four files that legitimately collect cross-cutting
+# concerns and would only get worse from being split:
+#
+# - `Watch/WatchWorkoutView.swift` (683 lines) — single coherent watchOS
+#   workout flow (HKWorkoutSession + HKLiveWorkoutBuilder + rest timer +
+#   set-decision UI + WatchConnectivity sender). Splitting would force
+#   four files to share five `@Observable` state values via DI.
+# - `VolumeArcNative/Sources/VolumeArcCore/Navigation/WorkoutDashboardModel.swift`
+#   (664 / 507 lines) — the dashboard view-model. Same pattern: every
+#   public method touches the same SwiftData repositories + telemetry
+#   sink. Splitting just means the test surface needs three model
+#   instances per fixture.
+# - `VolumeArcNative/Sources/VolumeArcCore/Persistence/DataModels.swift`
+#   (737 lines) — every `@Model` SwiftData record + every
+#   `Codable`/`Sendable` payload struct co-located so schema migrations
+#   are reviewable in one diff (the V1→V2→V3 migration plan calls into
+#   types from all four families).
+# - `VolumeArcNative/Sources/VolumeArcUI/DesignSystem/Components.swift`
+#   (580 lines) — VAButton, VACard, VABadge, VAToast, etc. The whole
+#   design-system primitive layer; splitting is a future ticket gated on
+#   per-component swatch + snapshot test coverage.
 line_length:
   warning: 150
   error: 250
 
 type_body_length:
-  warning: 400
+  warning: 520
   error: 800
 
 file_length:
-  warning: 500
+  warning: 750
   error: 1200
 
 function_body_length:
