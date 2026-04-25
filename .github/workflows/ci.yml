@@ -37,7 +37,16 @@ jobs:
       pull-requests: write
 
     steps:
+      # VOL-103: `continue-on-error: true` covers both the main checkout
+      # and the auto-injected Post Checkout cleanup. The cleanup step
+      # races against the runner's `_actions/` cache and fails with
+      # "Can't find action.yml under actions/checkout/v6" when another
+      # job interferes. Letting it fail the job would mask successful
+      # test + coverage runs. The main checkout itself isn't risky to
+      # tolerate failures on — if it fails, every subsequent build/test
+      # step will fail loudly with missing source-tree errors.
       - name: Checkout
+        continue-on-error: true
         uses: actions/checkout@v6
 
       - name: Pre-flight
@@ -127,8 +136,19 @@ jobs:
       # VOL-97: publish the xcresult bundle so reviewers can open it in
       # Xcode without re-running CI. Runs on success and failure so a
       # broken run still yields a downloadable artifact.
+      #
+      # VOL-103: `continue-on-error: true` because the self-hosted-runner
+      # `_actions/` cache races between concurrent jobs and the action
+      # tarball can disappear mid-job ("Can't find action.yml under
+      # actions/upload-artifact/v4"). The xcresult upload is a
+      # quality-of-life artifact, not a correctness gate — letting the
+      # cache race fail the entire job (after tests + coverage already
+      # passed) was wasting reviewer time on admin-merges. Better to land
+      # green and report a step-summary warning when the upload misses.
+      # Tracking the underlying race in VOL-103 for a real fix.
       - name: Upload xcresult
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: TestResults-${{ github.run_id }}
@@ -137,8 +157,10 @@ jobs:
 
       # VOL-97: machine-readable coverage summary so the sticky PR
       # comment and the trend-append step have a stable handoff file.
+      # VOL-103: same continue-on-error treatment as Upload xcresult.
       - name: Upload coverage summary
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: CoverageSummary-${{ github.run_id }}
@@ -151,8 +173,10 @@ jobs:
       # actions/github-script (first-party action; policy forbids
       # reaching for third-party sticky-comment actions) with a
       # find-or-create pattern keyed on a hidden marker.
+      # VOL-103: same continue-on-error treatment.
       - name: Sticky PR coverage comment
         if: always() && github.event_name == 'pull_request'
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |
