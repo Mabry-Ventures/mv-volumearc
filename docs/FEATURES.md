@@ -52,7 +52,7 @@ This is the granular per-feature checklist. For high-level system status, see [`
 | `SwiftDataCoachMemoryRepository` | ✅ | Append, fetch recent, and pruning behavior ship. |
 | `ProgressionEngine` | ✅ | Progression, substitution, and recommendation logic are exercised by production code and tests. |
 | `ReadinessModel` | ✅ | Five-factor readiness scoring is live in the dashboard and coach context. |
-| Exercise catalog | ✅ | Shipping catalog supports the current training flows; future expansion is additive, not a blocker. |
+| Exercise catalog | ✅ | VOL-105 Phase 1 (PR-pending) scales the catalog 11 → 130+ entries with extended schema (`MuscleGroup` 22-case taxonomy, `DifficultyTier`, `HKActivityTypeMapping`, `aliases`, `unilateral`, `lengthenedPositionEmphasis`). Sources: ~95 entries derived from [yuhonas/free-exercise-db](https://github.com/yuhonas/free-exercise-db) (The Unlicense — text only, no images), ~25 hand-authored modern hypertrophy movements (Bulgarian split squat, pendulum squat, pec deck, leaning lateral raise, single-leg/B-stance hip thrust, Nordic, Pendlay, Meadows, seal row, PJR pullover, tibialis raise, paused/pin/block variants). Phase 2 (Codex CLI image-gen pipeline for per-exercise illustrations) is a separate ticket. |
 
 ## Sync & connectivity
 
