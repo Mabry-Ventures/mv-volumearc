@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "straight-arm-pulldown.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

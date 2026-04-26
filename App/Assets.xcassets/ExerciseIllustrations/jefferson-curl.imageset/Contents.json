@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "jefferson-curl.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

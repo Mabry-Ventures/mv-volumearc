@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "kneeling-cable-pulldown.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

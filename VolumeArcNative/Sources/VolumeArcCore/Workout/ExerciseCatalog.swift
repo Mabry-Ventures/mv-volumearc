@@ -252,3 +252,21 @@ public enum VolumeArcExerciseCatalog {
         }
     }
 }
+
+extension ExerciseDefinition {
+    /// VOL-105 Phase 2: name of the bundle asset that ships an illustration
+    /// for this exercise. Mirrors the entry's `id` so the catalog and the
+    /// asset namespace are kept in lockstep — the
+    /// `App/Assets.xcassets/ExerciseIllustrations/` group provides
+    /// namespacing so the runtime path is e.g. `ExerciseIllustrations/back-squat`.
+    ///
+    /// Consumers in `VolumeArcUI` should load via:
+    /// ```swift
+    /// Image(exercise.illustrationAssetName, bundle: .main)
+    ///     .resizable()
+    ///     .scaledToFit()
+    /// ```
+    public var illustrationAssetName: String {
+        "ExerciseIllustrations/\(id)"
+    }
+}

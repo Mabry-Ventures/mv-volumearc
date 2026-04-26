@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "t-bar-row.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

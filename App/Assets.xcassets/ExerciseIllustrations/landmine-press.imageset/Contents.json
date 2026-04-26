@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "landmine-press.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

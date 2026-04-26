@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "low-bar-squat.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}
