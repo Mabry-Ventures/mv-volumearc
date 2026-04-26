@@ -82,13 +82,37 @@ public struct ProgressionEngine: Sendable {
         if athlete.availableEquipment.contains(exercise.primaryEquipment) {
             return exercise
         }
-        if let alt = VolumeArcExerciseCatalog.alternatives(
+        // VOL-105: when offering an alternate, prefer ones that match
+        // (or fall below) the athlete's advancement level. The filter
+        // is preference-only — if no friendlier candidate exists we
+        // still surface the first viable substitute rather than
+        // returning the un-equipped original. Equipment availability
+        // is the binding constraint; difficulty is a tiebreaker.
+        let alternatives = VolumeArcExerciseCatalog.alternatives(
             for: exercise,
             availableEquipment: athlete.availableEquipment
-        ).first {
-            return alt
+        )
+        let cap = difficultyCap(for: athlete.advancementLevel)
+        if let scoped = alternatives.first(where: { $0.difficulty <= cap }) {
+            return scoped
+        }
+        if let any = alternatives.first {
+            return any
         }
         return exercise
+    }
+
+    /// Highest `DifficultyTier` we'll auto-recommend for an athlete at
+    /// the given `AdvancementLevel`. The two scales align 1:1 today
+    /// (beginner → beginner, intermediate → intermediate, advanced →
+    /// advanced); the helper exists so future taxonomy drift between
+    /// the two enums has a single chokepoint to update.
+    private func difficultyCap(for level: AdvancementLevel) -> DifficultyTier {
+        switch level {
+        case .beginner:     return .beginner
+        case .intermediate: return .intermediate
+        case .advanced:     return .advanced
+        }
     }
 
     // MARK: - Target computation
@@ -134,14 +158,26 @@ public struct ProgressionEngine: Sendable {
     ) -> WorkoutTarget {
         let repRange = exerciseRepRange(exercise, goal: goal, athlete: athlete)
 
-        let starterWeight: Double
+        let baseWeight: Double
         switch exercise.primaryEquipment {
-        case .barbell where exercise.isCompound: starterWeight = 95
-        case .barbell: starterWeight = 65
-        case .dumbbell: starterWeight = 25
-        case .machine, .cable: starterWeight = 50
-        case .kettlebell: starterWeight = 35
-        case .bodyweight, .band: starterWeight = 0
+        case .barbell where exercise.isCompound: baseWeight = 95
+        case .barbell: baseWeight = 65
+        case .dumbbell: baseWeight = 25
+        case .machine, .cable: baseWeight = 50
+        case .kettlebell: baseWeight = 35
+        case .bodyweight, .band: baseWeight = 0
+        }
+
+        // VOL-105: unilateral lifts (single-arm rows, BSS, etc.) get a
+        // lighter starter load — the same dumbbell that would feel
+        // moderate two-handed is meaningfully heavier when only one
+        // limb is loaded. Skip the haircut for bodyweight unilateral
+        // entries (sissy squats, etc.) — they're already at zero.
+        let starterWeight: Double
+        if exercise.unilateral && baseWeight > 0 {
+            starterWeight = (baseWeight * 0.6).rounded()
+        } else {
+            starterWeight = baseWeight
         }
 
         return WorkoutTarget(
@@ -223,6 +259,13 @@ public struct ProgressionEngine: Sendable {
         guard let last = history.lastSession,
               let topSet = last.sets.max(by: { $0.weight < $1.weight })
         else {
+            // VOL-105: stretch-bias movements (deficit RDL, leaning
+            // lateral, pec deck, etc.) want an explicit "own the deep
+            // ROM" cue on a cold start so users don't half-rep the
+            // movement.
+            if selected.lengthenedPositionEmphasis {
+                return "Starting fresh with \(selected.name) — go for full stretch, own the bottom of every rep."
+            }
             return "Starting fresh with \(selected.name) at a conservative load. Build confidence, own the movement."
         }
 
