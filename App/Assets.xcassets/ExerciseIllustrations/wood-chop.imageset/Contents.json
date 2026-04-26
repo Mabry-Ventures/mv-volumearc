@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "wood-chop.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

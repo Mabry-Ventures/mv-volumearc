@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "machine-hip-thrust.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

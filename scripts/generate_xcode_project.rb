@@ -291,6 +291,15 @@ add_resource(watch_group, watch_target, 'PrivacyInfo.xcprivacy')
 add_resource(watch_widgets_group, watch_widgets_target, 'PrivacyInfo.xcprivacy')
 add_resource(widgets_group, widget_target, 'PrivacyInfo.xcprivacy')
 
+# VOL-105 Phase 2: ship the exercise-illustration asset catalog with the
+# app target. The catalog provides namespacing via Contents.json so each
+# entry is loadable from SwiftUI as e.g.
+# `Image("ExerciseIllustrations/back-squat", bundle: .main)`. Letting
+# xcodeproj infer `folder.assetcatalog` from the `.xcassets` extension
+# keeps the project file deterministic — no per-imageset entries in the
+# pbxproj, just one folder reference.
+add_resource(app_group, app_target, 'Assets.xcassets')
+
 # VOL-100: coach eval fixtures wired into the tests bundle so
 # `CoachEvalTests` can resolve them via
 # `Bundle(for:).url(forResource: "CoachEvalFixtures")`. The directory lives
