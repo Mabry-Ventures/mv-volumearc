@@ -255,10 +255,10 @@ public enum VolumeArcExerciseCatalog {
 
 extension ExerciseDefinition {
     /// VOL-105 Phase 2: name of the bundle asset that ships an illustration
-    /// for this exercise. Mirrors the entry's `id` so the catalog and the
-    /// asset namespace are kept in lockstep — the
-    /// `App/Assets.xcassets/ExerciseIllustrations/` group provides
-    /// namespacing so the runtime path is e.g. `ExerciseIllustrations/back-squat`.
+    /// for this exercise. Resolves to `ExerciseIllustrations/<asset-id>`
+    /// where `<asset-id>` is normally the entry's `id`, but can be aliased
+    /// to a parent's id for variants whose pose is genuinely identical in
+    /// static-frame format (see `illustrationAliases`).
     ///
     /// Consumers in `VolumeArcUI` should load via:
     /// ```swift
@@ -267,6 +267,28 @@ extension ExerciseDefinition {
     ///     .scaledToFit()
     /// ```
     public var illustrationAssetName: String {
-        "ExerciseIllustrations/\(id)"
+        let assetID = Self.illustrationAliases[id] ?? id
+        return "ExerciseIllustrations/\(assetID)"
     }
+
+    /// VOL-105 sibling-collision fix: pure tempo / pause variants share
+    /// their parent lift's illustration. The static-frame illustration of
+    /// a "Paused Bench Press" is mechanically identical to a "Bench Press"
+    /// — the difference is *time spent at the bottom*, which a single line
+    /// drawing can't convey honestly. Sharing the parent illustration
+    /// matches the standard pattern in line-drawing-based workout apps
+    /// (Strong, Hevy) and avoids shipping two visually identical PNGs
+    /// under different names. The exercise card already surfaces the
+    /// variant name + tempo cues alongside the illustration.
+    ///
+    /// To add a new alias: add a row here, delete the redundant imageset
+    /// from `App/Assets.xcassets/ExerciseIllustrations/`, and add a row
+    /// to `testPausedVariantsShareParentIllustration` so the routing is
+    /// pinned. The coverage test resolves through `illustrationAssetName`
+    /// and will pass automatically.
+    public static let illustrationAliases: [String: String] = [
+        "paused-back-squat": "back-squat",
+        "paused-bench-press": "bench-press",
+        "paused-deadlift": "deadlift",
+    ]
 }
