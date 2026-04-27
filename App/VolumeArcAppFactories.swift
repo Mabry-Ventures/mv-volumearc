@@ -246,4 +246,35 @@ extension VolumeArcApp {
         #endif
         return sinks.count == 1 ? persistent : FanoutTelemetrySink(sinks: sinks)
     }
+
+    /// VOL-112: post a simulated `WatchPayload` notification on launch if
+    /// `-PostFakeWatchPayload <kind>` was passed AND we're in
+    /// deterministic mode. Used by `VolumeArcWatchSimulationJourneyTests`
+    /// to exercise the dashboard's watch-arrival path without spinning
+    /// up a paired watchOS+iOS simulator session.
+    ///
+    /// The deterministic-mode gate is intentional — even if a production
+    /// build accidentally received the launch arg, this helper would
+    /// silently no-op rather than fabricate a watch event. Pairs with
+    /// the `WatchPayloadKind` enum: `restTimer`, `liveState`,
+    /// `startSession`, `endSession`, `coachCue`, `completedWorkout`. An
+    /// unrecognized kind is silently ignored (returns without posting)
+    /// rather than crashing — the test owns choosing a valid kind.
+    static func postSimulatedWatchPayloadIfRequested() {
+        guard VolumeArcRuntimeFlags.isDeterministicMode,
+              let kindRaw = VolumeArcLaunchArguments.postFakeWatchPayloadKind,
+              let kind = WatchPayloadKind(rawValue: kindRaw) else {
+            return
+        }
+        let payload = WatchPayload(
+            kind: kind,
+            workoutID: "test.simulated.\(UUID().uuidString)",
+            body: "Simulated payload from -PostFakeWatchPayload"
+        )
+        NotificationCenter.default.post(
+            name: WatchConnectivityNotifications.payloadDidArrive,
+            object: nil,
+            userInfo: [WatchConnectivityNotifications.payloadUserInfoKey: payload]
+        )
+    }
 }
