@@ -24,8 +24,21 @@ actor VolumeArcRelaySessionProvider: OpenAIRelayCredentialsProviding {
     }
 
     func authorizationHeaderValue() async throws -> String {
-        let signingKey = try resolveSigningKey()
+        // VOL-116: persist the device ID BEFORE resolving the signing key.
+        // The device ID is a stable identity for this install — it must be
+        // generated and persisted on first call regardless of whether the
+        // signing key is bootstrapped yet. Otherwise:
+        //   1. The first auth attempt before signing-key bootstrap throws
+        //      from `resolveSigningKey()` and never persists a device ID.
+        //   2. A later attempt (after the signing key arrives) generates a
+        //      fresh device ID, breaking "stable device identity across the
+        //      lifetime of the install" — the relay's rate-limit, telemetry,
+        //      and abuse signals all key on this ID.
+        // Test coverage: `testRelayProviderDeviceIDIsStableAcrossCalls` runs
+        // with no signing key configured and asserts the device ID is still
+        // persisted to Keychain after two `try?` calls.
         let device = deviceID()
+        let signingKey = try resolveSigningKey()
         let signature = Self.hmacHex(key: signingKey, message: device)
         return "Bearer \(device).\(signature)"
     }

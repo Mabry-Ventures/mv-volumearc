@@ -34,25 +34,35 @@ final class VolumeArcRelaySessionTests: XCTestCase {
 
     // MARK: - Real relay session provider
 
-    /// The relay session provider should produce a stable device ID on
-    /// repeated calls within a single provider instance.
+    /// VOL-116: even when signing key resolution fails (CI runner has no
+    /// `VOLUMEARC_RELAY_SIGNING_KEY` env var, no `VolumeArcRelaySigningKey`
+    /// Info.plist key, no prior keychain entry), the device ID must still
+    /// be generated and persisted on the first auth attempt. The relay's
+    /// rate-limiting, telemetry, and abuse signals all key on this ID, so
+    /// it must be stable across the lifetime of the install — including
+    /// across signing-key bootstrapping.
+    ///
+    /// Two calls must observe the same persisted value.
     func testRelayProviderDeviceIDIsStableAcrossCalls() async throws {
         let provider = VolumeArcRelaySessionProvider(
             baseURL: URL(string: "https://example.invalid")!,
             applicationID: "com.test.volumearc"
         )
 
-        // Call the auth header twice — it should either succeed with a
-        // bearer token or fail with a relay error, but the device ID
-        // written to Keychain should be stable across both calls.
+        // Call the auth header twice — both calls fail (no signing key
+        // configured) but each call must persist the device ID, and both
+        // calls must observe the same persisted value.
         _ = try? await provider.authorizationHeaderValue()
-        _ = try? await provider.authorizationHeaderValue()
-
-        // Check the keychain directly for the device ID key.
         let store = VolumeArcSecureStore()
-        let deviceID = try store.load("ai.relay.deviceID")
-        XCTAssertNotNil(deviceID)
-        XCTAssertFalse(deviceID?.isEmpty ?? true)
+        let deviceIDKey = "ai.relay.deviceID"
+        let deviceIDAfterFirstCall = try store.load(deviceIDKey)
+
+        _ = try? await provider.authorizationHeaderValue()
+        let deviceIDAfterSecondCall = try store.load(deviceIDKey)
+
+        XCTAssertNotNil(deviceIDAfterFirstCall, "Device ID must be persisted on first auth attempt even when signing key is unavailable")
+        XCTAssertFalse(deviceIDAfterFirstCall?.isEmpty ?? true)
+        XCTAssertEqual(deviceIDAfterFirstCall, deviceIDAfterSecondCall, "Device ID must be stable across calls")
     }
 
     /// Invalid base URLs should still produce a session provider — the
