@@ -104,7 +104,7 @@ app_perf_tests_target = project.new_target(:ui_test_bundle, 'VolumeArcAppPerfTes
 
 def configure_target(target, bundle_id: nil, extra: {})
   target.build_configurations.each do |config|
-    config.build_settings['SWIFT_VERSION'] = '6.0'
+    config.build_settings['SWIFT_VERSION'] = '6.3'
     config.build_settings['GENERATE_INFOPLIST_FILE'] = 'YES'
     config.build_settings['MARKETING_VERSION'] = MARKETING_VERSION
     config.build_settings['CURRENT_PROJECT_VERSION'] = BUILD_NUMBER
