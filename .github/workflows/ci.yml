@@ -70,6 +70,25 @@ jobs:
           ruby --version | grep -qE 'ruby (3|4)\.' || { echo "::error::Ruby < 3.0 (EOL)"; exit 1; }
           gem list xcodeproj --installed --version '>= 1.0' >/dev/null || { echo "::error::xcodeproj gem missing"; exit 1; }
           command -v swiftlint >/dev/null || { echo "::error::swiftlint missing on runner"; exit 1; }
+          # Toolchain pin: Xcode 26.4+ is required so the Swift 6.3 language
+          # mode and the iOS 26 SDK that build settings depend on are
+          # available. `xcodebuild -version` prints e.g. "Xcode 26.4" on the
+          # first line; parse the version components and compare against the
+          # required minimum. If the runner's Xcode is older the build would
+          # fail later with a confusing "unsupported Swift compiler version"
+          # — fail here with a precise message instead.
+          xcode_version_line=$(xcodebuild -version | head -n 1 | awk '{print $2}')
+          xcode_major=$(echo "$xcode_version_line" | awk -F. '{print $1}')
+          xcode_minor=$(echo "$xcode_version_line" | awk -F. '{print $2+0}')
+          required_major=26
+          required_minor=4
+          if [ "${xcode_major:-0}" -lt "$required_major" ] \
+             || { [ "${xcode_major:-0}" -eq "$required_major" ] \
+                  && [ "${xcode_minor:-0}" -lt "$required_minor" ]; }; then
+            echo "::error::Xcode $xcode_version_line is below the required ${required_major}.${required_minor}"
+            exit 1
+          fi
+          echo "Xcode version: $xcode_version_line (>= ${required_major}.${required_minor})"
           # Absolute-available is more meaningful than percent on shared
           # runner Macs with big drives; iOS build+test needs ~5GB headroom.
           avail_gb=$(df -g "$HOME" | awk 'NR==2 {print $4}')
@@ -346,6 +365,18 @@ jobs:
           ruby --version
           xcodebuild -version
           gem list xcodeproj --installed --version '>= 1.0' >/dev/null
+          # Toolchain pin: Xcode 26.4+ required (mirrors build-and-test).
+          xcode_version_line=$(xcodebuild -version | head -n 1 | awk '{print $2}')
+          xcode_major=$(echo "$xcode_version_line" | awk -F. '{print $1}')
+          xcode_minor=$(echo "$xcode_version_line" | awk -F. '{print $2+0}')
+          required_major=26
+          required_minor=4
+          if [ "${xcode_major:-0}" -lt "$required_major" ] \
+             || { [ "${xcode_major:-0}" -eq "$required_major" ] \
+                  && [ "${xcode_minor:-0}" -lt "$required_minor" ]; }; then
+            echo "::error::Xcode $xcode_version_line is below the required ${required_major}.${required_minor}"
+            exit 1
+          fi
         shell: bash
 
       - name: Run performance suite
