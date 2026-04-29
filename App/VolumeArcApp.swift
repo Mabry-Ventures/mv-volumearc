@@ -54,6 +54,28 @@ enum VolumeArcLaunchArguments {
     static var isPerfTestMode: Bool {
         flagEnabled("-PerfTestMode")
     }
+
+    /// `-PostFakeWatchPayload <kind>` — VOL-112. Tells the app to post a
+    /// simulated `WatchPayload` notification at launch, as if a paired
+    /// Apple Watch had sent the named kind. Used by
+    /// `VolumeArcWatchSimulationJourneyTests` to exercise the iPhone
+    /// dashboard's watch-payload arrival path without spinning up a
+    /// paired-simulator session (full pairing coverage lives in VOL-94's
+    /// real-device canary).
+    ///
+    /// `<kind>` is a `WatchPayloadKind` rawValue: `restTimer`,
+    /// `liveState`, `startSession`, `endSession`, `coachCue`, or
+    /// `completedWorkout`. The flag is gated on `-UITestMode 1` —
+    /// production app launches ignore it even if accidentally set.
+    static var postFakeWatchPayloadKind: String? {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "-PostFakeWatchPayload") else { return nil }
+        let nextIndex = arguments.index(after: index)
+        guard nextIndex < arguments.endIndex else { return nil }
+        let value = arguments[nextIndex]
+        guard value.hasPrefix("-") == false else { return nil }
+        return value
+    }
 }
 
 @main
@@ -378,6 +400,29 @@ struct VolumeArcApp: App {
                 VolumeArcBackgroundTasks.sharedModel = dashboardModel
                 VolumeArcBackgroundTasks.scheduleAll()
                 #endif
+
+                // VOL-112: when launched with `-PostFakeWatchPayload <kind>`
+                // and `-UITestMode 1`, post a simulated `WatchPayload` so
+                // the iPhone dashboard exercises its watch-arrival path
+                // without needing a paired-simulator session. The full
+                // pairing path is covered by VOL-94's real-device canary.
+                Self.postSimulatedWatchPayloadIfRequested()
+            }
+            // VOL-112: hidden test-only overlay surfacing the most-recent
+            // received Watch payload kind. Gated on deterministic mode so
+            // production builds neither render the overlay nor add it to
+            // the accessibility tree. XCUITests
+            // (`VolumeArcWatchSimulationJourneyTests`) assert on this
+            // identifier to confirm the payload arrival path executed.
+            .overlay(alignment: .topLeading) {
+                if VolumeArcRuntimeFlags.isDeterministicMode {
+                    Text(verbatim: dashboardModel.lastWatchPayloadKindForTesting ?? "")
+                        .frame(width: 1, height: 1)
+                        .accessibilityIdentifier("debug.watch.last-payload-kind")
+                        .accessibilityLabel(Text(verbatim: dashboardModel.lastWatchPayloadKindForTesting ?? ""))
+                        .allowsHitTesting(false)
+                        .opacity(0.001)
+                }
             }
             .onOpenURL { url in
                 handle(url: url)

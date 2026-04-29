@@ -38,6 +38,17 @@ public final class WorkoutDashboardModel: ObservableObject {
     @Published public private(set) var isNetworkReachable: Bool = true
     @Published public private(set) var hasLoadedInitialData: Bool = false
 
+    /// VOL-112: most-recent `WatchPayloadKind.rawValue` observed by
+    /// `handleWatchPayload`. Surfaced as observable state so XCUITests
+    /// (and only XCUITests, via the deterministic-mode debug overlay in
+    /// `VolumeArcApp`) can assert the watch-payload arrival path
+    /// actually fired without scraping telemetry events. In production
+    /// this is set as a side effect of every received payload but no UI
+    /// reads it — the runtime cost is one optional-string assignment per
+    /// payload arrival, which is negligible vs the existing telemetry
+    /// `record` + `refresh()` work in the same handler.
+    @Published public private(set) var lastWatchPayloadKindForTesting: String?
+
     // MARK: - Dependencies
 
     private let aiProvider: AICoachProvider
@@ -614,6 +625,11 @@ public final class WorkoutDashboardModel: ObservableObject {
             severity: .info,
             message: "Watch payload: \(payload.kind.rawValue)"
         ))
+        // VOL-112: pin the most-recent kind for the test-only debug
+        // overlay. Done before refresh so a slow refresh doesn't delay
+        // the visible signal — XCUITests wait on this string and
+        // shouldn't have to wait for the full repository round-trip.
+        lastWatchPayloadKindForTesting = payload.kind.rawValue
         await refresh()
     }
 
