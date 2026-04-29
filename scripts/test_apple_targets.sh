@@ -57,6 +57,35 @@ xcodebuild \
 
 # XCUITests (journey coverage)
 reset_app_state
+
+# VOL-88: on Tart VM runners (iOS Simulator inside a virtualized macOS),
+# the XCUITest test runner ("VolumeArcAppUITests-Runner") sometimes
+# fails to initialize with:
+#   "Timed out waiting for AX loaded notification"
+# This is the iOS Accessibility daemon failing to come up before
+# XCTRunner's connect timeout. Standard pattern for virtualized
+# simulator environments: explicitly boot the destination simulator
+# and wait for `bootstatus -b` (which includes a Springboard wait)
+# before invoking xcodebuild test. Idempotent — if the simulator is
+# already booted, `simctl boot` returns "Already booted" (handled by
+# `|| true`).
+warm_simulator_for_ui_tests() {
+  local device="iPhone 17"
+  echo "Pre-warming '$device' for UI tests (Tart VM AX daemon stabilization)..."
+  xcrun simctl boot "$device" 2>/dev/null || true
+  # `bootstatus -b` blocks until the device reports `system_app == true`,
+  # which is a stronger signal than `-c` (which only waits for boot
+  # completion). Without this the AX daemon may not be ready when
+  # XCTRunner connects.
+  xcrun simctl bootstatus "$device" -b
+  # Belt-and-suspenders: even after bootstatus reports ready, the AX
+  # daemon can take a few additional seconds to initialize. 15s
+  # eliminates the flake observed on Tart VM runs of PR #83.
+  sleep 15
+  echo "Simulator '$device' is ready for XCUITests."
+}
+warm_simulator_for_ui_tests
+
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
   -scheme "VolumeArcAppUITests" \
