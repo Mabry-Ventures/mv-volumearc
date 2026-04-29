@@ -7,6 +7,11 @@ public struct ProfileView: View {
     @ObservedObject var model: WorkoutDashboardModel
     @State private var isEditingProfile = false
     @State private var isShowingPaywall = false
+    /// VOL-109: tracked locally so the Apple Health row can swap to
+    /// the "Connected" affordance after the prompt closes. Doesn't
+    /// drive any business logic — the actual HealthKit grant state is
+    /// queried by the data layer when it needs to read/write samples.
+    @State private var healthAuthorizationDidComplete = false
 
     public init(model: WorkoutDashboardModel) {
         self.model = model
@@ -94,6 +99,61 @@ public struct ProfileView: View {
                 .accessibilityHint(String(
                     localized: "Opens the paywall to start a Premium subscription",
                     comment: "VoiceOver hint for the upgrade row"
+                ))
+                .accessibilityAddTraits(.isButton)
+            }
+
+            // VOL-109: Apple Health connection row. Mirrors the
+            // onboarding "Connect Apple Health" button so users who
+            // skipped the prompt during onboarding (or want to revoke
+            // the connection later) have a settings entry point. Routes
+            // through `model.requestHealthKitAuthorization()` so the
+            // same `shouldSurfacePermissionPrompts` gate applies.
+            Section(String(localized: "Apple Health", comment: "Profile tab section header — Apple Health connection")) {
+                HStack {
+                    Label(
+                        healthAuthorizationDidComplete
+                            ? String(
+                                localized: "Connected to Apple Health",
+                                comment: "Profile row label after the Apple Health authorization sheet has been answered"
+                            )
+                            : String(
+                                localized: "Connect Apple Health",
+                                comment: "Profile row label that opens the Apple Health authorization sheet"
+                            ),
+                        systemImage: "heart.text.square.fill"
+                    )
+                    .foregroundStyle(VA.Colors.primary)
+                    Spacer()
+                    if healthAuthorizationDidComplete {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(VA.Colors.success)
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    Task {
+                        VAHaptics.tap()
+                        _ = await model.requestHealthKitAuthorization()
+                        healthAuthorizationDidComplete = true
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("profile.health.connect")
+                .accessibilityLabel(
+                    healthAuthorizationDidComplete
+                        ? String(
+                            localized: "Apple Health connected",
+                            comment: "VoiceOver label for the Apple Health row after connection"
+                        )
+                        : String(
+                            localized: "Connect to Apple Health",
+                            comment: "VoiceOver label for the Apple Health row before connection"
+                        )
+                )
+                .accessibilityHint(String(
+                    localized: "Opens the Apple Health authorization sheet to share your workout data",
+                    comment: "VoiceOver hint for the Apple Health row"
                 ))
                 .accessibilityAddTraits(.isButton)
             }

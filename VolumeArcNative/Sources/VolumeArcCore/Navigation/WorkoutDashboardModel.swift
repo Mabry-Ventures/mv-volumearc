@@ -56,6 +56,11 @@ public final class WorkoutDashboardModel: ObservableObject {
     private let telemetrySink: TelemetrySink
     private let progressionEngine = ProgressionEngine()
     public let featureFlags: FeatureFlagProvider
+    /// VOL-109: HealthKit authorization gateway. Stored so onboarding +
+    /// the Profile-tab "Apple Health" row can route auth requests
+    /// through `requestHealthKitAuthorization()` rather than reaching
+    /// into a global `HealthStore` singleton.
+    private let healthStore: HealthStore
 
     #if canImport(SwiftData)
     private let workoutRepository: SwiftDataWorkoutRepository?
@@ -102,6 +107,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.voiceCoach = voiceCoach
         self.telemetrySink = telemetrySink
         self.featureFlags = featureFlags ?? LocalFeatureFlagProvider()
+        self.healthStore = healthStore
         self.workoutRepository = repository
         self.coachMemoryRepository = coachMemoryRepository
         self.userProfileRepository = userProfileRepository
@@ -136,6 +142,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.voiceCoach = voiceCoach
         self.telemetrySink = telemetrySink
         self.featureFlags = featureFlags ?? LocalFeatureFlagProvider()
+        self.healthStore = healthStore
         #if canImport(SwiftData)
         self.workoutRepository = nil
         self.coachMemoryRepository = nil
@@ -166,6 +173,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.voiceCoach = voiceCoach
         self.telemetrySink = telemetrySink
         self.featureFlags = featureFlags ?? LocalFeatureFlagProvider()
+        self.healthStore = healthStore
         #if canImport(SwiftData)
         self.workoutRepository = nil
         self.coachMemoryRepository = nil
@@ -631,6 +639,91 @@ public final class WorkoutDashboardModel: ObservableObject {
         // shouldn't have to wait for the full repository round-trip.
         lastWatchPayloadKindForTesting = payload.kind.rawValue
         await refresh()
+    }
+
+    /// VOL-110: perform a background-app-refresh cycle. Records bracketing
+    /// telemetry events (`category: "background", name: "refresh_started"`
+    /// and `"refresh_completed"`) so the BGTask handler's observability
+    /// is testable without owning a `BGAppRefreshTask` instance (which
+    /// can't be constructed in user code — only the system allocates one).
+    ///
+    /// `VolumeArcBackgroundTasks.handleAppRefresh` calls into this method
+    /// from the `BGTaskScheduler` handler closure. Tests call it directly
+    /// against an in-memory dashboard model + capturing telemetry sink.
+    ///
+    /// Returns `true` when the underlying refresh completed without
+    /// throwing; `false` is reserved for future failure modes that bubble
+    /// up explicit errors (today `refresh()` swallows persistence errors
+    /// and surfaces them via published state, so this currently always
+    /// returns `true` after `refresh()` returns).
+    @discardableResult
+    public func performBackgroundRefresh() async -> Bool {
+        telemetrySink.record(TelemetryEvent(
+            category: "background",
+            name: "refresh_started",
+            severity: .info,
+            message: "BGTask app-refresh handler entered."
+        ))
+        await refresh()
+        telemetrySink.record(TelemetryEvent(
+            category: "background",
+            name: "refresh_completed",
+            severity: .info,
+            message: "BGTask app-refresh handler completed."
+        ))
+        return true
+    }
+
+    /// VOL-109: request HealthKit authorization for the read/write scopes
+    /// declared in `HealthKitAuthorizationScope`. Routes through
+    /// `VolumeArcRuntimeFlags.shouldSurfacePermissionPrompts` so:
+    /// - production builds: prompt fires every call (HealthKit itself
+    ///   no-ops repeats once the user has decided)
+    /// - `-UITestMode 1` only: silently no-ops (returns false), so
+    ///   journey tests don't trip on the system dialog
+    /// - `-UITestMode 1 -SimulatePermissionPrompts 1`: prompt fires so
+    ///   `addUIInterruptionMonitor`-driven tests can drive the dialog
+    ///
+    /// Records a telemetry event for observability:
+    ///   `category: "health", name: "auth_requested" | "auth_skipped" | "auth_failed"`
+    /// Tests assert on this telemetry event to confirm the routing
+    /// decision without depending on real HealthKit state.
+    ///
+    /// Returns `true` if HealthKit reported a successful authorization
+    /// request (regardless of which scopes the user actually granted —
+    /// HealthKit doesn't disclose per-type grant state from a request
+    /// call). Returns `false` if the prompt was skipped for any reason
+    /// or HealthKit itself errored.
+    @discardableResult
+    public func requestHealthKitAuthorization() async -> Bool {
+        guard VolumeArcRuntimeFlags.shouldSurfacePermissionPrompts else {
+            telemetrySink.record(TelemetryEvent(
+                category: "health",
+                name: "auth_skipped",
+                severity: .info,
+                message: "HealthKit prompt skipped under deterministic mode without simulation flag."
+            ))
+            return false
+        }
+
+        do {
+            let granted = try await healthStore.requestAuthorization()
+            telemetrySink.record(TelemetryEvent(
+                category: "health",
+                name: "auth_requested",
+                severity: .info,
+                message: "HealthKit authorization request returned granted=\(granted)."
+            ))
+            return granted
+        } catch {
+            telemetrySink.record(TelemetryEvent(
+                category: "health",
+                name: "auth_failed",
+                severity: .warning,
+                message: "HealthKit authorization request errored: \(error.localizedDescription)"
+            ))
+            return false
+        }
     }
 
     public func handleHealthBackgroundUpdate(_ update: HealthBackgroundUpdate) async {

@@ -55,6 +55,18 @@ enum VolumeArcLaunchArguments {
         flagEnabled("-PerfTestMode")
     }
 
+    /// `-SimulatePermissionPrompts 1` — VOL-109. Re-enables system
+    /// permission prompts (HealthKit, Notifications) inside
+    /// `-UITestMode 1` so XCUITests can drive the prompt path via
+    /// `addUIInterruptionMonitor`. Without this flag,
+    /// `VolumeArcRuntimeFlags.isDeterministicMode` short-circuits every
+    /// prompt site so existing journey tests don't trip on the system
+    /// dialog. The pair `-UITestMode 1 -SimulatePermissionPrompts 1` is
+    /// the signature for permission-flow XCUITests.
+    static var simulatePermissionPrompts: Bool {
+        flagEnabled("-SimulatePermissionPrompts")
+    }
+
     /// `-PostFakeWatchPayload <kind>` — VOL-112. Tells the app to post a
     /// simulated `WatchPayload` notification at launch, as if a paired
     /// Apple Watch had sent the named kind. Used by
@@ -105,6 +117,10 @@ struct VolumeArcApp: App {
         // list caps without taking a new dependency on the launch
         // argument layer.
         VolumeArcRuntimeFlags.isPerformanceTestMode = VolumeArcLaunchArguments.isPerfTestMode
+        // VOL-109: mirror `-SimulatePermissionPrompts` so the prompt
+        // sites can re-enable the system dialog inside `-UITestMode 1`
+        // for the permission-flow XCUITests.
+        VolumeArcRuntimeFlags.simulatePermissionPrompts = VolumeArcLaunchArguments.simulatePermissionPrompts
         #if canImport(Sentry)
         VolumeArcSentryConfiguration.bootstrapIfNeeded()
         #endif

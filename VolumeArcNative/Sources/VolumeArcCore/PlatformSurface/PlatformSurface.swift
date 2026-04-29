@@ -105,7 +105,15 @@ public enum PlatformSurfaceSharedStorage {
 public enum PlatformSurfaceDefaultsReader {
     /// Returns the last widget snapshot the app wrote to shared storage, or nil if none.
     public static func loadWidgetSnapshot() -> WidgetSummarySnapshot? {
-        let defaults = PlatformSurfaceSharedStorage.defaults
+        loadWidgetSnapshot(from: PlatformSurfaceSharedStorage.defaults)
+    }
+
+    /// VOL-110: testable overload that reads from a caller-provided
+    /// `UserDefaults`. Same decode logic as the no-arg variant — the
+    /// production path uses the app-group store, tests pass an
+    /// isolated `UserDefaults(suiteName:)` so they don't depend on
+    /// the app-group entitlement and don't pollute the real store.
+    public static func loadWidgetSnapshot(from defaults: UserDefaults) -> WidgetSummarySnapshot? {
         guard let data = defaults.data(forKey: PlatformSurfaceSharedStorage.widgetSnapshotKey),
               let decoded = try? JSONDecoder().decode(WidgetSummarySnapshot.self, from: data)
         else {
@@ -131,7 +139,16 @@ public enum PlatformSurfaceDefaultsReader {
 public enum PlatformSurfaceDefaultsWriter {
     /// Persist a widget snapshot and post the change notification.
     public static func saveWidgetSnapshot(_ snapshot: WidgetSummarySnapshot) {
-        let defaults = PlatformSurfaceSharedStorage.defaults
+        saveWidgetSnapshot(snapshot, to: PlatformSurfaceSharedStorage.defaults)
+    }
+
+    /// VOL-110: testable overload that writes to a caller-provided
+    /// `UserDefaults`. Same encode + notification-post logic — tests
+    /// inject a per-test `UserDefaults(suiteName:)` so writes are
+    /// hermetic. The change notification is still posted because it's
+    /// part of the contract (the app's `RootDashboardView` listens for
+    /// it to trigger `WidgetCenter.reloadAllTimelines()`).
+    public static func saveWidgetSnapshot(_ snapshot: WidgetSummarySnapshot, to defaults: UserDefaults) {
         if let data = try? JSONEncoder().encode(snapshot) {
             defaults.set(data, forKey: PlatformSurfaceSharedStorage.widgetSnapshotKey)
         }

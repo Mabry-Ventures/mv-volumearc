@@ -3,17 +3,36 @@ import SwiftUI
 import VolumeArcCore
 
 /// First-run onboarding experience.
-/// 5 steps: welcome → profile → preferences → coaching style → permissions → done.
+/// 6 steps: welcome → profile → preferences → coaching style → permissions → done.
 public struct OnboardingView: View {
     @Binding var isPresented: Bool
     let onComplete: (OnboardingResult) -> Void
+    /// VOL-109: callback that fires the Apple Health authorization
+    /// prompt when the user taps "Connect Apple Health" on the
+    /// permissions step. Returns `true` if the system reported a
+    /// successful authorization request (regardless of which scopes the
+    /// user toggled on; HealthKit doesn't disclose per-type grant
+    /// state). Optional so existing call sites that don't yet wire the
+    /// callback keep compiling — a missing callback degrades the step
+    /// to "informational only, just tap Continue to advance".
+    let onRequestHealthAuthorization: (() async -> Bool)?
 
     @State private var step: Step = .welcome
     @State private var result = OnboardingResult()
+    /// VOL-109: tracked locally so the permissions step can show a
+    /// "Connected" affordance after the prompt closes. Doesn't drive
+    /// any business logic — Continue advances unconditionally — so a
+    /// "false" value just means we don't change the button label.
+    @State private var healthAuthorizationDidComplete = false
 
-    public init(isPresented: Binding<Bool>, onComplete: @escaping (OnboardingResult) -> Void) {
+    public init(
+        isPresented: Binding<Bool>,
+        onComplete: @escaping (OnboardingResult) -> Void,
+        onRequestHealthAuthorization: (() async -> Bool)? = nil
+    ) {
         self._isPresented = isPresented
         self.onComplete = onComplete
+        self.onRequestHealthAuthorization = onRequestHealthAuthorization
     }
 
     public var body: some View {
@@ -91,6 +110,7 @@ public struct OnboardingView: View {
         case .profile: profileStep
         case .preferences: preferencesStep
         case .coachingStyle: coachingStyleStep
+        case .permissions: permissionsStep
         case .done: doneStep
         }
     }
@@ -251,6 +271,78 @@ public struct OnboardingView: View {
         }
     }
 
+    /// VOL-109: Apple Health permission step. Optional connect — the
+    /// Continue button advances to `.done` regardless of grant state.
+    /// The "Connect Apple Health" button triggers the system prompt via
+    /// `onRequestHealthAuthorization` (when wired by the host); after
+    /// the prompt closes (allow OR deny) the button label flips to
+    /// "Connected" so the user knows the request completed.
+    private var permissionsStep: some View {
+        VStack(spacing: VA.Space.xl) {
+            Image(systemName: "heart.text.square.fill")
+                .font(.system(size: 88, weight: .semibold))
+                .foregroundStyle(VA.Colors.primary)
+                .vaAppear()
+
+            VStack(spacing: VA.Space.md) {
+                Text(String(
+                    localized: "Connect Apple Health",
+                    comment: "Onboarding permissions step title"
+                ))
+                .font(VA.Typography.title)
+                .foregroundStyle(VA.Colors.textPrimary)
+                .multilineTextAlignment(.center)
+
+                Text(String(
+                    localized: "VolumeArc reads your past workouts and writes new sessions back. You stay in control — connect later from Profile if you'd rather decide now.",
+                    comment: "Onboarding permissions step body explaining what HealthKit data is read/written and that the connection is optional"
+                ))
+                .font(VA.Typography.body)
+                .foregroundStyle(VA.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 320)
+            }
+
+            if onRequestHealthAuthorization != nil {
+                VAButton(
+                    healthAuthorizationDidComplete
+                        ? String(
+                            localized: "Connected",
+                            comment: "Onboarding permissions step button label after the system prompt has been answered"
+                        )
+                        : String(
+                            localized: "Connect Apple Health",
+                            comment: "Onboarding permissions step primary action — opens the HealthKit authorization sheet"
+                        ),
+                    style: healthAuthorizationDidComplete ? .ghost : .secondary,
+                    accessibilityIdentifier: "onboarding.permissions.connect-health"
+                ) {
+                    Task {
+                        VAHaptics.tap()
+                        // The result (granted true/false) is intentionally
+                        // ignored at this layer — HealthKit doesn't report
+                        // per-type grant state from a request, so a `false`
+                        // return just means the user closed the sheet
+                        // (which is exactly what we want to acknowledge).
+                        _ = await onRequestHealthAuthorization?()
+                        healthAuthorizationDidComplete = true
+                    }
+                }
+                .frame(maxWidth: 320)
+                .disabled(healthAuthorizationDidComplete)
+            }
+
+            Text(String(
+                localized: "You can change this anytime in Profile → Apple Health.",
+                comment: "Onboarding permissions step footer pointing the user to the Profile-tab settings entry for HealthKit"
+            ))
+            .font(VA.Typography.footnote)
+            .foregroundStyle(VA.Colors.textTertiary)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: 320)
+        }
+    }
+
     private var doneStep: some View {
         VStack(spacing: VA.Space.xl) {
             Image(systemName: "checkmark.circle.fill")
@@ -391,7 +483,13 @@ public struct OnboardingView: View {
         case profile = 1
         case preferences = 2
         case coachingStyle = 3
-        case done = 4
+        // VOL-109: Apple Health connection step. The Continue button
+        // advances to .done regardless of grant state — connection is
+        // optional. The "Connect Apple Health" button on the step
+        // triggers the HealthKit auth prompt via the dashboard model;
+        // tests use `addUIInterruptionMonitor` to drive the system sheet.
+        case permissions = 4
+        case done = 5
     }
 }
 

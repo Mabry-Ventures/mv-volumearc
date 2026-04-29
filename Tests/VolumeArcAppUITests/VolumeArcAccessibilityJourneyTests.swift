@@ -177,10 +177,11 @@ final class VolumeArcAccessibilityJourneyTests: XCTestCase {
             "[\(contextLabel)] Onboarding cover should be visible"
         )
 
-        // Same 4-Continue + 1-Finish loop as the parent journey. Larger
-        // type / longer strings only stress the layout — the step count
-        // is unchanged.
-        for stepIndex in 0..<4 {
+        // Same 5-Continue + 1-Finish loop as the parent journey (welcome,
+        // profile, preferences, coachingStyle, permissions). Larger type
+        // / longer strings only stress the layout — the step count is
+        // unchanged from the parent journey.
+        for stepIndex in 0..<5 {
             dismissKeyboardIfPresent(in: app)
             let continueButton = app.descendants(matching: .any)
                 .matching(identifier: "onboarding.continue").firstMatch

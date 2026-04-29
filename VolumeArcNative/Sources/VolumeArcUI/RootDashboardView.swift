@@ -80,19 +80,31 @@ public struct RootDashboardView: View {
             }
         }
         .fullScreenCover(isPresented: $navigation.showOnboarding) {
-            OnboardingView(isPresented: $navigation.showOnboarding) { result in
-                Task {
-                    // VOL-57 fixup: only `updateProfile` here; the
-                    // `.onChange(of: model.isOnboardingComplete)` below is
-                    // the single source of truth for dismissing the cover.
-                    // If `updateProfile` silently fails (SwiftData save
-                    // error), `isOnboardingComplete` stays false, the cover
-                    // stays up, and the user can retry. Unconditionally
-                    // dismissing here let users bypass the first-run gate
-                    // whenever the profile save happened to fail.
-                    await model.updateProfile(result.toDefaults())
+            OnboardingView(
+                isPresented: $navigation.showOnboarding,
+                onComplete: { result in
+                    Task {
+                        // VOL-57 fixup: only `updateProfile` here; the
+                        // `.onChange(of: model.isOnboardingComplete)` below is
+                        // the single source of truth for dismissing the cover.
+                        // If `updateProfile` silently fails (SwiftData save
+                        // error), `isOnboardingComplete` stays false, the cover
+                        // stays up, and the user can retry. Unconditionally
+                        // dismissing here let users bypass the first-run gate
+                        // whenever the profile save happened to fail.
+                        await model.updateProfile(result.toDefaults())
+                    }
+                },
+                // VOL-109: route the permissions-step "Connect Apple Health"
+                // tap through the dashboard model, which gates on
+                // `VolumeArcRuntimeFlags.shouldSurfacePermissionPrompts` so
+                // existing journey tests never see the system sheet, but
+                // permission-flow XCUITests with
+                // `-SimulatePermissionPrompts 1` do.
+                onRequestHealthAuthorization: {
+                    await model.requestHealthKitAuthorization()
                 }
-            }
+            )
         }
         // VOL-93: paywall sheet attached at the root so it can be triggered
         // from launch arguments (`-ShowPaywallOnLaunch`) as well as from

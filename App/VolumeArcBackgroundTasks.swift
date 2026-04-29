@@ -78,8 +78,14 @@ enum VolumeArcBackgroundTasks {
 
         Task { @MainActor in
             if let model = sharedModel {
-                await model.refresh()
-                completion.complete(success: true)
+                // VOL-110: route through `performBackgroundRefresh` rather
+                // than `refresh` directly so the BGTask handler emits
+                // bracketing telemetry events
+                // (`background.refresh_started` / `_completed`) that
+                // operations can use to observe BGTask wake events. The
+                // method is also the test seam for VOL-110's unit test.
+                let success = await model.performBackgroundRefresh()
+                completion.complete(success: success)
             } else {
                 completion.complete(success: false)
             }
