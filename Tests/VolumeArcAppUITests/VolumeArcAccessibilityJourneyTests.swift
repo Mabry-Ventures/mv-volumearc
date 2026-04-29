@@ -89,7 +89,7 @@ final class VolumeArcAccessibilityJourneyTests: XCTestCase {
     /// the timeout, the layout has hard-broken.
     func testSeededDashboardUnderCombinedDynamicTypeAndPseudoLocaleStress() throws {
         let app = VolumeArcAppUITestSupport.makeSeededApp(
-            extra: VolumeArcAppUITestSupport.dynamicTypeAndPseudoLocaleStressLaunchArgs
+            extra: VolumeArcAppUITestSupport.combinedStressLaunchArgs
         )
         app.launch()
 

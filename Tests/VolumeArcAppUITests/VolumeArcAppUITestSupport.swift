@@ -78,7 +78,7 @@ enum VolumeArcAppUITestSupport {
     /// Dynamic Type + double-length pseudo-locale at the same time. Use
     /// this for the worst-case smoke test; individual axis tests use the
     /// per-axis launch-arg arrays above.
-    static var dynamicTypeAndPseudoLocaleStressLaunchArgs: [String] {
+    static var combinedStressLaunchArgs: [String] {
         dynamicTypeAccessibility5LaunchArgs + pseudoLocaleDoubleLengthLaunchArgs
     }
 }
