@@ -197,7 +197,7 @@ jobs:
       - name: Upload xcresult
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: TestResults-${{ github.run_id }}
           path: .build/derived-data/TestResults.xcresult
@@ -209,7 +209,7 @@ jobs:
       - name: Upload coverage summary
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: CoverageSummary-${{ github.run_id }}
           path: .build/coverage-summary.json
@@ -409,7 +409,7 @@ jobs:
 
       - name: Upload perf xcresult on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: perf-results-${{ github.sha }}
           path: .build/perf-results.xcresult
