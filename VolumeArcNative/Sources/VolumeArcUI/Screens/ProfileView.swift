@@ -98,6 +98,61 @@ public struct ProfileView: View {
                 .accessibilityAddTraits(.isButton)
             }
 
+            // VOL-109: Apple Health connection row. Mirrors the
+            // onboarding "Connect Apple Health" button so users who
+            // skipped the prompt during onboarding (or want to revoke
+            // the connection later) have a settings entry point. Routes
+            // through `model.requestHealthKitAuthorization()` so the
+            // same `shouldSurfacePermissionPrompts` gate applies.
+            Section(String(localized: "Apple Health", comment: "Profile tab section header — Apple Health connection")) {
+                HStack {
+                    Label(
+                        model.isHealthAuthorized
+                            ? String(
+                                localized: "Connected to Apple Health",
+                                comment: "Profile row label after the Apple Health authorization sheet has been answered"
+                            )
+                            : String(
+                                localized: "Connect Apple Health",
+                                comment: "Profile row label that opens the Apple Health authorization sheet"
+                            ),
+                        systemImage: "heart.text.square.fill"
+                    )
+                    .foregroundStyle(VA.Colors.primary)
+                    Spacer()
+                    if model.isHealthAuthorized {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(VA.Colors.success)
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    Task {
+                        VAHaptics.tap()
+                        await model.requestHealthKitAuthorization()
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("profile.health.connect")
+                .accessibilityLabel(
+                    model.isHealthAuthorized
+                        ? String(
+                            localized: "Apple Health connected",
+                            comment: "VoiceOver label for the Apple Health row after connection"
+                        )
+                        : String(
+                            localized: "Connect to Apple Health",
+                            comment: "VoiceOver label for the Apple Health row before connection"
+                        )
+                )
+                .accessibilityValue(healthAuthorizationAccessibilityValue)
+                .accessibilityHint(String(
+                    localized: "Opens the Apple Health authorization sheet to share your workout data",
+                    comment: "VoiceOver hint for the Apple Health row"
+                ))
+                .accessibilityAddTraits(.isButton)
+            }
+
             Section(String(localized: "App", comment: "Profile tab section header — app-level settings")) {
                 NavigationLink {
                     DiagnosticsView()
@@ -131,6 +186,7 @@ public struct ProfileView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .accessibilityIdentifier("profile.root")
         .navigationTitle(DashboardTab.profile.title)
         .navigationBarTitleDisplayMode(.large)
         .sheet(isPresented: $isEditingProfile) {
@@ -194,6 +250,27 @@ public struct ProfileView: View {
         let parts = model.athlete.name.split(separator: " ").prefix(2)
         if parts.isEmpty { return "VA" }
         return parts.compactMap { $0.first }.map(String.init).joined()
+    }
+
+    private var healthAuthorizationAccessibilityValue: String {
+        if model.isHealthAuthorized {
+            return String(
+                localized: "Connected",
+                comment: "VoiceOver value for the Apple Health row after authorization"
+            )
+        }
+
+        if VolumeArcRuntimeFlags.shouldSurfacePermissionPrompts {
+            return String(
+                localized: "System permission prompt enabled",
+                comment: "VoiceOver value for the Apple Health row when tapping will surface the system prompt"
+            )
+        }
+
+        return String(
+            localized: "Not connected",
+            comment: "VoiceOver value for the Apple Health row before authorization"
+        )
     }
 
     private func row(label: String, value: String, icon: String) -> some View {

@@ -19,6 +19,7 @@ public struct RootDashboardView: View {
             }
             .tabItem {
                 Label(DashboardTab.today.title, systemImage: DashboardTab.today.systemImage)
+                    .accessibilityIdentifier("tab.today")
             }
             .tag(DashboardTab.today)
             .accessibilityIdentifier("tab.today")
@@ -28,6 +29,7 @@ public struct RootDashboardView: View {
             }
             .tabItem {
                 Label(DashboardTab.workouts.title, systemImage: DashboardTab.workouts.systemImage)
+                    .accessibilityIdentifier("tab.workouts")
             }
             .tag(DashboardTab.workouts)
             .accessibilityIdentifier("tab.workouts")
@@ -37,6 +39,7 @@ public struct RootDashboardView: View {
             }
             .tabItem {
                 Label(DashboardTab.coach.title, systemImage: DashboardTab.coach.systemImage)
+                    .accessibilityIdentifier("tab.coach")
             }
             .tag(DashboardTab.coach)
             .accessibilityIdentifier("tab.coach")
@@ -46,6 +49,7 @@ public struct RootDashboardView: View {
             }
             .tabItem {
                 Label(DashboardTab.signals.title, systemImage: DashboardTab.signals.systemImage)
+                    .accessibilityIdentifier("tab.signals")
             }
             .tag(DashboardTab.signals)
             .accessibilityIdentifier("tab.signals")
@@ -55,6 +59,7 @@ public struct RootDashboardView: View {
             }
             .tabItem {
                 Label(DashboardTab.profile.title, systemImage: DashboardTab.profile.systemImage)
+                    .accessibilityIdentifier("tab.profile")
             }
             .tag(DashboardTab.profile)
             .accessibilityIdentifier("tab.profile")
@@ -64,8 +69,19 @@ public struct RootDashboardView: View {
         .environmentObject(toastPresenter)
         .vaToastOverlay(toastPresenter)
         .task {
+            let shouldOpenProfileOnLaunch = Self.shouldOpenProfileOnLaunch
+            if shouldOpenProfileOnLaunch {
+                navigation.openProfile()
+            }
+
             await model.refresh()
             navigation.showOnboarding = model.hasLoadedInitialData && !model.isOnboardingComplete
+            // XCUITest affordance: open the Profile surface directly so
+            // tests that target Profile-only rows do not depend on
+            // simulator-specific TabView hit testing.
+            if shouldOpenProfileOnLaunch, navigation.showOnboarding == false {
+                navigation.openProfile()
+            }
             // VOL-93: `-ShowPaywallOnLaunch 1` asks the dashboard to
             // present the paywall as soon as the app boots. This is an
             // XCUITest affordance so journey tests can exercise the
@@ -80,19 +96,31 @@ public struct RootDashboardView: View {
             }
         }
         .fullScreenCover(isPresented: $navigation.showOnboarding) {
-            OnboardingView(isPresented: $navigation.showOnboarding) { result in
-                Task {
-                    // VOL-57 fixup: only `updateProfile` here; the
-                    // `.onChange(of: model.isOnboardingComplete)` below is
-                    // the single source of truth for dismissing the cover.
-                    // If `updateProfile` silently fails (SwiftData save
-                    // error), `isOnboardingComplete` stays false, the cover
-                    // stays up, and the user can retry. Unconditionally
-                    // dismissing here let users bypass the first-run gate
-                    // whenever the profile save happened to fail.
-                    await model.updateProfile(result.toDefaults())
+            OnboardingView(
+                isPresented: $navigation.showOnboarding,
+                onComplete: { result in
+                    Task {
+                        // VOL-57 fixup: only `updateProfile` here; the
+                        // `.onChange(of: model.isOnboardingComplete)` below is
+                        // the single source of truth for dismissing the cover.
+                        // If `updateProfile` silently fails (SwiftData save
+                        // error), `isOnboardingComplete` stays false, the cover
+                        // stays up, and the user can retry. Unconditionally
+                        // dismissing here let users bypass the first-run gate
+                        // whenever the profile save happened to fail.
+                        await model.updateProfile(result.toDefaults())
+                    }
+                },
+                // VOL-109: route the permissions-step "Connect Apple Health"
+                // tap through the dashboard model, which gates on
+                // `VolumeArcRuntimeFlags.shouldSurfacePermissionPrompts` so
+                // existing journey tests never see the system sheet, but
+                // permission-flow XCUITests with
+                // `-SimulatePermissionPrompts 1` do.
+                onRequestHealthAuthorization: {
+                    await model.requestHealthKitAuthorization()
                 }
-            }
+            )
         }
         // VOL-93: paywall sheet attached at the root so it can be triggered
         // from launch arguments (`-ShowPaywallOnLaunch`) as well as from
@@ -136,6 +164,19 @@ public struct RootDashboardView: View {
     private static var shouldShowPaywallOnLaunch: Bool {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: "-ShowPaywallOnLaunch") else {
+            return false
+        }
+        let nextIndex = arguments.index(after: index)
+        guard nextIndex < arguments.endIndex else { return true }
+        let rawValue = arguments[nextIndex]
+        guard rawValue.hasPrefix("-") == false else { return true }
+        return rawValue != "0"
+    }
+
+    /// XCUITest helper for journeys that need a stable Profile entry point.
+    private static var shouldOpenProfileOnLaunch: Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "-OpenProfileOnLaunch") else {
             return false
         }
         let nextIndex = arguments.index(after: index)

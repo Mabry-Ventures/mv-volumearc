@@ -49,5 +49,13 @@
 		<string>fetch</string>
 		<string>processing</string>
 	</array>
-</dict>
+
+	<!-- HealthKit privacy copy kept here so static plist checks can
+	     verify the authorization path even before build-setting
+	     `INFOPLIST_KEY_*` values are merged by Xcode. -->
+	<key>NSHealthShareUsageDescription</key>
+	<string>VolumeArc reads your completed workouts from Apple Health to show your training history and calculate readiness.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>VolumeArc writes completed workouts so your training history stays in sync with Apple Health.</string>
+	</dict>
 </plist>

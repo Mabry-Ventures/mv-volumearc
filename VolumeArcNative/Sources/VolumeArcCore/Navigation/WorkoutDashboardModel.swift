@@ -37,16 +37,11 @@ public final class WorkoutDashboardModel: ObservableObject {
     @Published public var isOnboardingComplete: Bool = false
     @Published public private(set) var isNetworkReachable: Bool = true
     @Published public private(set) var hasLoadedInitialData: Bool = false
+    @Published public private(set) var isHealthAuthorized: Bool = false
 
-    /// VOL-112: most-recent `WatchPayloadKind.rawValue` observed by
-    /// `handleWatchPayload`. Surfaced as observable state so XCUITests
-    /// (and only XCUITests, via the deterministic-mode debug overlay in
-    /// `VolumeArcApp`) can assert the watch-payload arrival path
-    /// actually fired without scraping telemetry events. In production
-    /// this is set as a side effect of every received payload but no UI
-    /// reads it — the runtime cost is one optional-string assignment per
-    /// payload arrival, which is negligible vs the existing telemetry
-    /// `record` + `refresh()` work in the same handler.
+    /// VOL-112: most-recent Watch payload kind, surfaced for the
+    /// deterministic-mode debug overlay so XCUITests can assert the
+    /// watch-payload arrival path without scraping telemetry events.
     @Published public private(set) var lastWatchPayloadKindForTesting: String?
 
     // MARK: - Dependencies
@@ -56,6 +51,11 @@ public final class WorkoutDashboardModel: ObservableObject {
     private let telemetrySink: TelemetrySink
     private let progressionEngine = ProgressionEngine()
     public let featureFlags: FeatureFlagProvider
+    /// VOL-109: HealthKit authorization gateway. Stored so onboarding +
+    /// the Profile-tab "Apple Health" row can route auth requests
+    /// through `requestHealthKitAuthorization()` rather than reaching
+    /// into a global `HealthStore` singleton.
+    private let healthStore: HealthStore
 
     #if canImport(SwiftData)
     private let workoutRepository: SwiftDataWorkoutRepository?
@@ -102,6 +102,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.voiceCoach = voiceCoach
         self.telemetrySink = telemetrySink
         self.featureFlags = featureFlags ?? LocalFeatureFlagProvider()
+        self.healthStore = healthStore
         self.workoutRepository = repository
         self.coachMemoryRepository = coachMemoryRepository
         self.userProfileRepository = userProfileRepository
@@ -136,6 +137,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.voiceCoach = voiceCoach
         self.telemetrySink = telemetrySink
         self.featureFlags = featureFlags ?? LocalFeatureFlagProvider()
+        self.healthStore = healthStore
         #if canImport(SwiftData)
         self.workoutRepository = nil
         self.coachMemoryRepository = nil
@@ -166,6 +168,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.voiceCoach = voiceCoach
         self.telemetrySink = telemetrySink
         self.featureFlags = featureFlags ?? LocalFeatureFlagProvider()
+        self.healthStore = healthStore
         #if canImport(SwiftData)
         self.workoutRepository = nil
         self.coachMemoryRepository = nil
@@ -182,13 +185,16 @@ public final class WorkoutDashboardModel: ObservableObject {
     // MARK: - Refresh
 
     /// Reload all published state from repositories. Called at launch and after writes.
-    public func refresh() async {
+    @discardableResult
+    public func refresh() async -> Bool {
+        self.isHealthAuthorized = await healthStore.isAuthorized
+
         #if canImport(SwiftData)
         guard let workoutRepository,
               let userProfileRepository,
               let coachMemoryRepository,
               let trainingPlanRepository else {
-            return
+            return true
         }
 
         do {
@@ -246,6 +252,7 @@ public final class WorkoutDashboardModel: ObservableObject {
                 message: "Dashboard refreshed",
                 metadata: ["sessionCount": "\(sessions.count)", "readiness": "\(readiness.score)"]
             ))
+            return true
         } catch {
             telemetrySink.record(TelemetryEvent(
                 category: "dashboard",
@@ -253,7 +260,10 @@ public final class WorkoutDashboardModel: ObservableObject {
                 severity: .error,
                 message: "Failed to refresh dashboard: \(error.localizedDescription)"
             ))
+            return false
         }
+        #else
+        return true
         #endif
     }
 
@@ -655,6 +665,65 @@ public final class WorkoutDashboardModel: ObservableObject {
         )
     }
     #endif
+}
+
+public extension WorkoutDashboardModel {
+    /// VOL-110: BGTask app-refresh entry point with bracketing telemetry.
+    @discardableResult
+    func performBackgroundRefresh() async -> Bool {
+        telemetrySink.record(TelemetryEvent(
+            category: "background",
+            name: "refresh_started",
+            severity: .info,
+            message: "BGTask app-refresh handler entered."
+        ))
+        let success = await refresh()
+        telemetrySink.record(TelemetryEvent(
+            category: "background",
+            name: success ? "refresh_completed" : "refresh_failed",
+            severity: success ? .info : .error,
+            message: success
+                ? "BGTask app-refresh handler completed."
+                : "BGTask app-refresh handler failed."
+        ))
+        return success
+    }
+
+    /// VOL-109: request Apple Health authorization through the runtime prompt gate.
+    @discardableResult
+    func requestHealthKitAuthorization() async -> Bool {
+        guard VolumeArcRuntimeFlags.shouldSurfacePermissionPrompts else {
+            isHealthAuthorized = await healthStore.isAuthorized
+            telemetrySink.record(TelemetryEvent(
+                category: "health",
+                name: "auth_skipped",
+                severity: .info,
+                message: "HealthKit prompt skipped under deterministic mode without simulation flag."
+            ))
+            return false
+        }
+
+        do {
+            let granted = try await healthStore.requestAuthorization()
+            isHealthAuthorized = await healthStore.isAuthorized
+            telemetrySink.record(TelemetryEvent(
+                category: "health",
+                name: "auth_requested",
+                severity: .info,
+                message: "HealthKit authorization request returned granted=\(granted)."
+            ))
+            return granted && isHealthAuthorized
+        } catch {
+            isHealthAuthorized = await healthStore.isAuthorized
+            telemetrySink.record(TelemetryEvent(
+                category: "health",
+                name: "auth_failed",
+                severity: .warning,
+                message: "HealthKit authorization request errored: \(error.localizedDescription)"
+            ))
+            return false
+        }
+    }
 }
 
 // MARK: - Coach message model

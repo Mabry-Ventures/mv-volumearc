@@ -24,6 +24,10 @@ SCHEME="VolumeArcAppPerfTests"
 
 mkdir -p "$(dirname "$XCRESULT")"
 
+. "$ROOT/scripts/simulators.sh"
+
+IOS_TEST_DEVICE_NAME="$(resolve_ios_test_device --no-fallback)"
+
 ruby "scripts/generate_xcode_project.rb"
 
 # Wipe any stale perf result bundle — `xcodebuild test` refuses to
@@ -42,7 +46,7 @@ xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
   -scheme "$SCHEME" \
   -sdk iphonesimulator \
-  -destination "platform=iOS Simulator,name=iPhone 17" \
+  -destination "platform=iOS Simulator,name=$IOS_TEST_DEVICE_NAME" \
   -derivedDataPath "$DERIVED_DATA_PATH" \
   -resultBundlePath "$XCRESULT" \
   CODE_SIGNING_ALLOWED=NO \

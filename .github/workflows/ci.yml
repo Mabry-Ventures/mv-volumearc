@@ -69,6 +69,15 @@ jobs:
           fi
         shell: bash
 
+      - name: Prepare Ruby toolchain
+        # VOL-109/VOL-110 PR unblock: self-hosted runner images may have
+        # Homebrew on PATH without the ruby formula installed/linked, which
+        # leaves `ruby` resolving to macOS' EOL system Ruby despite the static
+        # PATH above. Bootstrap the Homebrew Ruby explicitly and publish the
+        # actual Ruby + gem bin dirs to following steps.
+        run: bash ./.github/scripts/prepare_ruby_toolchain.sh xcodeproj
+        shell: bash
+
       - name: Pre-flight
         # VOL-75: fail fast if the runner is missing something required.
         # Cheaper than a 20-minute build that dies at step 6 on a sick runner.
@@ -368,6 +377,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Prepare Ruby toolchain
+        run: bash ./.github/scripts/prepare_ruby_toolchain.sh xcodeproj
+        shell: bash
+
       - name: Pre-flight
         run: |
           set -euo pipefail
@@ -414,6 +427,10 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Prepare Ruby toolchain
+        run: bash ./.github/scripts/prepare_ruby_toolchain.sh bundler xcodeproj
+        shell: bash
 
       - name: Install dependencies
         run: bundle install

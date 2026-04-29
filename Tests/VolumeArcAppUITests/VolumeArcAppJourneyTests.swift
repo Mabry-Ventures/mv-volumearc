@@ -46,7 +46,7 @@ final class VolumeArcAppJourneyTests: XCTestCase {
             "Onboarding cover should be visible on first launch"
         )
 
-        // Tap "Continue" through the four non-final steps, then
+        // Tap "Continue" through the five non-final steps, then
         // "Get Started" to finish.
         //
         // VOL-114 fixed VAButton's accessibility identifier propagation,
@@ -58,13 +58,16 @@ final class VolumeArcAppJourneyTests: XCTestCase {
         // proceed. This keeps XCUITest's `kAXScrollToVisibleAction` from
         // failing on covered buttons.
         //
-        // 4 = `OnboardingView.Step.allCases.count - 1` (welcome → profile →
-        // preferences → coachingStyle → done). The last step shows
+        // 5 = `OnboardingView.Step.allCases.count - 1` (welcome → profile
+        // → preferences → coachingStyle → permissions → done). The
+        // permissions step (VOL-109) added between coachingStyle and done
+        // is "tap Continue to skip Apple Health" by default — this test
+        // doesn't engage the Connect button. The last step shows
         // "Get Started" / `onboarding.finish`, not Continue, so it's
         // tapped separately below. If a step is added or removed, update
         // this loop bound — the coupling is intentional rather than read
         // at runtime so the test stays a black-box smoke gate.
-        for _ in 0..<4 {
+        for _ in 0..<5 {
             dismissKeyboardIfPresent(in: app)
             let continueButton = app.descendants(matching: .any)
                 .matching(identifier: "onboarding.continue").firstMatch
