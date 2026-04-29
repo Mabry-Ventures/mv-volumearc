@@ -75,7 +75,7 @@ jobs:
         # leaves `ruby` resolving to macOS' EOL system Ruby despite the static
         # PATH above. Bootstrap the Homebrew Ruby explicitly and publish the
         # actual Ruby + gem bin dirs to following steps.
-        run: ./.github/scripts/prepare_ruby_toolchain.sh xcodeproj
+        run: bash ./.github/scripts/prepare_ruby_toolchain.sh xcodeproj
         shell: bash
 
       - name: Pre-flight
@@ -378,7 +378,7 @@ jobs:
           fetch-depth: 0
 
       - name: Prepare Ruby toolchain
-        run: ./.github/scripts/prepare_ruby_toolchain.sh xcodeproj
+        run: bash ./.github/scripts/prepare_ruby_toolchain.sh xcodeproj
         shell: bash
 
       - name: Pre-flight
@@ -429,7 +429,7 @@ jobs:
           fetch-depth: 0
 
       - name: Prepare Ruby toolchain
-        run: ./.github/scripts/prepare_ruby_toolchain.sh bundler xcodeproj
+        run: bash ./.github/scripts/prepare_ruby_toolchain.sh bundler xcodeproj
         shell: bash
 
       - name: Install dependencies
