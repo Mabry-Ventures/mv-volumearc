@@ -21,9 +21,8 @@ import XCTest
 ///    path).
 /// 3. Tapping the Profile-tab Apple Health row routes through the
 ///    same `requestHealthKitAuthorization` path (no prompt under
-///    plain `-UITestMode 1` thanks to the gate; the row UI updates to
-///    "Connected" anyway because the gate's no-op return still flips
-///    the local `healthAuthorizationDidComplete` state).
+///    plain `-UITestMode 1` thanks to the gate; because the gate
+///    returns `false`, the row must remain in its "Connect" state).
 ///
 /// Driving the actual HealthKit system sheet via `addUIInterruptionMonitor`
 /// requires `-SimulatePermissionPrompts 1` which is intentionally NOT
@@ -101,12 +100,14 @@ final class VolumeArcHealthKitPermissionJourneyTests: XCTestCase {
 
     /// VOL-109 contract: tapping the Profile-tab Apple Health row routes
     /// through the same permission gate. Under plain `-UITestMode 1`
-    /// the prompt is short-circuited (no system sheet appears), but the
-    /// row's local "Connected" affordance still flips so the user gets
-    /// feedback that something happened. This proves the wiring without
-    /// requiring a real system sheet.
+    /// the prompt is short-circuited (no system sheet appears), and the
+    /// row must stay in its "Connect" state because the model returned
+    /// `false`. This proves the wiring without requiring a real system
+    /// sheet and catches accidental "Connected" lies on denial/skips.
     func testProfileHealthRowRoutesThroughPermissionGate() throws {
-        let app = VolumeArcAppUITestSupport.makeSeededApp()
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenProfileOnLaunch", "1"]
+        )
         app.launch()
 
         XCTAssertTrue(
@@ -120,44 +121,27 @@ final class VolumeArcHealthKitPermissionJourneyTests: XCTestCase {
             "Dashboard should appear"
         )
 
-        // Navigate to the Profile tab via the `tab.profile` accessibility
-        // identifier set on the NavigationStack in `RootDashboardView`.
-        // Looking up by identifier rather than localized title keeps the
-        // test stable across pseudo-locale runs and tab-order changes.
-        let profileTab = app.descendants(matching: .any)
-            .matching(identifier: "tab.profile").firstMatch
+        let healthRow = waitForProfileHealthRow(in: app)
         XCTAssertTrue(
-            profileTab.waitForExistence(timeout: 10),
-            "Profile tab should be reachable via the tab.profile identifier"
-        )
-        profileTab.tap()
-
-        let healthRow = app.descendants(matching: .any)
-            .matching(identifier: "profile.health.connect").firstMatch
-        XCTAssertTrue(
-            healthRow.waitForExistence(timeout: 10),
+            healthRow.exists,
             "Profile tab should expose the Apple Health connect row"
         )
 
         // Tap the row. Under `-UITestMode 1` without
         // `-SimulatePermissionPrompts 1`, the dashboard model's
         // permission gate short-circuits the prompt — no system sheet
-        // fires. The row should still update to its "Connected" label.
+        // fires. Since the model returns `false` for this route, the row
+        // should not claim HealthKit is connected.
         healthRow.tap()
 
-        // Allow the local @State flip to render. The row label change
-        // is driven by `healthAuthorizationDidComplete = true` in the
-        // tap handler.
+        // Allow any local @State update to render.
         Thread.sleep(forTimeInterval: 1.0)
 
-        // The same accessibility identifier is reused for both the
-        // pre-tap "Connect" and post-tap "Connected" states (the label
-        // changes, not the identifier), so re-finding it is sufficient
-        // proof the row is still in the accessibility tree and didn't
-        // crash the navigation.
-        XCTAssertTrue(
-            healthRow.exists,
-            "Apple Health row should remain in the accessibility tree after tap"
+        let postTapHealthRow = profileHealthRow(in: app)
+        XCTAssertEqual(
+            postTapHealthRow.label,
+            "Connect to Apple Health",
+            "Skipped HealthKit authorization should leave the Profile row in its Connect state"
         )
     }
 
@@ -212,5 +196,40 @@ final class VolumeArcHealthKitPermissionJourneyTests: XCTestCase {
         guard app.keyboards.firstMatch.exists else { return }
         let topLeft = app.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.05))
         topLeft.tap()
+    }
+
+    private func waitForProfileHealthRow(in app: XCUIApplication, timeout: TimeInterval = 20) -> XCUIElement {
+        var row = profileHealthRow(in: app)
+        if row.waitForExistence(timeout: 2) { return row }
+
+        let deadline = Date().addingTimeInterval(timeout)
+        let profileForm = app.collectionViews.firstMatch
+        while Date() < deadline {
+            if profileForm.exists {
+                profileForm.swipeUp()
+            } else {
+                app.swipeUp()
+            }
+            row = profileHealthRow(in: app)
+            if row.waitForExistence(timeout: 1) { return row }
+        }
+
+        return row
+    }
+
+    private func profileHealthRow(in app: XCUIApplication) -> XCUIElement {
+        let identified = app.descendants(matching: .any)
+            .matching(identifier: "profile.health.connect").firstMatch
+        if identified.exists { return identified }
+
+        let labelPredicate = NSPredicate(
+            format: "label == %@ OR label == %@ OR label CONTAINS %@",
+            "Connect to Apple Health",
+            "Connect Apple Health",
+            "Apple Health"
+        )
+        return app.descendants(matching: .any)
+            .matching(labelPredicate)
+            .firstMatch
     }
 }

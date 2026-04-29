@@ -24,6 +24,34 @@ SCHEME="VolumeArcAppPerfTests"
 
 mkdir -p "$(dirname "$XCRESULT")"
 
+resolve_ios_test_device() {
+  local requested="${IOS_TEST_DEVICE:-iPhone 17}"
+  if xcrun simctl list devices available | grep -Eq "^[[:space:]]+$requested \\("; then
+    echo "$requested"
+    return
+  fi
+
+  local fallback
+  fallback="$(
+    xcrun simctl list devices available \
+      | awk '/^[[:space:]]+iPhone / && $0 !~ /unavailable/ {
+          sub(/^[[:space:]]+/, "");
+          sub(/[[:space:]][(].*/, "");
+          print;
+          exit
+        }'
+  )"
+  if [[ -z "$fallback" ]]; then
+    echo "::error::No available iPhone simulator found" >&2
+    exit 1
+  fi
+
+  echo "::warning::Requested iOS simulator '$requested' not found; using '$fallback'" >&2
+  echo "$fallback"
+}
+
+IOS_TEST_DEVICE_NAME="$(resolve_ios_test_device)"
+
 ruby "scripts/generate_xcode_project.rb"
 
 # Wipe any stale perf result bundle — `xcodebuild test` refuses to
@@ -42,7 +70,7 @@ xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
   -scheme "$SCHEME" \
   -sdk iphonesimulator \
-  -destination "platform=iOS Simulator,name=iPhone 17" \
+  -destination "platform=iOS Simulator,name=$IOS_TEST_DEVICE_NAME" \
   -derivedDataPath "$DERIVED_DATA_PATH" \
   -resultBundlePath "$XCRESULT" \
   CODE_SIGNING_ALLOWED=NO \

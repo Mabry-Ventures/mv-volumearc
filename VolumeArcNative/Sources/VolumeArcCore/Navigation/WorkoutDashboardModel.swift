@@ -190,13 +190,14 @@ public final class WorkoutDashboardModel: ObservableObject {
     // MARK: - Refresh
 
     /// Reload all published state from repositories. Called at launch and after writes.
-    public func refresh() async {
+    @discardableResult
+    public func refresh() async -> Bool {
         #if canImport(SwiftData)
         guard let workoutRepository,
               let userProfileRepository,
               let coachMemoryRepository,
               let trainingPlanRepository else {
-            return
+            return true
         }
 
         do {
@@ -254,6 +255,7 @@ public final class WorkoutDashboardModel: ObservableObject {
                 message: "Dashboard refreshed",
                 metadata: ["sessionCount": "\(sessions.count)", "readiness": "\(readiness.score)"]
             ))
+            return true
         } catch {
             telemetrySink.record(TelemetryEvent(
                 category: "dashboard",
@@ -261,7 +263,10 @@ public final class WorkoutDashboardModel: ObservableObject {
                 severity: .error,
                 message: "Failed to refresh dashboard: \(error.localizedDescription)"
             ))
+            return false
         }
+        #else
+        return true
         #endif
     }
 
@@ -641,61 +646,55 @@ public final class WorkoutDashboardModel: ObservableObject {
         await refresh()
     }
 
-    /// VOL-110: perform a background-app-refresh cycle. Records bracketing
-    /// telemetry events (`category: "background", name: "refresh_started"`
-    /// and `"refresh_completed"`) so the BGTask handler's observability
-    /// is testable without owning a `BGAppRefreshTask` instance (which
-    /// can't be constructed in user code — only the system allocates one).
-    ///
-    /// `VolumeArcBackgroundTasks.handleAppRefresh` calls into this method
-    /// from the `BGTaskScheduler` handler closure. Tests call it directly
-    /// against an in-memory dashboard model + capturing telemetry sink.
-    ///
-    /// Returns `true` when the underlying refresh completed without
-    /// throwing; `false` is reserved for future failure modes that bubble
-    /// up explicit errors (today `refresh()` swallows persistence errors
-    /// and surfaces them via published state, so this currently always
-    /// returns `true` after `refresh()` returns).
+    public func handleHealthBackgroundUpdate(_ update: HealthBackgroundUpdate) async {
+        telemetrySink.record(TelemetryEvent(
+            category: "health",
+            name: "background_update",
+            severity: .info,
+            message: "Background health update for \(update.workoutID)"
+        ))
+        await refresh()
+    }
+
+    #if canImport(SwiftData)
+    private static func recentSession(from workout: WorkoutRecord) -> RecentSession {
+        RecentSession(
+            date: workout.completedAt ?? workout.startedAt,
+            durationMinutes: workout.durationMinutes,
+            exerciseIDs: workout.exerciseIDsCSV.split(separator: ",").map(String.init),
+            totalVolumeLoad: workout.totalVolumeLoad,
+            averageRPE: workout.averageRPE,
+            completedSetCount: workout.completedSetCount
+        )
+    }
+    #endif
+}
+
+public extension WorkoutDashboardModel {
+    /// VOL-110: BGTask app-refresh entry point with bracketing telemetry.
     @discardableResult
-    public func performBackgroundRefresh() async -> Bool {
+    func performBackgroundRefresh() async -> Bool {
         telemetrySink.record(TelemetryEvent(
             category: "background",
             name: "refresh_started",
             severity: .info,
             message: "BGTask app-refresh handler entered."
         ))
-        await refresh()
+        let success = await refresh()
         telemetrySink.record(TelemetryEvent(
             category: "background",
-            name: "refresh_completed",
-            severity: .info,
-            message: "BGTask app-refresh handler completed."
+            name: success ? "refresh_completed" : "refresh_failed",
+            severity: success ? .info : .error,
+            message: success
+                ? "BGTask app-refresh handler completed."
+                : "BGTask app-refresh handler failed."
         ))
-        return true
+        return success
     }
 
-    /// VOL-109: request HealthKit authorization for the read/write scopes
-    /// declared in `HealthKitAuthorizationScope`. Routes through
-    /// `VolumeArcRuntimeFlags.shouldSurfacePermissionPrompts` so:
-    /// - production builds: prompt fires every call (HealthKit itself
-    ///   no-ops repeats once the user has decided)
-    /// - `-UITestMode 1` only: silently no-ops (returns false), so
-    ///   journey tests don't trip on the system dialog
-    /// - `-UITestMode 1 -SimulatePermissionPrompts 1`: prompt fires so
-    ///   `addUIInterruptionMonitor`-driven tests can drive the dialog
-    ///
-    /// Records a telemetry event for observability:
-    ///   `category: "health", name: "auth_requested" | "auth_skipped" | "auth_failed"`
-    /// Tests assert on this telemetry event to confirm the routing
-    /// decision without depending on real HealthKit state.
-    ///
-    /// Returns `true` if HealthKit reported a successful authorization
-    /// request (regardless of which scopes the user actually granted —
-    /// HealthKit doesn't disclose per-type grant state from a request
-    /// call). Returns `false` if the prompt was skipped for any reason
-    /// or HealthKit itself errored.
+    /// VOL-109: request Apple Health authorization through the runtime prompt gate.
     @discardableResult
-    public func requestHealthKitAuthorization() async -> Bool {
+    func requestHealthKitAuthorization() async -> Bool {
         guard VolumeArcRuntimeFlags.shouldSurfacePermissionPrompts else {
             telemetrySink.record(TelemetryEvent(
                 category: "health",
@@ -725,29 +724,6 @@ public final class WorkoutDashboardModel: ObservableObject {
             return false
         }
     }
-
-    public func handleHealthBackgroundUpdate(_ update: HealthBackgroundUpdate) async {
-        telemetrySink.record(TelemetryEvent(
-            category: "health",
-            name: "background_update",
-            severity: .info,
-            message: "Background health update for \(update.workoutID)"
-        ))
-        await refresh()
-    }
-
-    #if canImport(SwiftData)
-    private static func recentSession(from workout: WorkoutRecord) -> RecentSession {
-        RecentSession(
-            date: workout.completedAt ?? workout.startedAt,
-            durationMinutes: workout.durationMinutes,
-            exerciseIDs: workout.exerciseIDsCSV.split(separator: ",").map(String.init),
-            totalVolumeLoad: workout.totalVolumeLoad,
-            averageRPE: workout.averageRPE,
-            completedSetCount: workout.completedSetCount
-        )
-    }
-    #endif
 }
 
 // MARK: - Coach message model

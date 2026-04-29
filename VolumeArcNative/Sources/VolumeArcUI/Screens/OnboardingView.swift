@@ -118,7 +118,7 @@ public struct OnboardingView: View {
     private var welcomeStep: some View {
         VStack(spacing: VA.Space.xl) {
             Image(systemName: "figure.strengthtraining.traditional.circle.fill")
-                .font(.system(size: 88, weight: .semibold))
+                .font(VA.Typography.onboardingIcon)
                 .foregroundStyle(VA.Colors.primary)
                 .vaAppear()
 
@@ -275,12 +275,13 @@ public struct OnboardingView: View {
     /// Continue button advances to `.done` regardless of grant state.
     /// The "Connect Apple Health" button triggers the system prompt via
     /// `onRequestHealthAuthorization` (when wired by the host); after
-    /// the prompt closes (allow OR deny) the button label flips to
-    /// "Connected" so the user knows the request completed.
+    /// HealthKit only when the model reports a successful authorization
+    /// request. Denial/failure leaves the button available so the user can
+    /// retry or continue without connecting.
     private var permissionsStep: some View {
         VStack(spacing: VA.Space.xl) {
             Image(systemName: "heart.text.square.fill")
-                .font(.system(size: 88, weight: .semibold))
+                .font(VA.Typography.onboardingIcon)
                 .foregroundStyle(VA.Colors.primary)
                 .vaAppear()
 
@@ -294,7 +295,10 @@ public struct OnboardingView: View {
                 .multilineTextAlignment(.center)
 
                 Text(String(
-                    localized: "VolumeArc reads your past workouts and writes new sessions back. You stay in control — connect later from Profile if you'd rather decide now.",
+                    localized: """
+                    VolumeArc reads your past workouts and writes new sessions back. You stay in control — \
+                    connect later from Profile if you'd rather decide now.
+                    """,
                     comment: "Onboarding permissions step body explaining what HealthKit data is read/written and that the connection is optional"
                 ))
                 .font(VA.Typography.body)
@@ -319,13 +323,8 @@ public struct OnboardingView: View {
                 ) {
                     Task {
                         VAHaptics.tap()
-                        // The result (granted true/false) is intentionally
-                        // ignored at this layer — HealthKit doesn't report
-                        // per-type grant state from a request, so a `false`
-                        // return just means the user closed the sheet
-                        // (which is exactly what we want to acknowledge).
-                        _ = await onRequestHealthAuthorization?()
-                        healthAuthorizationDidComplete = true
+                        let granted = await onRequestHealthAuthorization?() ?? false
+                        healthAuthorizationDidComplete = granted
                     }
                 }
                 .frame(maxWidth: 320)
@@ -346,7 +345,7 @@ public struct OnboardingView: View {
     private var doneStep: some View {
         VStack(spacing: VA.Space.xl) {
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 88, weight: .semibold))
+                .font(VA.Typography.onboardingIcon)
                 .foregroundStyle(VA.Colors.success)
                 .vaAppear()
 

@@ -134,8 +134,8 @@ public struct ProfileView: View {
                 .onTapGesture {
                     Task {
                         VAHaptics.tap()
-                        _ = await model.requestHealthKitAuthorization()
-                        healthAuthorizationDidComplete = true
+                        let granted = await model.requestHealthKitAuthorization()
+                        healthAuthorizationDidComplete = granted
                     }
                 }
                 .accessibilityElement(children: .combine)

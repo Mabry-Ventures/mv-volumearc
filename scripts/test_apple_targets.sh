@@ -18,6 +18,34 @@ ruby "scripts/generate_xcode_project.rb"
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT/.build/derived-data}"
 mkdir -p "$DERIVED_DATA_PATH"
 
+resolve_ios_test_device() {
+  local requested="${IOS_TEST_DEVICE:-iPhone 17}"
+  if xcrun simctl list devices available | grep -Eq "^[[:space:]]+$requested \\("; then
+    echo "$requested"
+    return
+  fi
+
+  local fallback
+  fallback="$(
+    xcrun simctl list devices available \
+      | awk '/^[[:space:]]+iPhone / && $0 !~ /unavailable/ {
+          sub(/^[[:space:]]+/, "");
+          sub(/[[:space:]][(].*/, "");
+          print;
+          exit
+        }'
+  )"
+  if [[ -z "$fallback" ]]; then
+    echo "::error::No available iPhone simulator found" >&2
+    exit 1
+  fi
+
+  echo "::warning::Requested iOS simulator '$requested' not found; using '$fallback'" >&2
+  echo "$fallback"
+}
+
+IOS_TEST_DEVICE_NAME="$(resolve_ios_test_device)"
+
 # VOL-75 P2: the previous `shutdown all` + `erase all` was destructive at
 # system scope — when two CI jobs ran concurrently on the same Mac
 # (multiple runner instances share the simulator fleet), one job's reset
@@ -47,7 +75,7 @@ xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
   -scheme "VolumeArcAppTests" \
   -sdk iphonesimulator \
-  -destination "platform=iOS Simulator,name=iPhone 17" \
+  -destination "platform=iOS Simulator,name=$IOS_TEST_DEVICE_NAME" \
   -derivedDataPath "$DERIVED_DATA_PATH" \
   -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
   -enableCodeCoverage YES \
@@ -70,7 +98,7 @@ reset_app_state
 # already booted, `simctl boot` returns "Already booted" (handled by
 # `|| true`).
 warm_simulator_for_ui_tests() {
-  local device="iPhone 17"
+  local device="$IOS_TEST_DEVICE_NAME"
   echo "Pre-warming '$device' for UI tests (Tart VM AX daemon stabilization)..."
   xcrun simctl boot "$device" 2>/dev/null || true
   # `bootstatus -b` blocks until the device reports `system_app == true`,
@@ -90,7 +118,7 @@ xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
   -scheme "VolumeArcAppUITests" \
   -sdk iphonesimulator \
-  -destination "platform=iOS Simulator,name=iPhone 17" \
+  -destination "platform=iOS Simulator,name=$IOS_TEST_DEVICE_NAME" \
   -derivedDataPath "$DERIVED_DATA_PATH" \
   -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
   CODE_SIGNING_ALLOWED=NO \

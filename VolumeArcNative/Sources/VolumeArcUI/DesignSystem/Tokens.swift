@@ -87,6 +87,9 @@ public enum VA {
         public static let timerDisplay = Font.system(.largeTitle, design: .rounded, weight: .bold)
             .monospacedDigit()
 
+        /// Large onboarding glyphs. Fixed by design so SF Symbols keep a stable visual anchor.
+        public static let onboardingIcon = Font.system(size: 88, weight: .semibold)
+
         // MARK: Widget / Live Activity scale
         //
         // Widget surfaces intentionally use fixed point sizes rather than
