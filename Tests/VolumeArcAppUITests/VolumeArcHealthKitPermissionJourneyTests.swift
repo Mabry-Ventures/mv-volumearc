@@ -120,6 +120,7 @@ final class VolumeArcHealthKitPermissionJourneyTests: XCTestCase {
             dashboard.waitForExistence(timeout: 15),
             "Dashboard should appear"
         )
+        openProfileTabIfNeeded(in: app)
 
         let healthRow = waitForProfileHealthRow(in: app)
         XCTAssertTrue(
@@ -231,5 +232,25 @@ final class VolumeArcHealthKitPermissionJourneyTests: XCTestCase {
         return app.descendants(matching: .any)
             .matching(labelPredicate)
             .firstMatch
+    }
+
+    private func openProfileTabIfNeeded(in app: XCUIApplication) {
+        let profileRoot = app.descendants(matching: .any)
+            .matching(identifier: "profile.root").firstMatch
+        if profileRoot.waitForExistence(timeout: 2) { return }
+
+        let profileTab = app.tabBars.buttons["Profile"].firstMatch
+        if profileTab.waitForExistence(timeout: 5) {
+            profileTab.tap()
+            _ = profileRoot.waitForExistence(timeout: 5)
+            return
+        }
+
+        let identifiedTab = app.descendants(matching: .any)
+            .matching(identifier: "tab.profile").firstMatch
+        if identifiedTab.waitForExistence(timeout: 2) {
+            identifiedTab.tap()
+            _ = profileRoot.waitForExistence(timeout: 5)
+        }
     }
 }

@@ -37,16 +37,11 @@ public final class WorkoutDashboardModel: ObservableObject {
     @Published public var isOnboardingComplete: Bool = false
     @Published public private(set) var isNetworkReachable: Bool = true
     @Published public private(set) var hasLoadedInitialData: Bool = false
+    @Published public private(set) var isHealthAuthorized: Bool = false
 
-    /// VOL-112: most-recent `WatchPayloadKind.rawValue` observed by
-    /// `handleWatchPayload`. Surfaced as observable state so XCUITests
-    /// (and only XCUITests, via the deterministic-mode debug overlay in
-    /// `VolumeArcApp`) can assert the watch-payload arrival path
-    /// actually fired without scraping telemetry events. In production
-    /// this is set as a side effect of every received payload but no UI
-    /// reads it — the runtime cost is one optional-string assignment per
-    /// payload arrival, which is negligible vs the existing telemetry
-    /// `record` + `refresh()` work in the same handler.
+    /// VOL-112: most-recent Watch payload kind, surfaced for the
+    /// deterministic-mode debug overlay so XCUITests can assert the
+    /// watch-payload arrival path without scraping telemetry events.
     @Published public private(set) var lastWatchPayloadKindForTesting: String?
 
     // MARK: - Dependencies
@@ -192,6 +187,8 @@ public final class WorkoutDashboardModel: ObservableObject {
     /// Reload all published state from repositories. Called at launch and after writes.
     @discardableResult
     public func refresh() async -> Bool {
+        self.isHealthAuthorized = await healthStore.isAuthorized
+
         #if canImport(SwiftData)
         guard let workoutRepository,
               let userProfileRepository,
@@ -696,6 +693,7 @@ public extension WorkoutDashboardModel {
     @discardableResult
     func requestHealthKitAuthorization() async -> Bool {
         guard VolumeArcRuntimeFlags.shouldSurfacePermissionPrompts else {
+            isHealthAuthorized = await healthStore.isAuthorized
             telemetrySink.record(TelemetryEvent(
                 category: "health",
                 name: "auth_skipped",
@@ -707,14 +705,16 @@ public extension WorkoutDashboardModel {
 
         do {
             let granted = try await healthStore.requestAuthorization()
+            isHealthAuthorized = await healthStore.isAuthorized
             telemetrySink.record(TelemetryEvent(
                 category: "health",
                 name: "auth_requested",
                 severity: .info,
                 message: "HealthKit authorization request returned granted=\(granted)."
             ))
-            return granted
+            return granted && isHealthAuthorized
         } catch {
+            isHealthAuthorized = await healthStore.isAuthorized
             telemetrySink.record(TelemetryEvent(
                 category: "health",
                 name: "auth_failed",

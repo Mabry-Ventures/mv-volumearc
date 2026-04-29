@@ -7,11 +7,6 @@ public struct ProfileView: View {
     @ObservedObject var model: WorkoutDashboardModel
     @State private var isEditingProfile = false
     @State private var isShowingPaywall = false
-    /// VOL-109: tracked locally so the Apple Health row can swap to
-    /// the "Connected" affordance after the prompt closes. Doesn't
-    /// drive any business logic — the actual HealthKit grant state is
-    /// queried by the data layer when it needs to read/write samples.
-    @State private var healthAuthorizationDidComplete = false
 
     public init(model: WorkoutDashboardModel) {
         self.model = model
@@ -112,7 +107,7 @@ public struct ProfileView: View {
             Section(String(localized: "Apple Health", comment: "Profile tab section header — Apple Health connection")) {
                 HStack {
                     Label(
-                        healthAuthorizationDidComplete
+                        model.isHealthAuthorized
                             ? String(
                                 localized: "Connected to Apple Health",
                                 comment: "Profile row label after the Apple Health authorization sheet has been answered"
@@ -125,7 +120,7 @@ public struct ProfileView: View {
                     )
                     .foregroundStyle(VA.Colors.primary)
                     Spacer()
-                    if healthAuthorizationDidComplete {
+                    if model.isHealthAuthorized {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(VA.Colors.success)
                     }
@@ -134,14 +129,13 @@ public struct ProfileView: View {
                 .onTapGesture {
                     Task {
                         VAHaptics.tap()
-                        let granted = await model.requestHealthKitAuthorization()
-                        healthAuthorizationDidComplete = granted
+                        await model.requestHealthKitAuthorization()
                     }
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("profile.health.connect")
                 .accessibilityLabel(
-                    healthAuthorizationDidComplete
+                    model.isHealthAuthorized
                         ? String(
                             localized: "Apple Health connected",
                             comment: "VoiceOver label for the Apple Health row after connection"
@@ -191,6 +185,7 @@ public struct ProfileView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .accessibilityIdentifier("profile.root")
         .navigationTitle(DashboardTab.profile.title)
         .navigationBarTitleDisplayMode(.large)
         .sheet(isPresented: $isEditingProfile) {

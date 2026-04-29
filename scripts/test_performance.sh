@@ -24,33 +24,9 @@ SCHEME="VolumeArcAppPerfTests"
 
 mkdir -p "$(dirname "$XCRESULT")"
 
-resolve_ios_test_device() {
-  local requested="${IOS_TEST_DEVICE:-iPhone 17}"
-  if xcrun simctl list devices available | grep -Eq "^[[:space:]]+$requested \\("; then
-    echo "$requested"
-    return
-  fi
+. "$ROOT/scripts/simulators.sh"
 
-  local fallback
-  fallback="$(
-    xcrun simctl list devices available \
-      | awk '/^[[:space:]]+iPhone / && $0 !~ /unavailable/ {
-          sub(/^[[:space:]]+/, "");
-          sub(/[[:space:]][(].*/, "");
-          print;
-          exit
-        }'
-  )"
-  if [[ -z "$fallback" ]]; then
-    echo "::error::No available iPhone simulator found" >&2
-    exit 1
-  fi
-
-  echo "::warning::Requested iOS simulator '$requested' not found; using '$fallback'" >&2
-  echo "$fallback"
-}
-
-IOS_TEST_DEVICE_NAME="$(resolve_ios_test_device)"
+IOS_TEST_DEVICE_NAME="$(resolve_ios_test_device --no-fallback)"
 
 ruby "scripts/generate_xcode_project.rb"
 

@@ -18,31 +18,7 @@ ruby "scripts/generate_xcode_project.rb"
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT/.build/derived-data}"
 mkdir -p "$DERIVED_DATA_PATH"
 
-resolve_ios_test_device() {
-  local requested="${IOS_TEST_DEVICE:-iPhone 17}"
-  if xcrun simctl list devices available | grep -Eq "^[[:space:]]+$requested \\("; then
-    echo "$requested"
-    return
-  fi
-
-  local fallback
-  fallback="$(
-    xcrun simctl list devices available \
-      | awk '/^[[:space:]]+iPhone / && $0 !~ /unavailable/ {
-          sub(/^[[:space:]]+/, "");
-          sub(/[[:space:]][(].*/, "");
-          print;
-          exit
-        }'
-  )"
-  if [[ -z "$fallback" ]]; then
-    echo "::error::No available iPhone simulator found" >&2
-    exit 1
-  fi
-
-  echo "::warning::Requested iOS simulator '$requested' not found; using '$fallback'" >&2
-  echo "$fallback"
-}
+. "$ROOT/scripts/simulators.sh"
 
 IOS_TEST_DEVICE_NAME="$(resolve_ios_test_device)"
 

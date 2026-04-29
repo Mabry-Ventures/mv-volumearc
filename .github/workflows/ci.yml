@@ -75,25 +75,7 @@ jobs:
         # leaves `ruby` resolving to macOS' EOL system Ruby despite the static
         # PATH above. Bootstrap the Homebrew Ruby explicitly and publish the
         # actual Ruby + gem bin dirs to following steps.
-        run: |
-          set -euo pipefail
-          command -v brew >/dev/null || { echo "::error::Homebrew missing on runner"; exit 1; }
-          if ! brew list ruby >/dev/null 2>&1; then
-            brew install ruby
-          fi
-          ruby_prefix="$(brew --prefix ruby)"
-          ruby_bin="$ruby_prefix/bin"
-          export PATH="$ruby_bin:$PATH"
-          gem_user_bin="$(ruby -e 'print Gem.user_dir')/bin"
-          gem_bindir="$(ruby -e 'print Gem.bindir')"
-          {
-            echo "$ruby_bin"
-            echo "$gem_user_bin"
-            echo "$gem_bindir"
-          } >> "$GITHUB_PATH"
-          ruby --version
-          gem install --user-install xcodeproj -N
-          gem list xcodeproj --installed --version '>= 1.0' >/dev/null
+        run: ./.github/scripts/prepare_ruby_toolchain.sh xcodeproj
         shell: bash
 
       - name: Pre-flight
@@ -396,25 +378,7 @@ jobs:
           fetch-depth: 0
 
       - name: Prepare Ruby toolchain
-        run: |
-          set -euo pipefail
-          command -v brew >/dev/null || { echo "::error::Homebrew missing on runner"; exit 1; }
-          if ! brew list ruby >/dev/null 2>&1; then
-            brew install ruby
-          fi
-          ruby_prefix="$(brew --prefix ruby)"
-          ruby_bin="$ruby_prefix/bin"
-          export PATH="$ruby_bin:$PATH"
-          gem_user_bin="$(ruby -e 'print Gem.user_dir')/bin"
-          gem_bindir="$(ruby -e 'print Gem.bindir')"
-          {
-            echo "$ruby_bin"
-            echo "$gem_user_bin"
-            echo "$gem_bindir"
-          } >> "$GITHUB_PATH"
-          ruby --version
-          gem install --user-install xcodeproj -N
-          gem list xcodeproj --installed --version '>= 1.0' >/dev/null
+        run: ./.github/scripts/prepare_ruby_toolchain.sh xcodeproj
         shell: bash
 
       - name: Pre-flight
@@ -465,24 +429,7 @@ jobs:
           fetch-depth: 0
 
       - name: Prepare Ruby toolchain
-        run: |
-          set -euo pipefail
-          command -v brew >/dev/null || { echo "::error::Homebrew missing on runner"; exit 1; }
-          if ! brew list ruby >/dev/null 2>&1; then
-            brew install ruby
-          fi
-          ruby_prefix="$(brew --prefix ruby)"
-          ruby_bin="$ruby_prefix/bin"
-          export PATH="$ruby_bin:$PATH"
-          gem_user_bin="$(ruby -e 'print Gem.user_dir')/bin"
-          gem_bindir="$(ruby -e 'print Gem.bindir')"
-          {
-            echo "$ruby_bin"
-            echo "$gem_user_bin"
-            echo "$gem_bindir"
-          } >> "$GITHUB_PATH"
-          ruby --version
-          gem install --user-install bundler xcodeproj -N
+        run: ./.github/scripts/prepare_ruby_toolchain.sh bundler xcodeproj
         shell: bash
 
       - name: Install dependencies

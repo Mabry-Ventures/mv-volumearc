@@ -189,6 +189,7 @@ public enum VA {
         public static let xl: CGFloat = 24
         public static let xxl: CGFloat = 32
         public static let xxxl: CGFloat = 48
+        public static let onboardingMaxWidth: CGFloat = 320
 
         // MARK: Widget scale
         //

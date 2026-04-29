@@ -134,7 +134,7 @@ public struct OnboardingView: View {
                     .font(VA.Typography.body)
                     .foregroundStyle(VA.Colors.textSecondary)
                     .multilineTextAlignment(.center)
-                    .frame(maxWidth: 320)
+                    .frame(maxWidth: VA.Space.onboardingMaxWidth)
             }
         }
     }
@@ -304,7 +304,7 @@ public struct OnboardingView: View {
                 .font(VA.Typography.body)
                 .foregroundStyle(VA.Colors.textSecondary)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 320)
+                .frame(maxWidth: VA.Space.onboardingMaxWidth)
             }
 
             if onRequestHealthAuthorization != nil {
@@ -327,7 +327,7 @@ public struct OnboardingView: View {
                         healthAuthorizationDidComplete = granted
                     }
                 }
-                .frame(maxWidth: 320)
+                .frame(maxWidth: VA.Space.onboardingMaxWidth)
                 .disabled(healthAuthorizationDidComplete)
             }
 
@@ -338,7 +338,7 @@ public struct OnboardingView: View {
             .font(VA.Typography.footnote)
             .foregroundStyle(VA.Colors.textTertiary)
             .multilineTextAlignment(.center)
-            .frame(maxWidth: 320)
+            .frame(maxWidth: VA.Space.onboardingMaxWidth)
         }
     }
 
@@ -358,7 +358,7 @@ public struct OnboardingView: View {
                     .font(VA.Typography.body)
                     .foregroundStyle(VA.Colors.textSecondary)
                     .multilineTextAlignment(.center)
-                    .frame(maxWidth: 320)
+                    .frame(maxWidth: VA.Space.onboardingMaxWidth)
             }
         }
     }
