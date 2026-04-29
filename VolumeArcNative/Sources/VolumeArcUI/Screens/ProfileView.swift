@@ -145,6 +145,7 @@ public struct ProfileView: View {
                             comment: "VoiceOver label for the Apple Health row before connection"
                         )
                 )
+                .accessibilityValue(healthAuthorizationAccessibilityValue)
                 .accessibilityHint(String(
                     localized: "Opens the Apple Health authorization sheet to share your workout data",
                     comment: "VoiceOver hint for the Apple Health row"
@@ -249,6 +250,27 @@ public struct ProfileView: View {
         let parts = model.athlete.name.split(separator: " ").prefix(2)
         if parts.isEmpty { return "VA" }
         return parts.compactMap { $0.first }.map(String.init).joined()
+    }
+
+    private var healthAuthorizationAccessibilityValue: String {
+        if model.isHealthAuthorized {
+            return String(
+                localized: "Connected",
+                comment: "VoiceOver value for the Apple Health row after authorization"
+            )
+        }
+
+        if VolumeArcRuntimeFlags.shouldSurfacePermissionPrompts {
+            return String(
+                localized: "System permission prompt enabled",
+                comment: "VoiceOver value for the Apple Health row when tapping will surface the system prompt"
+            )
+        }
+
+        return String(
+            localized: "Not connected",
+            comment: "VoiceOver value for the Apple Health row before authorization"
+        )
     }
 
     private func row(label: String, value: String, icon: String) -> some View {

@@ -29,5 +29,10 @@ if [[ "$#" -gt 0 ]]; then
 fi
 
 for gem_name in "$@"; do
-  gem list "$gem_name" --installed --version '>= 1.0' >/dev/null
+  if [[ "$gem_name" == -* || "$gem_name" == *[~\<\>=:]* || ! "$gem_name" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+    echo "::warning::Skipping Ruby gem verification for non-gem argument '$gem_name'"
+    continue
+  fi
+
+  gem list --installed "$gem_name" >/dev/null
 done

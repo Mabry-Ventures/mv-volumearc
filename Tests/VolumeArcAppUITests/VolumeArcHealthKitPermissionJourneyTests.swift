@@ -135,10 +135,11 @@ final class VolumeArcHealthKitPermissionJourneyTests: XCTestCase {
         // should not claim HealthKit is connected.
         healthRow.tap()
 
-        // Allow any local @State update to render.
-        Thread.sleep(forTimeInterval: 1.0)
-
         let postTapHealthRow = profileHealthRow(in: app)
+        XCTAssertTrue(
+            waitForLabel("Connect to Apple Health", on: postTapHealthRow, timeout: 5),
+            "Skipped HealthKit authorization should return the Profile row to its Connect state"
+        )
         XCTAssertEqual(
             postTapHealthRow.label,
             "Connect to Apple Health",
@@ -146,46 +147,38 @@ final class VolumeArcHealthKitPermissionJourneyTests: XCTestCase {
         )
     }
 
-    /// VOL-109 contract: when launched with `-SimulatePermissionPrompts 1`,
-    /// tapping Connect Apple Health DOES fire the system HealthKit
-    /// sheet. Driving that sheet end-to-end requires
-    /// `addUIInterruptionMonitor` against system-modal UI rendered by
-    /// SpringBoard, which iOS Simulator running inside Tart VMs (VOL-88)
-    /// handles unreliably:
-    /// - The sim sometimes shows an Apple Account prompt at boot that
-    ///   competes with the test's HealthKit-targeted monitor (observed
-    ///   on the first PR #87 attempt).
-    /// - Per-iOS-version label drift on the HealthKit sheet ("Turn All
-    ///   On" vs "Allow" vs "Continue") makes the monitor brittle.
-    /// - `addUIInterruptionMonitor` requires a follow-up host-app
-    ///   interaction to dispatch, and the timing of that interaction
-    ///   relative to sheet appearance is racy on virtualized sims.
-    ///
-    /// The actual contract this test would assert — "tapping Connect
-    /// fires the system sheet under the simulation flag" — is covered
-    /// reliably only on real hardware. Deferred to VOL-94's
-    /// real-device canary suite (where sheet driving works because
-    /// SpringBoard runs natively, not in a nested VM).
-    ///
-    /// Until then, the wiring contract (the gate routes correctly, the
-    /// onboarding step exposes the Connect button, the Profile row is
-    /// reachable) is fully covered by the two tests above and the unit
-    /// tests in `VolumeArcCore` that exercise
-    /// `WorkoutDashboardModel.requestHealthKitAuthorization` paths.
-    func testHealthKitConnectButtonFiresSystemSheetUnderSimulationFlag() throws {
-        throw XCTSkip(
-            """
-            VOL-109 system-sheet driving is deferred to VOL-94's real-device \
-            canary. addUIInterruptionMonitor against HealthKit's auth sheet \
-            is unreliable on iOS Simulator running inside Tart VMs (VOL-88) \
-            because (a) sim boot occasionally surfaces an Apple Account \
-            prompt that competes with our monitor and (b) sheet button \
-            labels drift between iOS versions, both of which manifest as \
-            interruption-monitor races. The wiring contract is covered by \
-            the two preceding tests; this skip preserves the test method \
-            signature so re-enabling it on real hardware is a one-line \
-            change (delete this XCTSkip, the body below remains valid).
-            """
+    /// VOL-109 contract: `-SimulatePermissionPrompts 1` must route the
+    /// HealthKit entry point into the prompt-enabled path. The test avoids
+    /// driving SpringBoard's HealthKit sheet on Tart VMs; instead, the
+    /// Profile row exposes the prompt routing as an accessibility value.
+    func testHealthKitConnectButtonSurfacesSimulationPromptPath() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenProfileOnLaunch", "1", "-SimulatePermissionPrompts", "1"]
+        )
+        app.launch()
+
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: 20),
+            "App should reach foreground"
+        )
+
+        let dashboard = app.otherElements["root.dashboard"]
+        XCTAssertTrue(
+            dashboard.waitForExistence(timeout: 15),
+            "Dashboard should appear"
+        )
+        openProfileTabIfNeeded(in: app)
+
+        let healthRow = waitForProfileHealthRow(in: app)
+        XCTAssertTrue(
+            waitForValue("System permission prompt enabled", on: healthRow, timeout: 5),
+            "Profile health row should expose the prompt-enabled accessibility value"
+        )
+
+        XCTAssertEqual(
+            healthRow.value as? String,
+            "System permission prompt enabled",
+            "-SimulatePermissionPrompts should mark the Apple Health row as prompt-enabled"
         )
     }
 
@@ -232,6 +225,27 @@ final class VolumeArcHealthKitPermissionJourneyTests: XCTestCase {
         return app.descendants(matching: .any)
             .matching(labelPredicate)
             .firstMatch
+    }
+
+    private func waitForLabel(_ expected: String, on element: XCUIElement, timeout: TimeInterval) -> Bool {
+        waitForElementState(timeout: timeout) {
+            element.label == expected
+        }
+    }
+
+    private func waitForValue(_ expected: String, on element: XCUIElement, timeout: TimeInterval) -> Bool {
+        waitForElementState(timeout: timeout) {
+            (element.value as? String) == expected
+        }
+    }
+
+    private func waitForElementState(timeout: TimeInterval, matches: () -> Bool) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if matches() { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        }
+        return matches()
     }
 
     private func openProfileTabIfNeeded(in app: XCUIApplication) {
