@@ -203,7 +203,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: TestResults-${{ github.run_id }}
-          path: .build/derived-data/TestResults.xcresult
+          path: |
+            .build/derived-data/TestResults.xcresult
+            .build/derived-data/ui-test-attempt-*.log
           retention-days: 14
 
       # VOL-97: machine-readable coverage summary so the sticky PR
