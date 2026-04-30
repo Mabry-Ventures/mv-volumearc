@@ -352,9 +352,9 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
 
     func testTrainingPlanNextWorkoutUsesMondayBasedWeekdays() throws {
         let plan = [
+            WeeklyWorkout(dayOfWeek: 5, title: "Friday Deadlift"),
             WeeklyWorkout(dayOfWeek: 1, title: "Monday Squat"),
             WeeklyWorkout(dayOfWeek: 3, title: "Wednesday Bench"),
-            WeeklyWorkout(dayOfWeek: 5, title: "Friday Deadlift"),
         ]
         try trainingPlanRepository.upsertPlan(plan)
 
@@ -370,9 +370,16 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
             month: 5,
             day: 2
         ).date)
+        let sunday = try XCTUnwrap(DateComponents(
+            calendar: Calendar(identifier: .gregorian),
+            year: 2026,
+            month: 5,
+            day: 3
+        ).date)
 
         XCTAssertEqual(try trainingPlanRepository.nextWorkout(from: monday)?.title, "Monday Squat")
         XCTAssertEqual(try trainingPlanRepository.nextWorkout(from: saturday)?.title, "Monday Squat")
+        XCTAssertEqual(try trainingPlanRepository.nextWorkout(from: sunday)?.title, "Monday Squat")
     }
 
     private func makeDashboardModel(

@@ -163,12 +163,13 @@ public struct SwiftDataTrainingPlanRepository: Sendable {
     public func nextWorkout(from date: Date = .now) throws -> WeeklyWorkout? {
         let workouts = try weeklyWorkouts()
         guard !workouts.isEmpty else { return nil }
+        let sortedWorkouts = workouts.sorted { $0.dayOfWeek < $1.dayOfWeek }
         let todayWeekday = WeeklyWorkout.trainingWeekday(for: date)
         // Find next workout on or after today
-        if let next = workouts.first(where: { $0.dayOfWeek >= todayWeekday }) {
+        if let next = sortedWorkouts.first(where: { $0.dayOfWeek >= todayWeekday }) {
             return next
         }
-        return workouts.first
+        return sortedWorkouts.first
     }
 }
 

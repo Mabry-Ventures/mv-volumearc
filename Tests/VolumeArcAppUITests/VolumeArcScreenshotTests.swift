@@ -34,6 +34,10 @@ final class VolumeArcScreenshotTests: XCTestCase {
         snapshot("02_live_workout")
 
         tapTab(atIndex: 2, in: app)
+        let coachComposer = app.descendants(matching: .any)
+            .matching(identifier: "coach.composer")
+            .firstMatch
+        XCTAssertTrue(coachComposer.waitForExistence(timeout: 10))
         snapshot("03_coach")
 
         app.terminate()
@@ -64,6 +68,13 @@ final class VolumeArcScreenshotTests: XCTestCase {
         XCTAssertTrue(tabBar.waitForExistence(timeout: 5))
         let tabs = tabBar.buttons
         XCTAssertGreaterThan(tabs.count, index)
-        tabs.element(boundBy: index).tap()
+        let target = tabs.element(boundBy: index)
+        XCTAssertTrue(target.waitForExistence(timeout: 5))
+        expectation(
+            for: NSPredicate(format: "isHittable == true"),
+            evaluatedWith: target
+        )
+        waitForExpectations(timeout: 5)
+        target.tap()
     }
 }

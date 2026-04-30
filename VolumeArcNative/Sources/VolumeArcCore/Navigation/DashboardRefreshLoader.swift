@@ -193,15 +193,31 @@ public actor DashboardRefreshLoader {
         var descriptor = FetchDescriptor<TrainingPlanRecord>()
         descriptor.fetchLimit = 1
         guard let record = try context.fetch(descriptor).first,
-              let data = record.workoutsJSON.data(using: .utf8),
-              let workouts = try? JSONDecoder().decode([WeeklyWorkout].self, from: data),
-              !workouts.isEmpty
+              let data = record.workoutsJSON.data(using: .utf8)
         else {
             return nil
         }
 
+        let workouts: [WeeklyWorkout]
+        do {
+            workouts = try JSONDecoder().decode([WeeklyWorkout].self, from: data)
+        } catch {
+            logTrainingPlanDecodeFailure(error: error)
+            return nil
+        }
+
+        let sortedWorkouts = workouts.sorted { $0.dayOfWeek < $1.dayOfWeek }
+        guard !sortedWorkouts.isEmpty else { return nil }
         let todayWeekday = WeeklyWorkout.trainingWeekday(for: .now)
-        return workouts.first { $0.dayOfWeek >= todayWeekday } ?? workouts.first
+        return sortedWorkouts.first { $0.dayOfWeek >= todayWeekday } ?? sortedWorkouts.first
+    }
+
+    private func logTrainingPlanDecodeFailure(error: Error) {
+        #if canImport(OSLog)
+        logger.error(
+            "Failed to decode training plan JSON for dashboard refresh: \(String(describing: error), privacy: .public)"
+        )
+        #endif
     }
 
     private func loadActiveWorkout(in context: ModelContext) throws -> DashboardRefreshSnapshot.ActiveWorkout? {
