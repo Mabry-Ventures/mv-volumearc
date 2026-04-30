@@ -6,6 +6,7 @@ final class VolumeArcScreenshotTests: XCTestCase {
         continueAfterFailure = false
     }
 
+    @MainActor
     func testCaptureAppStoreScreenshots() throws {
         let app = VolumeArcAppUITestSupport.makeSeededApp()
         setupSnapshot(app)
@@ -24,9 +25,7 @@ final class VolumeArcScreenshotTests: XCTestCase {
         XCTAssertTrue(startButton.waitForExistence(timeout: 10))
         startButton.tap()
 
-        let workoutsTab = app.tabBars.buttons["Workouts"]
-        XCTAssertTrue(workoutsTab.waitForExistence(timeout: 5))
-        workoutsTab.tap()
+        tapTab(atIndex: 1, in: app)
 
         let activeSession = app.descendants(matching: .any)
             .matching(identifier: "workouts.activeSession")
@@ -34,9 +33,7 @@ final class VolumeArcScreenshotTests: XCTestCase {
         XCTAssertTrue(activeSession.waitForExistence(timeout: 10))
         snapshot("02_live_workout")
 
-        let coachTab = app.tabBars.buttons["Coach"]
-        XCTAssertTrue(coachTab.waitForExistence(timeout: 5))
-        coachTab.tap()
+        tapTab(atIndex: 2, in: app)
         snapshot("03_coach")
 
         app.terminate()
@@ -49,6 +46,25 @@ final class VolumeArcScreenshotTests: XCTestCase {
             .matching(identifier: "paywall.root")
             .firstMatch
         XCTAssertTrue(paywallRoot.waitForExistence(timeout: 20))
+        let monthlyPlan = paywallApp.descendants(matching: .any)
+            .matching(identifier: "paywall.plan.com.mabryventures.VolumeArc.premium.monthly")
+            .firstMatch
+        let planLoaded = monthlyPlan.waitForExistence(timeout: 20)
+        if ProcessInfo.processInfo.arguments.contains("-RequireStoreKitProducts") {
+            XCTAssertTrue(planLoaded, "Premium screenshot should wait for StoreKit products before capture")
+        } else if !planLoaded {
+            throw XCTSkip("StoreKit products unavailable on this simulator; skipping premium screenshot capture.")
+        }
         snapshot("04_premium")
+    }
+
+    @MainActor
+    private func tapTab(atIndex index: Int, in app: XCUIApplication) {
+        let tabBar = app.tabBars.firstMatch
+        XCTAssertTrue(tabBar.waitForExistence(timeout: 5))
+        let tabCount = 5.0
+        let normalizedX = (Double(index) + 0.5) / tabCount
+        let coordinate = tabBar.coordinate(withNormalizedOffset: CGVector(dx: normalizedX, dy: 0.5))
+        coordinate.tap()
     }
 }

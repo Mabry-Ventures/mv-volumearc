@@ -23,6 +23,11 @@ languages([
   "en-US"
 ])
 
+# Release screenshots must include loaded StoreKit pricing. CI can run
+# the screenshot test without this flag and skip only the premium capture
+# when the local StoreKit daemon does not expose products.
+launch_arguments(["-RequireStoreKitProducts", "1"])
+
 # Scheme used for screenshot capture.
 scheme("VolumeArcAppUITests")
 

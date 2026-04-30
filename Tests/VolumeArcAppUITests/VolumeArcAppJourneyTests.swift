@@ -412,6 +412,7 @@ final class VolumeArcAppJourneyTests: XCTestCase {
     #if canImport(StoreKitTest)
     private func makeStoreKitSession() throws -> SKTestSession {
         let session = try SKTestSession(configurationFileNamed: "VolumeArcTests")
+        session.clearTransactions()
         session.disableDialogs = true
         session.askToBuyEnabled = false
         return session

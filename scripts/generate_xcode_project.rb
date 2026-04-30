@@ -432,10 +432,14 @@ storekit_reference = <<~XML.chomp
       </StoreKitConfigurationFileReference>
 XML
 unless ui_scheme_xml.include?('StoreKitConfigurationFileReference')
-  ui_scheme_xml.sub!(
+  inserted = ui_scheme_xml.sub!(
     "      allowLocationSimulation = \"YES\">\n   </LaunchAction>",
     "      allowLocationSimulation = \"YES\">\n#{app_runnable}\n#{storekit_reference}\n   </LaunchAction>"
   )
+  unless inserted
+    raise "Failed to insert StoreKitConfigurationFileReference into #{ui_scheme_path}; " \
+          'VolumeArcAppUITests LaunchAction XML format may have changed.'
+  end
   File.write(ui_scheme_path, ui_scheme_xml)
 end
 

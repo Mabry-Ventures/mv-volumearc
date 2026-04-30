@@ -117,8 +117,11 @@ public actor DashboardRefreshLoader {
         )
     }
 
-    private func loadRecentWorkouts(limit: Int, in context: ModelContext) throws -> [WorkoutRecord] {
+    private func loadCompletedWorkouts(limit: Int, in context: ModelContext) throws -> [WorkoutRecord] {
         var descriptor = FetchDescriptor<WorkoutRecord>(
+            predicate: #Predicate<WorkoutRecord> { workout in
+                workout.completedAt != nil
+            },
             sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
         )
         descriptor.fetchLimit = limit
@@ -126,8 +129,7 @@ public actor DashboardRefreshLoader {
     }
 
     private func loadRecentSessions(limit: Int, in context: ModelContext) throws -> [RecentSession] {
-        try loadRecentWorkouts(limit: limit, in: context)
-            .filter { $0.completedAt != nil }
+        try loadCompletedWorkouts(limit: limit, in: context)
             .map(Self.recentSession(from:))
     }
 
@@ -136,7 +138,7 @@ public actor DashboardRefreshLoader {
         limit: Int,
         in context: ModelContext
     ) throws -> ExerciseHistory {
-        let workouts = try loadRecentWorkouts(limit: 200, in: context)
+        let workouts = try loadCompletedWorkouts(limit: 200, in: context)
         let sessions = workouts.compactMap { workout -> ExerciseSession? in
             guard let data = workout.setsJSON.data(using: .utf8),
                   let logged = try? JSONDecoder().decode([RefreshLoggedSet].self, from: data)
@@ -150,9 +152,10 @@ public actor DashboardRefreshLoader {
     }
 
     private func loadCoachMemory(in context: ModelContext) throws -> CoachMemory {
-        let descriptor = FetchDescriptor<CoachMemoryRecord>(
+        var descriptor = FetchDescriptor<CoachMemoryRecord>(
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
+        descriptor.fetchLimit = 20
         let entries = try context.fetch(descriptor).map {
             CoachMemory.Entry(
                 createdAt: $0.createdAt,
