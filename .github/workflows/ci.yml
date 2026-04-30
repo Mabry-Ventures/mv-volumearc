@@ -22,18 +22,19 @@ jobs:
   build-and-test:
     name: Build & Test
     runs-on: [self-hosted, mv-shared]
-    # VOL-88 / VOL-111 / VOL-112: bumped 30 → 90. Self-hosted macOS
-    # runners may start with no warm DerivedData / SPM cache, so a cold
-    # first run can spend ~50 min compiling Sentry's Swift
-    # dependencies from source before the app's own targets compile.
-    # The added XCUITests (Dynamic Type + pseudo-locale journey reruns
-    # + Watch payload simulation) then push the test phase to ~10 min.
-    # PR #88 hit the previous 60-min timeout after tests passed, before
-    # coverage/lint/release validation could finish. 90 leaves enough
-    # headroom for cold compile + full validation while cache work lands.
+    # VOL-88 / VOL-111 / VOL-112: self-hosted macOS runners may start
+    # with no warm DerivedData / SPM cache, so a cold first run can spend
+    # a long time compiling Sentry's Swift dependencies and all simulator
+    # targets from source before the app's own tests execute.
+    #
+    # PR #88 proved 90 min is still too tight on a cold runner: build-all
+    # completed after ~68 min, unit tests passed, then the job was canceled
+    # while the UI test target was still building/running. 150 min gives
+    # full build + unit/UI tests + coverage/lint/release validation enough
+    # headroom while cache work lands.
     # A future follow-up (snapshot caching of DerivedData into the runner
-    # image) would let us drop this back to 30.
-    timeout-minutes: 90
+    # image) would let us drop this back down.
+    timeout-minutes: 150
     # VOL-97: the post-merge coverage-trend append step commits back to
     # main, so the job-scoped GITHUB_TOKEN needs write access to
     # repository contents. PR jobs don't commit; the same permission is
