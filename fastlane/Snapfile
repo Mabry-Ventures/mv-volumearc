@@ -4,10 +4,8 @@
 # Output lives in fastlane/screenshots/ and is picked up automatically by
 # `deliver` during `fastlane ios release`.
 #
-# VOL-96b follow-up: the `screenshots` lane additionally requires
-# `SnapshotHelper.swift` in Tests/VolumeArcAppUITests/ plus UI test flows
-# that call `snapshot("name")` at the screens we want captured. Without
-# those, the lane fails fast with an actionable message.
+# Screenshot capture is implemented in `VolumeArcScreenshotTests` with
+# the local `SnapshotHelper.swift` wrapper.
 
 # Device matrix — keep this in sync with VOL-96 and App Store marketing
 # requirements. iPhone 17 covers the 6.1" class; iPhone 17 Pro Max covers
@@ -20,13 +18,12 @@ devices([
 
 # Localizations — add new App Store locales here. Each locale must have a
 # matching XCUITest flow that calls `snapshot("name")` after launching in
-# that language (see SnapshotHelper.swift + the capture flows in VOL-96b).
+# that language.
 languages([
   "en-US"
 ])
 
-# Scheme used for screenshot capture. VOL-93 will expand the UI test
-# target; for now we reuse the smoke-level `VolumeArcAppUITests` scheme.
+# Scheme used for screenshot capture.
 scheme("VolumeArcAppUITests")
 
 # Output location — `deliver` reads from here by default, so the release

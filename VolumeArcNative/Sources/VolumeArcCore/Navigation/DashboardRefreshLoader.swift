@@ -1,0 +1,213 @@
+#if canImport(SwiftData)
+import Foundation
+import SwiftData
+
+/// Sendable snapshot of all repository-derived dashboard state.
+///
+/// `WorkoutDashboardModel` is `@MainActor` because SwiftUI observes it.
+/// This loader keeps the SwiftData read/projection path off that actor:
+/// it creates its own `ModelContext`, turns managed records into value
+/// projections inside the actor, and returns only Sendable structs for
+/// the model to publish.
+public struct DashboardRefreshSnapshot: Sendable {
+    public struct ActiveWorkout: Sendable {
+        public let identifier: String
+        public let title: String
+        public let completedSetCount: Int
+
+        public init(identifier: String, title: String, completedSetCount: Int) {
+            self.identifier = identifier
+            self.title = title
+            self.completedSetCount = completedSetCount
+        }
+    }
+
+    public let athlete: AthleteProfile
+    public let recentSessions: [RecentSession]
+    public let readiness: ReadinessAssessment
+    public let autopilot: WorkoutAutopilotState
+    public let nextWorkout: WeeklyWorkout?
+    public let activeWorkout: ActiveWorkout?
+    public let isOnboardingComplete: Bool
+
+    public init(
+        athlete: AthleteProfile,
+        recentSessions: [RecentSession],
+        readiness: ReadinessAssessment,
+        autopilot: WorkoutAutopilotState,
+        nextWorkout: WeeklyWorkout?,
+        activeWorkout: ActiveWorkout?,
+        isOnboardingComplete: Bool
+    ) {
+        self.athlete = athlete
+        self.recentSessions = recentSessions
+        self.readiness = readiness
+        self.autopilot = autopilot
+        self.nextWorkout = nextWorkout
+        self.activeWorkout = activeWorkout
+        self.isOnboardingComplete = isOnboardingComplete
+    }
+}
+
+public actor DashboardRefreshLoader {
+    private let container: ModelContainer
+    private let progressionEngine: ProgressionEngine
+
+    public init(
+        container: ModelContainer,
+        progressionEngine: ProgressionEngine = ProgressionEngine()
+    ) {
+        self.container = container
+        self.progressionEngine = progressionEngine
+    }
+
+    public func load(sessionFetchLimit: Int) throws -> DashboardRefreshSnapshot {
+        let context = ModelContext(container)
+        let athlete = try loadAthleteProfile(in: context)
+        let recentSessions = try loadRecentSessions(limit: sessionFetchLimit, in: context)
+        let readiness = progressionEngine.evaluateReadiness(from: recentSessions, athlete: athlete)
+
+        let primaryExercise = VolumeArcExerciseCatalog.backSquat
+        let history = try loadHistory(forExercise: primaryExercise.id, limit: 20, in: context)
+        let memory = try loadCoachMemory(in: context)
+        let autopilot = progressionEngine.buildAutopilotState(
+            for: history,
+            athlete: athlete,
+            goal: VolumeArcProductDefaults.strengthGoal,
+            recentSessions: recentSessions,
+            memory: memory
+        )
+
+        return DashboardRefreshSnapshot(
+            athlete: athlete,
+            recentSessions: recentSessions,
+            readiness: readiness,
+            autopilot: autopilot,
+            nextWorkout: try loadNextWorkout(in: context),
+            activeWorkout: try loadActiveWorkout(in: context),
+            isOnboardingComplete: try loadProfile(in: context)?.onboardingCompleted ?? false
+        )
+    }
+
+    private func loadProfile(in context: ModelContext) throws -> UserProfileRecord? {
+        var descriptor = FetchDescriptor<UserProfileRecord>()
+        descriptor.fetchLimit = 1
+        return try context.fetch(descriptor).first
+    }
+
+    private func loadAthleteProfile(in context: ModelContext) throws -> AthleteProfile {
+        guard let record = try loadProfile(in: context) else {
+            return VolumeArcProductDefaults.athleteProfile
+        }
+
+        let equipment = Set(
+            record.availableEquipmentCSV.split(separator: ",")
+                .compactMap { Equipment(rawValue: String($0)) }
+        )
+
+        return AthleteProfile(
+            name: record.name,
+            coachingStyle: CoachingStyle(rawValue: record.coachingStyle) ?? .motivational,
+            privacyMode: PrivacyMode(rawValue: record.privacyMode) ?? .standard,
+            advancementLevel: AdvancementLevel(rawValue: record.advancementLevel) ?? .intermediate,
+            availableEquipment: equipment.isEmpty ? [.barbell, .dumbbell, .machine, .bodyweight] : equipment,
+            sessionTimeBudgetMinutes: record.sessionTimeBudgetMinutes,
+            weeklyTrainingDays: record.weeklyTrainingDays,
+            preferredRepRange: record.preferredRepRangeLower...record.preferredRepRangeUpper
+        )
+    }
+
+    private func loadRecentWorkouts(limit: Int, in context: ModelContext) throws -> [WorkoutRecord] {
+        var descriptor = FetchDescriptor<WorkoutRecord>(
+            sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = limit
+        return try context.fetch(descriptor)
+    }
+
+    private func loadRecentSessions(limit: Int, in context: ModelContext) throws -> [RecentSession] {
+        try loadRecentWorkouts(limit: limit, in: context)
+            .filter { $0.completedAt != nil }
+            .map(Self.recentSession(from:))
+    }
+
+    private func loadHistory(
+        forExercise exerciseID: String,
+        limit: Int,
+        in context: ModelContext
+    ) throws -> ExerciseHistory {
+        let workouts = try loadRecentWorkouts(limit: 200, in: context)
+        let sessions = workouts.compactMap { workout -> ExerciseSession? in
+            guard let data = workout.setsJSON.data(using: .utf8),
+                  let logged = try? JSONDecoder().decode([RefreshLoggedSet].self, from: data)
+            else { return nil }
+
+            let sets = logged.filter { $0.exerciseID == exerciseID }.map(\.set)
+            guard !sets.isEmpty else { return nil }
+            return ExerciseSession(date: workout.completedAt ?? workout.startedAt, sets: sets)
+        }
+        return ExerciseHistory(exerciseID: exerciseID, sessions: Array(sessions.prefix(limit)))
+    }
+
+    private func loadCoachMemory(in context: ModelContext) throws -> CoachMemory {
+        let descriptor = FetchDescriptor<CoachMemoryRecord>(
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+        )
+        let entries = try context.fetch(descriptor).map {
+            CoachMemory.Entry(
+                createdAt: $0.createdAt,
+                summary: $0.content,
+                theme: $0.theme.isEmpty ? nil : $0.theme
+            )
+        }
+        return CoachMemory(entries: entries)
+    }
+
+    private func loadNextWorkout(in context: ModelContext) throws -> WeeklyWorkout? {
+        var descriptor = FetchDescriptor<TrainingPlanRecord>()
+        descriptor.fetchLimit = 1
+        guard let record = try context.fetch(descriptor).first,
+              let data = record.workoutsJSON.data(using: .utf8),
+              let workouts = try? JSONDecoder().decode([WeeklyWorkout].self, from: data),
+              !workouts.isEmpty
+        else {
+            return nil
+        }
+
+        let todayWeekday = Calendar.current.component(.weekday, from: .now)
+        return workouts.first { $0.dayOfWeek >= todayWeekday } ?? workouts.first
+    }
+
+    private func loadActiveWorkout(in context: ModelContext) throws -> DashboardRefreshSnapshot.ActiveWorkout? {
+        var descriptor = FetchDescriptor<WorkoutRecord>(
+            predicate: #Predicate<WorkoutRecord> { workout in
+                workout.completedAt == nil
+            },
+            sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = 1
+        guard let active = try context.fetch(descriptor).first else { return nil }
+        return DashboardRefreshSnapshot.ActiveWorkout(
+            identifier: active.identifier,
+            title: active.title,
+            completedSetCount: active.completedSetCount
+        )
+    }
+
+    private static func recentSession(from workout: WorkoutRecord) -> RecentSession {
+        RecentSession(
+            date: workout.completedAt ?? workout.startedAt,
+            durationMinutes: workout.durationMinutes,
+            exerciseIDs: workout.exerciseIDsCSV.split(separator: ",").map(String.init),
+            totalVolumeLoad: workout.totalVolumeLoad,
+            averageRPE: workout.averageRPE,
+            completedSetCount: workout.completedSetCount
+        )
+    }
+}
+
+private struct RefreshLoggedSet: Codable {
+    let exerciseID: String
+    let set: WorkoutSetPerformance
+}
+#endif

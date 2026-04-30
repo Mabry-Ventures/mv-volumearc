@@ -2,7 +2,7 @@
 
 ## Test architecture
 
-VolumeArc currently ships with **293 unit + integration tests**, **4 XCUITest smoke tests**, and **4 performance-regression tests** (VOL-99).
+VolumeArc currently ships with **293 unit + integration tests**, expanded XCUITest journey coverage, and **4 performance-regression tests** (VOL-99).
 
 ```
 Tests/VolumeArcAppTests/
@@ -32,7 +32,12 @@ Tests/VolumeArcAppTests/
 └── VolumeArcSentryPIIScrubberTests.swift         # 33 tests (VOL-72)
 
 Tests/VolumeArcAppUITests/
-└── VolumeArcAppUITests.swift                     # 4 XCUITest smoke tests
+├── VolumeArcAppUITests.swift                     # launch/navigation smoke tests
+├── VolumeArcAppJourneyTests.swift                # onboarding, paywall, StoreKit, workout journey
+├── VolumeArcAccessibilityJourneyTests.swift      # Dynamic Type + pseudo-locale sweep
+├── VolumeArcHealthKitPermissionJourneyTests.swift # HealthKit permission prompt simulation
+├── VolumeArcWatchSimulationJourneyTests.swift    # deterministic Watch payload simulation
+└── VolumeArcScreenshotTests.swift                # fastlane App Store screenshots
 
 Tests/VolumeArcAppPerfTests/
 └── VolumeArcPerfTests.swift                      # 4 performance-regression tests (VOL-99)

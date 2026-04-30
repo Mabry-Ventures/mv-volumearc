@@ -6,15 +6,9 @@ cd "$ROOT"
 
 ruby "scripts/generate_xcode_project.rb"
 
-# VOL-75 P2 / runner isolation: pin DerivedData to the workspace so concurrent
-# CI jobs on the same self-hosted Mac don't race on the shared
-# ~/Library/Developer/Xcode/DerivedData/VolumeArcApple-* path. Without this,
-# two jobs extracting the Sentry XCFramework at once produce "checkdir
-# error: cannot create ..." and two jobs running XCUITest launch concurrently
-# produce "Cannot launch simulated executable: no file found at VolumeArc.app"
-# because one run wipes the other's freshly-built bundle. Keeping DerivedData
-# inside $ROOT means each worktree has its own copy, cleaned by `git clean
-# -ffdx` between runs. Overridable via `DERIVED_DATA_PATH` env var.
+# VOL-88: Tart runners are ephemeral, but pinning DerivedData to the
+# workspace keeps local developer runs and any fallback runner isolated
+# from global Xcode caches. Overridable via `DERIVED_DATA_PATH` env var.
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT/.build/derived-data}"
 mkdir -p "$DERIVED_DATA_PATH"
 

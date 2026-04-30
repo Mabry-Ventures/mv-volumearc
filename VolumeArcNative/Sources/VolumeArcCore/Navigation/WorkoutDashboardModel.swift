@@ -62,6 +62,7 @@ public final class WorkoutDashboardModel: ObservableObject {
     private let coachMemoryRepository: SwiftDataCoachMemoryRepository?
     private let userProfileRepository: SwiftDataUserProfileRepository?
     private let trainingPlanRepository: SwiftDataTrainingPlanRepository?
+    private let refreshLoader: DashboardRefreshLoader?
     #endif
 
     #if canImport(StoreKit)
@@ -107,6 +108,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.coachMemoryRepository = coachMemoryRepository
         self.userProfileRepository = userProfileRepository
         self.trainingPlanRepository = trainingPlanRepository
+        self.refreshLoader = DashboardRefreshLoader(container: repository.container)
         self.syncEngine = syncEngine
         self.subscriptionStore = subscriptionStore
         self.startupNotice = startupNotice
@@ -143,6 +145,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.coachMemoryRepository = nil
         self.userProfileRepository = nil
         self.trainingPlanRepository = nil
+        self.refreshLoader = nil
         #endif
         self.syncEngine = syncEngine
         self.subscriptionStore = subscriptionStore
@@ -174,6 +177,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.coachMemoryRepository = nil
         self.userProfileRepository = nil
         self.trainingPlanRepository = nil
+        self.refreshLoader = nil
         #endif
         #if canImport(StoreKit)
         self.syncEngine = nil
@@ -190,44 +194,25 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.isHealthAuthorized = await healthStore.isAuthorized
 
         #if canImport(SwiftData)
-        guard let workoutRepository,
-              let userProfileRepository,
-              let coachMemoryRepository,
-              let trainingPlanRepository else {
+        guard let refreshLoader else {
             return true
         }
 
         do {
-            let profile = try userProfileRepository.athleteProfile()
-            self.athlete = profile
-
             // VOL-99: the perf suite seeds a larger history pool and
             // asserts scroll performance on the Today tab. Bump the fetch
             // limit when `-PerfTestMode 1` is active so the rows exist in
             // memory for XCTest to scroll past.
             let sessionFetchLimit = VolumeArcRuntimeFlags.isPerformanceTestMode ? 60 : 20
-            let sessions = try workoutRepository.recentSessions(limit: sessionFetchLimit)
-            self.recentSessions = sessions
+            let snapshot = try await refreshLoader.load(sessionFetchLimit: sessionFetchLimit)
 
-            self.readiness = progressionEngine.evaluateReadiness(from: sessions, athlete: profile)
+            self.athlete = snapshot.athlete
+            self.recentSessions = snapshot.recentSessions
+            self.readiness = snapshot.readiness
+            self.autopilot = snapshot.autopilot
+            self.nextWorkout = snapshot.nextWorkout
 
-            // Find the primary exercise to build autopilot state for.
-            let primary = VolumeArcExerciseCatalog.backSquat
-            let history = try workoutRepository.history(forExercise: primary.id)
-            let memory = try coachMemoryRepository.coachMemory()
-
-            self.autopilot = progressionEngine.buildAutopilotState(
-                for: history,
-                athlete: profile,
-                goal: VolumeArcProductDefaults.strengthGoal,
-                recentSessions: sessions,
-                memory: memory
-            )
-
-            self.nextWorkout = try trainingPlanRepository.nextWorkout()
-
-            // Check active workout state
-            if let active = try workoutRepository.activeWorkout() {
+            if let active = snapshot.activeWorkout {
                 self.activeWorkoutID = active.identifier
                 self.activeWorkoutTitle = active.title
                 self.isSessionActive = true
@@ -239,7 +224,7 @@ public final class WorkoutDashboardModel: ObservableObject {
                 self.loggedSetCountThisSession = 0
             }
 
-            self.isOnboardingComplete = try userProfileRepository.isOnboardingComplete()
+            self.isOnboardingComplete = snapshot.isOnboardingComplete
             self.hasLoadedInitialData = true
 
             // Publish a widget snapshot derived from the freshly loaded state.
@@ -250,7 +235,7 @@ public final class WorkoutDashboardModel: ObservableObject {
                 name: "refresh",
                 severity: .info,
                 message: "Dashboard refreshed",
-                metadata: ["sessionCount": "\(sessions.count)", "readiness": "\(readiness.score)"]
+                metadata: ["sessionCount": "\(snapshot.recentSessions.count)", "readiness": "\(readiness.score)"]
             ))
             return true
         } catch {

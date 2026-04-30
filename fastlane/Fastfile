@@ -119,12 +119,10 @@ platform :ios do
   # (see that file for devices/locales). Screenshots are written to
   # fastlane/screenshots/ and picked up automatically by `deliver`.
   #
-  # NOTE (VOL-96b follow-up): this lane requires a `SnapshotHelper.swift`
-  # in the VolumeArcAppUITests target plus UI test flows that call
-  # `snapshot("name")` at the screens we want captured. Until that helper
-  # and the capture flows land, this lane will fail fast with a clear
-  # message rather than silently producing empty artifacts. Do not add
-  # screenshot generation to the beta lane — only release.
+  # Screenshot capture lives in `VolumeArcScreenshotTests` and uses the
+  # local `SnapshotHelper.swift` wrapper so fastlane can collect named
+  # XCTest attachments from the xcresult bundle. Do not add screenshot
+  # generation to the beta lane — only release.
   lane :screenshots do
     helper_path = File.expand_path(
       "../Tests/VolumeArcAppUITests/SnapshotHelper.swift",
@@ -133,8 +131,8 @@ platform :ios do
     unless File.exist?(helper_path)
       UI.user_error!(
         "SnapshotHelper.swift is missing from Tests/VolumeArcAppUITests/. " \
-          "Screenshot capture is stubbed pending VOL-96b — add the helper " \
-          "and `snapshot(...)` call sites, then re-run `fastlane screenshots`."
+          "Screenshot capture helper is missing; restore SnapshotHelper.swift " \
+          "and VolumeArcScreenshotTests before running fastlane screenshots."
       )
     end
 

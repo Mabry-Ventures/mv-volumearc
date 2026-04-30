@@ -260,6 +260,7 @@ public struct TodayView: View {
                     }
                 }
             }
+            .accessibilityIdentifier("today.startWorkout")
 
             VAButton(
                 String(localized: "Ask Coach", comment: "Quick action to open the AI coach"),

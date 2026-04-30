@@ -12,17 +12,16 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # VOL-75: self-hosted runners launched by launchctl before the Homebrew
-  # PATH ever reached them have a minimal env, so `swiftlint`, the modern
-  # Ruby from Homebrew, and user-gem bin directories are all missing from
-  # PATH at step-invocation time. Prepending them here makes the workflow
-  # insensitive to shell-profile timing on the runner.
+  # VOL-88: Tart runner images are baked with Homebrew Ruby, SwiftLint,
+  # and the user gem bin directory available. Keep an explicit PATH here
+  # so the workflow remains insensitive to shell-profile timing on freshly
+  # cloned VM instances.
   PATH: /opt/homebrew/opt/ruby/bin:/opt/homebrew/lib/ruby/gems/4.0.0/bin:/Users/githubrunner/.gem/ruby/4.0.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 
 jobs:
   build-and-test:
     name: Build & Test
-    runs-on: [self-hosted, mv-shared]
+    runs-on: [self-hosted, tart-mv-volumearc]
     # VOL-88 / VOL-111 / VOL-112: bumped 30 → 60. Tart VM runners are
     # ephemeral with no warm DerivedData / SPM cache, so a cold first
     # run on a fresh VM spends ~33 min compiling Sentry's Swift
@@ -70,7 +69,7 @@ jobs:
         shell: bash
 
       - name: Prepare Ruby toolchain
-        # VOL-109/VOL-110 PR unblock: self-hosted runner images may have
+        # VOL-109/VOL-110 PR unblock: runner images may have
         # Homebrew on PATH without the ruby formula installed/linked, which
         # leaves `ruby` resolving to macOS' EOL system Ruby despite the static
         # PATH above. Bootstrap the Homebrew Ruby explicitly and publish the
@@ -185,7 +184,7 @@ jobs:
       # Xcode without re-running CI. Runs on success and failure so a
       # broken run still yields a downloadable artifact.
       #
-      # VOL-103: `continue-on-error: true` because the self-hosted-runner
+      # VOL-103: `continue-on-error: true` because the runner
       # `_actions/` cache races between concurrent jobs and the action
       # tarball can disappear mid-job ("Can't find action.yml under
       # actions/upload-artifact/v4"). The xcresult upload is a
@@ -366,7 +365,7 @@ jobs:
     name: Performance budgets (VOL-99)
     needs: build-and-test
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: [self-hosted, mv-shared]
+    runs-on: [self-hosted, tart-mv-volumearc]
     timeout-minutes: 45
     permissions:
       contents: read
@@ -419,7 +418,7 @@ jobs:
     name: Deploy to TestFlight
     needs: [build-and-test, perf-regression]
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: [self-hosted, mv-shared]
+    runs-on: [self-hosted, tart-mv-volumearc]
     timeout-minutes: 45
 
     steps:

@@ -255,6 +255,7 @@ app_tests_target.add_system_framework('Security')
 app_tests_target.add_system_framework('AppIntents')
 app_tests_target.add_system_framework('ActivityKit')
 app_ui_tests_target.add_system_framework('XCTest')
+app_ui_tests_target.add_system_framework('StoreKitTest')
 app_perf_tests_target.add_system_framework('XCTest')
 
 def add_swift_sources(group, target, base_dir)
@@ -286,6 +287,7 @@ add_swift_sources(widgets_group, widget_target, ROOT.join('Widgets'))
 add_swift_sources(tests_group, app_tests_target, ROOT.join('Tests/VolumeArcAppTests'))
 add_swift_sources(ui_tests_group, app_ui_tests_target, ROOT.join('Tests/VolumeArcAppUITests'))
 add_swift_sources(perf_tests_group, app_perf_tests_target, ROOT.join('Tests/VolumeArcAppPerfTests'))
+add_resource(ui_tests_group, app_ui_tests_target, 'VolumeArcTests.storekit')
 add_resource(app_group, app_target, 'PrivacyInfo.xcprivacy')
 add_resource(watch_group, watch_target, 'PrivacyInfo.xcprivacy')
 add_resource(watch_widgets_group, watch_widgets_target, 'PrivacyInfo.xcprivacy')
@@ -405,6 +407,37 @@ test_scheme.save_as(PROJECT_PATH, 'VolumeArcAppTests', true)
 ui_test_scheme = Xcodeproj::XCScheme.new
 ui_test_scheme.configure_with_targets(app_target, app_ui_tests_target)
 ui_test_scheme.save_as(PROJECT_PATH, 'VolumeArcAppUITests', true)
+
+# VOL-107: activate the local StoreKit configuration for UI-test app
+# launches. xcodeproj can write the scheme, but this gem version does
+# not expose StoreKitConfigurationFileReference on XCScheme, so patch the
+# generated XML deterministically after saving.
+ui_scheme_path = PROJECT_PATH.join('xcshareddata/xcschemes/VolumeArcAppUITests.xcscheme')
+ui_scheme_xml = File.read(ui_scheme_path)
+app_runnable = <<~XML.chomp
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "#{app_target.uuid}"
+            BuildableName = "VolumeArc.app"
+            BlueprintName = "VolumeArcApp"
+            ReferencedContainer = "container:VolumeArcApple.xcodeproj">
+         </BuildableReference>
+      </BuildableProductRunnable>
+XML
+storekit_reference = <<~XML.chomp
+      <StoreKitConfigurationFileReference
+         identifier = "../Tests/VolumeArcAppUITests/VolumeArcTests.storekit">
+      </StoreKitConfigurationFileReference>
+XML
+unless ui_scheme_xml.include?('StoreKitConfigurationFileReference')
+  ui_scheme_xml.sub!(
+    "      allowLocationSimulation = \"YES\">\n   </LaunchAction>",
+    "      allowLocationSimulation = \"YES\">\n#{app_runnable}\n#{storekit_reference}\n   </LaunchAction>"
+  )
+  File.write(ui_scheme_path, ui_scheme_xml)
+end
 
 # VOL-99: dedicated perf scheme. `scripts/test_performance.sh`
 # (invoked by the tag-gated `perf-regression` CI job) selects it via
