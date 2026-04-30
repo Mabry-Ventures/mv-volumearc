@@ -50,7 +50,7 @@ final class VolumeArcScreenshotTests: XCTestCase {
             .matching(identifier: "paywall.plan.com.mabryventures.VolumeArc.premium.monthly")
             .firstMatch
         let planLoaded = monthlyPlan.waitForExistence(timeout: 20)
-        if ProcessInfo.processInfo.arguments.contains("-RequireStoreKitProducts") {
+        if paywallApp.launchArguments.contains("-RequireStoreKitProducts") {
             XCTAssertTrue(planLoaded, "Premium screenshot should wait for StoreKit products before capture")
         } else if !planLoaded {
             throw XCTSkip("StoreKit products unavailable on this simulator; skipping premium screenshot capture.")
@@ -62,9 +62,8 @@ final class VolumeArcScreenshotTests: XCTestCase {
     private func tapTab(atIndex index: Int, in app: XCUIApplication) {
         let tabBar = app.tabBars.firstMatch
         XCTAssertTrue(tabBar.waitForExistence(timeout: 5))
-        let tabCount = 5.0
-        let normalizedX = (Double(index) + 0.5) / tabCount
-        let coordinate = tabBar.coordinate(withNormalizedOffset: CGVector(dx: normalizedX, dy: 0.5))
-        coordinate.tap()
+        let tabs = tabBar.buttons
+        XCTAssertGreaterThan(tabs.count, index)
+        tabs.element(boundBy: index).tap()
     }
 }
