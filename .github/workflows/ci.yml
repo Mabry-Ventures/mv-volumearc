@@ -85,7 +85,8 @@ jobs:
         run: |
           set -euo pipefail
           echo "PATH=$PATH"
-          xcodebuild -version
+          xcode_version_output=$(xcodebuild -version)
+          printf '%s\n' "$xcode_version_output"
           ruby --version | grep -qE 'ruby (3|4)\.' || { echo "::error::Ruby < 3.0 (EOL)"; exit 1; }
           gem list xcodeproj --installed --version '>= 1.0' >/dev/null || { echo "::error::xcodeproj gem missing"; exit 1; }
           command -v swiftlint >/dev/null || { echo "::error::swiftlint missing on runner"; exit 1; }
@@ -96,7 +97,7 @@ jobs:
           # required minimum. If the runner's Xcode is older the build would
           # fail later with a confusing "unsupported Swift compiler version"
           # — fail here with a precise message instead.
-          xcode_version_line=$(xcodebuild -version | head -n 1 | awk '{print $2}')
+          xcode_version_line=$(printf '%s\n' "$xcode_version_output" | awk 'NR==1 {print $2}')
           xcode_major=$(echo "$xcode_version_line" | awk -F. '{print $1}')
           xcode_minor=$(echo "$xcode_version_line" | awk -F. '{print $2+0}')
           required_major=26
@@ -386,10 +387,11 @@ jobs:
         run: |
           set -euo pipefail
           ruby --version
-          xcodebuild -version
+          xcode_version_output=$(xcodebuild -version)
+          printf '%s\n' "$xcode_version_output"
           gem list xcodeproj --installed --version '>= 1.0' >/dev/null
           # Toolchain pin: Xcode 26.4+ required (mirrors build-and-test).
-          xcode_version_line=$(xcodebuild -version | head -n 1 | awk '{print $2}')
+          xcode_version_line=$(printf '%s\n' "$xcode_version_output" | awk 'NR==1 {print $2}')
           xcode_major=$(echo "$xcode_version_line" | awk -F. '{print $1}')
           xcode_minor=$(echo "$xcode_version_line" | awk -F. '{print $2+0}')
           required_major=26
