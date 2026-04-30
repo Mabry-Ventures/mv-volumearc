@@ -6,9 +6,9 @@ cd "$ROOT"
 
 ruby "scripts/generate_xcode_project.rb"
 
-# VOL-88: Tart runners are ephemeral, but pinning DerivedData to the
-# workspace keeps local developer runs and any fallback runner isolated
-# from global Xcode caches. Overridable via `DERIVED_DATA_PATH` env var.
+# VOL-88: pinning DerivedData to the workspace keeps local developer
+# runs and CI runner jobs isolated from global Xcode caches. Overridable
+# via `DERIVED_DATA_PATH` env var.
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT/.build/derived-data}"
 mkdir -p "$DERIVED_DATA_PATH"
 
@@ -56,7 +56,7 @@ xcodebuild \
 # XCUITests (journey coverage)
 reset_app_state
 
-# VOL-88: on Tart VM runners (iOS Simulator inside a virtualized macOS),
+# VOL-88: on self-hosted CI runners,
 # the XCUITest test runner ("VolumeArcAppUITests-Runner") sometimes
 # fails to initialize with:
 #   "Timed out waiting for AX loaded notification"
@@ -69,7 +69,7 @@ reset_app_state
 # `|| true`).
 warm_simulator_for_ui_tests() {
   local device="$IOS_TEST_DEVICE_NAME"
-  echo "Pre-warming '$device' for UI tests (Tart VM AX daemon stabilization)..."
+  echo "Pre-warming '$device' for UI tests (AX daemon stabilization)..."
   xcrun simctl boot "$device" 2>/dev/null || true
   # `bootstatus -b` blocks until the device reports `system_app == true`,
   # which is a stronger signal than `-c` (which only waits for boot
@@ -78,7 +78,7 @@ warm_simulator_for_ui_tests() {
   xcrun simctl bootstatus "$device" -b
   # Belt-and-suspenders: even after bootstatus reports ready, the AX
   # daemon can take a few additional seconds to initialize. 15s
-  # eliminates the flake observed on Tart VM runs of PR #83.
+  # eliminates the flake observed on CI runs of PR #83.
   sleep 15
   echo "Simulator '$device' is ready for XCUITests."
 }

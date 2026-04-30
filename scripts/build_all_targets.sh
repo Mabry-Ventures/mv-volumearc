@@ -6,9 +6,9 @@ cd "$ROOT"
 
 ruby "scripts/generate_xcode_project.rb"
 
-# VOL-88: Tart runners are ephemeral, but pinning DerivedData to the
-# workspace keeps local developer runs and any fallback runner isolated
-# from global Xcode caches. Overridable via `DERIVED_DATA_PATH` env var.
+# VOL-88: pinning DerivedData to the workspace keeps local developer
+# runs and CI runner jobs isolated from global Xcode caches. Overridable
+# via `DERIVED_DATA_PATH` env var.
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT/.build/derived-data}"
 mkdir -p "$DERIVED_DATA_PATH"
 

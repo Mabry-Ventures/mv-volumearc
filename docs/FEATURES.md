@@ -85,7 +85,7 @@ This is the granular per-feature checklist. For high-level system status, see [`
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Generated Xcode project | ✅ | `scripts/generate_xcode_project.rb` remains the only source of truth for the Xcode project. |
-| CI pipeline (Tart M4 runners) | ✅ | Build, unit/integration tests, UI smoke tests, lint, and validation run on ephemeral Tart-backed PR and main runners. |
+| CI pipeline (M4 self-hosted runners) | ✅ | Build, unit/integration tests, UI smoke tests, lint, and validation run on the dedicated Apple Silicon PR and main runner. |
 | Fastlane (test/beta/release) | ✅ | TestFlight automation and App Store submission lanes ship. |
 | Archive script | ✅ | `archive_for_distribution.sh` produces signed distribution archives. |
 | Privacy manifests | ✅ | Required manifests ship for all relevant targets and are validated. |

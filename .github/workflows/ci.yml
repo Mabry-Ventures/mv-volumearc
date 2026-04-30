@@ -12,25 +12,25 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # VOL-88: Tart runner images are baked with Homebrew Ruby, SwiftLint,
-  # and the user gem bin directory available. Keep an explicit PATH here
-  # so the workflow remains insensitive to shell-profile timing on freshly
-  # cloned VM instances.
+  # VOL-88: the current GitHub runner inventory exposes the dedicated
+  # Apple Silicon machine with the `mv-shared` label. Keep an explicit
+  # PATH here so the workflow remains insensitive to shell-profile timing
+  # on freshly provisioned instances.
   PATH: /opt/homebrew/opt/ruby/bin:/opt/homebrew/lib/ruby/gems/4.0.0/bin:/Users/githubrunner/.gem/ruby/4.0.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 
 jobs:
   build-and-test:
     name: Build & Test
-    runs-on: [self-hosted, tart-mv-volumearc]
-    # VOL-88 / VOL-111 / VOL-112: bumped 30 → 60. Tart VM runners are
-    # ephemeral with no warm DerivedData / SPM cache, so a cold first
-    # run on a fresh VM spends ~33 min compiling Sentry's Swift
+    runs-on: [self-hosted, mv-shared]
+    # VOL-88 / VOL-111 / VOL-112: bumped 30 → 60. Self-hosted macOS
+    # runners may start with no warm DerivedData / SPM cache, so a cold
+    # first run spends ~33 min compiling Sentry's Swift
     # dependencies from source before the app's own targets compile.
     # The added XCUITests (Dynamic Type + pseudo-locale journey reruns
     # + Watch payload simulation) then push the test phase to ~10 min.
     # 60 leaves a 17-min headroom over the observed 43-min worst case.
-    # A future follow-up (snapshot caching of DerivedData into the Tart
-    # VM image) would let us drop this back to 30.
+    # A future follow-up (snapshot caching of DerivedData into the runner
+    # image) would let us drop this back to 30.
     timeout-minutes: 60
     # VOL-97: the post-merge coverage-trend append step commits back to
     # main, so the job-scoped GITHUB_TOKEN needs write access to
@@ -365,7 +365,7 @@ jobs:
     name: Performance budgets (VOL-99)
     needs: build-and-test
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: [self-hosted, tart-mv-volumearc]
+    runs-on: [self-hosted, mv-shared]
     timeout-minutes: 45
     permissions:
       contents: read
@@ -418,7 +418,7 @@ jobs:
     name: Deploy to TestFlight
     needs: [build-and-test, perf-regression]
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: [self-hosted, tart-mv-volumearc]
+    runs-on: [self-hosted, mv-shared]
     timeout-minutes: 45
 
     steps:
