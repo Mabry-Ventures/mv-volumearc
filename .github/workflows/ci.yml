@@ -13,10 +13,10 @@ concurrency:
 
 env:
   # VOL-88: the current GitHub runner inventory exposes the dedicated
-  # Apple Silicon machine with the `mv-shared` label. Keep an explicit
-  # PATH here so the workflow remains insensitive to shell-profile timing
-  # on freshly provisioned instances.
-  PATH: /opt/homebrew/opt/ruby/bin:/opt/homebrew/lib/ruby/gems/4.0.0/bin:/Users/githubrunner/.gem/ruby/4.0.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+  # Apple Silicon machine with the `mv-shared` label. Keep only portable
+  # base tool locations here; prepare_ruby_toolchain.sh appends Ruby and
+  # gem bins dynamically via GITHUB_PATH after detecting the runner image.
+  PATH: /opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 
 jobs:
   build-and-test:

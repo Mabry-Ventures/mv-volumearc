@@ -54,7 +54,10 @@ final class VolumeArcScreenshotTests: XCTestCase {
             .matching(identifier: "paywall.plan.com.mabryventures.VolumeArc.premium.monthly")
             .firstMatch
         let planLoaded = monthlyPlan.waitForExistence(timeout: 20)
-        if paywallApp.launchArguments.contains("-RequireStoreKitProducts") {
+        let requiresStoreKitProducts = paywallApp.launchArguments.contains { argument in
+            argument == "-RequireStoreKitProducts" || argument.hasPrefix("-RequireStoreKitProducts=")
+        }
+        if requiresStoreKitProducts {
             XCTAssertTrue(planLoaded, "Premium screenshot should wait for StoreKit products before capture")
         } else if !planLoaded {
             throw XCTSkip("StoreKit products unavailable on this simulator; skipping premium screenshot capture.")
