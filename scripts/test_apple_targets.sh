@@ -84,12 +84,46 @@ warm_simulator_for_ui_tests() {
 }
 warm_simulator_for_ui_tests
 
-xcodebuild \
-  -project "VolumeArcApple.xcodeproj" \
-  -scheme "VolumeArcAppUITests" \
-  -sdk iphonesimulator \
-  -destination "platform=iOS Simulator,name=$IOS_TEST_DEVICE_NAME" \
-  -derivedDataPath "$DERIVED_DATA_PATH" \
-  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
-  CODE_SIGNING_ALLOWED=NO \
-  test
+run_ui_tests_once() {
+  local attempt="$1"
+  local log_path="$DERIVED_DATA_PATH/ui-test-attempt-${attempt}.log"
+
+  set +e
+  xcodebuild \
+    -project "VolumeArcApple.xcodeproj" \
+    -scheme "VolumeArcAppUITests" \
+    -sdk iphonesimulator \
+    -destination "platform=iOS Simulator,name=$IOS_TEST_DEVICE_NAME" \
+    -derivedDataPath "$DERIVED_DATA_PATH" \
+    -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
+    CODE_SIGNING_ALLOWED=NO \
+    test 2>&1 | tee "$log_path"
+  local status=${PIPESTATUS[0]}
+  set -e
+
+  return "$status"
+}
+
+is_simulator_busy_preflight_failure() {
+  local log_path="$1"
+  grep -Eq \
+    'Application failed preflight checks|SBMainWorkspace.*Busy|Simulator device failed to launch .*xctrunner' \
+    "$log_path"
+}
+
+if run_ui_tests_once 1; then
+  :
+else
+  first_ui_status=$?
+  first_ui_log="$DERIVED_DATA_PATH/ui-test-attempt-1.log"
+  if is_simulator_busy_preflight_failure "$first_ui_log"; then
+    echo "::warning::XCUITest runner hit a simulator Busy preflight failure; rebooting simulator and retrying once."
+    xcrun simctl shutdown "$IOS_TEST_DEVICE_NAME" 2>/dev/null || true
+    sleep 10
+    warm_simulator_for_ui_tests
+    reset_app_state
+    run_ui_tests_once 2
+  else
+    exit "$first_ui_status"
+  fi
+fi
