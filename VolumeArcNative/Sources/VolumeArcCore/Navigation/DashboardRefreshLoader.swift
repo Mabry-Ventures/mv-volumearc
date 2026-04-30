@@ -1,6 +1,9 @@
 #if canImport(SwiftData)
 import Foundation
 import SwiftData
+#if canImport(OSLog)
+import OSLog
+#endif
 
 /// Sendable snapshot of all repository-derived dashboard state.
 ///
@@ -52,6 +55,9 @@ public struct DashboardRefreshSnapshot: Sendable {
 public actor DashboardRefreshLoader {
     private let container: ModelContainer
     private let progressionEngine: ProgressionEngine
+    #if canImport(OSLog)
+    private let logger = Logger(subsystem: "com.mabryventures.VolumeArc", category: "dashboard-refresh")
+    #endif
 
     public init(
         container: ModelContainer,
@@ -141,15 +147,31 @@ public actor DashboardRefreshLoader {
     ) throws -> ExerciseHistory {
         let workouts = try loadCompletedWorkouts(limit: 200, in: context)
         let sessions = workouts.compactMap { workout -> ExerciseSession? in
-            guard let data = workout.setsJSON.data(using: .utf8),
-                  let logged = try? JSONDecoder().decode([RefreshLoggedSet].self, from: data)
-            else { return nil }
+            guard let data = workout.setsJSON.data(using: .utf8) else { return nil }
+            let logged: [RefreshLoggedSet]
+            do {
+                logged = try JSONDecoder().decode([RefreshLoggedSet].self, from: data)
+            } catch {
+                logHistoryDecodeFailure(workout: workout, error: error)
+                return nil
+            }
 
             let sets = logged.filter { $0.exerciseID == exerciseID }.map(\.set)
             guard !sets.isEmpty else { return nil }
             return ExerciseSession(date: workout.completedAt ?? workout.startedAt, sets: sets)
         }
         return ExerciseHistory(exerciseID: exerciseID, sessions: Array(sessions.prefix(limit)))
+    }
+
+    private func logHistoryDecodeFailure(workout: WorkoutRecord, error: Error) {
+        #if canImport(OSLog)
+        logger.warning(
+            """
+            Failed to decode workout history for \(workout.identifier, privacy: .public): \
+            \(String(describing: error), privacy: .public)
+            """
+        )
+        #endif
     }
 
     private func loadCoachMemory(in context: ModelContext) throws -> CoachMemory {
