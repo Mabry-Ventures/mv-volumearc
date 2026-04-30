@@ -63,7 +63,8 @@ public actor DashboardRefreshLoader {
 
     public func load(sessionFetchLimit: Int) throws -> DashboardRefreshSnapshot {
         let context = ModelContext(container)
-        let athlete = try loadAthleteProfile(in: context)
+        let profile = try loadProfile(in: context)
+        let athlete = loadAthleteProfile(from: profile)
         let recentSessions = try loadRecentSessions(limit: sessionFetchLimit, in: context)
         let readiness = progressionEngine.evaluateReadiness(from: recentSessions, athlete: athlete)
 
@@ -85,7 +86,7 @@ public actor DashboardRefreshLoader {
             autopilot: autopilot,
             nextWorkout: try loadNextWorkout(in: context),
             activeWorkout: try loadActiveWorkout(in: context),
-            isOnboardingComplete: try loadProfile(in: context)?.onboardingCompleted ?? false
+            isOnboardingComplete: profile?.onboardingCompleted ?? false
         )
     }
 
@@ -95,8 +96,8 @@ public actor DashboardRefreshLoader {
         return try context.fetch(descriptor).first
     }
 
-    private func loadAthleteProfile(in context: ModelContext) throws -> AthleteProfile {
-        guard let record = try loadProfile(in: context) else {
+    private func loadAthleteProfile(from record: UserProfileRecord?) -> AthleteProfile {
+        guard let record else {
             return VolumeArcProductDefaults.athleteProfile
         }
 
@@ -177,7 +178,7 @@ public actor DashboardRefreshLoader {
             return nil
         }
 
-        let todayWeekday = Calendar.current.component(.weekday, from: .now)
+        let todayWeekday = WeeklyWorkout.trainingWeekday(for: .now)
         return workouts.first { $0.dayOfWeek >= todayWeekday } ?? workouts.first
     }
 

@@ -163,8 +163,7 @@ public struct SwiftDataTrainingPlanRepository: Sendable {
     public func nextWorkout(from date: Date = .now) throws -> WeeklyWorkout? {
         let workouts = try weeklyWorkouts()
         guard !workouts.isEmpty else { return nil }
-        let calendar = Calendar.current
-        let todayWeekday = calendar.component(.weekday, from: date)
+        let todayWeekday = WeeklyWorkout.trainingWeekday(for: date)
         // Find next workout on or after today
         if let next = workouts.first(where: { $0.dayOfWeek >= todayWeekday }) {
             return next
