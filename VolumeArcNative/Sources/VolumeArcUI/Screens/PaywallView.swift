@@ -265,6 +265,7 @@ public struct PaywallView: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("paywall.plan.\(product.id)")
     }
 
     // MARK: - Action buttons
@@ -282,6 +283,7 @@ public struct PaywallView: View {
                 Task { await startPurchase() }
             }
             .disabled(selectedProductID == nil || isPurchasing)
+            .accessibilityIdentifier("paywall.purchase")
 
             Button(String(localized: "Restore Purchases", comment: "Paywall restore purchases button")) {
                 Task {

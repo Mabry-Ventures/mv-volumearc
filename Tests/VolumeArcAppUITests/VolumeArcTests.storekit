@@ -1,0 +1,142 @@
+{
+  "appPolicies" : {
+    "eula" : "",
+    "policies" : [
+      {
+        "locale" : "en_US",
+        "policyText" : "",
+        "policyURL" : ""
+      }
+    ]
+  },
+  "identifier" : "A5CE32E4",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Load Products"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Purchase"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Verification"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Store Sync"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Subscription Status"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Transaction"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Manage Subscriptions Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Refund Request Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Offer Code Redeem Sheet"
+      }
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "A78A8236",
+      "localizations" : [
+
+      ],
+      "name" : "VolumeArc Premium",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "9.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "2D7E4490",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Monthly access to VolumeArc Premium.",
+              "displayName" : "VolumeArc Premium Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.mabryventures.VolumeArc.premium.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "VolumeArc Premium Monthly",
+          "subscriptionGroupID" : "A78A8236",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "79.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "AF53CBE8",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Annual access to VolumeArc Premium.",
+              "displayName" : "VolumeArc Premium Yearly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.mabryventures.VolumeArc.premium.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "VolumeArc Premium Yearly",
+          "subscriptionGroupID" : "A78A8236",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

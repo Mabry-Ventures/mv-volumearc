@@ -28,7 +28,7 @@
             buildForAnalyzing = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "315BA6D414AA30D7B520AB5D"
+               BlueprintIdentifier = "F0CED5A3AE783B17C2DD3A2B"
                BuildableName = "VolumeArcAppUITests.xctest"
                BlueprintName = "VolumeArcAppUITests"
                ReferencedContainer = "container:VolumeArcApple.xcodeproj">
@@ -46,7 +46,7 @@
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "315BA6D414AA30D7B520AB5D"
+               BlueprintIdentifier = "F0CED5A3AE783B17C2DD3A2B"
                BuildableName = "VolumeArcAppUITests.xctest"
                BlueprintName = "VolumeArcAppUITests"
                ReferencedContainer = "container:VolumeArcApple.xcodeproj">
@@ -64,6 +64,19 @@
       debugDocumentVersioning = "YES"
       debugServiceExtension = "internal"
       allowLocationSimulation = "YES">
+<BuildableProductRunnable
+   runnableDebuggingMode = "0">
+   <BuildableReference
+      BuildableIdentifier = "primary"
+      BlueprintIdentifier = "6C6DEDD2E32FB173312AEB89"
+      BuildableName = "VolumeArc.app"
+      BlueprintName = "VolumeArcApp"
+      ReferencedContainer = "container:VolumeArcApple.xcodeproj">
+   </BuildableReference>
+</BuildableProductRunnable>
+<StoreKitConfigurationFileReference
+   identifier = "../Tests/VolumeArcAppUITests/VolumeArcTests.storekit">
+</StoreKitConfigurationFileReference>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"

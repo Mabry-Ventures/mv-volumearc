@@ -6,15 +6,9 @@ cd "$ROOT"
 
 ruby "scripts/generate_xcode_project.rb"
 
-# VOL-75 P2 / runner isolation: pin DerivedData to the workspace so concurrent
-# CI jobs on the same self-hosted Mac don't race on the shared
-# ~/Library/Developer/Xcode/DerivedData/VolumeArcApple-* path. Without this,
-# two jobs extracting the Sentry XCFramework at once produce "checkdir
-# error: cannot create ..." and two jobs running XCUITest launch concurrently
-# produce "Cannot launch simulated executable: no file found at VolumeArc.app"
-# because one run wipes the other's freshly-built bundle. Keeping DerivedData
-# inside $ROOT means each worktree has its own copy, cleaned by `git clean
-# -ffdx` between runs. Overridable via `DERIVED_DATA_PATH` env var.
+# VOL-88: pinning DerivedData to the workspace keeps local developer
+# runs and CI runner jobs isolated from global Xcode caches. Overridable
+# via `DERIVED_DATA_PATH` env var.
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT/.build/derived-data}"
 mkdir -p "$DERIVED_DATA_PATH"
 
@@ -62,7 +56,7 @@ xcodebuild \
 # XCUITests (journey coverage)
 reset_app_state
 
-# VOL-88: on Tart VM runners (iOS Simulator inside a virtualized macOS),
+# VOL-88: on self-hosted CI runners,
 # the XCUITest test runner ("VolumeArcAppUITests-Runner") sometimes
 # fails to initialize with:
 #   "Timed out waiting for AX loaded notification"
@@ -75,7 +69,7 @@ reset_app_state
 # `|| true`).
 warm_simulator_for_ui_tests() {
   local device="$IOS_TEST_DEVICE_NAME"
-  echo "Pre-warming '$device' for UI tests (Tart VM AX daemon stabilization)..."
+  echo "Pre-warming '$device' for UI tests (AX daemon stabilization)..."
   xcrun simctl boot "$device" 2>/dev/null || true
   # `bootstatus -b` blocks until the device reports `system_app == true`,
   # which is a stronger signal than `-c` (which only waits for boot
@@ -84,18 +78,52 @@ warm_simulator_for_ui_tests() {
   xcrun simctl bootstatus "$device" -b
   # Belt-and-suspenders: even after bootstatus reports ready, the AX
   # daemon can take a few additional seconds to initialize. 15s
-  # eliminates the flake observed on Tart VM runs of PR #83.
+  # eliminates the flake observed on CI runs of PR #83.
   sleep 15
   echo "Simulator '$device' is ready for XCUITests."
 }
 warm_simulator_for_ui_tests
 
-xcodebuild \
-  -project "VolumeArcApple.xcodeproj" \
-  -scheme "VolumeArcAppUITests" \
-  -sdk iphonesimulator \
-  -destination "platform=iOS Simulator,name=$IOS_TEST_DEVICE_NAME" \
-  -derivedDataPath "$DERIVED_DATA_PATH" \
-  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
-  CODE_SIGNING_ALLOWED=NO \
-  test
+run_ui_tests_once() {
+  local attempt="$1"
+  local log_path="$DERIVED_DATA_PATH/ui-test-attempt-${attempt}.log"
+
+  set +e
+  xcodebuild \
+    -project "VolumeArcApple.xcodeproj" \
+    -scheme "VolumeArcAppUITests" \
+    -sdk iphonesimulator \
+    -destination "platform=iOS Simulator,name=$IOS_TEST_DEVICE_NAME" \
+    -derivedDataPath "$DERIVED_DATA_PATH" \
+    -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
+    CODE_SIGNING_ALLOWED=NO \
+    test 2>&1 | tee "$log_path"
+  local status=${PIPESTATUS[0]}
+  set -e
+
+  return "$status"
+}
+
+is_simulator_busy_preflight_failure() {
+  local log_path="$1"
+  grep -Eq \
+    'Application failed preflight checks|SBMainWorkspace.*Busy|Simulator device failed to launch .*xctrunner' \
+    "$log_path"
+}
+
+if run_ui_tests_once 1; then
+  :
+else
+  first_ui_status=$?
+  first_ui_log="$DERIVED_DATA_PATH/ui-test-attempt-1.log"
+  if is_simulator_busy_preflight_failure "$first_ui_log"; then
+    echo "::warning::XCUITest runner hit a simulator Busy preflight failure; rebooting simulator and retrying once."
+    xcrun simctl shutdown "$IOS_TEST_DEVICE_NAME" 2>/dev/null || true
+    sleep 10
+    warm_simulator_for_ui_tests
+    reset_app_state
+    run_ui_tests_once 2
+  else
+    exit "$first_ui_status"
+  fi
+fi

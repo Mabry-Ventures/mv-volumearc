@@ -1,13 +1,16 @@
 import XCTest
+#if canImport(StoreKitTest)
+import StoreKit
+import StoreKitTest
+#endif
 
 /// VOL-93: end-to-end journey XCUITests for the VolumeArc iOS app.
 ///
 /// This suite is the P1 subset of VOL-93 — it proves critical launch
 /// flows actually work (onboarding → dashboard, paywall present/dismiss,
 /// restore purchases tap). Coverage that requires additional harness
-/// work (StoreKit Test framework, HealthKit sheets, active-workout
-/// completion, BGTask triggers, Dynamic Type sweep, Watch pairing) is
-/// tracked in VOL-107 through VOL-112.
+/// work (HealthKit sheets, BGTask triggers, Dynamic Type sweep, Watch
+/// pairing) is tracked in VOL-109 through VOL-112.
 ///
 /// All tests launch via `VolumeArcAppUITestSupport` so the flag strings
 /// stay in lockstep with the smoke tests.
@@ -124,9 +127,8 @@ final class VolumeArcAppJourneyTests: XCTestCase {
     /// sheet appears, its legal links are reachable, and the close
     /// button returns the user to the dashboard.
     ///
-    /// This is explicitly NOT a full purchase flow — that requires the
-    /// StoreKit Test framework wired into the build and is tracked in
-    /// VOL-107.
+    /// This is explicitly NOT a full purchase flow — the StoreKit Test
+    /// purchase path is covered by `testPremiumPurchaseFlowWithStoreKitTest`.
     func testPaywallPresentationAndDismissal() throws {
         let app = VolumeArcAppUITestSupport.makeSeededApp(extra: ["-ShowPaywallOnLaunch", "1"])
         app.launch()
@@ -190,7 +192,7 @@ final class VolumeArcAppJourneyTests: XCTestCase {
         )
     }
 
-    // MARK: - 3. Restore purchases tap
+    // MARK: - 3. StoreKit restore + purchase flows
 
     /// Boots the paywall and taps "Restore Purchases". The goal is only
     /// to prove the tap path does not crash the app — asserting that
@@ -248,4 +250,201 @@ final class VolumeArcAppJourneyTests: XCTestCase {
             "Paywall should remain presented after Restore Purchases is tapped"
         )
     }
+
+    /// VOL-107: real StoreKit Test purchase flow. A local `.storekit`
+    /// config backs Product loading and purchase completion, then the
+    /// paywall should dismiss once `StoreKitSubscriptionStore.isPremium`
+    /// flips true.
+    func testPremiumPurchaseFlowWithStoreKitTest() throws {
+        #if canImport(StoreKitTest)
+        _ = try makeStoreKitSession()
+        let app = VolumeArcAppUITestSupport.makeSeededApp(extra: ["-ShowPaywallOnLaunch", "1"])
+        app.launch()
+
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: 20),
+            "App should reach foreground running state on cold launch"
+        )
+
+        let productIDs = [
+            "com.mabryventures.VolumeArc.premium.monthly",
+            "com.mabryventures.VolumeArc.premium.yearly",
+        ]
+        let preflight = expectation(description: "StoreKit Test products preflight")
+        let preflightResult = StoreKitProductPreflightResult()
+        Task {
+            let products = (try? await Product.products(for: productIDs)) ?? []
+            preflightResult.productCount = products.count
+            preflight.fulfill()
+        }
+        wait(for: [preflight], timeout: 10)
+        guard preflightResult.productCount > 0 else {
+            throw XCTSkip(
+                "StoreKit Test daemon did not expose local products for this simulator; purchase flow skipped."
+            )
+        }
+
+        let paywallRoot = app.descendants(matching: .any)
+            .matching(identifier: "paywall.root")
+            .firstMatch
+        XCTAssertTrue(
+            paywallRoot.waitForExistence(timeout: 15),
+            "Paywall sheet should appear when -ShowPaywallOnLaunch 1 is set"
+        )
+
+        let monthlyPlan = app.descendants(matching: .any)
+            .matching(identifier: "paywall.plan.com.mabryventures.VolumeArc.premium.monthly")
+            .firstMatch
+        XCTAssertTrue(
+            monthlyPlan.waitForExistence(timeout: 20),
+            "StoreKit Test should load the monthly premium product"
+        )
+        monthlyPlan.tap()
+
+        let purchaseButton = app.descendants(matching: .any)
+            .matching(identifier: "paywall.purchase")
+            .firstMatch
+        XCTAssertTrue(
+            purchaseButton.waitForExistence(timeout: 5),
+            "Paywall should expose the purchase button"
+        )
+        purchaseButton.tap()
+
+        XCTAssertTrue(
+            paywallRoot.waitForNonExistence(timeout: 20),
+            "Paywall should dismiss once the StoreKit Test purchase succeeds"
+        )
+        #else
+        throw XCTSkip("StoreKitTest is unavailable in this SDK.")
+        #endif
+    }
+
+    // MARK: - 4. Active workout completion
+
+    /// VOL-108: end-to-end active workout loop — start a session, log a
+    /// set, complete the workout, and verify the summary appears.
+    func testStartLogCompleteWorkoutSession() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp()
+        app.launch()
+        assertAppReachedForeground(app)
+
+        assertElementExists(app.otherElements["root.dashboard"], timeout: 15, "Seeded dashboard should be visible")
+
+        let startButton = waitForElement(
+            in: app,
+            identifier: "today.startWorkout",
+            timeout: 10,
+            "Today should expose Start Workout"
+        )
+        startButton.tap()
+
+        let workoutsTab = app.tabBars.buttons["Workouts"]
+        assertElementExists(workoutsTab, timeout: 5, "Tab bar should expose the Workouts tab")
+        workoutsTab.tap()
+
+        _ = waitForElement(
+            in: app,
+            identifier: "workouts.activeSession",
+            timeout: 10,
+            "Workouts tab should show an active session after Start Workout"
+        )
+
+        let logSetButton = waitForElement(
+            in: app,
+            identifier: "workouts.logSet",
+            timeout: 10,
+            "Active session should expose Log Set"
+        )
+        logSetButton.tap()
+
+        let completeButton = waitForElement(
+            in: app,
+            identifier: "workouts.completeWorkout",
+            timeout: 10,
+            "Active session should expose Complete Workout"
+        )
+        completeButton.tap()
+
+        let summary = waitForElement(
+            in: app,
+            identifier: "sessionSummary.root",
+            timeout: 15,
+            "Completing a workout should present the session summary"
+        )
+
+        let done = app.descendants(matching: .any)
+            .matching(identifier: "sessionSummary.done")
+            .firstMatch
+        for _ in 0..<3 where !done.exists {
+            summary.swipeUp()
+        }
+        XCTAssertTrue(
+            done.waitForExistence(timeout: 10),
+            "Session summary should expose a Done button"
+        )
+        done.tap()
+
+        _ = waitForElement(
+            in: app,
+            identifier: "workouts.emptyState",
+            timeout: 10,
+            "Workouts tab should return to idle state after dismissing summary"
+        )
+    }
+
+    private func assertAppReachedForeground(_ app: XCUIApplication) {
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: 20),
+            "App should reach foreground running state on cold launch"
+        )
+    }
+
+    private func waitForElement(
+        in app: XCUIApplication,
+        identifier: String,
+        timeout: TimeInterval,
+        _ message: String
+    ) -> XCUIElement {
+        let element = app.descendants(matching: .any)
+            .matching(identifier: identifier)
+            .firstMatch
+        assertElementExists(element, timeout: timeout, message)
+        return element
+    }
+
+    private func assertElementExists(
+        _ element: XCUIElement,
+        timeout: TimeInterval,
+        _ message: String
+    ) {
+        XCTAssertTrue(element.waitForExistence(timeout: timeout), message)
+    }
+
+    #if canImport(StoreKitTest)
+    private func makeStoreKitSession() throws -> SKTestSession {
+        let session = try SKTestSession(configurationFileNamed: "VolumeArcTests")
+        session.clearTransactions()
+        session.disableDialogs = true
+        session.askToBuyEnabled = false
+        return session
+    }
+
+    private final class StoreKitProductPreflightResult: @unchecked Sendable {
+        private let lock = NSLock()
+        private var storedProductCount = 0
+
+        var productCount: Int {
+            get {
+                lock.lock()
+                defer { lock.unlock() }
+                return storedProductCount
+            }
+            set {
+                lock.lock()
+                storedProductCount = newValue
+                lock.unlock()
+            }
+        }
+    }
+    #endif
 }

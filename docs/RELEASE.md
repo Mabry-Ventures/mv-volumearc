@@ -150,17 +150,9 @@ Current languages: `en-US`.
 3. Run `fastlane ios screenshots` locally to confirm the new folder appears under `fastlane/screenshots/<locale>/`.
 4. Commit the Snapfile change alongside any App Store metadata (`fastlane/metadata/<locale>/`) that accompanies the launch.
 
-#### VOL-96b follow-up (SnapshotHelper wiring)
+#### Screenshot capture flow
 
-The lane is wired into `release`, but it currently fails fast with an actionable message because the XCUITest target does not yet include `SnapshotHelper.swift` or any `snapshot("name")` call sites. Until VOL-96b lands:
-
-- Running `fastlane ios release` will **block at the screenshots step** with the error `SnapshotHelper.swift is missing from Tests/VolumeArcAppUITests/`.
-- To ship a release in the meantime, temporarily invoke `fastlane ios beta` plus `fastlane ios deliver` with `skip_screenshots: true` (the old behavior), or land VOL-96b first.
-
-VOL-96b scope:
-1. Drop `SnapshotHelper.swift` (from the fastlane repo) into `Tests/VolumeArcAppUITests/`.
-2. Add `setupSnapshot(app)` to the UI test `setUp` and `snapshot("01Dashboard")`-style calls at each screen we want captured.
-3. Ensure `scripts/generate_xcode_project.rb` adds the helper to the UI test target (it will pick it up via the existing `add_swift_sources` glob).
+`VolumeArcScreenshotTests` launches seeded app states, calls `setupSnapshot(app)`, and attaches named screenshots with `snapshot("name")`. The UI test target includes the local `SnapshotHelper.swift`, and `scripts/generate_xcode_project.rb` picks up both files through the existing UI test source glob.
 
 ## Rollback
 

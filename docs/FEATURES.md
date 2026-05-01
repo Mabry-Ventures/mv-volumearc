@@ -85,7 +85,7 @@ This is the granular per-feature checklist. For high-level system status, see [`
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Generated Xcode project | ✅ | `scripts/generate_xcode_project.rb` remains the only source of truth for the Xcode project. |
-| CI pipeline (self-hosted M4) | ✅ | Build, unit/integration tests, UI smoke tests, lint, and validation run on PRs and main pushes. |
+| CI pipeline (M4 self-hosted runners) | ✅ | Build, unit/integration tests, UI smoke tests, lint, and validation run on the dedicated Apple Silicon PR and main runner. |
 | Fastlane (test/beta/release) | ✅ | TestFlight automation and App Store submission lanes ship. |
 | Archive script | ✅ | `archive_for_distribution.sh` produces signed distribution archives. |
 | Privacy manifests | ✅ | Required manifests ship for all relevant targets and are validated. |
@@ -95,7 +95,7 @@ This is the granular per-feature checklist. For high-level system status, see [`
 | Accessibility labels | ✅ | Data displays, interactive controls, widgets, watch surfaces, and toast announcements have shipped accessibility coverage. |
 | Hard-failing release validation | ✅ | `scripts/validate_release_config.sh` hard-checks the checked-in `App/Info.plist` via `plutil -extract` for `CFBundleURLTypes`, `BGTaskSchedulerPermittedIdentifiers`, `UIBackgroundModes`, the `volumearc` URL scheme, and both BGTask identifiers (VOL-85), and validates signed entitlements on the built `.app` via `codesign -d --entitlements -` for `aps-environment = production`, iCloud container identifier, HealthKit, and App Groups (VOL-92). Fastlane runs it against the archived bundle before TestFlight upload. |
 | Checked-in `App/Info.plist` (vs `INFOPLIST_KEY_*`) | ✅ | `App/Info.plist` is checked in and wired via `INFOPLIST_FILE`. Array-valued keys that `INFOPLIST_KEY_*` silently drops now live in the plist file. |
-| AI review gate (CodeRabbit Pro + Codex) on PRs | ✅ | Two-bot review gate is part of the protected-branch merge contract. CodeRabbit Pro is primary (server-side, auto-invoked on PR open/update); Codex Code Review is secondary (requested by `Request AI Reviews` workflow step). |
+| AI review gate (CodeRabbit Pro + Codex) on PRs | ✅ | Two-bot review gate is part of the protected-branch merge contract. `Request AI Reviews` posts current-head review requests for CodeRabbit Pro and Codex Code Review, then waits for both bots to signal on that head SHA. |
 
 ## Design
 

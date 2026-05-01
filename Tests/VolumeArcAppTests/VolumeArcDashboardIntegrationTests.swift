@@ -350,6 +350,38 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertEqual(fetched.map(\.title), plan.map(\.title))
     }
 
+    func testTrainingPlanNextWorkoutUsesMondayBasedWeekdays() throws {
+        let plan = [
+            WeeklyWorkout(dayOfWeek: 5, title: "Friday Deadlift"),
+            WeeklyWorkout(dayOfWeek: 1, title: "Monday Squat"),
+            WeeklyWorkout(dayOfWeek: 3, title: "Wednesday Bench"),
+        ]
+        try trainingPlanRepository.upsertPlan(plan)
+
+        let monday = try XCTUnwrap(DateComponents(
+            calendar: Calendar(identifier: .gregorian),
+            year: 2026,
+            month: 4,
+            day: 27
+        ).date)
+        let saturday = try XCTUnwrap(DateComponents(
+            calendar: Calendar(identifier: .gregorian),
+            year: 2026,
+            month: 5,
+            day: 2
+        ).date)
+        let sunday = try XCTUnwrap(DateComponents(
+            calendar: Calendar(identifier: .gregorian),
+            year: 2026,
+            month: 5,
+            day: 3
+        ).date)
+
+        XCTAssertEqual(try trainingPlanRepository.nextWorkout(from: monday)?.title, "Monday Squat")
+        XCTAssertEqual(try trainingPlanRepository.nextWorkout(from: saturday)?.title, "Monday Squat")
+        XCTAssertEqual(try trainingPlanRepository.nextWorkout(from: sunday)?.title, "Monday Squat")
+    }
+
     private func makeDashboardModel(
         aiProvider: any AICoachProvider = LocalHeuristicAICoachProvider()
     ) -> WorkoutDashboardModel {

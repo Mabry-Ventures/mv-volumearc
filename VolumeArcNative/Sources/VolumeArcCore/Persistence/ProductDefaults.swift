@@ -42,6 +42,12 @@ public struct WeeklyWorkout: Codable, Sendable {
         self.dayOfWeek = dayOfWeek
         self.title = title
     }
+
+    /// Training plans store weekdays as Monday = 1 ... Sunday = 7.
+    public static func trainingWeekday(for date: Date, calendar: Calendar = .current) -> Int {
+        let foundationWeekday = calendar.component(.weekday, from: date)
+        return foundationWeekday == 1 ? 7 : foundationWeekday - 1
+    }
 }
 
 public enum VolumeArcProductDefaults {

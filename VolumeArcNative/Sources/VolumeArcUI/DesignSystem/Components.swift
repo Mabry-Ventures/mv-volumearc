@@ -53,7 +53,11 @@ public struct VACard<Content: View>: View {
             Color.clear
         case .accent:
             LinearGradient(
-                colors: [VA.Colors.primary.opacity(0.15), VA.Colors.primary.opacity(0.05)],
+                colors: [
+                    VA.Colors.sunriseA.opacity(0.22),
+                    VA.Colors.sunriseB.opacity(0.12),
+                    VA.Colors.sunriseC.opacity(0.08),
+                ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -203,9 +207,9 @@ private struct VAButtonBackgroundModifier: ViewModifier {
             content
                 .background(
                     LinearGradient(
-                        colors: [VA.Colors.primary, VA.Colors.primary.opacity(0.85)],
-                        startPoint: .top,
-                        endPoint: .bottom
+                        colors: [VA.Colors.primary, VA.Colors.primaryDeep],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
                     )
                 )
                 .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))

@@ -20,16 +20,17 @@ public struct WorkoutsView: View {
                 if model.isSessionActive {
                     activeSessionHeader
                     currentExerciseCard
-                    restTimerCard
                     logSetButton
                     completeButton
+                    restTimerCard
                 } else {
                     idleState
                 }
             }
             .padding(VA.Space.lg)
         }
-        .background(VA.Colors.surfaceSecondary)
+        .accessibilityIdentifier("workouts.root")
+        .background(VA.Colors.surfaceGrouped)
         .navigationTitle(model.isSessionActive
                          ? String(localized: "Session", comment: "Workouts tab title during an active session")
                          : String(localized: "Workouts", comment: "Workouts tab title when idle"))
@@ -93,6 +94,7 @@ public struct WorkoutsView: View {
                     .symbolEffect(.pulse, options: .repeating)
             }
         }
+        .accessibilityIdentifier("workouts.activeSession")
     }
 
     @ViewBuilder
@@ -175,6 +177,7 @@ public struct WorkoutsView: View {
                         restActive = true
                         VAHaptics.tap()
                     }
+                    .accessibilityIdentifier("workouts.startRest")
                 }
             }
         }
@@ -200,6 +203,7 @@ public struct WorkoutsView: View {
                 ))
             }
         }
+        .accessibilityIdentifier("workouts.logSet")
     }
 
     private var completeButton: some View {
@@ -229,6 +233,7 @@ public struct WorkoutsView: View {
                 )
             }
         }
+        .accessibilityIdentifier("workouts.completeWorkout")
     }
 
     // MARK: - Idle state
@@ -252,6 +257,7 @@ public struct WorkoutsView: View {
                     }
                 )
             )
+            .accessibilityIdentifier("workouts.emptyState")
             .frame(minHeight: 300)
 
             if !model.recentSessions.isEmpty {

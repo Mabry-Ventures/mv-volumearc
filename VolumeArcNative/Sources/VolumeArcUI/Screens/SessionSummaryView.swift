@@ -32,14 +32,15 @@ public struct SessionSummaryView: View {
     }
 
     public var body: some View {
-        VStack(spacing: VA.Space.xl) {
-            Spacer()
-            celebration
-            metricsGrid
-            Spacer()
-            continueButton
+        ScrollView {
+            VStack(spacing: VA.Space.xl) {
+                celebration
+                metricsGrid
+                continueButton
+            }
+            .frame(maxWidth: .infinity)
+            .padding(VA.Space.xl)
         }
-        .padding(VA.Space.xl)
         .background(
             LinearGradient(
                 colors: [
@@ -52,6 +53,7 @@ public struct SessionSummaryView: View {
             )
             .ignoresSafeArea()
         )
+        .accessibilityIdentifier("sessionSummary.root")
         .onAppear {
             VAHaptics.workoutComplete()
             if reduceMotion {
@@ -191,6 +193,7 @@ public struct SessionSummaryView: View {
         }
         .opacity(hasAppeared ? 1 : 0)
         .offset(y: hasAppeared ? 0 : 20)
+        .accessibilityIdentifier("sessionSummary.done")
     }
 }
 #endif
