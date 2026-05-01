@@ -16,25 +16,32 @@ public struct WorkoutsView: View {
 
     public var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: VA.Space.lg) {
+            LazyVStack(alignment: .leading, spacing: VA.Space.xl) {
+                workoutsHeader
                 if model.isSessionActive {
                     activeSessionHeader
-                    currentExerciseCard
-                    logSetButton
-                    completeButton
-                    restTimerCard
+                    activeExerciseCard
+                    activeActions
+                    setLogCard
+                    if restActive {
+                        restTimerCard
+                    } else {
+                        coachCueCard
+                    }
+                    upNextCard
                 } else {
                     idleState
                 }
             }
             .padding(VA.Space.lg)
+            .padding(.bottom, VA.Space.xxl)
         }
         .accessibilityIdentifier("workouts.root")
         .background(VA.Colors.surfaceGrouped)
         .navigationTitle(model.isSessionActive
                          ? String(localized: "Session", comment: "Workouts tab title during an active session")
                          : String(localized: "Workouts", comment: "Workouts tab title when idle"))
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .fullScreenCover(item: $summary) { snapshot in
             SessionSummaryView(
                 sets: snapshot.sets,
@@ -60,82 +67,185 @@ public struct WorkoutsView: View {
         let primaryLift: String
     }
 
+    // MARK: - Header
+
+    private var workoutsHeader: some View {
+        VStack(alignment: .leading, spacing: VA.Space.xxs) {
+            Text(model.isSessionActive
+                 ? String(localized: "In progress", comment: "Workouts active session header eyebrow")
+                 : String(localized: "Your library", comment: "Workouts library header eyebrow"))
+                .font(VA.Typography.footnote)
+                .foregroundStyle(VA.Colors.textSecondary)
+            Text(model.isSessionActive ? activeWorkoutTitle : String(localized: "Workouts", comment: "Workouts header title"))
+                .font(VA.Typography.title)
+                .foregroundStyle(VA.Colors.textPrimary)
+                .lineLimit(2)
+                .minimumScaleFactor(0.82)
+        }
+        .padding(.top, VA.Space.sm)
+    }
+
     // MARK: - Active session
 
     private var activeSessionHeader: some View {
-        VACard(style: .accent) {
-            HStack {
-                VStack(alignment: .leading, spacing: VA.Space.xxs) {
-                    Text(String(localized: "LIVE SESSION", comment: "Label above the active session card"))
-                        .font(VA.Typography.caption)
-                        .foregroundStyle(VA.Colors.primary)
-                        .tracking(0.5)
-                    Text(model.activeWorkoutTitle ?? String(
-                        localized: "Strength Session",
-                        comment: "Default title when no workout title is set"
-                    ))
-                        .font(VA.Typography.title2)
-                        .foregroundStyle(VA.Colors.textPrimary)
-                    Text(String(
-                        localized: "^[\(model.loggedSetCountThisSession) sets](inflect: true) logged",
-                        comment: """
-                            Active session subtitle showing how many sets have \
-                            been logged. Uses Apple's inflection syntax for \
-                            plural agreement.
-                            """
-                    ))
-                        .font(VA.Typography.footnote)
-                        .foregroundStyle(VA.Colors.textSecondary)
-                }
-                Spacer()
-                Image(systemName: "record.circle")
-                    .font(.system(size: 24, weight: .medium))
+        HStack(alignment: .center, spacing: VA.Space.md) {
+            VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                Text(String(localized: "LIVE SESSION", comment: "Label above the active session card"))
+                    .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.primary)
-                    .symbolEffect(.pulse, options: .repeating)
+                    .tracking(0.6)
+                Text(activeWorkoutTitle)
+                    .font(VA.Typography.headline)
+                    .foregroundStyle(VA.Colors.textPrimary)
+                Text(String(
+                    localized: "^[\(model.loggedSetCountThisSession) sets](inflect: true) logged",
+                    comment: "Active session subtitle showing how many sets have been logged"
+                ))
+                .font(VA.Typography.footnote)
+                .foregroundStyle(VA.Colors.textSecondary)
             }
+            Spacer(minLength: VA.Space.sm)
+            ZStack {
+                VAProgressRing(progress: setProgress, lineWidth: 4)
+                    .frame(width: 44, height: 44)
+                Text("\(min(model.loggedSetCountThisSession, targetSetCount))/\(targetSetCount)")
+                    .font(VA.Typography.caption)
+                    .foregroundStyle(VA.Colors.textPrimary)
+                    .monospacedDigit()
+            }
+            .accessibilityLabel(String(
+                localized: "Session progress \(min(model.loggedSetCountThisSession, targetSetCount)) of \(targetSetCount) sets",
+                comment: "VoiceOver label for active session set progress"
+            ))
         }
+        .padding(VA.Space.lg)
+        .vaGlassBackground(in: RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous))
         .accessibilityIdentifier("workouts.activeSession")
     }
 
     @ViewBuilder
-    private var currentExerciseCard: some View {
+    private var activeExerciseCard: some View {
         if let autopilot = model.autopilot {
             VACard(style: .elevated) {
                 VStack(alignment: .leading, spacing: VA.Space.md) {
-                    VASectionHeader(String(localized: "Next Set", comment: "Section header above the upcoming set card"))
-                    Text(autopilot.nextExerciseName)
-                        .font(VA.Typography.title)
-                        .foregroundStyle(VA.Colors.textPrimary)
+                    HStack(alignment: .center, spacing: VA.Space.md) {
+                        WorkoutIllustrationTile(systemImage: "figure.strengthtraining.traditional", size: 88, accent: VA.Colors.primary)
+                        VStack(alignment: .leading, spacing: VA.Space.xs) {
+                            Text(String(
+                                localized: "SET \(currentSetNumber) OF \(targetSetCount)",
+                                comment: "Active workout current set counter"
+                            ))
+                            .font(VA.Typography.caption)
+                            .foregroundStyle(VA.Colors.textSecondary)
+                            .tracking(0.8)
+                            Text(autopilot.nextExerciseName)
+                                .font(VA.Typography.title2)
+                                .foregroundStyle(VA.Colors.textPrimary)
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.82)
 
-                    HStack(spacing: VA.Space.xl) {
-                        VAMetricDisplay(
-                            label: String(localized: "Weight", comment: "Metric label — target weight"),
-                            value: "\(Int(autopilot.nextTarget.weight))",
-                            unit: autopilot.nextTarget.unit,
-                            style: .standard
-                        )
-                        VAMetricDisplay(
-                            label: String(localized: "Reps", comment: "Metric label — target rep range"),
-                            value: "\(autopilot.nextTarget.repRange.lowerBound)-\(autopilot.nextTarget.repRange.upperBound)",
-                            style: .standard
-                        )
-                        VAMetricDisplay(
-                            label: String(localized: "RPE", comment: "Metric label — target rate of perceived exertion"),
-                            value: String(format: "%.1f", autopilot.nextTarget.targetRPE),
-                            style: .standard
-                        )
+                            HStack(alignment: .firstTextBaseline, spacing: VA.Space.sm) {
+                                Text("\(Int(autopilot.nextTarget.weight))")
+                                    .font(VA.Typography.display)
+                                    .foregroundStyle(VA.Colors.textPrimary)
+                                    .monospacedDigit()
+                                    .minimumScaleFactor(0.72)
+                                Text("\(autopilot.nextTarget.unit) x \(autopilot.nextTarget.repRange.lowerBound)")
+                                    .font(VA.Typography.footnote)
+                                    .foregroundStyle(VA.Colors.textSecondary)
+                            }
+                        }
                     }
 
-                    Divider()
+                    HStack(spacing: VA.Space.xs) {
+                        WorkoutChip(text: String(
+                            localized: "RPE \(String(format: "%.1f", autopilot.nextTarget.targetRPE)) target",
+                            comment: "Active workout target RPE chip"
+                        ), tone: .primary)
+                        WorkoutChip(text: String(localized: "90s rest", comment: "Active workout rest chip"), tone: .neutral)
+                    }
 
-                    HStack(alignment: .top, spacing: VA.Space.sm) {
-                        Image(systemName: "quote.opening")
-                            .font(.system(size: 13))
-                            .foregroundStyle(VA.Colors.primary)
-                        Text(autopilot.bestCue)
-                            .font(VA.Typography.footnote)
-                            .foregroundStyle(VA.Colors.textSecondary)
-                            .italic()
+                    VAButton(
+                        String(localized: "Log Set", comment: "Button to record the current set"),
+                        icon: "checkmark",
+                        style: .primary,
+                        accessibilityHint: String(localized: "Records this set and starts the rest timer",
+                                                  comment: "Log Set button VoiceOver hint"),
+                        accessibilityIdentifier: "workouts.logSet"
+                    ) {
+                        logSet()
+                    }
+                }
+            }
+        } else {
+            VACard(style: .elevated) {
+                VStack(alignment: .leading, spacing: VA.Space.md) {
+                    WorkoutIllustrationTile(systemImage: "figure.strengthtraining.traditional", size: 88, accent: VA.Colors.primary)
+                    Text(String(localized: "Session ready", comment: "Fallback active workout title"))
+                        .font(VA.Typography.title2)
+                        .foregroundStyle(VA.Colors.textPrimary)
+                    Text(String(
+                        localized: "Your next target will appear after the dashboard refreshes.",
+                        comment: "Fallback active workout message when no recommendation is loaded"
+                    ))
+                    .font(VA.Typography.footnote)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                }
+            }
+        }
+    }
+
+    private var activeActions: some View {
+        HStack(spacing: VA.Space.md) {
+            if !restActive {
+                VAButton(
+                    String(localized: "Start Rest", comment: "Button to start rest timer"),
+                    icon: "timer",
+                    style: .secondary,
+                    accessibilityIdentifier: "workouts.startRest"
+                ) {
+                    restEndsAt = .now.addingTimeInterval(90)
+                    restActive = true
+                    VAHaptics.tap()
+                }
+            }
+            VAButton(
+                String(localized: "Complete Workout", comment: "Button to finish the current workout session"),
+                icon: "flag.checkered",
+                style: .secondary,
+                accessibilityIdentifier: "workouts.completeWorkout"
+            ) {
+                completeWorkout()
+            }
+        }
+    }
+
+    private var setLogCard: some View {
+        VStack(alignment: .leading, spacing: VA.Space.sm) {
+            HStack {
+                Text(String(localized: "SET LOG", comment: "Active workout set log section label"))
+                    .font(VA.Typography.caption)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                    .tracking(0.6)
+                Spacer()
+                Text(String(localized: "RPE", comment: "Active workout set log rpe column label"))
+                    .font(VA.Typography.caption)
+                    .foregroundStyle(VA.Colors.textSecondary)
+            }
+            .padding(.horizontal, VA.Space.xs)
+
+            VACard(style: .flat) {
+                VStack(spacing: 0) {
+                    ForEach(1...targetSetCount, id: \.self) { setNumber in
+                        SetLogRow(
+                            setNumber: setNumber,
+                            isDone: setNumber <= model.loggedSetCountThisSession,
+                            target: compactTarget,
+                            rpe: model.autopilot?.nextTarget.targetRPE ?? 7.5
+                        )
+                        if setNumber != targetSetCount {
+                            Divider().padding(.leading, 42)
+                        }
                     }
                 }
             }
@@ -145,194 +255,176 @@ public struct WorkoutsView: View {
     private var restTimerCard: some View {
         VACard(style: .glass) {
             VStack(spacing: VA.Space.md) {
-                HStack {
-                    Text(String(localized: "REST TIMER", comment: "Label above the rest timer"))
-                        .font(VA.Typography.caption)
-                        .foregroundStyle(VA.Colors.textSecondary)
-                        .tracking(0.5)
-                    Spacer()
-                    if restActive {
-                        Button(String(localized: "Reset", comment: "Rest timer reset button")) {
-                            restEndsAt = .now.addingTimeInterval(90)
-                            VAHaptics.tap()
-                        }
-                        .font(VA.Typography.button)
-                        .foregroundStyle(VA.Colors.primary)
-                    }
-                }
-
+                Text(String(localized: "RESTING", comment: "Label above the active rest timer"))
+                    .font(VA.Typography.caption)
+                    .foregroundStyle(VA.Colors.primary)
+                    .tracking(0.8)
                 RestTimerDisplay(
                     endsAt: restEndsAt,
                     active: restActive,
-                    onComplete: { VAHaptics.restComplete() }
-                )
-
-                if !restActive {
-                    VAButton(
-                        String(localized: "Start Rest (90s)", comment: "Button to start a 90-second rest timer"),
-                        icon: "timer",
-                        style: .secondary
-                    ) {
-                        restEndsAt = .now.addingTimeInterval(90)
-                        restActive = true
-                        VAHaptics.tap()
+                    onComplete: {
+                        restActive = false
+                        VAHaptics.restComplete()
                     }
-                    .accessibilityIdentifier("workouts.startRest")
+                )
+                VAButton(
+                    String(localized: "Skip Rest", comment: "Button to skip active rest timer"),
+                    icon: "forward.fill",
+                    style: .secondary
+                ) {
+                    restActive = false
+                    VAHaptics.tap()
                 }
             }
         }
     }
 
-    private var logSetButton: some View {
-        VAButton(
-            String(localized: "Log Set", comment: "Button to record the current set"),
-            icon: "checkmark.circle.fill",
-            style: .primary,
-            accessibilityHint: String(localized: "Records this set and starts the rest timer",
-                                      comment: "Log Set button VoiceOver hint")
-        ) {
-            Task {
-                VAHaptics.setLogged()
-                await model.logRecommendedSet()
-                restEndsAt = .now.addingTimeInterval(90)
-                restActive = true
-                toastPresenter.show(VAToast(
-                    kind: .success,
-                    title: String(localized: "Set logged", comment: "Toast after logging a set"),
-                    message: String(localized: "Starting your 90-second rest.", comment: "Toast detail")
-                ))
+    @ViewBuilder
+    private var coachCueCard: some View {
+        if let cue = model.autopilot?.bestCue {
+            HStack(alignment: .top, spacing: VA.Space.md) {
+                Image(systemName: "quote.opening")
+                    .font(VA.Typography.headline)
+                    .foregroundStyle(VA.Colors.primary)
+                    .frame(width: 30, height: 30)
+                    .background(VA.Colors.primary.opacity(0.12), in: Circle())
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: VA.Space.xs) {
+                    Text(String(localized: "Coach cue", comment: "Active workout coach cue label"))
+                        .font(VA.Typography.footnote)
+                        .foregroundStyle(VA.Colors.textSecondary)
+                    Text(cue)
+                        .font(VA.Typography.footnote)
+                        .foregroundStyle(VA.Colors.textPrimary)
+                        .italic()
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+            .padding(VA.Space.lg)
+            .vaGlassBackground(in: RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous))
         }
-        .accessibilityIdentifier("workouts.logSet")
     }
 
-    private var completeButton: some View {
-        VAButton(
-            String(localized: "Complete Workout", comment: "Button to finish the current workout session"),
-            icon: "flag.checkered",
-            style: .secondary
-        ) {
-            Task {
-                VAHaptics.workoutComplete()
-
-                let capturedSets = model.loggedSetCountThisSession
-                let capturedRPE = model.autopilot?.nextTarget.targetRPE ?? 7.5
-                let capturedLift = model.autopilot?.nextExerciseName ?? String(
-                    localized: "your workout",
-                    comment: "Fallback phrase for the primary lift when none is identified"
-                )
-
-                let completedSession = await model.completeWorkoutSession()
-
-                summary = CompletedSessionSnapshot(
-                    sets: completedSession?.completedSetCount ?? max(1, capturedSets),
-                    totalVolume: max(completedSession?.totalVolumeLoad ?? 0, 1),
-                    duration: max(completedSession?.durationMinutes ?? 0, 1),
-                    averageRPE: completedSession?.averageRPE ?? capturedRPE,
-                    primaryLift: capturedLift
-                )
+    private var upNextCard: some View {
+        VACard(style: .flat) {
+            HStack(alignment: .center, spacing: VA.Space.md) {
+                WorkoutIllustrationTile(systemImage: "dumbbell", size: 48, accent: VA.Colors.textSecondary)
+                VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                    Text(String(localized: "UP NEXT", comment: "Active workout up next label"))
+                        .font(VA.Typography.caption)
+                        .foregroundStyle(VA.Colors.textSecondary)
+                        .tracking(0.6)
+                    Text(nextExercisePreview)
+                        .font(VA.Typography.headline)
+                        .foregroundStyle(VA.Colors.textPrimary)
+                    Text(nextExerciseTargetPreview)
+                        .font(VA.Typography.footnote)
+                        .foregroundStyle(VA.Colors.textSecondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(VA.Typography.caption)
+                    .foregroundStyle(VA.Colors.textTertiary)
             }
         }
-        .accessibilityIdentifier("workouts.completeWorkout")
     }
 
     // MARK: - Idle state
 
     private var idleState: some View {
-        VStack(spacing: VA.Space.lg) {
-            VAEmptyState(
-                icon: "figure.strengthtraining.traditional",
-                title: String(localized: "No Active Session", comment: "Empty state title on Workouts tab"),
-                message: String(
-                    localized: "Ready to train? Start a workout from the Today tab or begin one now.",
-                    comment: "Empty state message on Workouts tab"
-                ),
-                action: (
-                    label: String(localized: "Start Workout", comment: "Empty state action — begin a workout"),
-                    handler: {
-                        Task {
-                            VAHaptics.sessionStart()
-                            await model.startWorkoutSession()
-                        }
-                    }
-                )
-            )
-            .accessibilityIdentifier("workouts.emptyState")
-            .frame(minHeight: 300)
+        WorkoutIdleLibrary(
+            featuredTitle: model.nextWorkout?.title ?? String(
+                localized: "Strength Session",
+                comment: "Featured workout fallback title"
+            ),
+            featuredFocus: model.autopilot?.nextExerciseName ?? String(
+                localized: "Chest · Shoulders · Triceps",
+                comment: "Featured workout focus"
+            ),
+            startWorkout: startWorkout
+        )
+        .accessibilityIdentifier("workouts.emptyState")
+    }
 
-            if !model.recentSessions.isEmpty {
-                VStack(alignment: .leading, spacing: VA.Space.md) {
-                    VASectionHeader(String(localized: "Recent History", comment: "Section header listing recent sessions"))
-                    ForEach(Array(model.recentSessions.prefix(5).enumerated()), id: \.offset) { _, session in
-                        VACard(style: .flat) {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(session.date.formatted(.dateTime.month().day()))
-                                        .font(VA.Typography.headline)
-                                    Text(String(
-                                        localized: "^[\(session.completedSetCount) sets](inflect: true)",
-                                        comment: "Recent history row — pluralized set count"
-                                    ))
-                                    .font(VA.Typography.footnote)
-                                    .foregroundStyle(VA.Colors.textSecondary)
-                                }
-                                Spacer()
-                                Text(String(
-                                    localized: "\(Int(session.totalVolumeLoad)) lb load",
-                                    comment: "Recent history row — total volume load"
-                                ))
-                                .font(VA.Typography.monoDigit)
-                                .foregroundStyle(VA.Colors.primary)
-                            }
-                        }
-                    }
-                }
-            }
+    // MARK: - Actions
+
+    private func startWorkout() {
+        Task {
+            VAHaptics.sessionStart()
+            await model.startWorkoutSession()
         }
     }
-}
 
-/// Dedicated subview for the rest timer so only this view re-renders each second,
-/// not the whole WorkoutsView.
-private struct RestTimerDisplay: View {
-    let endsAt: Date
-    let active: Bool
-    let onComplete: () -> Void
-
-    @State private var lastFired: Bool = false
-
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            let remaining = max(0, Int(endsAt.timeIntervalSince(context.date)))
-            let total: TimeInterval = 90
-            let elapsed = total - endsAt.timeIntervalSince(context.date)
-            let progress = max(0, min(1, elapsed / total))
-
-            ZStack {
-                VAProgressRing(progress: progress, lineWidth: 12, color: remaining == 0 ? VA.Colors.success : VA.Colors.primary)
-                    .frame(width: 140, height: 140)
-                VStack(spacing: 0) {
-                    Text("\(remaining)")
-                        .font(VA.Typography.timerDisplay)
-                        .foregroundStyle(VA.Colors.textPrimary)
-                    Text(remaining == 0 ? "GO" : "seconds")
-                        .font(VA.Typography.caption)
-                        .foregroundStyle(VA.Colors.textSecondary)
-                        .tracking(1)
-                }
-            }
-            .accessibilityElement()
-            .accessibilityLabel("Rest timer")
-            .accessibilityValue(remaining == 0 ? "Go time" : "\(remaining) seconds remaining")
-            .onChange(of: remaining) { _, newValue in
-                if active && newValue == 0 && !lastFired {
-                    lastFired = true
-                    onComplete()
-                }
-                if newValue > 0 { lastFired = false }
-            }
+    private func logSet() {
+        Task {
+            VAHaptics.setLogged()
+            await model.logRecommendedSet()
+            restEndsAt = .now.addingTimeInterval(90)
+            restActive = true
+            toastPresenter.show(VAToast(
+                kind: .success,
+                title: String(localized: "Set logged", comment: "Toast after logging a set"),
+                message: String(localized: "Starting your 90-second rest.", comment: "Toast detail")
+            ))
         }
-        .frame(height: 160)
+    }
+
+    private func completeWorkout() {
+        Task {
+            VAHaptics.workoutComplete()
+
+            let capturedSets = model.loggedSetCountThisSession
+            let capturedRPE = model.autopilot?.nextTarget.targetRPE ?? 7.5
+            let capturedLift = model.autopilot?.nextExerciseName ?? String(
+                localized: "your workout",
+                comment: "Fallback phrase for the primary lift when none is identified"
+            )
+
+            let completedSession = await model.completeWorkoutSession()
+            restActive = false
+
+            summary = CompletedSessionSnapshot(
+                sets: completedSession?.completedSetCount ?? max(1, capturedSets),
+                totalVolume: max(completedSession?.totalVolumeLoad ?? 0, 1),
+                duration: max(completedSession?.durationMinutes ?? 0, 1),
+                averageRPE: completedSession?.averageRPE ?? capturedRPE,
+                primaryLift: capturedLift
+            )
+        }
+    }
+
+    // MARK: - Derived display values
+
+    private var activeWorkoutTitle: String {
+        model.activeWorkoutTitle ?? String(localized: "Strength Session", comment: "Default active workout title")
+    }
+
+    private var targetSetCount: Int { 5 }
+
+    private var currentSetNumber: Int {
+        min(model.loggedSetCountThisSession + 1, targetSetCount)
+    }
+
+    private var setProgress: Double {
+        Double(min(model.loggedSetCountThisSession, targetSetCount)) / Double(targetSetCount)
+    }
+
+    private var compactTarget: String {
+        guard let target = model.autopilot?.nextTarget else {
+            return String(localized: "Target pending", comment: "Fallback active workout set target")
+        }
+        return "\(Int(target.weight)) x \(target.repRange.lowerBound)"
+    }
+
+    private var nextExercisePreview: String {
+        model.autopilot?.nextExerciseName ?? String(localized: "Accessory work", comment: "Active workout up next fallback")
+    }
+
+    private var nextExerciseTargetPreview: String {
+        guard let target = model.autopilot?.nextTarget else {
+            return String(localized: "3 x 10 · moderate load", comment: "Active workout up next fallback target")
+        }
+        return "\(target.repRange.lowerBound) x \(target.repRange.upperBound) · \(Int(target.weight)) \(target.unit)"
     }
 }
 #endif
