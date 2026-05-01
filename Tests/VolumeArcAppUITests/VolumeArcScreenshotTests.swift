@@ -40,6 +40,20 @@ final class VolumeArcScreenshotTests: XCTestCase {
         XCTAssertTrue(coachComposer.waitForExistence(timeout: 10))
         snapshot("03_coach")
 
+        tapTab(atIndex: 3, in: app)
+        let signalsRoot = app.descendants(matching: .any)
+            .matching(identifier: "signals.root")
+            .firstMatch
+        XCTAssertTrue(signalsRoot.waitForExistence(timeout: 10))
+        snapshot("04_signals")
+
+        tapTab(atIndex: 4, in: app)
+        let profileRoot = app.descendants(matching: .any)
+            .matching(identifier: "profile.root")
+            .firstMatch
+        XCTAssertTrue(profileRoot.waitForExistence(timeout: 10))
+        snapshot("05_profile")
+
         app.terminate()
 
         let paywallApp = VolumeArcAppUITestSupport.makeSeededApp(extra: ["-ShowPaywallOnLaunch", "1"])
@@ -62,7 +76,7 @@ final class VolumeArcScreenshotTests: XCTestCase {
         } else if !planLoaded {
             throw XCTSkip("StoreKit products unavailable on this simulator; skipping premium screenshot capture.")
         }
-        snapshot("04_premium")
+        snapshot("06_premium")
     }
 
     @MainActor
