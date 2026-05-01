@@ -65,7 +65,7 @@ Practical consequences:
 4. Open a PR with a clear title and description
 5. CI must pass (build, test, lint, validate)
 6. At least one code review required
-7. AI Review Gate runs automatically: CodeRabbit Pro (primary reviewer, auto-invoked on PR open/update) and Codex Code Review (secondary, requested by the `Request AI Reviews` workflow step). Both must post a review signal on the current head SHA within their wait window or the gate fails.
+7. AI Review Gate runs automatically: CodeRabbit Pro (primary reviewer) and Codex Code Review (secondary reviewer) are both requested by the `Request AI Reviews` workflow step. Both must post a review signal on the current head SHA within their wait window or the gate fails.
 8. Merge via squash when all checks pass
 
 ## Code style
