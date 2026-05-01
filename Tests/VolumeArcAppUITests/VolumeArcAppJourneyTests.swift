@@ -258,6 +258,14 @@ final class VolumeArcAppJourneyTests: XCTestCase {
     func testPremiumPurchaseFlowWithStoreKitTest() throws {
         #if canImport(StoreKitTest)
         _ = try makeStoreKitSession()
+        let app = VolumeArcAppUITestSupport.makeSeededApp(extra: ["-ShowPaywallOnLaunch", "1"])
+        app.launch()
+
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: 20),
+            "App should reach foreground running state on cold launch"
+        )
+
         let productIDs = [
             "com.mabryventures.VolumeArc.premium.monthly",
             "com.mabryventures.VolumeArc.premium.yearly",
@@ -275,14 +283,6 @@ final class VolumeArcAppJourneyTests: XCTestCase {
                 "StoreKit Test daemon did not expose local products for this simulator; purchase flow skipped."
             )
         }
-
-        let app = VolumeArcAppUITestSupport.makeSeededApp(extra: ["-ShowPaywallOnLaunch", "1"])
-        app.launch()
-
-        XCTAssertTrue(
-            app.wait(for: .runningForeground, timeout: 20),
-            "App should reach foreground running state on cold launch"
-        )
 
         let paywallRoot = app.descendants(matching: .any)
             .matching(identifier: "paywall.root")
@@ -326,65 +326,49 @@ final class VolumeArcAppJourneyTests: XCTestCase {
     func testStartLogCompleteWorkoutSession() throws {
         let app = VolumeArcAppUITestSupport.makeSeededApp()
         app.launch()
+        assertAppReachedForeground(app)
 
-        XCTAssertTrue(
-            app.wait(for: .runningForeground, timeout: 20),
-            "App should reach foreground running state on cold launch"
-        )
+        assertElementExists(app.otherElements["root.dashboard"], timeout: 15, "Seeded dashboard should be visible")
 
-        let dashboard = app.otherElements["root.dashboard"]
-        XCTAssertTrue(
-            dashboard.waitForExistence(timeout: 15),
-            "Seeded dashboard should be visible"
-        )
-
-        let startButton = app.descendants(matching: .any)
-            .matching(identifier: "today.startWorkout")
-            .firstMatch
-        XCTAssertTrue(
-            startButton.waitForExistence(timeout: 10),
+        let startButton = waitForElement(
+            in: app,
+            identifier: "today.startWorkout",
+            timeout: 10,
             "Today should expose Start Workout"
         )
         startButton.tap()
 
         let workoutsTab = app.tabBars.buttons["Workouts"]
-        XCTAssertTrue(
-            workoutsTab.waitForExistence(timeout: 5),
-            "Tab bar should expose the Workouts tab"
-        )
+        assertElementExists(workoutsTab, timeout: 5, "Tab bar should expose the Workouts tab")
         workoutsTab.tap()
 
-        let activeSession = app.descendants(matching: .any)
-            .matching(identifier: "workouts.activeSession")
-            .firstMatch
-        XCTAssertTrue(
-            activeSession.waitForExistence(timeout: 10),
+        _ = waitForElement(
+            in: app,
+            identifier: "workouts.activeSession",
+            timeout: 10,
             "Workouts tab should show an active session after Start Workout"
         )
 
-        let logSetButton = app.descendants(matching: .any)
-            .matching(identifier: "workouts.logSet")
-            .firstMatch
-        XCTAssertTrue(
-            logSetButton.waitForExistence(timeout: 10),
+        let logSetButton = waitForElement(
+            in: app,
+            identifier: "workouts.logSet",
+            timeout: 10,
             "Active session should expose Log Set"
         )
         logSetButton.tap()
 
-        let completeButton = app.descendants(matching: .any)
-            .matching(identifier: "workouts.completeWorkout")
-            .firstMatch
-        XCTAssertTrue(
-            completeButton.waitForExistence(timeout: 10),
+        let completeButton = waitForElement(
+            in: app,
+            identifier: "workouts.completeWorkout",
+            timeout: 10,
             "Active session should expose Complete Workout"
         )
         completeButton.tap()
 
-        let summary = app.descendants(matching: .any)
-            .matching(identifier: "sessionSummary.root")
-            .firstMatch
-        XCTAssertTrue(
-            summary.waitForExistence(timeout: 15),
+        let summary = waitForElement(
+            in: app,
+            identifier: "sessionSummary.root",
+            timeout: 15,
             "Completing a workout should present the session summary"
         )
 
@@ -400,13 +384,40 @@ final class VolumeArcAppJourneyTests: XCTestCase {
         )
         done.tap()
 
-        let emptyState = app.descendants(matching: .any)
-            .matching(identifier: "workouts.emptyState")
-            .firstMatch
-        XCTAssertTrue(
-            emptyState.waitForExistence(timeout: 10),
+        _ = waitForElement(
+            in: app,
+            identifier: "workouts.emptyState",
+            timeout: 10,
             "Workouts tab should return to idle state after dismissing summary"
         )
+    }
+
+    private func assertAppReachedForeground(_ app: XCUIApplication) {
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: 20),
+            "App should reach foreground running state on cold launch"
+        )
+    }
+
+    private func waitForElement(
+        in app: XCUIApplication,
+        identifier: String,
+        timeout: TimeInterval,
+        _ message: String
+    ) -> XCUIElement {
+        let element = app.descendants(matching: .any)
+            .matching(identifier: identifier)
+            .firstMatch
+        assertElementExists(element, timeout: timeout, message)
+        return element
+    }
+
+    private func assertElementExists(
+        _ element: XCUIElement,
+        timeout: TimeInterval,
+        _ message: String
+    ) {
+        XCTAssertTrue(element.waitForExistence(timeout: timeout), message)
     }
 
     #if canImport(StoreKitTest)
