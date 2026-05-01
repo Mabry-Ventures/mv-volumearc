@@ -7,6 +7,9 @@ public struct CoachView: View {
     @ObservedObject var model: WorkoutDashboardModel
     @ObservedObject var navigation: DashboardNavigationModel
     @State private var draftMessage: String = ""
+    @State private var showPlanDraft: Bool = false
+    @State private var expandedExerciseID: String?
+    @State private var planDraft: CoachPlanDraft = .default
     @FocusState private var inputFocused: Bool
 
     public init(model: WorkoutDashboardModel, navigation: DashboardNavigationModel) {
@@ -16,19 +19,41 @@ public struct CoachView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
+            coachHeader
             messageList
-            Divider()
+            quickPromptRail
             composer
         }
         .background(VA.Colors.surfaceGrouped)
         .navigationTitle(DashboardTab.coach.title)
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             if let prompt = navigation.coachPrompt, !prompt.isEmpty {
                 draftMessage = prompt
+                showPlanDraft = isPlanningPrompt(prompt)
                 navigation.clearCoachPrompt()
             }
         }
+    }
+
+    // MARK: - Header
+
+    private var coachHeader: some View {
+        VStack(alignment: .leading, spacing: VA.Space.xxs) {
+            Text(DashboardTab.coach.title)
+                .font(VA.Typography.title)
+                .foregroundStyle(VA.Colors.textPrimary)
+            Text(coachContextLine)
+                .font(VA.Typography.footnote)
+                .foregroundStyle(VA.Colors.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, VA.Space.lg)
+        .padding(.top, VA.Space.sm)
+        .padding(.bottom, VA.Space.md)
+        .background(VA.Colors.surfaceGrouped)
     }
 
     // MARK: - Message list
@@ -39,7 +64,9 @@ public struct CoachView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: VA.Space.lg) {
                     welcomeCard
-                    quickPrompts
+                    if showPlanDraft {
+                        planningCard
+                    }
                 }
                 .padding(VA.Space.lg)
             }
@@ -47,6 +74,9 @@ public struct CoachView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: VA.Space.md) {
+                        if showPlanDraft {
+                            planningCard
+                        }
                         ForEach(Array(model.coachMessages.enumerated()), id: \.element.id) { offset, message in
                             VACoachBubble(
                                 sender: message.sender == .user ? .user : .coach,
@@ -94,88 +124,78 @@ public struct CoachView: View {
     }
 
     private var welcomeCard: some View {
-        VACard(style: .accent) {
+        VACard(style: .elevated) {
             VStack(alignment: .leading, spacing: VA.Space.md) {
-                HStack(spacing: VA.Space.sm) {
-                    Image(systemName: "waveform")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(VA.Colors.primary)
-                    Text(String(localized: "Your Coach", comment: "Coach welcome card title"))
+                HStack(alignment: .top, spacing: VA.Space.md) {
+                    Image(systemName: "waveform.and.mic")
                         .font(VA.Typography.title2)
-                        .foregroundStyle(VA.Colors.textPrimary)
-                }
-                Text(String(
-                    localized: """
-                        Ask anything about your training — load selection, \
-                        form cues, recovery, or how last week looks. I'll pull \
-                        from your recent sessions to give you a grounded answer.
-                        """,
-                    comment: "Coach welcome card description"
-                ))
-                    .font(VA.Typography.body)
-                    .foregroundStyle(VA.Colors.textSecondary)
-            }
-        }
-    }
-
-    private var quickPrompts: some View {
-        VStack(alignment: .leading, spacing: VA.Space.md) {
-            VASectionHeader(String(localized: "Try asking", comment: "Suggested prompts section header"))
-            // Wrap the stacked interactive-glass rows in a `GlassEffectContainer`
-            // so iOS 26's coordinated glass renderer composes them as a single
-            // material treatment rather than rendering each row independently.
-            quickPromptsList
-        }
-    }
-
-    @ViewBuilder
-    private var quickPromptsList: some View {
-        if #available(iOS 26.0, *) {
-            GlassEffectContainer(spacing: VA.Space.md) {
-                VStack(alignment: .leading, spacing: VA.Space.md) {
-                    promptButtons
-                }
-            }
-        } else {
-            VStack(alignment: .leading, spacing: VA.Space.md) {
-                promptButtons
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var promptButtons: some View {
-        ForEach(suggestedPrompts, id: \.self) { prompt in
-            Button {
-                draftMessage = prompt
-                inputFocused = true
-                VAHaptics.tap()
-            } label: {
-                HStack {
-                    Text(prompt)
+                        .foregroundStyle(VA.Colors.primary)
+                        .frame(width: 44, height: 44)
+                        .background(VA.Colors.primary.opacity(0.12), in: Circle())
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: VA.Space.xs) {
+                        Text(String(localized: "Your Coach", comment: "Coach welcome card title"))
+                            .font(VA.Typography.title2)
+                            .foregroundStyle(VA.Colors.textPrimary)
+                        Text(String(
+                            localized: """
+                                Ask anything about your training — load selection, form cues, \
+                                recovery, or tomorrow's plan. I’ll ground the answer in your \
+                                recent sessions and readiness.
+                                """,
+                            comment: "Coach welcome card description"
+                        ))
                         .font(VA.Typography.body)
-                        .foregroundStyle(VA.Colors.textPrimary)
-                        .multilineTextAlignment(.leading)
-                    Spacer()
-                    Image(systemName: "arrow.up.forward")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(VA.Colors.textTertiary)
+                        .foregroundStyle(VA.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
-                .padding(VA.Space.md)
-                .vaInteractiveGlassBackground(
-                    in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous)
-                )
             }
-            .buttonStyle(.plain)
         }
+    }
+
+    private var planningCard: some View {
+        CoachPlanningCard(
+            plan: $planDraft,
+            expandedExerciseID: $expandedExerciseID,
+            sendPlanFeedback: sendPlanFeedback(_:),
+            startNow: startPlanNow
+        )
+    }
+
+    private var quickPromptRail: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: VA.Space.sm) {
+                ForEach(suggestedPrompts, id: \.self) { prompt in
+                    Button {
+                        draftMessage = prompt
+                        showPlanDraft = showPlanDraft || isPlanningPrompt(prompt)
+                        inputFocused = true
+                        VAHaptics.tap()
+                    } label: {
+                        Text(prompt)
+                            .font(VA.Typography.footnote)
+                            .foregroundStyle(VA.Colors.textPrimary)
+                            .lineLimit(1)
+                            .padding(.horizontal, VA.Space.md)
+                            .frame(height: 34)
+                            .background(VA.Colors.textTertiary.opacity(0.12), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, VA.Space.lg)
+            .padding(.vertical, VA.Space.sm)
+        }
+        .background(VA.Colors.surfaceGrouped)
     }
 
     private var suggestedPrompts: [String] {
         [
-            String(localized: "Am I ready to push on squats this week?", comment: "Suggested coach prompt about squat progression"),
-            String(localized: "Last set felt heavy — should I hold or go up?", comment: "Suggested coach prompt about load decision"),
-            String(localized: "What accessories should I add for bench?", comment: "Suggested coach prompt about accessory work"),
-            String(localized: "How does my recent volume look?", comment: "Suggested coach prompt about training volume"),
+            String(localized: "Plan tomorrow", comment: "Suggested coach prompt to co-design tomorrow's workout"),
+            String(localized: "Should I push?", comment: "Suggested coach prompt about whether to push"),
+            String(localized: "Form check", comment: "Suggested coach prompt for lifting form"),
+            String(localized: "Substitute exercise", comment: "Suggested coach prompt for exercise substitution"),
         ]
     }
 
@@ -184,16 +204,14 @@ public struct CoachView: View {
     private var composer: some View {
         HStack(alignment: .bottom, spacing: VA.Space.sm) {
             TextField(
-                String(localized: "Ask your coach", comment: "Coach composer placeholder"),
+                String(localized: "Ask the coach", comment: "Coach composer placeholder"),
                 text: $draftMessage,
                 axis: .vertical
             )
                 .textFieldStyle(.plain)
                 .font(VA.Typography.body)
-                .padding(VA.Space.md)
-                .vaInteractiveGlassBackground(
-                    in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous)
-                )
+                .padding(.horizontal, VA.Space.md)
+                .padding(.vertical, VA.Space.sm)
                 .lineLimit(1...4)
                 .focused($inputFocused)
                 // VOL-99: perf test types into this field before timing
@@ -204,9 +222,11 @@ public struct CoachView: View {
             Button {
                 sendMessage()
             } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 36))
-                    .foregroundStyle(canSend ? VA.Colors.primary : VA.Colors.textTertiary)
+                Image(systemName: "arrow.up")
+                    .font(VA.Typography.button)
+                    .foregroundStyle(canSend ? VA.Colors.textOnPrimary : VA.Colors.textTertiary)
+                    .frame(width: 36, height: 36)
+                    .background(canSend ? VA.Colors.primary : VA.Colors.textTertiary.opacity(0.12), in: Circle())
             }
             .disabled(!canSend)
             .buttonStyle(.plain)
@@ -214,9 +234,25 @@ public struct CoachView: View {
             // and start the first-token latency measurement.
             .accessibilityIdentifier("coach.send")
         }
-        .padding(VA.Space.md)
-        .background(VA.Colors.surfacePrimary)
+        .padding(.leading, VA.Space.md)
+        .padding(.trailing, VA.Space.xs)
+        .padding(.vertical, VA.Space.xs)
+        .vaGlassBackground(in: Capsule())
+        .padding(.horizontal, VA.Space.lg)
+        .padding(.bottom, VA.Space.lg)
+        .background(VA.Colors.surfaceGrouped)
         .accessibilityIdentifier("coach.composer")
+    }
+
+    // MARK: - Derived values
+
+    private var coachContextLine: String {
+        let workout = model.nextWorkout?.title ?? String(localized: "Next workout", comment: "Coach header fallback workout")
+        let exercise = model.autopilot?.nextExerciseName ?? String(localized: "Targets pending", comment: "Coach header fallback exercise")
+        return String(
+            localized: "Readiness \(model.readiness.score) · \(workout) · \(exercise)",
+            comment: "Coach header context line"
+        )
     }
 
     private var canSend: Bool {
@@ -226,11 +262,31 @@ public struct CoachView: View {
     private func sendMessage() {
         let prompt = draftMessage
         draftMessage = ""
+        showPlanDraft = showPlanDraft || isPlanningPrompt(prompt)
         VAHaptics.tap()
         Task {
             await model.askCoach(prompt)
             VAHaptics.coachResponse()
         }
+    }
+
+    private func sendPlanFeedback(_ prompt: String) {
+        draftMessage = prompt
+        inputFocused = true
+        VAHaptics.tap()
+    }
+
+    private func startPlanNow() {
+        Task {
+            VAHaptics.sessionStart()
+            await model.startWorkoutSession()
+            navigation.selectedTab = .workouts
+        }
+    }
+
+    private func isPlanningPrompt(_ prompt: String) -> Bool {
+        let lowercasedPrompt = prompt.lowercased()
+        return lowercasedPrompt.contains("plan") || lowercasedPrompt.contains("tomorrow")
     }
 }
 #endif
