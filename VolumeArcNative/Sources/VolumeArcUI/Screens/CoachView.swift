@@ -20,7 +20,7 @@ public struct CoachView: View {
             Divider()
             composer
         }
-        .background(VA.Colors.surfaceSecondary)
+        .background(VA.Colors.surfaceGrouped)
         .navigationTitle(DashboardTab.coach.title)
         .navigationBarTitleDisplayMode(.large)
         .onAppear {

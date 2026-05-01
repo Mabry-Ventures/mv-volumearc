@@ -30,7 +30,7 @@ public struct WorkoutsView: View {
             .padding(VA.Space.lg)
         }
         .accessibilityIdentifier("workouts.root")
-        .background(VA.Colors.surfaceSecondary)
+        .background(VA.Colors.surfaceGrouped)
         .navigationTitle(model.isSessionActive
                          ? String(localized: "Session", comment: "Workouts tab title during an active session")
                          : String(localized: "Workouts", comment: "Workouts tab title when idle"))

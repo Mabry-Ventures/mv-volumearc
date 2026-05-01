@@ -20,7 +20,7 @@ public struct SignalsView: View {
             }
             .padding(VA.Space.lg)
         }
-        .background(VA.Colors.surfaceSecondary)
+        .background(VA.Colors.surfaceGrouped)
         .navigationTitle(DashboardTab.signals.title)
         .navigationBarTitleDisplayMode(.large)
         .refreshable { await model.refresh() }

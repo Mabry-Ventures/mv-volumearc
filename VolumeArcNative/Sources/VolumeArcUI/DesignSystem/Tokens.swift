@@ -10,7 +10,23 @@ public enum VA {
     public enum Colors {
         /// Primary brand color — used for CTAs, active states, accent lines.
         public static let primary = Color(light: Color(red: 0.95, green: 0.42, blue: 0.20),
-                                          dark: Color(red: 1.0, green: 0.50, blue: 0.24))
+                                          dark: Color(red: 0.90, green: 0.54, blue: 0.32))
+
+        /// Deep brand color — used for gradient endpoints and pressed states.
+        public static let primaryDeep = Color(light: Color(red: 0.82, green: 0.31, blue: 0.11),
+                                              dark: Color(red: 0.77, green: 0.41, blue: 0.22))
+
+        /// Sunrise hero gradient start.
+        public static let sunriseA = Color(light: Color(red: 1.0, green: 0.70, blue: 0.48),
+                                           dark: Color(red: 1.0, green: 0.66, blue: 0.44))
+
+        /// Sunrise hero gradient midpoint.
+        public static let sunriseB = Color(light: Color(red: 0.95, green: 0.42, blue: 0.20),
+                                           dark: Color(red: 0.90, green: 0.42, blue: 0.23))
+
+        /// Sunrise hero gradient finish.
+        public static let sunriseC = Color(light: Color(red: 0.78, green: 0.29, blue: 0.43),
+                                           dark: Color(red: 0.70, green: 0.24, blue: 0.40))
 
         /// Secondary accent — used for highlights, secondary actions.
         public static let secondary = Color(light: Color(red: 0.20, green: 0.45, blue: 0.85),
@@ -36,12 +52,23 @@ public enum VA {
         public static let surfacePrimary = Color(.systemBackground)
         public static let surfaceSecondary = Color(.secondarySystemBackground)
         public static let surfaceTertiary = Color(.tertiarySystemBackground)
+        public static let surfaceGrouped = Color(.systemGroupedBackground)
 
         // Text
         public static let textPrimary = Color(.label)
         public static let textSecondary = Color(.secondaryLabel)
         public static let textTertiary = Color(.tertiaryLabel)
         public static let textOnPrimary = Color.white
+    }
+
+    // MARK: - Gradients
+
+    public enum Gradients {
+        public static let sunriseHero = LinearGradient(
+            colors: [VA.Colors.sunriseA, VA.Colors.sunriseB, VA.Colors.sunriseC],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 
     // MARK: - Typography

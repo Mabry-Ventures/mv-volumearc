@@ -23,7 +23,7 @@ struct WorkoutDetailView: View {
             }
             .padding(VA.Space.lg)
         }
-        .background(VA.Colors.surfaceSecondary)
+        .background(VA.Colors.surfaceGrouped)
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.large)
     }

@@ -22,7 +22,7 @@ public struct SessionDetailView: View {
             }
             .padding(VA.Space.lg)
         }
-        .background(VA.Colors.surfaceSecondary)
+        .background(VA.Colors.surfaceGrouped)
         .navigationTitle(
             session.date.formatted(.dateTime.weekday(.wide).month().day())
         )

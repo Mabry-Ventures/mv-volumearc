@@ -18,9 +18,9 @@ public struct TodayView: View {
             LazyVStack(alignment: .leading, spacing: VA.Space.lg) {
                 greeting
                 if model.hasLoadedInitialData {
-                    readinessCard
                     nextWorkoutCard
                     quickActionsRow
+                    readinessCard
                     recentSessionsSection
                     if !model.operationalSignals.isEmpty {
                         signalsSection
@@ -38,7 +38,7 @@ public struct TodayView: View {
         // VOL-99: identifier for the perf scroll test to find the
         // ScrollView and swipe across it.
         .accessibilityIdentifier("today.scroll")
-        .background(VA.Colors.surfaceSecondary)
+        .background(VA.Colors.surfaceGrouped)
         .navigationTitle(DashboardTab.today.title)
         .navigationBarTitleDisplayMode(.large)
         .refreshable { await model.refresh() }
@@ -156,64 +156,59 @@ public struct TodayView: View {
                 )
                 .navigationTransition(.zoom(sourceID: "next-workout-hero", in: heroNamespace))
             } label: {
-                // Hero card adopts the real iOS 26 Liquid Glass treatment via
-                // `VACard(style: .glass)`. The zoom hero transition itself is
-                // unchanged.
-                VACard(style: .glass) {
-                    VStack(alignment: .leading, spacing: VA.Space.md) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: VA.Space.xxs) {
-                                Text(String(
-                                    localized: "NEXT WORKOUT",
-                                    comment: "Section label above the hero next-workout card"
-                                ))
-                                .font(VA.Typography.caption)
-                                .foregroundStyle(VA.Colors.textSecondary)
-                                .tracking(0.5)
-                                Text(workoutTitle)
-                                    .font(VA.Typography.title2)
-                                    .foregroundStyle(VA.Colors.textPrimary)
-                            }
-                            Spacer()
-                            Image(systemName: "figure.strengthtraining.traditional")
-                                .font(.system(size: 28, weight: .medium))
-                                .foregroundStyle(VA.Colors.primary)
-                        }
+                ZStack(alignment: .topTrailing) {
+                    VA.Gradients.sunriseHero
+                    Circle()
+                        .fill(.white.opacity(0.26))
+                        .frame(width: 220, height: 220)
+                        .blur(radius: 10)
+                        .offset(x: 72, y: -78)
 
-                        Divider()
-
-                        VStack(alignment: .leading, spacing: VA.Space.sm) {
+                    VStack(alignment: .leading, spacing: VA.Space.lg) {
+                        VStack(alignment: .leading, spacing: VA.Space.xs) {
                             Text(String(
-                                localized: "Starting lift",
-                                comment: "Label above the first exercise of the next workout"
+                                localized: "NEXT WORKOUT",
+                                comment: "Section label above the hero next-workout card"
                             ))
                             .font(VA.Typography.caption)
-                            .foregroundStyle(VA.Colors.textSecondary)
-                            .tracking(0.5)
+                            .foregroundStyle(.white.opacity(0.78))
+                            .tracking(0.6)
+                            Text(workoutTitle)
+                                .font(VA.Typography.title)
+                                .foregroundStyle(.white)
                             Text(autopilot.nextExerciseName)
-                                .font(VA.Typography.headline)
-                                .foregroundStyle(VA.Colors.textPrimary)
-                            Text(String(
-                                localized: {
-                                    let weight = Int(autopilot.nextTarget.weight)
-                                    let unit = autopilot.nextTarget.unit
-                                    let low = autopilot.nextTarget.repRange.lowerBound
-                                    let high = autopilot.nextTarget.repRange.upperBound
-                                    let rpe = String(format: "%.1f", autopilot.nextTarget.targetRPE)
-                                    return "\(weight)\(unit) × \(low)-\(high) @ RPE \(rpe)"
-                                }(),
-                                comment: "Target line: weight × rep range @ target RPE for the next set"
-                            ))
-                            .font(VA.Typography.monoDigit)
-                            .foregroundStyle(VA.Colors.primary)
+                                .font(VA.Typography.body)
+                                .foregroundStyle(.white.opacity(0.88))
                         }
 
-                        Text(autopilot.recommendationReason)
-                            .font(VA.Typography.footnote)
-                            .foregroundStyle(VA.Colors.textSecondary)
-                            .padding(.top, VA.Space.xs)
+                        HStack(spacing: VA.Space.md) {
+                            Label(
+                                String(localized: "Start workout", comment: "Hero card call-to-action label"),
+                                systemImage: "arrow.right"
+                            )
+                            .font(VA.Typography.button)
+                            .foregroundStyle(VA.Colors.primaryDeep)
+                            .padding(.horizontal, VA.Space.lg)
+                            .frame(height: 46)
+                            .background(.white.opacity(0.96), in: Capsule())
+
+                            Text(targetLine)
+                                .font(VA.Typography.footnote)
+                                .foregroundStyle(.white.opacity(0.78))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                        }
                     }
+                    .padding(.horizontal, VA.Space.xl)
+                    .padding(.vertical, VA.Space.xl)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .clipShape(RoundedRectangle(cornerRadius: VA.Radius.xl, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: VA.Radius.xl, style: .continuous)
+                        .stroke(.white.opacity(0.28), lineWidth: 1)
+                }
+                .shadow(color: VA.Colors.primary.opacity(0.22), radius: 24, x: 0, y: 14)
                 .matchedTransitionSource(id: "next-workout-hero", in: heroNamespace)
             }
             .buttonStyle(.plain)
