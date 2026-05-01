@@ -227,7 +227,7 @@ public struct ProfileView: View {
                         .frame(width: 64, height: 64)
                     Text(initials)
                         .font(VA.Typography.title2)
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(VA.Colors.textOnPrimary)
                 }
 
                 VStack(alignment: .leading, spacing: VA.Space.xxs) {
@@ -247,9 +247,7 @@ public struct ProfileView: View {
     }
 
     private var initials: String {
-        let parts = model.athlete.name.split(separator: " ").prefix(2)
-        if parts.isEmpty { return "VA" }
-        return parts.compactMap { $0.first }.map(String.init).joined()
+        model.athlete.initials
     }
 
     private var healthAuthorizationAccessibilityValue: String {

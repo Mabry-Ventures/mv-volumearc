@@ -163,6 +163,14 @@ public struct AthleteProfile: Sendable {
     }
 }
 
+public extension AthleteProfile {
+    var initials: String {
+        let parts = name.split(separator: " ").prefix(2)
+        if parts.isEmpty { return "VA" }
+        return parts.compactMap(\.first).map(String.init).joined()
+    }
+}
+
 /// A completed training session.
 public struct RecentSession: Sendable {
     public let date: Date

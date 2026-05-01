@@ -96,9 +96,7 @@ public struct TodayView: View {
     }
 
     private var initials: String {
-        let parts = model.athlete.name.split(separator: " ").prefix(2)
-        if parts.isEmpty { return "VA" }
-        return parts.compactMap(\.first).map(String.init).joined()
+        model.athlete.initials
     }
 
     private var avatar: some View {
@@ -452,7 +450,7 @@ public struct TodayView: View {
                         style: .compact
                     )
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(VA.Typography.caption)
                         .foregroundStyle(VA.Colors.textTertiary)
                 }
             }
@@ -557,7 +555,7 @@ public struct TodayView: View {
         VACard(style: .flat) {
             HStack(spacing: VA.Space.md) {
                 Image(systemName: signalIcon(signal.severity))
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(VA.Typography.headline)
                     .foregroundStyle(signalColor(signal.severity))
                 VStack(alignment: .leading, spacing: VA.Space.xxs) {
                     Text(signal.title)
