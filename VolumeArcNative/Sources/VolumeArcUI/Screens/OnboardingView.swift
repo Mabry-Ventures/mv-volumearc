@@ -37,18 +37,8 @@ public struct OnboardingView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            // VOL-114: progressBar carries the `onboarding.root` identifier
-            // instead of attaching it to the outer VStack. Previously the
-            // outer identifier propagated to every descendant — so every
-            // Button inside OnboardingView ended up with identifier
-            // `onboarding.root` and the per-button identifiers
-            // (onboarding.continue / onboarding.finish / onboarding.back)
-            // were silently replaced. Putting it on the progress bar keeps
-            // the smoke-test gate ("`onboarding.root` exists when the cover
-            // is presented") working AND lets the action-row buttons keep
-            // their journey-test identifiers.
+            onboardingRootMarker
             progressBar
-                .accessibilityIdentifier("onboarding.root")
             // VOL-115: wrap the step content in a ScrollView so that text
             // fields inside the profile step can be scrolled past the
             // keyboard, and the action row stays reachable. Pinning the
@@ -88,6 +78,21 @@ public struct OnboardingView: View {
     }
 
     // MARK: - Progress bar
+
+    private var onboardingRootMarker: some View {
+        // VOL-122 CI hardening: keep the root identifier on a dedicated
+        // semantic marker. Attaching it to the outer VStack propagates the
+        // identifier to buttons on some SwiftUI runtimes; attaching it to
+        // the 4pt progress bar can disappear from the accessibility tree
+        // at AX5 on CI.
+        Text(String(localized: "Onboarding", comment: "Accessibility label for the onboarding root marker"))
+            .font(.caption2)
+            .frame(width: 1, height: 1)
+            .opacity(0.01)
+            .accessibilityElement(children: .ignore)
+            .accessibilityIdentifier("onboarding.root")
+            .accessibilityLabel(String(localized: "Onboarding", comment: "Accessibility label for the onboarding root marker"))
+    }
 
     private var progressBar: some View {
         HStack(spacing: VA.Space.xs) {
