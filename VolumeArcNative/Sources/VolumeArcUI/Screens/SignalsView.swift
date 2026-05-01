@@ -55,22 +55,33 @@ public struct SignalsView: View {
                         .foregroundStyle(VA.Colors.textPrimary)
                         .monospacedDigit()
                         .contentTransition(.numericText())
-                    HStack(spacing: VA.Space.xs) {
+                    if !model.readiness.factors.isEmpty {
                         WorkoutChip(text: readinessDeltaLabel, tone: readinessDeltaTone)
-                        Text(String(localized: "vs 7-day avg", comment: "Signals readiness comparison label"))
-                            .font(VA.Typography.footnote)
-                            .foregroundStyle(VA.Colors.textTertiary)
                     }
+                    Text(model.readiness.brief)
+                        .font(VA.Typography.footnote)
+                        .foregroundStyle(VA.Colors.textSecondary)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
-                SignalSparkline(values: readinessTrend, color: VA.Colors.primary)
-                    .frame(minWidth: 120, maxWidth: .infinity)
-                    .frame(height: 72)
+                VAProgressRing(
+                    progress: Double(model.readiness.score) / 100,
+                    lineWidth: 12,
+                    color: readinessColor
+                )
+                .frame(width: 88, height: 88)
+                .overlay {
+                    Text(String(localized: "READY", comment: "Caption inside the readiness ring"))
+                        .font(VA.Typography.caption)
+                        .foregroundStyle(VA.Colors.textTertiary)
+                        .tracking(1)
+                }
             }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(String(
-            localized: "Readiness today \(model.readiness.score), \(readinessDeltaLabel) versus the seven day average",
+            localized: "Readiness score: \(model.readiness.score). \(model.readiness.brief)",
             comment: "VoiceOver label for the Signals readiness summary"
         ))
     }
@@ -81,9 +92,26 @@ public struct SignalsView: View {
                 .font(VA.Typography.title2)
                 .foregroundStyle(VA.Colors.textPrimary)
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: VA.Space.md) {
-                ForEach(signalInputs) { input in
-                    SignalInputCard(input: input)
+            if signalInputs.isEmpty {
+                VACard(style: .glass) {
+                    VStack(alignment: .leading, spacing: VA.Space.xs) {
+                        Text(String(localized: "No readiness inputs yet", comment: "Signals empty inputs title"))
+                            .font(VA.Typography.headline)
+                            .foregroundStyle(VA.Colors.textPrimary)
+                        Text(String(
+                            localized: "Connect Apple Health or complete more sessions to build a readiness breakdown.",
+                            comment: "Signals empty inputs description"
+                        ))
+                        .font(VA.Typography.footnote)
+                        .foregroundStyle(VA.Colors.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: VA.Space.md) {
+                    ForEach(signalInputs) { input in
+                        SignalInputCard(input: input)
+                    }
                 }
             }
         }
@@ -163,62 +191,24 @@ public struct SignalsView: View {
         readinessDelta >= 0 ? .success : .neutral
     }
 
-    private var readinessTrend: [Double] {
-        let score = Double(model.readiness.score)
-        return [score - 12, score - 8, score - 10, score - 4, score - 2, score]
-            .map { min(100, max(0, $0)) }
+    private var readinessColor: Color {
+        switch model.readiness.score {
+        case 75...: return VA.Colors.success
+        case 50..<75: return VA.Colors.warning
+        default: return VA.Colors.error
+        }
     }
 
     private var signalInputs: [SignalInput] {
-        let mappedFactors = model.readiness.factors.prefix(4).map { factor in
+        model.readiness.factors.prefix(4).map { factor in
             SignalInput(
                 title: factor.name,
                 value: factor.impact > 0 ? "+\(factor.impact)" : "\(factor.impact)",
                 detail: factor.detail,
                 icon: factor.impact >= 0 ? "arrow.up.right" : "arrow.down.right",
-                trend: trendValues(for: factor.impact),
                 color: factorColor(factor.impact)
             )
         }
-
-        if !mappedFactors.isEmpty {
-            return Array(mappedFactors)
-        }
-
-        return [
-            SignalInput(
-                title: "HRV",
-                value: "71 ms",
-                detail: "Above baseline",
-                icon: "heart.fill",
-                trend: [62, 64, 66, 64, 68, 71],
-                color: VA.Colors.success
-            ),
-            SignalInput(
-                title: "Sleep",
-                value: "7.4h",
-                detail: "Consistent",
-                icon: "bed.double.fill",
-                trend: [7.0, 7.2, 6.8, 7.0, 7.2, 7.4],
-                color: VA.Colors.success
-            ),
-            SignalInput(
-                title: "Recovery",
-                value: "Good",
-                detail: "Ready to train",
-                icon: "waveform.path.ecg",
-                trend: [70, 72, 74, 76, 75, 78],
-                color: VA.Colors.primary
-            ),
-            SignalInput(
-                title: "Soreness",
-                value: "2/10",
-                detail: "Low",
-                icon: "figure.run",
-                trend: [4, 3, 3, 2, 2, 2],
-                color: VA.Colors.textSecondary
-            ),
-        ]
     }
 
     private var weeklyVolumes: [WeeklyVolume] {
@@ -248,11 +238,6 @@ public struct SignalsView: View {
         return model.recentSessions.filter { session in interval?.contains(session.date) == true }.count
     }
 
-    private func trendValues(for impact: Int) -> [Double] {
-        let baseline = 70.0 + Double(impact * 2)
-        return [baseline - 8, baseline - 4, baseline - 5, baseline - 1, baseline, baseline + 2]
-    }
-
     private func factorColor(_ impact: Int) -> Color {
         switch impact {
         case 1...: return VA.Colors.success
@@ -268,7 +253,6 @@ private struct SignalInput: Identifiable {
     let value: String
     let detail: String
     let icon: String
-    let trend: [Double]
     let color: Color
 }
 
@@ -302,41 +286,7 @@ private struct SignalInputCard: View {
                     .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.textTertiary)
                     .lineLimit(2)
-                SignalSparkline(values: input.trend, color: input.color)
-                    .frame(height: 32)
             }
-        }
-    }
-}
-
-private struct SignalSparkline: View {
-    let values: [Double]
-    let color: Color
-
-    var body: some View {
-        GeometryReader { proxy in
-            let points = points(in: proxy.size)
-            Path { path in
-                guard let first = points.first else { return }
-                path.move(to: first)
-                points.dropFirst().forEach { path.addLine(to: $0) }
-            }
-            .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-        }
-        .accessibilityHidden(true)
-    }
-
-    private func points(in size: CGSize) -> [CGPoint] {
-        let values = values.isEmpty ? [0, 0] : values
-        let minValue = values.min() ?? 0
-        let maxValue = values.max() ?? 1
-        let range = max(maxValue - minValue, 1)
-        let step = values.count > 1 ? size.width / CGFloat(values.count - 1) : 0
-        return values.enumerated().map { index, value in
-            CGPoint(
-                x: CGFloat(index) * step,
-                y: size.height - CGFloat((value - minValue) / range) * size.height
-            )
         }
     }
 }

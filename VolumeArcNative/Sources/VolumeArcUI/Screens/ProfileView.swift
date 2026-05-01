@@ -103,7 +103,7 @@ public struct ProfileView: View {
                 Divider()
                 ProfileStat(value: compactTotalVolume, label: String(localized: "lb total", comment: "Profile stat label"))
                 Divider()
-                ProfileStat(value: "\(model.athlete.weeklyTrainingDays)x", label: String(localized: "weekly", comment: "Profile stat label"))
+                ProfileStat(value: weeklyTrainingDaysMultiplier, label: String(localized: "weekly", comment: "Profile stat label"))
             }
             .padding(.vertical, VA.Space.lg)
             .background(VA.Colors.surfacePrimary)
@@ -262,9 +262,16 @@ public struct ProfileView: View {
     private var compactTotalVolume: String {
         let totalVolume = model.recentSessions.map(\.totalVolumeLoad).reduce(0, +)
         if totalVolume >= 1000 {
-            return "\(Int(totalVolume / 1000))k"
+            return Int(totalVolume).formatted(.number.notation(.compactName))
         }
         return "\(Int(totalVolume))"
+    }
+
+    private var weeklyTrainingDaysMultiplier: String {
+        String(
+            localized: "\(model.athlete.weeklyTrainingDays)x",
+            comment: "Profile stat weekly training days multiplier value"
+        )
     }
 
     private var healthAuthorizationAccessibilityValue: String {
