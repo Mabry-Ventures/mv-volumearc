@@ -65,7 +65,7 @@ final class AppIconAssetContractTests: XCTestCase {
             }
         }
 
-        throw XCTSkip("AppIcon.appiconset was not found from \(filePath)")
+        throw AppIconAssetContractError.missingAppIconSet(filePath)
     }
 
     private func image(named filename: String, in images: [[String: Any]]) throws -> [String: Any] {
@@ -85,6 +85,17 @@ final class AppIconAssetContractTests: XCTestCase {
             width: data.uint32BigEndian(at: 16),
             height: data.uint32BigEndian(at: 20)
         )
+    }
+}
+
+private enum AppIconAssetContractError: LocalizedError {
+    case missingAppIconSet(String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .missingAppIconSet(filePath):
+            "AppIcon.appiconset was not found from \(filePath)"
+        }
     }
 }
 
