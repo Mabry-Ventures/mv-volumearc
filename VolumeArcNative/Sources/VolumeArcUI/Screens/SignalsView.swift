@@ -23,6 +23,7 @@ public struct SignalsView: View {
             .padding(.bottom, VA.Space.xxl)
         }
         .background(VA.Colors.surfaceGrouped)
+        .accessibilityIdentifier("signals.root")
         .navigationTitle(DashboardTab.signals.title)
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await model.refresh() }
