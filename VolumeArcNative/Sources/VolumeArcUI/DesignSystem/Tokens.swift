@@ -203,11 +203,49 @@ public enum VA {
 
         /// Dynamic Island compact trailing label (rest seconds / GO).
         public static let dynamicIslandCompact = Font.caption.bold()
+
+        /// Letter spacing for ALL-CAPS eyebrow labels.
+        public static let eyebrowTracking: CGFloat = 0.6
+    }
+
+    // MARK: - Opacity
+
+    public enum Opacity {
+        /// Subtle decorative glow on tinted hero cards.
+        public static let heroGlow: Double = 0.26
+
+        /// Muted copy on primary/gradient surfaces.
+        public static let textMutedOnPrimary: Double = 0.78
+
+        /// Supporting copy on primary/gradient surfaces.
+        public static let textSecondaryOnPrimary: Double = 0.88
+
+        /// Elevated light chip fill on primary/gradient surfaces.
+        public static let elevatedSurfaceOnPrimary: Double = 0.96
+
+        /// Hairline stroke on primary/gradient surfaces.
+        public static let strokeOnPrimary: Double = 0.28
+
+        /// Tinted icon panel primary stop.
+        public static let iconPanelPrimary: Double = 0.18
+
+        /// Tinted icon panel accent stop.
+        public static let iconPanelAccent: Double = 0.14
+
+        /// Subtle separators on neutral surfaces.
+        public static let subtleSeparator: Double = 0.16
+
+        /// Subtle tinted fills.
+        public static let subtleFill: Double = 0.12
+
+        /// Prominent accent fills.
+        public static let prominentFill: Double = 0.86
     }
 
     // MARK: - Spacing (4pt grid)
 
     public enum Space {
+        public static let zero: CGFloat = 0
         public static let xxs: CGFloat = 2
         public static let xs: CGFloat = 4
         public static let sm: CGFloat = 8
@@ -217,6 +255,36 @@ public enum VA {
         public static let xxl: CGFloat = 32
         public static let xxxl: CGFloat = 48
         public static let onboardingMaxWidth: CGFloat = 320
+
+        /// Standard avatar control size.
+        public static let avatar: CGFloat = 40
+
+        /// Decorative hero glow diameter.
+        public static let heroGlowSize: CGFloat = 220
+
+        /// Decorative hero glow blur radius.
+        public static let heroGlowBlur: CGFloat = 10
+
+        /// Decorative hero glow horizontal offset.
+        public static let heroGlowOffsetX: CGFloat = 72
+
+        /// Decorative hero glow vertical offset.
+        public static let heroGlowOffsetY: CGFloat = -78
+
+        /// Fixed media rail in split action cards.
+        public static let actionMediaRail: CGFloat = 88
+
+        /// Minimum height for prominent action cards.
+        public static let actionCardMinHeight: CGFloat = 92
+
+        /// Compact icon badge dimension.
+        public static let iconBadge: CGFloat = 30
+
+        /// Single-point border stroke.
+        public static let border: CGFloat = 1
+
+        /// Half-point hairline stroke.
+        public static let hairline: CGFloat = 0.5
 
         // MARK: Widget scale
         //

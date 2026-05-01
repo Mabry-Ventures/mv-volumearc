@@ -15,12 +15,14 @@ public struct TodayView: View {
 
     public var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: VA.Space.lg) {
+            LazyVStack(alignment: .leading, spacing: VA.Space.xl) {
                 greeting
                 if model.hasLoadedInitialData {
                     nextWorkoutCard
                     quickActionsRow
-                    readinessCard
+                    planTomorrowCard
+                    coachBriefingCard
+                    overviewMetrics
                     recentSessionsSection
                     if !model.operationalSignals.isEmpty {
                         signalsSection
@@ -40,23 +42,28 @@ public struct TodayView: View {
         .accessibilityIdentifier("today.scroll")
         .background(VA.Colors.surfaceGrouped)
         .navigationTitle(DashboardTab.today.title)
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .refreshable { await model.refresh() }
     }
 
     // MARK: - Greeting
 
     private var greeting: some View {
-        VStack(alignment: .leading, spacing: VA.Space.xs) {
-            Text(greetingText)
-                .font(VA.Typography.footnote)
-                .foregroundStyle(VA.Colors.textSecondary)
-                .textCase(.uppercase)
-                .tracking(0.5)
-            Text(welcomeText)
-                .font(VA.Typography.title)
-                .foregroundStyle(VA.Colors.textPrimary)
+        HStack(alignment: .bottom, spacing: VA.Space.lg) {
+            VStack(alignment: .leading, spacing: VA.Space.xs) {
+                Text(todayLabel)
+                    .font(VA.Typography.footnote)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                Text(welcomeText)
+                    .font(VA.Typography.title)
+                    .foregroundStyle(VA.Colors.textPrimary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.82)
+            }
+            Spacer(minLength: VA.Space.md)
+            avatar
         }
+        .padding(.top, VA.Space.sm)
     }
 
     private var firstName: String {
@@ -65,9 +72,13 @@ public struct TodayView: View {
 
     private var welcomeText: String {
         if model.athlete.name.isEmpty {
-            return String(localized: "Welcome back", comment: "Dashboard greeting when no name is set")
+            return greetingText
         }
-        return String(localized: "Welcome back, \(firstName)", comment: "Dashboard greeting with the athlete's first name")
+        return String(localized: "\(greetingText), \(firstName)", comment: "Dashboard greeting with the athlete's first name")
+    }
+
+    private var todayLabel: String {
+        Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day())
     }
 
     private var greetingText: String {
@@ -84,48 +95,44 @@ public struct TodayView: View {
         }
     }
 
-    // MARK: - Readiness card
+    private var initials: String {
+        model.athlete.initials
+    }
 
-    private var readinessCard: some View {
-        VACard(style: .accent) {
-            HStack(alignment: .center, spacing: VA.Space.lg) {
-                ZStack {
-                    VAProgressRing(progress: Double(model.readiness.score) / 100, lineWidth: 10)
-                        .frame(width: 88, height: 88)
-                    VStack(spacing: 0) {
-                        Text("\(model.readiness.score)")
-                            .font(VA.Typography.display)
-                            .foregroundStyle(VA.Colors.textPrimary)
-                            .contentTransition(.numericText())
-                        Text(String(
-                            localized: "READY",
-                            comment: "Caption inside the readiness ring"
-                        ))
-                        .font(VA.Typography.caption)
-                        .foregroundStyle(VA.Colors.textSecondary)
-                        .tracking(1)
-                    }
-                }
-                .accessibilityLabel(String(
-                    localized: "Readiness score \(model.readiness.score) out of 100",
-                    comment: "VoiceOver label describing the readiness score value"
-                ))
+    private var avatar: some View {
+        Text(initials)
+            .font(VA.Typography.footnote)
+            .foregroundStyle(VA.Colors.textOnPrimary)
+            .frame(width: VA.Space.avatar, height: VA.Space.avatar)
+            .background(
+                LinearGradient(
+                    colors: [VA.Colors.sunriseA, VA.Colors.sunriseC],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: Circle()
+            )
+            .vaShadow(.md)
+            .accessibilityLabel(String(
+                localized: "Profile for \(avatarName)",
+                comment: "VoiceOver label for the Today screen profile avatar"
+            ))
+    }
 
-                VStack(alignment: .leading, spacing: VA.Space.xs) {
-                    Text(String(
-                        localized: "READINESS",
-                        comment: "Label next to the readiness ring"
-                    ))
-                    .font(VA.Typography.caption)
-                    .foregroundStyle(VA.Colors.textSecondary)
-                    .tracking(0.5)
-                    Text(model.readiness.brief)
-                        .font(VA.Typography.body)
-                        .foregroundStyle(VA.Colors.textPrimary)
-                }
-                Spacer()
-            }
-        }
+    private var avatarName: String {
+        model.athlete.name.isEmpty ? String(localized: "VolumeArc") : model.athlete.name
+    }
+
+    // MARK: - Overview metrics
+
+    private var overviewMetrics: some View {
+        TodayOverviewMetrics(
+            readiness: model.readiness,
+            weeklyVolumeLoad: weeklyVolumeLoad,
+            sparklineValues: weeklySparklineValues,
+            trendLabel: volumeTrendLabel,
+            trendIsPositive: volumeTrendIsPositive
+        )
     }
 
     // MARK: - Next workout card
@@ -137,14 +144,7 @@ public struct TodayView: View {
                 localized: "Strength Session",
                 comment: "Default workout title when no plan name is available"
             )
-            let weight = Int(autopilot.nextTarget.weight)
-            let unit = autopilot.nextTarget.unit
-            let repRange = autopilot.nextTarget.repRange
-            let rpe = String(format: "%.1f", autopilot.nextTarget.targetRPE)
-            let targetLine = String(
-                localized: "\(weight)\(unit) × \(repRange.lowerBound)-\(repRange.upperBound) @ RPE \(rpe)",
-                comment: "Target line: weight × rep range @ target RPE for the next set"
-            )
+            let targetLine = targetLine(for: autopilot)
             NavigationLink {
                 WorkoutDetailView(
                     title: workoutTitle,
@@ -159,10 +159,10 @@ public struct TodayView: View {
                 ZStack(alignment: .topTrailing) {
                     VA.Gradients.sunriseHero
                     Circle()
-                        .fill(.white.opacity(0.26))
-                        .frame(width: 220, height: 220)
-                        .blur(radius: 10)
-                        .offset(x: 72, y: -78)
+                        .fill(VA.Colors.textOnPrimary.opacity(VA.Opacity.heroGlow))
+                        .frame(width: VA.Space.heroGlowSize, height: VA.Space.heroGlowSize)
+                        .blur(radius: VA.Space.heroGlowBlur)
+                        .offset(x: VA.Space.heroGlowOffsetX, y: VA.Space.heroGlowOffsetY)
 
                     VStack(alignment: .leading, spacing: VA.Space.lg) {
                         VStack(alignment: .leading, spacing: VA.Space.xs) {
@@ -171,14 +171,14 @@ public struct TodayView: View {
                                 comment: "Section label above the hero next-workout card"
                             ))
                             .font(VA.Typography.caption)
-                            .foregroundStyle(.white.opacity(0.78))
-                            .tracking(0.6)
+                            .foregroundStyle(VA.Colors.textOnPrimary.opacity(VA.Opacity.textMutedOnPrimary))
+                            .tracking(VA.Typography.eyebrowTracking)
                             Text(workoutTitle)
                                 .font(VA.Typography.title)
-                                .foregroundStyle(.white)
+                                .foregroundStyle(VA.Colors.textOnPrimary)
                             Text(autopilot.nextExerciseName)
                                 .font(VA.Typography.body)
-                                .foregroundStyle(.white.opacity(0.88))
+                                .foregroundStyle(VA.Colors.textOnPrimary.opacity(VA.Opacity.textSecondaryOnPrimary))
                         }
 
                         HStack(spacing: VA.Space.md) {
@@ -190,11 +190,14 @@ public struct TodayView: View {
                             .foregroundStyle(VA.Colors.primaryDeep)
                             .padding(.horizontal, VA.Space.lg)
                             .frame(height: 46)
-                            .background(.white.opacity(0.96), in: Capsule())
+                            .background(
+                                VA.Colors.textOnPrimary.opacity(VA.Opacity.elevatedSurfaceOnPrimary),
+                                in: Capsule()
+                            )
 
                             Text(targetLine)
                                 .font(VA.Typography.footnote)
-                                .foregroundStyle(.white.opacity(0.78))
+                                .foregroundStyle(VA.Colors.textOnPrimary.opacity(VA.Opacity.textMutedOnPrimary))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
                         }
@@ -206,9 +209,12 @@ public struct TodayView: View {
                 .clipShape(RoundedRectangle(cornerRadius: VA.Radius.xl, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: VA.Radius.xl, style: .continuous)
-                        .stroke(.white.opacity(0.28), lineWidth: 1)
+                        .stroke(
+                            VA.Colors.textOnPrimary.opacity(VA.Opacity.strokeOnPrimary),
+                            lineWidth: VA.Space.border
+                        )
                 }
-                .shadow(color: VA.Colors.primary.opacity(0.22), radius: 24, x: 0, y: 14)
+                .vaShadow(.lg)
                 .matchedTransitionSource(id: "next-workout-hero", in: heroNamespace)
             }
             .buttonStyle(.plain)
@@ -274,15 +280,123 @@ public struct TodayView: View {
         }
     }
 
+    // MARK: - Planning and coach briefing
+
+    private var planTomorrowCard: some View {
+        Button {
+            VAHaptics.tap()
+            navigation.openCoach(prompt: String(
+                localized: "Help me plan tomorrow's workout.",
+                comment: "Default coach prompt from the Today plan tomorrow card"
+            ))
+        } label: {
+            HStack(spacing: VA.Space.zero) {
+                ZStack {
+                    LinearGradient(
+                        colors: [
+                            VA.Colors.primary.opacity(VA.Opacity.iconPanelPrimary),
+                            VA.Colors.sunriseC.opacity(VA.Opacity.iconPanelAccent),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    Image(systemName: "figure.strengthtraining.traditional")
+                        .font(VA.Typography.title)
+                        .foregroundStyle(VA.Colors.primary)
+                }
+                .frame(width: VA.Space.actionMediaRail)
+
+                HStack(alignment: .center, spacing: VA.Space.md) {
+                    VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                        Text(String(localized: "WITH COACH", comment: "Plan tomorrow card eyebrow"))
+                            .font(VA.Typography.caption)
+                            .foregroundStyle(VA.Colors.primary)
+                            .tracking(VA.Typography.eyebrowTracking)
+                        Text(String(localized: "Plan tomorrow", comment: "Plan tomorrow card title"))
+                            .font(VA.Typography.headline)
+                            .foregroundStyle(VA.Colors.textPrimary)
+                        Text(planTomorrowSubtitle)
+                            .font(VA.Typography.footnote)
+                            .foregroundStyle(VA.Colors.textSecondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: VA.Space.sm)
+                    Image(systemName: "chevron.right")
+                        .font(VA.Typography.caption)
+                        .foregroundStyle(VA.Colors.textTertiary)
+                }
+                .padding(.horizontal, VA.Space.lg)
+                .padding(.vertical, VA.Space.md)
+            }
+            .frame(maxWidth: .infinity, minHeight: VA.Space.actionCardMinHeight, alignment: .leading)
+            .background(VA.Colors.surfacePrimary, in: RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous)
+                    .stroke(VA.Colors.textTertiary.opacity(VA.Opacity.subtleSeparator), lineWidth: VA.Space.hairline)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous))
+            .vaShadow(.sm)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("today.planTomorrow")
+    }
+
+    private var coachBriefingCard: some View {
+        Button {
+            VAHaptics.tap()
+            navigation.openCoach(prompt: String(
+                localized: "Brief me on today's training plan.",
+                comment: "Default coach prompt from the Today coach briefing card"
+            ))
+        } label: {
+            HStack(alignment: .top, spacing: VA.Space.md) {
+                Image(systemName: "figure.strengthtraining.traditional")
+                    .font(VA.Typography.headline)
+                    .foregroundStyle(VA.Colors.primary)
+                    .frame(width: VA.Space.iconBadge, height: VA.Space.iconBadge)
+                    .background(VA.Colors.primary.opacity(VA.Opacity.subtleFill), in: Circle())
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: VA.Space.xs) {
+                    Text(String(localized: "Coach briefing", comment: "Today coach briefing card title"))
+                        .font(VA.Typography.footnote)
+                        .foregroundStyle(VA.Colors.textSecondary)
+                    Text(coachBriefingText)
+                        .font(VA.Typography.footnote)
+                        .foregroundStyle(VA.Colors.textPrimary)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: VA.Space.sm)
+                Image(systemName: "chevron.right")
+                    .font(VA.Typography.caption)
+                    .foregroundStyle(VA.Colors.textTertiary)
+                    .padding(.top, VA.Space.xs)
+            }
+            .padding(.horizontal, VA.Space.lg)
+            .padding(.vertical, VA.Space.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .vaGlassBackground(in: RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("today.coachBriefing")
+    }
+
     // MARK: - Recent sessions
 
     private var recentSessionsSection: some View {
         VStack(alignment: .leading, spacing: VA.Space.md) {
             VASectionHeader(
-                String(localized: "Recent Sessions", comment: "Section header on Today tab for recent workout history"),
+                String(localized: "Recent", comment: "Section header on Today tab for recent workout history"),
                 subtitle: String(
-                    localized: "^[\(model.recentSessions.count) this week](inflect: true)",
+                    localized: "^[\(weeklyVolumeSummary.currentWeekSessionCount) this week](inflect: true)",
                     comment: "Subtitle showing how many sessions have been logged this week, with plural agreement"
+                ),
+                action: (
+                    label: String(localized: "See all", comment: "Recent sessions section action to open Workouts"),
+                    handler: { navigation.selectedTab = .workouts }
                 )
             )
             if model.recentSessions.isEmpty {
@@ -315,6 +429,10 @@ public struct TodayView: View {
         } label: {
             VACard(style: .flat) {
                 HStack(spacing: VA.Space.md) {
+                    Circle()
+                        .fill(VA.Colors.primary.opacity(VA.Opacity.prominentFill))
+                        .frame(width: 8, height: 8)
+                        .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: VA.Space.xxs) {
                         Text(session.date.formatted(.dateTime.weekday(.wide).month().day()))
                             .font(VA.Typography.headline)
@@ -338,7 +456,7 @@ public struct TodayView: View {
                         style: .compact
                     )
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(VA.Typography.caption)
                         .foregroundStyle(VA.Colors.textTertiary)
                 }
             }
@@ -349,6 +467,80 @@ public struct TodayView: View {
             localized: "Opens this session's details",
             comment: "Accessibility hint for tapping a recent session row"
         ))
+    }
+
+    // MARK: - Derived display values
+
+    private var planTomorrowSubtitle: String {
+        let title = model.nextWorkout?.title ?? String(
+            localized: "Next training day",
+            comment: "Fallback title in the Today plan tomorrow card"
+        )
+        return String(
+            localized: "\(title) queued — review and tweak together",
+            comment: "Plan tomorrow card subtitle describing the next queued workout"
+        )
+    }
+
+    private var coachBriefingText: String {
+        guard let autopilot = model.autopilot else {
+            return String(
+                localized: "Readiness \(model.readiness.score). Finish onboarding or log a session to unlock a grounded training brief.",
+                comment: "Coach briefing fallback when no recommendation is available"
+            )
+        }
+
+        let target = targetLine(for: autopilot)
+        return String(
+            localized: """
+                Readiness \(model.readiness.score). \(autopilot.nextExerciseName) \
+                is queued at \(target) — \(autopilot.recommendationReason)
+                """,
+            comment: "Coach briefing summary using readiness, next lift target, and recommendation reason"
+        )
+    }
+
+    private var weeklyVolumeLoad: Double {
+        weeklyVolumeSummary.currentVolumeLoad
+    }
+
+    private var weeklySparklineValues: [Double] {
+        weeklyVolumeSummary.sparklineValues
+    }
+
+    private var volumeTrendPercent: Int? {
+        weeklyVolumeSummary.trendPercent
+    }
+
+    private var volumeTrendLabel: String {
+        guard let percent = volumeTrendPercent else {
+            return String(localized: "On track", comment: "Weekly volume neutral trend label")
+        }
+        if percent > 0 {
+            return String(localized: "+\(percent)%", comment: "Weekly volume positive trend label")
+        }
+        return percent == 0
+            ? String(localized: "Flat", comment: "Weekly volume flat trend label")
+            : String(localized: "\(percent)%", comment: "Weekly volume negative trend label")
+    }
+
+    private var volumeTrendIsPositive: Bool {
+        (volumeTrendPercent ?? 0) > 0
+    }
+
+    private var weeklyVolumeSummary: TodayWeeklyVolumeSummary {
+        TodayWeeklyVolumeSummary(sessions: model.recentSessions)
+    }
+
+    private func targetLine(for autopilot: WorkoutAutopilotState) -> String {
+        let weight = autopilot.nextTarget.weight.formatted(.number.precision(.fractionLength(0...1)))
+        let unit = autopilot.nextTarget.unit
+        let repRange = autopilot.nextTarget.repRange
+        let rpe = String(format: "%.1f", autopilot.nextTarget.targetRPE)
+        return String(
+            localized: "\(weight)\(unit) × \(repRange.lowerBound)-\(repRange.upperBound) @ RPE \(rpe)",
+            comment: "Target line: weight × rep range @ target RPE for the next set"
+        )
     }
 
     // MARK: - Signals
@@ -369,7 +561,7 @@ public struct TodayView: View {
         VACard(style: .flat) {
             HStack(spacing: VA.Space.md) {
                 Image(systemName: signalIcon(signal.severity))
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(VA.Typography.headline)
                     .foregroundStyle(signalColor(signal.severity))
                 VStack(alignment: .leading, spacing: VA.Space.xxs) {
                     Text(signal.title)
