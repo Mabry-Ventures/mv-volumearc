@@ -103,7 +103,7 @@ public struct TodayView: View {
         Text(initials)
             .font(VA.Typography.footnote)
             .foregroundStyle(VA.Colors.textOnPrimary)
-            .frame(width: 40, height: 40)
+            .frame(width: VA.Space.avatar, height: VA.Space.avatar)
             .background(
                 LinearGradient(
                     colors: [VA.Colors.sunriseA, VA.Colors.sunriseC],
@@ -159,10 +159,10 @@ public struct TodayView: View {
                 ZStack(alignment: .topTrailing) {
                     VA.Gradients.sunriseHero
                     Circle()
-                        .fill(.white.opacity(0.26))
-                        .frame(width: 220, height: 220)
-                        .blur(radius: 10)
-                        .offset(x: 72, y: -78)
+                        .fill(VA.Colors.textOnPrimary.opacity(VA.Opacity.heroGlow))
+                        .frame(width: VA.Space.heroGlowSize, height: VA.Space.heroGlowSize)
+                        .blur(radius: VA.Space.heroGlowBlur)
+                        .offset(x: VA.Space.heroGlowOffsetX, y: VA.Space.heroGlowOffsetY)
 
                     VStack(alignment: .leading, spacing: VA.Space.lg) {
                         VStack(alignment: .leading, spacing: VA.Space.xs) {
@@ -171,14 +171,14 @@ public struct TodayView: View {
                                 comment: "Section label above the hero next-workout card"
                             ))
                             .font(VA.Typography.caption)
-                            .foregroundStyle(.white.opacity(0.78))
-                            .tracking(0.6)
+                            .foregroundStyle(VA.Colors.textOnPrimary.opacity(VA.Opacity.textMutedOnPrimary))
+                            .tracking(VA.Typography.eyebrowTracking)
                             Text(workoutTitle)
                                 .font(VA.Typography.title)
-                                .foregroundStyle(.white)
+                                .foregroundStyle(VA.Colors.textOnPrimary)
                             Text(autopilot.nextExerciseName)
                                 .font(VA.Typography.body)
-                                .foregroundStyle(.white.opacity(0.88))
+                                .foregroundStyle(VA.Colors.textOnPrimary.opacity(VA.Opacity.textSecondaryOnPrimary))
                         }
 
                         HStack(spacing: VA.Space.md) {
@@ -190,11 +190,14 @@ public struct TodayView: View {
                             .foregroundStyle(VA.Colors.primaryDeep)
                             .padding(.horizontal, VA.Space.lg)
                             .frame(height: 46)
-                            .background(.white.opacity(0.96), in: Capsule())
+                            .background(
+                                VA.Colors.textOnPrimary.opacity(VA.Opacity.elevatedSurfaceOnPrimary),
+                                in: Capsule()
+                            )
 
                             Text(targetLine)
                                 .font(VA.Typography.footnote)
-                                .foregroundStyle(.white.opacity(0.78))
+                                .foregroundStyle(VA.Colors.textOnPrimary.opacity(VA.Opacity.textMutedOnPrimary))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
                         }
@@ -206,7 +209,10 @@ public struct TodayView: View {
                 .clipShape(RoundedRectangle(cornerRadius: VA.Radius.xl, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: VA.Radius.xl, style: .continuous)
-                        .stroke(.white.opacity(0.28), lineWidth: 1)
+                        .stroke(
+                            VA.Colors.textOnPrimary.opacity(VA.Opacity.strokeOnPrimary),
+                            lineWidth: VA.Space.border
+                        )
                 }
                 .vaShadow(.lg)
                 .matchedTransitionSource(id: "next-workout-hero", in: heroNamespace)
@@ -284,12 +290,12 @@ public struct TodayView: View {
                 comment: "Default coach prompt from the Today plan tomorrow card"
             ))
         } label: {
-            HStack(spacing: 0) {
+            HStack(spacing: VA.Space.zero) {
                 ZStack {
                     LinearGradient(
                         colors: [
-                            VA.Colors.primary.opacity(0.18),
-                            VA.Colors.sunriseC.opacity(0.14),
+                            VA.Colors.primary.opacity(VA.Opacity.iconPanelPrimary),
+                            VA.Colors.sunriseC.opacity(VA.Opacity.iconPanelAccent),
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -298,14 +304,14 @@ public struct TodayView: View {
                         .font(VA.Typography.title)
                         .foregroundStyle(VA.Colors.primary)
                 }
-                .frame(width: 88)
+                .frame(width: VA.Space.actionMediaRail)
 
                 HStack(alignment: .center, spacing: VA.Space.md) {
                     VStack(alignment: .leading, spacing: VA.Space.xxs) {
                         Text(String(localized: "WITH COACH", comment: "Plan tomorrow card eyebrow"))
                             .font(VA.Typography.caption)
                             .foregroundStyle(VA.Colors.primary)
-                            .tracking(0.6)
+                            .tracking(VA.Typography.eyebrowTracking)
                         Text(String(localized: "Plan tomorrow", comment: "Plan tomorrow card title"))
                             .font(VA.Typography.headline)
                             .foregroundStyle(VA.Colors.textPrimary)
@@ -323,11 +329,11 @@ public struct TodayView: View {
                 .padding(.horizontal, VA.Space.lg)
                 .padding(.vertical, VA.Space.md)
             }
-            .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: VA.Space.actionCardMinHeight, alignment: .leading)
             .background(VA.Colors.surfacePrimary, in: RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous)
-                    .stroke(VA.Colors.textTertiary.opacity(0.16), lineWidth: 0.5)
+                    .stroke(VA.Colors.textTertiary.opacity(VA.Opacity.subtleSeparator), lineWidth: VA.Space.hairline)
             }
             .clipShape(RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous))
             .vaShadow(.sm)
@@ -348,8 +354,8 @@ public struct TodayView: View {
                 Image(systemName: "figure.strengthtraining.traditional")
                     .font(VA.Typography.headline)
                     .foregroundStyle(VA.Colors.primary)
-                    .frame(width: 30, height: 30)
-                    .background(VA.Colors.primary.opacity(0.12), in: Circle())
+                    .frame(width: VA.Space.iconBadge, height: VA.Space.iconBadge)
+                    .background(VA.Colors.primary.opacity(VA.Opacity.subtleFill), in: Circle())
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: VA.Space.xs) {
@@ -424,7 +430,7 @@ public struct TodayView: View {
             VACard(style: .flat) {
                 HStack(spacing: VA.Space.md) {
                     Circle()
-                        .fill(VA.Colors.primary.opacity(0.86))
+                        .fill(VA.Colors.primary.opacity(VA.Opacity.prominentFill))
                         .frame(width: 8, height: 8)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: VA.Space.xxs) {
@@ -527,7 +533,7 @@ public struct TodayView: View {
     }
 
     private func targetLine(for autopilot: WorkoutAutopilotState) -> String {
-        let weight = Int(autopilot.nextTarget.weight)
+        let weight = autopilot.nextTarget.weight.formatted(.number.precision(.fractionLength(0...1)))
         let unit = autopilot.nextTarget.unit
         let repRange = autopilot.nextTarget.repRange
         let rpe = String(format: "%.1f", autopilot.nextTarget.targetRPE)
