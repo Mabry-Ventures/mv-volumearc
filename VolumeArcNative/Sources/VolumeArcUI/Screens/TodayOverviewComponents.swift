@@ -114,7 +114,7 @@ private struct VAPill: View {
     var body: some View {
         HStack(spacing: VA.Space.xs) {
             Image(systemName: icon)
-                .font(.system(size: 10, weight: .bold))
+                .font(VA.Typography.caption)
             Text(text)
                 .font(VA.Typography.caption)
                 .lineLimit(1)
@@ -176,6 +176,46 @@ private struct VAMiniSparkline: View {
                 y: size.height - (CGFloat(normalized) * size.height)
             )
         }
+    }
+}
+
+struct TodayWeeklyVolumeSummary {
+    let currentVolumeLoad: Double
+    let currentWeekSessionCount: Int
+    let sparklineValues: [Double]
+    let trendPercent: Int?
+
+    init(sessions: [RecentSession], calendar: Calendar = .current, now: Date = .now) {
+        let currentWeek = calendar.dateInterval(of: .weekOfYear, for: now)
+        let currentSessions = Self.sessions(sessions, in: currentWeek)
+        let previousSessions: [RecentSession]
+
+        if
+            let currentWeek,
+            let previousWeekDate = calendar.date(byAdding: .weekOfYear, value: -1, to: currentWeek.start) {
+            previousSessions = Self.sessions(sessions, in: calendar.dateInterval(of: .weekOfYear, for: previousWeekDate))
+        } else {
+            previousSessions = []
+        }
+
+        currentVolumeLoad = currentSessions.map(\.totalVolumeLoad).reduce(0, +)
+        currentWeekSessionCount = currentSessions.count
+        sparklineValues = Self.sparklineValues(from: currentSessions)
+
+        let previousVolumeLoad = previousSessions.map(\.totalVolumeLoad).reduce(0, +)
+        trendPercent = previousVolumeLoad > 0
+            ? Int(((currentVolumeLoad - previousVolumeLoad) / previousVolumeLoad * 100).rounded())
+            : nil
+    }
+
+    private static func sessions(_ sessions: [RecentSession], in interval: DateInterval?) -> [RecentSession] {
+        guard let interval else { return [] }
+        return sessions.filter { interval.contains($0.date) }
+    }
+
+    private static func sparklineValues(from sessions: [RecentSession]) -> [Double] {
+        let volumes = sessions.sorted { $0.date < $1.date }.suffix(6).map(\.totalVolumeLoad)
+        return volumes.isEmpty ? [0, 0, 0, 0, 0, 0] : Array(volumes)
     }
 }
 #endif

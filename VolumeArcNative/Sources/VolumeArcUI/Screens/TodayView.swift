@@ -104,7 +104,7 @@ public struct TodayView: View {
     private var avatar: some View {
         Text(initials)
             .font(VA.Typography.footnote)
-            .foregroundStyle(Color.white)
+            .foregroundStyle(VA.Colors.textOnPrimary)
             .frame(width: 40, height: 40)
             .background(
                 LinearGradient(
@@ -114,7 +114,7 @@ public struct TodayView: View {
                 ),
                 in: Circle()
             )
-            .shadow(color: VA.Colors.primary.opacity(0.18), radius: 10, x: 0, y: 6)
+            .vaShadow(.md)
             .accessibilityLabel(String(
                 localized: "Profile for \(avatarName)",
                 comment: "VoiceOver label for the Today screen profile avatar"
@@ -210,7 +210,7 @@ public struct TodayView: View {
                     RoundedRectangle(cornerRadius: VA.Radius.xl, style: .continuous)
                         .stroke(.white.opacity(0.28), lineWidth: 1)
                 }
-                .shadow(color: VA.Colors.primary.opacity(0.22), radius: 24, x: 0, y: 14)
+                .vaShadow(.lg)
                 .matchedTransitionSource(id: "next-workout-hero", in: heroNamespace)
             }
             .buttonStyle(.plain)
@@ -297,7 +297,7 @@ public struct TodayView: View {
                         endPoint: .bottomTrailing
                     )
                     Image(systemName: "figure.strengthtraining.traditional")
-                        .font(.system(size: 32, weight: .regular))
+                        .font(VA.Typography.title)
                         .foregroundStyle(VA.Colors.primary)
                 }
                 .frame(width: 88)
@@ -319,7 +319,7 @@ public struct TodayView: View {
                     }
                     Spacer(minLength: VA.Space.sm)
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(VA.Typography.caption)
                         .foregroundStyle(VA.Colors.textTertiary)
                 }
                 .padding(.horizontal, VA.Space.lg)
@@ -348,7 +348,7 @@ public struct TodayView: View {
         } label: {
             HStack(alignment: .top, spacing: VA.Space.md) {
                 Image(systemName: "figure.strengthtraining.traditional")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(VA.Typography.headline)
                     .foregroundStyle(VA.Colors.primary)
                     .frame(width: 30, height: 30)
                     .background(VA.Colors.primary.opacity(0.12), in: Circle())
@@ -367,7 +367,7 @@ public struct TodayView: View {
 
                 Spacer(minLength: VA.Space.sm)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.textTertiary)
                     .padding(.top, VA.Space.xs)
             }
@@ -387,7 +387,7 @@ public struct TodayView: View {
             VASectionHeader(
                 String(localized: "Recent", comment: "Section header on Today tab for recent workout history"),
                 subtitle: String(
-                    localized: "^[\(model.recentSessions.count) this week](inflect: true)",
+                    localized: "^[\(weeklyVolumeSummary.currentWeekSessionCount) this week](inflect: true)",
                     comment: "Subtitle showing how many sessions have been logged this week, with plural agreement"
                 ),
                 action: (
@@ -497,24 +497,21 @@ public struct TodayView: View {
     }
 
     private var weeklyVolumeLoad: Double {
-        model.recentSessions.map(\.totalVolumeLoad).reduce(0, +)
+        weeklyVolumeSummary.currentVolumeLoad
     }
 
     private var weeklySparklineValues: [Double] {
-        let volumes = model.recentSessions
-            .sorted { $0.date < $1.date }
-            .suffix(6)
-            .map(\.totalVolumeLoad)
-        return volumes.isEmpty ? [0, 0, 0, 0, 0, max(weeklyVolumeLoad, 1)] : Array(volumes)
+        weeklyVolumeSummary.sparklineValues
+    }
+
+    private var volumeTrendPercent: Int? {
+        weeklyVolumeSummary.trendPercent
     }
 
     private var volumeTrendLabel: String {
-        let values = weeklySparklineValues.filter { $0 > 0 }
-        guard values.count >= 2, let first = values.first, let last = values.last, first > 0 else {
+        guard let percent = volumeTrendPercent else {
             return String(localized: "On track", comment: "Weekly volume neutral trend label")
         }
-
-        let percent = Int(((last - first) / first * 100).rounded())
         if percent > 0 {
             return String(localized: "+\(percent)%", comment: "Weekly volume positive trend label")
         }
@@ -524,7 +521,11 @@ public struct TodayView: View {
     }
 
     private var volumeTrendIsPositive: Bool {
-        volumeTrendLabel.hasPrefix("+")
+        (volumeTrendPercent ?? 0) > 0
+    }
+
+    private var weeklyVolumeSummary: TodayWeeklyVolumeSummary {
+        TodayWeeklyVolumeSummary(sessions: model.recentSessions)
     }
 
     private func targetLine(for autopilot: WorkoutAutopilotState) -> String {
