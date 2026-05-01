@@ -13,182 +13,22 @@ public struct ProfileView: View {
     }
 
     public var body: some View {
-        List {
-            Section {
-                profileHeader
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: VA.Space.xl) {
+                profileTitle
+                profileHero
+                trainingSection
+                subscriptionCard
+                accountSection
+                statusSection
             }
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets())
-
-            Section(String(localized: "Training", comment: "Profile tab section header — training settings")) {
-                row(
-                    label: String(localized: "Advancement", comment: "Profile row — advancement level"),
-                    value: model.athlete.advancementLevel.displayName,
-                    icon: "chart.line.uptrend.xyaxis"
-                )
-                row(
-                    label: String(localized: "Weekly days", comment: "Profile row — weekly training days"),
-                    value: "\(model.athlete.weeklyTrainingDays)",
-                    icon: "calendar"
-                )
-                row(
-                    label: String(localized: "Rep range", comment: "Profile row — preferred rep range"),
-                    value: "\(model.athlete.preferredRepRange.lowerBound)-\(model.athlete.preferredRepRange.upperBound)",
-                    icon: "number"
-                )
-                row(
-                    label: String(localized: "Equipment", comment: "Profile row — equipment count"),
-                    value: String(
-                        localized: "^[\(model.athlete.availableEquipment.count) types](inflect: true)",
-                        comment: "Profile row value — pluralized count of equipment types"
-                    ),
-                    icon: "dumbbell.fill"
-                )
-                Button {
-                    VAHaptics.tap()
-                    isEditingProfile = true
-                } label: {
-                    Label(
-                        String(localized: "Edit profile", comment: "Profile button — open edit profile sheet"),
-                        systemImage: "pencil"
-                    )
-                    .foregroundStyle(VA.Colors.primary)
-                }
-            }
-
-            Section(String(localized: "Premium", comment: "Profile tab section header — subscription")) {
-                // Intentionally NOT a SwiftUI Button. Button inside Form
-                // wraps itself as a cell with combined accessibility, and
-                // across SwiftUI runtime revisions the inner
-                // `accessibilityIdentifier` gets swallowed by the cell,
-                // which made the Upgrade row unqueryable from XCUITest.
-                // Using an HStack with `onTapGesture` keeps the row tappable
-                // with the exact same UX but lets us pin the accessibility
-                // identifier and label directly on the tap target.
-                HStack {
-                    Label(
-                        String(localized: "Upgrade", comment: "Profile button — open the paywall"),
-                        systemImage: "sparkles"
-                    )
-                    .foregroundStyle(VA.Colors.primary)
-                    Spacer()
-                    Text(String(
-                        localized: "Monthly / Yearly",
-                        comment: "Profile upgrade row subtitle — available billing periods"
-                    ))
-                    .font(.caption)
-                    .foregroundStyle(VA.Colors.textSecondary)
-                }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    VAHaptics.tap()
-                    isShowingPaywall = true
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("profile.upgrade")
-                .accessibilityLabel(String(
-                    localized: "Upgrade to Premium",
-                    comment: "VoiceOver label for the upgrade row"
-                ))
-                .accessibilityHint(String(
-                    localized: "Opens the paywall to start a Premium subscription",
-                    comment: "VoiceOver hint for the upgrade row"
-                ))
-                .accessibilityAddTraits(.isButton)
-            }
-
-            // VOL-109: Apple Health connection row. Mirrors the
-            // onboarding "Connect Apple Health" button so users who
-            // skipped the prompt during onboarding (or want to revoke
-            // the connection later) have a settings entry point. Routes
-            // through `model.requestHealthKitAuthorization()` so the
-            // same `shouldSurfacePermissionPrompts` gate applies.
-            Section(String(localized: "Apple Health", comment: "Profile tab section header — Apple Health connection")) {
-                HStack {
-                    Label(
-                        model.isHealthAuthorized
-                            ? String(
-                                localized: "Connected to Apple Health",
-                                comment: "Profile row label after the Apple Health authorization sheet has been answered"
-                            )
-                            : String(
-                                localized: "Connect Apple Health",
-                                comment: "Profile row label that opens the Apple Health authorization sheet"
-                            ),
-                        systemImage: "heart.text.square.fill"
-                    )
-                    .foregroundStyle(VA.Colors.primary)
-                    Spacer()
-                    if model.isHealthAuthorized {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(VA.Colors.success)
-                    }
-                }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    Task {
-                        VAHaptics.tap()
-                        await model.requestHealthKitAuthorization()
-                    }
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("profile.health.connect")
-                .accessibilityLabel(
-                    model.isHealthAuthorized
-                        ? String(
-                            localized: "Apple Health connected",
-                            comment: "VoiceOver label for the Apple Health row after connection"
-                        )
-                        : String(
-                            localized: "Connect to Apple Health",
-                            comment: "VoiceOver label for the Apple Health row before connection"
-                        )
-                )
-                .accessibilityValue(healthAuthorizationAccessibilityValue)
-                .accessibilityHint(String(
-                    localized: "Opens the Apple Health authorization sheet to share your workout data",
-                    comment: "VoiceOver hint for the Apple Health row"
-                ))
-                .accessibilityAddTraits(.isButton)
-            }
-
-            Section(String(localized: "App", comment: "Profile tab section header — app-level settings")) {
-                NavigationLink {
-                    DiagnosticsView()
-                } label: {
-                    Label(
-                        String(localized: "Diagnostics", comment: "Profile row — open diagnostics screen"),
-                        systemImage: "stethoscope"
-                    )
-                }
-                NavigationLink {
-                    Text(String(
-                        localized: "About VolumeArc",
-                        comment: "About VolumeArc screen placeholder title"
-                    ))
-                    .padding()
-                } label: {
-                    Label(
-                        String(localized: "About", comment: "Profile row — open about screen"),
-                        systemImage: "info.circle"
-                    )
-                }
-            }
-
-            if !model.operationalSignals.isEmpty {
-                Section(String(localized: "Status", comment: "Profile tab section header — operational status signals")) {
-                    ForEach(model.operationalSignals, id: \.id) { signal in
-                        Label(signal.title, systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(VA.Colors.warning)
-                    }
-                }
-            }
+            .padding(VA.Space.lg)
+            .padding(.bottom, VA.Space.xxl)
         }
-        .listStyle(.insetGrouped)
+        .background(VA.Colors.surfaceGrouped)
         .accessibilityIdentifier("profile.root")
         .navigationTitle(DashboardTab.profile.title)
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $isEditingProfile) {
             EditProfileView(
                 isPresented: $isEditingProfile,
@@ -214,71 +54,327 @@ public struct ProfileView: View {
         }
     }
 
-    private var profileHeader: some View {
-        VACard(style: .accent) {
-            HStack(spacing: VA.Space.md) {
-                ZStack {
-                    Circle()
-                        .fill(LinearGradient(
-                            colors: [VA.Colors.primary, VA.Colors.primary.opacity(0.6)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ))
-                        .frame(width: 64, height: 64)
+    private var profileTitle: some View {
+        Text(DashboardTab.profile.title)
+            .font(VA.Typography.title)
+            .foregroundStyle(VA.Colors.textPrimary)
+            .padding(.top, VA.Space.sm)
+    }
+
+    private var profileHero: some View {
+        VStack(spacing: 0) {
+            ZStack(alignment: .topTrailing) {
+                VA.Gradients.sunriseHero
+                Circle()
+                    .fill(VA.Colors.textOnPrimary.opacity(0.18))
+                    .frame(width: 160, height: 160)
+                    .offset(x: 42, y: -48)
+                    .accessibilityHidden(true)
+
+                HStack(spacing: VA.Space.md) {
                     Text(initials)
                         .font(VA.Typography.title2)
-                        .foregroundStyle(VA.Colors.textOnPrimary)
+                        .foregroundStyle(VA.Colors.primaryDeep)
+                        .frame(width: 56, height: 56)
+                        .background(VA.Colors.textOnPrimary.opacity(0.96), in: Circle())
+                    VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                        Text(displayName)
+                            .font(VA.Typography.title2)
+                            .foregroundStyle(VA.Colors.textOnPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.78)
+                        Text(model.athlete.advancementLevel.lifterPhrase)
+                            .font(VA.Typography.footnote)
+                            .foregroundStyle(VA.Colors.textOnPrimary.opacity(0.84))
+                    }
+                    Spacer()
+                    Text(String(localized: "PREMIUM", comment: "Profile membership badge"))
+                        .font(VA.Typography.caption)
+                        .foregroundStyle(VA.Colors.primaryDeep)
+                        .padding(.horizontal, VA.Space.sm)
+                        .frame(height: 28)
+                        .background(VA.Colors.textOnPrimary.opacity(0.96), in: Capsule())
                 }
+                .padding(VA.Space.xl)
+            }
 
+            HStack(spacing: 0) {
+                ProfileStat(value: "\(model.recentSessions.count)", label: String(localized: "sessions", comment: "Profile stat label"))
+                Divider()
+                ProfileStat(value: compactTotalVolume, label: String(localized: "lb total", comment: "Profile stat label"))
+                Divider()
+                ProfileStat(value: weeklyTrainingDaysMultiplier, label: String(localized: "weekly", comment: "Profile stat label"))
+            }
+            .padding(.vertical, VA.Space.lg)
+            .background(VA.Colors.surfacePrimary)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: VA.Radius.xl, style: .continuous))
+        .vaShadow(.md)
+    }
+
+    private var trainingSection: some View {
+        ProfileCardSection(title: String(localized: "Training", comment: "Profile training section title")) {
+            profileRow(
+                label: String(localized: "Coaching style", comment: "Profile row label"),
+                value: model.athlete.coachingStyle.displayName,
+                icon: "bubble.left.and.bubble.right.fill"
+            ) {
+                VAHaptics.tap()
+                isEditingProfile = true
+            }
+            profileRow(
+                label: String(localized: "Advancement", comment: "Profile row label"),
+                value: model.athlete.advancementLevel.displayName,
+                icon: "chart.line.uptrend.xyaxis"
+            ) {
+                VAHaptics.tap()
+                isEditingProfile = true
+            }
+            profileRow(
+                label: String(localized: "Equipment", comment: "Profile row label"),
+                value: String(
+                    localized: "^[\(model.athlete.availableEquipment.count) types](inflect: true)",
+                    comment: "Profile equipment count"
+                ),
+                icon: "dumbbell.fill"
+            ) {
+                VAHaptics.tap()
+                isEditingProfile = true
+            }
+            profileRow(
+                label: String(localized: "Time / session", comment: "Profile row label"),
+                value: "\(model.athlete.sessionTimeBudgetMinutes) min",
+                icon: "clock.fill"
+            ) {
+                VAHaptics.tap()
+                isEditingProfile = true
+            }
+        }
+    }
+
+    private var subscriptionCard: some View {
+        VACard(style: .glass) {
+            HStack(spacing: VA.Space.md) {
+                Image(systemName: "sparkles")
+                    .font(VA.Typography.headline)
+                    .foregroundStyle(VA.Colors.primary)
+                    .frame(width: 36, height: 36)
+                    .background(VA.Colors.primary.opacity(0.12), in: Circle())
                 VStack(alignment: .leading, spacing: VA.Space.xxs) {
-                    Text(model.athlete.name.isEmpty
-                         ? String(localized: "Set up your profile", comment: "Profile header when no name is set")
-                         : model.athlete.name)
-                        .font(VA.Typography.title2)
+                    Text(String(localized: "Premium", comment: "Profile subscription title"))
+                        .font(VA.Typography.headline)
                         .foregroundStyle(VA.Colors.textPrimary)
-                    Text(model.athlete.advancementLevel.lifterPhrase)
+                    Text(String(localized: "Monthly / Yearly", comment: "Profile subscription subtitle"))
                         .font(VA.Typography.footnote)
                         .foregroundStyle(VA.Colors.textSecondary)
                 }
                 Spacer()
+                Button {
+                    VAHaptics.tap()
+                    isShowingPaywall = true
+                } label: {
+                    Text(String(localized: "Manage", comment: "Profile manage subscription action"))
+                        .font(VA.Typography.button)
+                        .foregroundStyle(VA.Colors.primary)
+                        .padding(.horizontal, VA.Space.md)
+                        .frame(height: 34)
+                        .background(VA.Colors.primary.opacity(0.12), in: Capsule())
+                }
+                .buttonStyle(.plain)
             }
         }
-        .padding(.vertical, VA.Space.sm)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("profile.upgrade")
+        .accessibilityLabel(String(localized: "Upgrade to Premium", comment: "VoiceOver label for the upgrade row"))
+        .accessibilityHint(String(
+            localized: "Opens the paywall to start or manage a Premium subscription",
+            comment: "VoiceOver hint for the upgrade row"
+        ))
+        .accessibilityAddTraits(.isButton)
+    }
+
+    private var accountSection: some View {
+        ProfileCardSection(title: String(localized: "Account", comment: "Profile account section title")) {
+            NavigationLink {
+                DiagnosticsView()
+            } label: {
+                profileRowLabel(
+                    label: String(localized: "Diagnostics", comment: "Profile row label"),
+                    value: "",
+                    icon: "stethoscope"
+                )
+            }
+            .buttonStyle(.plain)
+
+            profileRow(
+                label: model.isHealthAuthorized
+                    ? String(localized: "Apple Health", comment: "Profile Apple Health row label")
+                    : String(localized: "Connect Apple Health", comment: "Profile Apple Health row label"),
+                value: model.isHealthAuthorized
+                    ? String(localized: "Connected", comment: "Profile Apple Health connected value")
+                    : String(localized: "Not connected", comment: "Profile Apple Health disconnected value"),
+                icon: "heart.text.square.fill"
+            ) {
+                Task {
+                    VAHaptics.tap()
+                    await model.requestHealthKitAuthorization()
+                }
+            }
+            .accessibilityIdentifier("profile.health.connect")
+            .accessibilityLabel(healthAuthorizationAccessibilityLabel)
+            .accessibilityValue(healthAuthorizationAccessibilityValue)
+
+            NavigationLink {
+                Text(String(localized: "About VolumeArc", comment: "About VolumeArc screen placeholder title"))
+                    .padding()
+            } label: {
+                profileRowLabel(
+                    label: String(localized: "About", comment: "Profile row label"),
+                    value: "",
+                    icon: "info.circle.fill"
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
+    private var statusSection: some View {
+        if !model.operationalSignals.isEmpty {
+            ProfileCardSection(title: String(localized: "Status", comment: "Profile status section title")) {
+                ForEach(model.operationalSignals, id: \.id) { signal in
+                    profileRowLabel(label: signal.title, value: signal.severity.rawValue.capitalized, icon: "exclamationmark.triangle.fill")
+                }
+            }
+        }
+    }
+
+    private var displayName: String {
+        model.athlete.name.isEmpty
+            ? String(localized: "Set up your profile", comment: "Profile header when no name is set")
+            : model.athlete.name
     }
 
     private var initials: String {
         model.athlete.initials
     }
 
+    private var compactTotalVolume: String {
+        let totalVolume = model.recentSessions.map(\.totalVolumeLoad).reduce(0, +)
+        if totalVolume >= 1000 {
+            return Int(totalVolume).formatted(.number.notation(.compactName))
+        }
+        return "\(Int(totalVolume))"
+    }
+
+    private var weeklyTrainingDaysMultiplier: String {
+        String(
+            localized: "\(model.athlete.weeklyTrainingDays)x",
+            comment: "Profile stat weekly training days multiplier value"
+        )
+    }
+
     private var healthAuthorizationAccessibilityValue: String {
         if model.isHealthAuthorized {
-            return String(
-                localized: "Connected",
-                comment: "VoiceOver value for the Apple Health row after authorization"
-            )
+            return String(localized: "Connected", comment: "VoiceOver value for Apple Health row")
         }
 
         if VolumeArcRuntimeFlags.shouldSurfacePermissionPrompts {
             return String(
                 localized: "System permission prompt enabled",
-                comment: "VoiceOver value for the Apple Health row when tapping will surface the system prompt"
+                comment: "VoiceOver value when tapping will surface the system prompt"
             )
         }
 
-        return String(
-            localized: "Not connected",
-            comment: "VoiceOver value for the Apple Health row before authorization"
-        )
+        return String(localized: "Not connected", comment: "VoiceOver value for Apple Health row")
     }
 
-    private func row(label: String, value: String, icon: String) -> some View {
-        HStack {
-            Label(label, systemImage: icon)
-                .foregroundStyle(VA.Colors.textPrimary)
-            Spacer()
-            Text(value)
-                .foregroundStyle(VA.Colors.textSecondary)
+    private var healthAuthorizationAccessibilityLabel: String {
+        model.isHealthAuthorized
+            ? String(
+                localized: "Apple Health connected",
+                comment: "VoiceOver label for the Apple Health row after connection"
+            )
+            : String(
+                localized: "Connect to Apple Health",
+                comment: "VoiceOver label for the Apple Health row before connection"
+            )
+    }
+
+    private func profileRow(label: String, value: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            profileRowLabel(label: label, value: value, icon: icon)
         }
+        .buttonStyle(.plain)
+    }
+
+    private func profileRowLabel(label: String, value: String, icon: String) -> some View {
+        HStack(spacing: VA.Space.md) {
+            Image(systemName: icon)
+                .font(VA.Typography.caption)
+                .foregroundStyle(VA.Colors.primary)
+                .frame(width: 30, height: 30)
+                .background(VA.Colors.primary.opacity(0.12), in: RoundedRectangle(cornerRadius: VA.Radius.sm, style: .continuous))
+            Text(label)
+                .font(VA.Typography.body)
+                .foregroundStyle(VA.Colors.textPrimary)
+            Spacer(minLength: VA.Space.sm)
+            if !value.isEmpty {
+                Text(value)
+                    .font(VA.Typography.footnote)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+            }
+            Image(systemName: "chevron.right")
+                .font(VA.Typography.caption)
+                .foregroundStyle(VA.Colors.textTertiary)
+        }
+        .padding(.horizontal, VA.Space.lg)
+        .frame(minHeight: 58)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct ProfileCardSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: VA.Space.sm) {
+            Text(title.uppercased())
+                .font(VA.Typography.footnote)
+                .foregroundStyle(VA.Colors.textSecondary)
+                .tracking(0.4)
+                .padding(.horizontal, VA.Space.xs)
+            VStack(spacing: 0) {
+                content
+            }
+            .background(VA.Colors.surfacePrimary, in: RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous)
+                    .stroke(VA.Colors.textTertiary.opacity(0.14), lineWidth: 0.5)
+            }
+        }
+    }
+}
+
+private struct ProfileStat: View {
+    let value: String
+    let label: String
+
+    var body: some View {
+        VStack(spacing: VA.Space.xxs) {
+            Text(value)
+                .font(VA.Typography.title2)
+                .foregroundStyle(VA.Colors.textPrimary)
+                .monospacedDigit()
+            Text(label.uppercased())
+                .font(VA.Typography.caption)
+                .foregroundStyle(VA.Colors.textTertiary)
+                .tracking(0.4)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 #endif
