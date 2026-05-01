@@ -221,6 +221,7 @@ public struct ProfileView: View {
                 }
             }
             .accessibilityIdentifier("profile.health.connect")
+            .accessibilityLabel(healthAuthorizationAccessibilityLabel)
             .accessibilityValue(healthAuthorizationAccessibilityValue)
 
             NavigationLink {
@@ -279,6 +280,18 @@ public struct ProfileView: View {
         }
 
         return String(localized: "Not connected", comment: "VoiceOver value for Apple Health row")
+    }
+
+    private var healthAuthorizationAccessibilityLabel: String {
+        model.isHealthAuthorized
+            ? String(
+                localized: "Apple Health connected",
+                comment: "VoiceOver label for the Apple Health row after connection"
+            )
+            : String(
+                localized: "Connect to Apple Health",
+                comment: "VoiceOver label for the Apple Health row before connection"
+            )
     }
 
     private func profileRow(label: String, value: String, icon: String, action: @escaping () -> Void) -> some View {
