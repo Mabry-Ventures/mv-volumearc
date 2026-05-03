@@ -1,6 +1,11 @@
 #if canImport(Sentry)
 import XCTest
-@testable import VolumeArcApp
+
+// `VolumeArcSentryConfiguration` is compiled directly into the test
+// bundle (its source file is added to the test target's Sources build
+// phase by `scripts/generate_xcode_project.rb`), so its `internal` symbols
+// are accessible without `@testable import`. Mirrors the pattern used by
+// `VolumeArcSentryPIIScrubberTests`.
 
 /// VOL-129. Asserts the release-identifier format that
 /// `VolumeArcSentryConfiguration.bootstrapIfNeeded()` passes to
