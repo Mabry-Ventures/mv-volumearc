@@ -8,12 +8,16 @@ This is the granular per-feature checklist. For high-level system status, see [`
 - ✅ **Shipped** — feature is complete, tested, and production-ready
 - 🚧 **In progress** — feature exists and partially works, but has known gaps
 - 🏗️ **Scaffold** — types and wiring exist but concrete implementation is stub
-- 📋 **Planned** — not yet started
+- 📋 **Planned** — not yet started (see [Production Readiness](https://linear.app/mabry-ventures/project/volumearc-production-readiness-af810008523d) project for ticket links)
 
 ## Platform surfaces
 
 | Feature | Status | Notes |
 |---------|--------|-------|
+| iPad UX parity (iPad 11" + iPad Pro 13") | 📋 | Positioning-critical per [`PRODUCT_POSITIONING.md`](PRODUCT_POSITIONING.md). Full audit pass + iPad-specific layouts where Compact split-view breaks. Tracked in [VOL-158](https://linear.app/mabry-ventures/issue/VOL-158). |
+| In-app feedback channel (Sentry user-feedback widget) | 📋 | Profile → Help → Send feedback. Captures recent telemetry events + build context, redacts PII via `VolumeArcSentryPIIScrubber`. Optional shake-to-report. Tracked in [VOL-146](https://linear.app/mabry-ventures/issue/VOL-146). |
+| Apple Watch Vitals + Training Load (watchOS 26.4+) | 📋 | Read Apple's Training Load + Vitals score; surface "Vitals say" insight chip; pass into `RecoveryContext`. Tracked in [VOL-154](https://linear.app/mabry-ventures/issue/VOL-154). |
+| Public coach-quality page (volumearc.app/quality) | 📋 | Visible eval-trend results — converts the eval harness from engineering tool to marketing moat. Tracked in [VOL-148](https://linear.app/mabry-ventures/issue/VOL-148). |
 | iOS navigation shell (5 tabs) | ✅ | Full tab bar with Today, Workouts, Coach, Signals, and Profile, routed by `DashboardNavigationModel`. |
 | Today dashboard | ✅ | Readiness hero, next workout hero card, quick actions, recent sessions, and zoom hero transitions. |
 | Workouts tab | ✅ | Active session flow, rest timer, log set, session summary, and workout detail surfaces are live. |
@@ -29,6 +33,10 @@ This is the granular per-feature checklist. For high-level system status, see [`
 
 | Feature | Status | Notes |
 |---------|--------|-------|
+| HealthKit depth in coach prompt (HRV / sleep debt / training load) | 📋 | Killer-app differentiator. `RecoveryContext` value type fed into `CoachPromptTemplate` so the coach references real Apple data. Tracked in [VOL-145](https://linear.app/mabry-ventures/issue/VOL-145). |
+| Curated programs library (5/3/1, PPL, Starting Strength) | 📋 | Killer-app — closes #1 competitive gap vs Hevy / Fitbod / Caliber. `TrainingProgramRecord` + `ProgramsLibraryView` + program-aware coach prompt fragment. Tracked in [VOL-144](https://linear.app/mabry-ventures/issue/VOL-144). |
+| Apple Intelligence — Writing Tools + Image Playground | 📋 | Coach memory accepts Writing Tools rewrite/summarize/proofread; exercise illustrations openable in Image Playground. iOS 26+. Tracked in [VOL-159](https://linear.app/mabry-ventures/issue/VOL-159). |
+| Vision-based form check V1 (bench / squat / deadlift) | 📋 | Exploratory. Vision Framework `VNDetectHumanBodyPoseRequest` + on-device pose pipeline → rep counter / bar-path / tempo. Tracked in [VOL-155](https://linear.app/mabry-ventures/issue/VOL-155). |
 | AI provider chain (Foundation Models → Relay → Local) | ✅ | Runtime factory selects the three-provider chain with graceful fallback. |
 | `OpenAIRelayCoachProvider` | ✅ | Real HTTP relay-backed coach provider in production use. Routes outbound prompts through `CoachPromptTemplate.render(...)`. |
 | `LocalHeuristicAICoachProvider` | ✅ | Real rule-based offline fallback grounded in readiness and recent-session context. Dispatches against the templated prompt so its intent classification stays in lockstep with the cloud path. |
@@ -84,6 +92,7 @@ This is the granular per-feature checklist. For high-level system status, see [`
 
 | Feature | Status | Notes |
 |---------|--------|-------|
+| Marketing site (`marketing/` → `volumearc.app`) | 🚧 | Next.js 16 + Tailwind v4 + shadcn/ui scaffold landed (adapted from Tailwind Plus Pocket). Pages: `/`, `/terms`, `/privacy`, `/support`, `/quality`. CI build gate live. Vercel project link + custom domain + legal counsel review pending. See [`docs/MARKETING.md`](MARKETING.md). |
 | Generated Xcode project | ✅ | `scripts/generate_xcode_project.rb` remains the only source of truth for the Xcode project. |
 | CI pipeline (M4 self-hosted runners) | ✅ | Build, unit/integration tests, UI smoke tests, lint, and validation run on the dedicated Apple Silicon PR and main runner. |
 | Fastlane (test/beta/release) | ✅ | TestFlight automation and App Store submission lanes ship. |

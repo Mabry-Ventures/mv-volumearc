@@ -1,0 +1,45 @@
+{
+  "name": "@volumearc/marketing",
+  "version": "0.1.0",
+  "private": true,
+  "description": "VolumeArc marketing site — Next.js 16 + Tailwind CSS v4 + shadcn/ui (with Shadcnblocks registry). Adapted from Tailwind Plus Pocket. Deploys to Vercel.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "vercel-build": "next build"
+  },
+  "browserslist": "defaults, not ie <= 11",
+  "dependencies": {
+    "@headlessui/react": "^2.2.6",
+    "@tailwindcss/forms": "^0.5.10",
+    "@tailwindcss/postcss": "^4.2.2",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.23.11",
+    "next": "16.1.6",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^5.8.3",
+    "use-debounce": "^10.0.5"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.5",
+    "@next/eslint-plugin-next": "^16.2.4",
+    "@types/node": "^24.1.0",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "eslint": "^9.32.0",
+    "eslint-config-next": "16.1.6",
+    "prettier": "^3.6.2",
+    "prettier-plugin-tailwindcss": "^0.7.2",
+    "sharp": "0.34.3",
+    "typescript-eslint": "^8.59.1"
+  },
+  "overrides": {
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3"
+  }
+}

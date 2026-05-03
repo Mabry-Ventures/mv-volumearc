@@ -13,8 +13,15 @@ Topic-specific deep dives:
 - [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md) — tokens, components, haptics, motion
 - [`docs/FEATURES.md`](docs/FEATURES.md) — granular per-feature checklist (subordinate to the status table in `PLATFORM.md`)
 - [`docs/TESTING.md`](docs/TESTING.md) — test architecture, writing tests, coverage targets
+- [`docs/USER_JOURNEYS.md`](docs/USER_JOURNEYS.md) — canonical user-journey catalog with paired XCUITest references (VOL-141)
 - [`docs/RELEASE.md`](docs/RELEASE.md) — release process, versioning, TestFlight, hotfixes
 - [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) — dev setup, branch strategy, PR process
+- [`docs/MARKETING.md`](docs/MARKETING.md) — marketing site (`marketing/` → `volumearc.app`) architecture + deploy flow
+- [`docs/AUDIT.md`](docs/AUDIT.md) — 2026-05-01 forensic production-readiness audit + the [Production Readiness](https://linear.app/mabry-ventures/project/volumearc-production-readiness-af810008523d) project that tracks burndown
+
+The repo also contains:
+- [`marketing/`](marketing/) — Next.js 16 marketing site deployed to Vercel at `volumearc.app`. Adapted from Tailwind Plus Pocket. See `docs/MARKETING.md` before changing it.
+- [`relay/`](relay/) — Cloudflare Worker proxying coach prompts to Gemini.
 
 ## When to update which doc
 
@@ -31,6 +38,15 @@ When you change the **implementation status** of a system (a stub becomes real, 
 
 ## Production-readiness status
 
-The original post-95/95 launch blockers (VOL-55 through VOL-67) shipped in PRs [#23](https://github.com/Mabry-Ventures/mv-volumearc/pull/23)–[#31](https://github.com/Mabry-Ventures/mv-volumearc/pull/31) between 2026-04-14 and 2026-04-20. The Go-Live Readiness sweep (VOL-70 through VOL-77, VOL-89, VOL-95, VOL-100) closed the App Store submission blockers (production APS environment, paywall legal links, privacy manifest completeness, Sentry PII scrubbing) and the hygiene gaps (feature flag wiring, real SSE streaming, Liquid Glass adoption, SwiftLint scope, deterministic project generation, coach eval harness) in PRs [#43](https://github.com/Mabry-Ventures/mv-volumearc/pull/43)–[#63](https://github.com/Mabry-Ventures/mv-volumearc/pull/63) between 2026-04-22 and 2026-04-23. The app is **not yet production-ready** — marketing pages at `volumearc.app/terms` and `/privacy`, App Store Connect metadata, screenshots, and a TestFlight review pass remain. Current open work is tracked in the Linear **"Go-Live Readiness"** / **"Production Launch Quality"** projects on the VolumeArc team; consult those projects before describing any system as shipped or production-ready.
+The original post-95/95 launch blockers (VOL-55 through VOL-67) shipped in PRs [#23](https://github.com/Mabry-Ventures/mv-volumearc/pull/23)–[#31](https://github.com/Mabry-Ventures/mv-volumearc/pull/31) between 2026-04-14 and 2026-04-20. The Go-Live Readiness sweep (VOL-70 through VOL-77, VOL-89, VOL-95, VOL-100) closed the App Store submission blockers and hygiene gaps in PRs [#43](https://github.com/Mabry-Ventures/mv-volumearc/pull/43)–[#63](https://github.com/Mabry-Ventures/mv-volumearc/pull/63) between 2026-04-22 and 2026-04-23.
+
+A **forensic production-readiness audit on 2026-05-01** (full report: [`docs/AUDIT.md`](docs/AUDIT.md)) scored the platform at **84/100** and identified 27 net-new gaps plus 10 existing tickets to close before broad launch. All 37 items are tracked in the [**VolumeArc Production Readiness**](https://linear.app/mabry-ventures/project/volumearc-production-readiness-af810008523d) Linear project, organized into four waves over cycles 4–11 (2026-05-03 → 2026-07-12):
+
+- **Wave 1 (cycles 4–5):** App Store submit-ready — close the four critical-severity findings (CI fork guard, dSYM upload, AI review gate blocking, marketing pages)
+- **Wave 2 (cycles 6–7):** Hardening + raise coverage gate to **90%+** (VOL-140), document **100% of user journeys** (VOL-141), add snapshot regression, HK/CK fakes, iPad audit
+- **Wave 3 (cycles 8–9):** Killer-app differentiators — curated programs library, HealthKit-depth coach prompt, in-app feedback, nightly response-eval CI
+- **Wave 4 (cycles 10–11):** Polish + exploratory — Vision form-check V1, Apple Watch Vitals, Apple Intelligence, public coach-quality page
+
+The app is **not yet production-ready**. Marketing pages at `volumearc.app/terms` and `/privacy`, App Store Connect metadata, screenshots, and a TestFlight review pass remain. Consult the Production Readiness project before describing any system as shipped or production-ready.
 
 When in doubt, read [`docs/PLATFORM.md`](docs/PLATFORM.md) — it is the single source of truth and must be updated in the same PR as any status-changing code change. Past "production-ready" claims based on surface-level audits were wrong; treat the docs and Linear project as the only authoritative signal.

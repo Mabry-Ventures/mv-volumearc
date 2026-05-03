@@ -45,3 +45,12 @@ fastlane/test_output/
 
 # Claude Code local session state
 .claude/
+
+# Marketing site (Next.js) build artifacts
+# marketing/ has its own .gitignore for the bulk; these are belt-and-suspenders.
+marketing/.next/
+marketing/.vercel/
+marketing/node_modules/
+marketing/coverage/
+marketing/.turbo/
+marketing/next-env.d.ts
