@@ -32,14 +32,18 @@ Automated via Fastlane on tag push.
    - Regenerates the Xcode project with `BUILD_NUMBER` set
    - Archives with `CODE_SIGNING_ALLOWED=YES`
    - Exports to `.ipa`
+   - Validates signed entitlements against `App/VolumeArc.Release.entitlements` (VOL-92)
+   - Uploads dSYMs to Sentry via `sentry-cli debug-files upload --include-sources --wait` (VOL-133) — fail-loud, with the upload manifest captured as a `sentry-dsym-manifest-<sha>` CI artifact (30-day retention)
    - Uploads to TestFlight via App Store Connect API
    - **Waits for App Store Connect processing** (up to 30 min, see below)
-   - Uploads dSYMs to Sentry
 
 Required CI secrets:
 - `DEVELOPMENT_TEAM` — Apple team ID (e.g., A886EMZZW6)
 - `APP_STORE_CONNECT_API_KEY_PATH` — path to the `.p8` key file on the runner
+- `SENTRY_AUTH_TOKEN` — Sentry user auth token with `project:write` on `mabry-ventures-llc/volumearc-ios`. Created at [https://sentry.io/settings/account/api/auth-tokens/](https://sentry.io/settings/account/api/auth-tokens/). Recommended rotation: every 90 days. The Fastlane lane skips the dSYM upload (with a `UI.important` warning) when this token is unset, so local archive runs don't fail without it.
 - `VOLUMEARC_PAT` — personal access token (only needed if cross-repo checkout returns)
+
+The deploy job sets `SENTRY_ORG=mabry-ventures-llc` and `SENTRY_PROJECT=volumearc-ios` as env vars in `ci.yml`. If the org or project slug ever changes, update both `ci.yml` AND the `sentry_org`/`sentry_project` defaults in `fastlane/Fastfile`.
 
 ### Marketing site
 

@@ -1,3 +1,6 @@
+require "fileutils"
+require "shellwords"
+
 default_platform(:ios)
 
 before_all do
@@ -64,6 +67,58 @@ platform :ios do
       ENV["VOLUMEARC_BUILT_WATCH_PATH"] = built_watch if built_watch
     end
     sh("../scripts/validate_release_config.sh")
+
+    # VOL-133: upload dSYMs to Sentry so production crash reports
+    # symbolicate. Without this step, every crash that lands in Sentry
+    # arrives as obfuscated frames and root-cause analysis is blocked.
+    #
+    # Skipped (with a UI warning) when SENTRY_AUTH_TOKEN is unset so
+    # local archive builds don't fail. CI sets the token via the
+    # `SENTRY_AUTH_TOKEN` repo secret on the deploy-testflight job.
+    #
+    # Hard-fails the lane on sentry-cli error so a silent upload failure
+    # can't reach App Store Connect with unsymbolicated dSYMs.
+    if ENV["SENTRY_AUTH_TOKEN"].to_s.empty?
+      UI.important(
+        "SENTRY_AUTH_TOKEN unset — skipping dSYM upload. " \
+          "Crashes from this build will arrive in Sentry as obfuscated frames."
+      )
+    elsif archive_path.nil? || !File.directory?(archive_path)
+      UI.user_error!("VOL-133: cannot upload dSYMs — no .xcarchive recorded by gym.")
+    else
+      dsym_dir = File.join(archive_path, "dSYMs")
+      unless File.directory?(dsym_dir) && !Dir.empty?(dsym_dir)
+        UI.user_error!("VOL-133: dSYM directory missing or empty at #{dsym_dir}.")
+      end
+
+      sentry_org = ENV.fetch("SENTRY_ORG", "mabry-ventures-llc")
+      sentry_project = ENV.fetch("SENTRY_PROJECT", "volumearc-ios")
+      manifest_path = File.expand_path("../build/sentry-dsym-manifest.json", __dir__)
+      FileUtils.mkdir_p(File.dirname(manifest_path))
+
+      UI.message("VOL-133: uploading dSYMs from #{dsym_dir} → #{sentry_org}/#{sentry_project}")
+      sh(
+        "sentry-cli", "debug-files", "upload",
+        "--org", sentry_org,
+        "--project", sentry_project,
+        "--include-sources",
+        "--wait",
+        "--log-level=info",
+        dsym_dir
+      )
+
+      # Capture the upload manifest so CI can attach it as an artifact for
+      # traceability. `sentry-cli debug-files list` shows what landed for
+      # the configured project; filtering to our build's UUIDs keeps the
+      # JSON focused on this release.
+      sh(
+        "sentry-cli debug-files list " \
+          "--org #{Shellwords.escape(sentry_org)} " \
+          "--project #{Shellwords.escape(sentry_project)} " \
+          "> #{Shellwords.escape(manifest_path)}"
+      )
+      UI.success("VOL-133: dSYMs uploaded; manifest at #{manifest_path}")
+    end
 
     # VOL-96: wait for App Store Connect build processing instead of
     # fire-and-forget. We previously returned success the moment the

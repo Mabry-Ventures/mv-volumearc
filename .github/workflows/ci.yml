@@ -441,6 +441,22 @@ jobs:
       - name: Install dependencies
         run: bundle install
 
+      - name: Install sentry-cli
+        # VOL-133: required by the `beta` Fastlane lane to upload dSYMs to
+        # Sentry so production crashes symbolicate. Idempotent — Homebrew
+        # is a no-op if sentry-cli is already installed by a prior run on
+        # the persistent self-hosted runner. The `getsentry/tools` tap is
+        # the canonical install path per Sentry docs.
+        run: |
+          set -euo pipefail
+          if command -v sentry-cli >/dev/null 2>&1; then
+            echo "sentry-cli already installed: $(sentry-cli --version)"
+          else
+            brew install getsentry/tools/sentry-cli
+            echo "sentry-cli installed: $(sentry-cli --version)"
+          fi
+        shell: bash
+
       - name: Deploy to TestFlight
         env:
           DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
@@ -448,4 +464,24 @@ jobs:
           # VOL-76 remainder: set so validate_release_config.sh hard-fails
           # (not just warns) when VERSION matches the latest tag on a tag build.
           CI_TAG_BUILD: '1'
+          # VOL-133: dSYM upload to Sentry. The Fastlane `beta` lane skips
+          # the upload (with a warning) when the token is unset, so local
+          # archive builds keep working without the secret.
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: mabry-ventures-llc
+          SENTRY_PROJECT: volumearc-ios
         run: bundle exec fastlane ios beta
+
+      - name: Upload Sentry dSYM manifest
+        # VOL-133: the dSYM upload manifest captured by the beta lane is
+        # uploaded as a CI artifact so the dSYMs landed on Sentry are
+        # traceable per release. Optional — if the file is missing (e.g.,
+        # SENTRY_AUTH_TOKEN was unset) the step is a no-op.
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: sentry-dsym-manifest-${{ github.sha }}
+          path: build/sentry-dsym-manifest.json
+          retention-days: 30
+          if-no-files-found: ignore
