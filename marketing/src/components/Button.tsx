@@ -10,13 +10,19 @@ const baseStyles = {
 
 const variantStyles = {
   solid: {
-    cyan: 'relative overflow-hidden bg-cyan-500 text-white before:absolute before:inset-0 active:before:bg-transparent hover:before:bg-white/10 active:bg-cyan-600 active:text-white/80 before:transition-colors',
+    // VolumeArc brand — sunrise orange. Matches VA.Colors.primary.
+    sunrise:
+      'relative overflow-hidden bg-sunrise-500 text-white shadow-sm shadow-sunrise-500/25 before:absolute before:inset-0 active:before:bg-transparent hover:before:bg-white/10 active:bg-sunrise-600 active:text-white/80 before:transition-colors',
+    // Inverted: white-on-dark hero CTA. Lands sunrise text on white pill.
     white:
-      'bg-white text-cyan-900 hover:bg-white/90 active:bg-white/90 active:text-cyan-900/70',
-    gray: 'bg-gray-800 text-white hover:bg-gray-900 active:bg-gray-800 active:text-white/80',
+      'bg-white text-sunrise-700 hover:bg-white/95 active:bg-white/90 active:text-sunrise-700/80',
+    // Neutral fallback for secondary actions.
+    gray: 'bg-gray-900 text-white hover:bg-gray-800 active:bg-gray-900 active:text-white/80',
   },
   outline: {
     gray: 'border-gray-300 text-gray-700 hover:border-gray-400 active:bg-gray-100 active:text-gray-700/80',
+    sunrise:
+      'border-sunrise-200 text-sunrise-700 hover:border-sunrise-400 hover:text-sunrise-800 active:bg-sunrise-50',
   },
 }
 
@@ -39,15 +45,15 @@ type ButtonProps = (
 
 export function Button({ className, ...props }: ButtonProps) {
   props.variant ??= 'solid'
-  props.color ??= 'gray'
+  // Default to brand sunrise for solid CTAs, neutral gray for outline.
+  if (props.variant === 'solid' && !props.color) props.color = 'sunrise'
+  if (props.variant === 'outline' && !props.color) props.color = 'gray'
 
   className = clsx(
     baseStyles[props.variant],
     props.variant === 'outline'
-      ? variantStyles.outline[props.color]
-      : props.variant === 'solid'
-        ? variantStyles.solid[props.color]
-        : undefined,
+      ? variantStyles.outline[props.color as keyof typeof variantStyles.outline]
+      : variantStyles.solid[props.color as keyof typeof variantStyles.solid],
     className,
   )
 

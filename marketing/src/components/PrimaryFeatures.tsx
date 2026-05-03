@@ -95,8 +95,8 @@ function ReadinessIcon(props: React.ComponentPropsWithoutRef<'svg'>) {
           y2={26}
           gradientUnits="userSpaceOnUse"
         >
-          <stop stopColor="#06B6D4" />
-          <stop offset={1} stopColor="#06B6D4" stopOpacity={0.3} />
+          <stop stopColor="#F26B33" />
+          <stop offset={1} stopColor="#F26B33" stopOpacity={0.3} />
         </linearGradient>
       </defs>
       <circle cx={16} cy={16} r={16} fill="#A3A3A3" fillOpacity={0.2} />
@@ -194,8 +194,8 @@ function CoachScreen(props: ScreenProps) {
               Last week I hit 5×5 at 225. Should I push to 230 today or hold?
             </p>
           </div>
-          <div className="rounded-2xl bg-cyan-500 p-4 text-white">
-            <p className="text-xs font-semibold tracking-wide text-cyan-100 uppercase">
+          <div className="rounded-2xl bg-sunrise-500 p-4 text-white">
+            <p className="text-xs font-semibold tracking-wide text-sunrise-100 uppercase">
               VolumeArc · Pro
             </p>
             <p className="mt-2">
@@ -204,7 +204,7 @@ function CoachScreen(props: ScreenProps) {
               two — log RPE so I can recalibrate next session.
             </p>
           </div>
-          <div className="rounded-full bg-cyan-50 px-3 py-1.5 text-center text-xs font-medium text-cyan-700">
+          <div className="rounded-full bg-sunrise-50 px-3 py-1.5 text-center text-xs font-medium text-sunrise-700">
             Streaming · first token 0.6s · Gemini Pro
           </div>
         </div>
@@ -269,16 +269,16 @@ function ReadinessScreen(props: ScreenProps) {
         {...(props.animated ? { ...bodyAnimation, custom: props.custom } : {})}
       >
         <div className="px-4 py-6">
-          <div className="rounded-3xl bg-gradient-to-br from-cyan-500 to-cyan-600 p-6 text-white">
-            <p className="text-xs font-semibold tracking-wide text-cyan-100 uppercase">
+          <div className="rounded-3xl bg-gradient-to-br from-sunrise-500 to-coral-500 p-6 text-white">
+            <p className="text-xs font-semibold tracking-wide text-sunrise-100 uppercase">
               Readiness
             </p>
             <p className="mt-2 text-5xl font-medium tracking-tight">82</p>
-            <p className="mt-2 text-sm text-cyan-100">out of 100</p>
+            <p className="mt-2 text-sm text-sunrise-100">out of 100</p>
           </div>
           <div className="mt-6 space-y-3 text-sm">
             {[
-              { label: 'HRV trend', value: '+6% vs 28d', tone: 'text-cyan-600' },
+              { label: 'HRV trend', value: '+6% vs 28d', tone: 'text-sunrise-600' },
               { label: 'Sleep debt', value: '0:18', tone: 'text-gray-900' },
               {
                 label: 'Training load (7d)',
@@ -375,7 +375,7 @@ function FeaturesDesktop() {
       </TabList>
       <div className="relative col-span-6">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-          <CircleBackground color="#13B5C8" className="animate-spin-slower" />
+          <CircleBackground color="#F26B33" className="animate-spin-slower" />
         </div>
         <PhoneFrame className="z-10 mx-auto w-full max-w-[366px]">
           <TabPanels as={Fragment}>
@@ -456,7 +456,7 @@ function FeaturesMobile() {
             <div className="relative transform overflow-hidden rounded-2xl bg-gray-800 px-5 py-6">
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
                 <CircleBackground
-                  color="#13B5C8"
+                  color="#F26B33"
                   className={featureIndex % 2 === 1 ? 'rotate-180' : undefined}
                 />
               </div>

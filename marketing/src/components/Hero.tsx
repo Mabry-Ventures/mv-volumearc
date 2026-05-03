@@ -9,6 +9,9 @@ import { PhoneFrame } from '@/components/PhoneFrame'
 function BackgroundIllustration(props: React.ComponentPropsWithoutRef<'div'>) {
   let id = useId()
 
+  // The two concentric arcs echo the orange "VolumeArc" in the app icon —
+  // gradient stops use the sunrise palette (peach → orange → coral) so the
+  // hero illustration reads as the same brand mark, blown up.
   return (
     <div {...props}>
       <svg
@@ -19,13 +22,14 @@ function BackgroundIllustration(props: React.ComponentPropsWithoutRef<'div'>) {
       >
         <path
           d="M1025 513c0 282.77-229.23 512-512 512S1 795.77 1 513 230.23 1 513 1s512 229.23 512 512Z"
-          stroke="#D4D4D4"
+          stroke="#E5D4C8"
           strokeOpacity="0.7"
         />
         <path
           d="M513 1025C230.23 1025 1 795.77 1 513"
           stroke={`url(#${id}-gradient-1)`}
           strokeLinecap="round"
+          strokeWidth="2"
         />
         <defs>
           <linearGradient
@@ -36,8 +40,9 @@ function BackgroundIllustration(props: React.ComponentPropsWithoutRef<'div'>) {
             y2="1025"
             gradientUnits="userSpaceOnUse"
           >
-            <stop stopColor="#06b6d4" />
-            <stop offset="1" stopColor="#06b6d4" stopOpacity="0" />
+            <stop stopColor="#F26B33" />
+            <stop offset="0.6" stopColor="#C74A6E" stopOpacity="0.6" />
+            <stop offset="1" stopColor="#C74A6E" stopOpacity="0" />
           </linearGradient>
         </defs>
       </svg>
@@ -49,13 +54,14 @@ function BackgroundIllustration(props: React.ComponentPropsWithoutRef<'div'>) {
       >
         <path
           d="M913 513c0 220.914-179.086 400-400 400S113 733.914 113 513s179.086-400 400-400 400 179.086 400 400Z"
-          stroke="#D4D4D4"
+          stroke="#E5D4C8"
           strokeOpacity="0.7"
         />
         <path
           d="M913 513c0 220.914-179.086 400-400 400"
           stroke={`url(#${id}-gradient-2)`}
           strokeLinecap="round"
+          strokeWidth="2"
         />
         <defs>
           <linearGradient
@@ -66,8 +72,9 @@ function BackgroundIllustration(props: React.ComponentPropsWithoutRef<'div'>) {
             y2="913"
             gradientUnits="userSpaceOnUse"
           >
-            <stop stopColor="#06b6d4" />
-            <stop offset="1" stopColor="#06b6d4" stopOpacity="0" />
+            <stop stopColor="#FFB37A" />
+            <stop offset="0.6" stopColor="#F26B33" stopOpacity="0.6" />
+            <stop offset="1" stopColor="#F26B33" stopOpacity="0" />
           </linearGradient>
         </defs>
       </svg>
@@ -99,23 +106,30 @@ const platformChips = [
 
 export function Hero() {
   return (
-    <div className="overflow-hidden py-20 sm:py-32 lg:pb-32 xl:pb-36">
-      <Container>
+    <div className="relative overflow-hidden bg-gradient-to-b from-peach-50/60 via-white to-white py-20 sm:py-32 lg:pb-32 xl:pb-36">
+      {/* Soft sunrise wash behind the hero — anchors the brand without overwhelming the copy. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-40 -left-40 h-[40rem] w-[40rem] rounded-full bg-sunrise-gradient opacity-[0.08] blur-3xl"
+      />
+      <Container className="relative">
         <div className="lg:grid lg:grid-cols-12 lg:gap-x-8 lg:gap-y-20">
           <div className="relative z-10 mx-auto max-w-2xl lg:col-span-7 lg:max-w-none lg:pt-6 xl:col-span-6">
-            <h1 className="text-4xl font-medium tracking-tight text-gray-900 sm:text-5xl">
-              The deepest Apple-ecosystem strength coach.
+            <h1 className="font-display text-4xl font-semibold tracking-tight text-gray-900 sm:text-5xl lg:text-[3.5rem] lg:leading-[1.05]">
+              Your strength coach,{' '}
+              <span className="bg-sunrise-gradient bg-clip-text text-transparent">
+                built into your Apple Watch.
+              </span>
             </h1>
             <p className="mt-6 text-lg text-gray-600">
-              VolumeArc is an AI-powered strength training coach for iPhone and
-              Apple Watch. Your watch leads the session. Your readiness comes
-              from your real recovery data. Your training history follows you
-              across every Apple device — privately, and on-device when it
-              matters.
+              VolumeArc is an AI-powered strength coach for iPhone and Apple
+              Watch. The watch leads the session. Readiness comes from your
+              real recovery data. Your history follows you across every Apple
+              device — privately, and on-device when it matters.
             </p>
             <div className="mt-8 flex flex-wrap gap-x-6 gap-y-4">
               <AppStoreLink />
-              <Button href="#features" variant="outline">
+              <Button href="#features" variant="outline" color="sunrise">
                 <PlayIcon className="h-6 w-6 flex-none" />
                 <span className="ml-2.5">See how it works</span>
               </Button>
@@ -130,8 +144,8 @@ export function Hero() {
             </div>
           </div>
           <div className="relative -mt-4 lg:col-span-7 lg:mt-0 xl:col-span-6">
-            <p className="text-center text-sm font-semibold text-gray-900 lg:text-left">
-              Built day-one on Apple's newest platform stack
+            <p className="text-center text-sm font-semibold tracking-wide text-gray-900 uppercase lg:text-left">
+              Built day-one on iOS 26 + watchOS 26
             </p>
             <ul
               role="list"
@@ -139,7 +153,7 @@ export function Hero() {
             >
               {platformChips.map((chip) => (
                 <li key={chip}>
-                  <span className="inline-flex items-center rounded-full bg-cyan-50 px-3 py-1 text-xs font-medium text-cyan-700 ring-1 ring-cyan-200/60 ring-inset">
+                  <span className="va-glass inline-flex items-center rounded-full px-3.5 py-1.5 text-xs font-semibold text-sunrise-800">
                     {chip}
                   </span>
                 </li>

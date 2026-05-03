@@ -37,7 +37,7 @@ export function Footer() {
         <div className="grid grid-cols-1 gap-y-12 pt-16 pb-10 sm:grid-cols-4 sm:gap-x-8 lg:py-16">
           <div className="sm:col-span-1">
             <div className="flex items-center text-gray-900">
-              <Logomark className="h-10 w-10 flex-none fill-cyan-500" />
+              <Logomark className="h-10 w-10 flex-none rounded-[20%]" />
               <div className="ml-3">
                 <p className="text-base font-semibold tracking-tight">
                   VolumeArc

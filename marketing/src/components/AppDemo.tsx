@@ -95,8 +95,8 @@ function Chart({
           <path d={`${path} V ${height + paddingY} H ${paddingX} Z`} />
         </clipPath>
         <linearGradient id={`${id}-gradient`} x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor="#13B5C8" />
-          <stop offset="100%" stopColor="#13B5C8" stopOpacity="0" />
+          <stop offset="0%" stopColor="#F26B33" />
+          <stop offset="100%" stopColor="#F26B33" stopOpacity="0" />
         </linearGradient>
       </defs>
       {[...Array(gridLines - 1).keys()].map((index) => (
@@ -127,7 +127,7 @@ function Chart({
         strokeLinejoin="round"
         initial={{ pathLength: 0 }}
         transition={{ duration: 1 }}
-        {...(isInView ? { stroke: '#06b6d4', animate: { pathLength: 1 } } : {})}
+        {...(isInView ? { stroke: '#F26B33', animate: { pathLength: 1 } } : {})}
         onUpdate={({ pathLength }) => {
           if (pathRef.current && typeof pathLength === 'number') {
             pathWidth.set(
@@ -146,7 +146,7 @@ function Chart({
             y1={points[activePointIndex].y}
             x2={totalWidth}
             y2={points[activePointIndex].y}
-            stroke="#06b6d4"
+            stroke="#F26B33"
             strokeDasharray="1 3"
           />
           <circle
@@ -155,7 +155,7 @@ function Chart({
             cy={points[activePointIndex].y}
             fill="#fff"
             strokeWidth="2"
-            stroke="#06b6d4"
+            stroke="#F26B33"
           />
         </>
       )}
@@ -200,7 +200,7 @@ export function AppDemo() {
                 <div
                   className={clsx(
                     'ml-auto text-sm tracking-tight tabular-nums',
-                    trendDelta >= 0 ? 'text-cyan-500' : 'text-gray-500',
+                    trendDelta >= 0 ? 'text-sunrise-500' : 'text-gray-500',
                   )}
                 >
                   {`${trendDelta >= 0 ? '+' : ''}${trendDelta}`}
@@ -209,7 +209,7 @@ export function AppDemo() {
             </div>
             <div className="mt-6 flex gap-4 text-xs text-gray-500">
               <div>7D</div>
-              <div className="font-semibold text-cyan-600">30D</div>
+              <div className="font-semibold text-sunrise-600">30D</div>
               <div>90D</div>
               <div>1Y</div>
               <div>All</div>
@@ -224,7 +224,7 @@ export function AppDemo() {
                 onChangeActivePointIndex={setActivePointIndex}
               />
             </div>
-            <div className="mt-4 rounded-lg bg-cyan-500 px-4 py-2 text-center text-sm font-semibold text-white">
+            <div className="mt-4 rounded-lg bg-sunrise-500 px-4 py-2 text-center text-sm font-semibold text-white">
               Start next workout
             </div>
             <div className="mt-3 divide-y divide-gray-100 text-sm">

@@ -50,7 +50,7 @@ const plans = [
       'Priority eval-trend updates',
       'Apple Watch Vitals + Training Load integration',
     ],
-    logomarkClassName: 'fill-cyan-500',
+    logomarkClassName: 'fill-sunrise-500',
   },
 ]
 
@@ -103,8 +103,10 @@ function Plan({
   return (
     <section
       className={clsx(
-        'flex flex-col overflow-hidden rounded-3xl p-6 shadow-lg shadow-gray-900/5',
-        featured ? 'order-first bg-gray-900 lg:order-0' : 'bg-white',
+        'flex flex-col overflow-hidden rounded-3xl p-6',
+        featured
+          ? 'order-first bg-gradient-to-br from-gray-900 via-sunrise-950 to-coral-950 shadow-2xl shadow-sunrise-900/30 ring-1 ring-inset ring-white/10 lg:order-0'
+          : 'bg-white shadow-lg shadow-gray-900/5 ring-1 ring-inset ring-gray-200/60',
       )}
     >
       <h3
@@ -174,7 +176,7 @@ function Plan({
               <CheckIcon
                 className={clsx(
                   'h-6 w-6 flex-none',
-                  featured ? 'text-white' : 'text-cyan-500',
+                  featured ? 'text-sunrise-300' : 'text-sunrise-500',
                 )}
               />
               <span className="ml-4">{feature}</span>
@@ -184,7 +186,7 @@ function Plan({
       </div>
       <Button
         href={button.href}
-        color={featured ? 'cyan' : 'gray'}
+        color={featured ? 'sunrise' : 'gray'}
         className="mt-6"
         aria-label={`${button.label} — ${name} plan`}
       >
@@ -244,7 +246,7 @@ export function Pricing() {
             <div
               aria-hidden="true"
               className={clsx(
-                'pointer-events-none absolute inset-0 z-10 grid grid-cols-2 overflow-hidden rounded-lg bg-cyan-500 transition-all duration-300',
+                'pointer-events-none absolute inset-0 z-10 grid grid-cols-2 overflow-hidden rounded-lg bg-sunrise-500 transition-all duration-300',
                 activePeriod === 'Monthly'
                   ? '[clip-path:inset(0_50%_0_0)]'
                   : '[clip-path:inset(0_0_0_calc(50%-1px))]',
@@ -274,11 +276,11 @@ export function Pricing() {
         <p className="mx-auto mt-10 max-w-2xl text-center text-sm text-gray-500">
           Subscriptions are billed through your Apple ID. Auto-renews until
           cancelled. Manage in iOS Settings → Apple ID → Subscriptions. See{' '}
-          <a className="underline" href="/terms">
+          <a className="text-sunrise-700 underline decoration-sunrise-300 underline-offset-4 hover:decoration-sunrise-500" href="/terms">
             Terms
           </a>{' '}
           and{' '}
-          <a className="underline" href="/privacy">
+          <a className="text-sunrise-700 underline decoration-sunrise-300 underline-offset-4 hover:decoration-sunrise-500" href="/privacy">
             Privacy Policy
           </a>{' '}
           for full disclosure.

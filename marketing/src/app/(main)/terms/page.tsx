@@ -14,7 +14,7 @@ export default function TermsPage() {
       <Container>
         <div className="mx-auto max-w-3xl">
           <header>
-            <p className="text-sm font-semibold text-cyan-600">Legal</p>
+            <p className="text-sm font-semibold tracking-wide text-sunrise-700 uppercase">Legal</p>
             <h1 className="mt-2 text-4xl font-medium tracking-tight text-gray-900">
               Terms of Service
             </h1>

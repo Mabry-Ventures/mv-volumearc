@@ -99,7 +99,7 @@ export default function SupportPage() {
       <Container>
         <div className="mx-auto max-w-3xl">
           <header>
-            <p className="text-sm font-semibold text-cyan-600">Support</p>
+            <p className="text-sm font-semibold tracking-wide text-sunrise-700 uppercase">Support</p>
             <h1 className="mt-2 text-4xl font-medium tracking-tight text-gray-900">
               Get help with VolumeArc
             </h1>

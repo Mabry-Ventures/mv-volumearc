@@ -37,7 +37,7 @@ export default function QualityPage() {
       <Container>
         <div className="mx-auto max-w-4xl">
           <header>
-            <p className="text-sm font-semibold text-cyan-600">Quality</p>
+            <p className="text-sm font-semibold tracking-wide text-sunrise-700 uppercase">Quality</p>
             <h1 className="mt-2 text-4xl font-medium tracking-tight text-gray-900">
               Coach quality, in the open.
             </h1>

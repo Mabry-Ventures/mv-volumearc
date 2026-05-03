@@ -73,7 +73,7 @@ export function Faqs() {
             Anything else?{' '}
             <a
               href="mailto:support@volumearc.com"
-              className="text-gray-900 underline"
+              className="font-medium text-sunrise-700 underline decoration-sunrise-300 underline-offset-4 hover:decoration-sunrise-500"
             >
               support@volumearc.com
             </a>
