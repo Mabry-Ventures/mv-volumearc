@@ -2,7 +2,13 @@
 
 ## Test architecture
 
-VolumeArc currently ships with **293 unit + integration tests**, expanded XCUITest journey coverage, and **4 performance-regression tests** (VOL-99).
+VolumeArc currently ships with **356 test functions** across unit + integration + XCUITest journey + performance suites (audited 2026-05-01). The headline shapes:
+
+- 80% line-coverage gate enforced on `VolumeArcCore` (VOL-52), targeted to rise to **90%** under [VOL-140](https://linear.app/mabry-ventures/issue/VOL-140) with new gates for `VolumeArcUI` (≥85%), `VolumeArcWatch` (≥85% — pending [VOL-138](https://linear.app/mabry-ventures/issue/VOL-138)), Widgets (≥75% — pending [VOL-139](https://linear.app/mabry-ventures/issue/VOL-139)).
+- 6-metric performance budget (cold launch, scroll fps, scroll hitches, memory, coach P50, coach P95) tag-gated in CI (VOL-99).
+- 20-fixture coach eval matrix with hermetic template-layer assertions in CI; response-layer harness manual today, nightly CI pending [VOL-147](https://linear.app/mabry-ventures/issue/VOL-147).
+- User-journey catalog at [`USER_JOURNEYS.md`](USER_JOURNEYS.md); current coverage **15%**, target **100%** under [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141).
+- Visual regression: **none today** — pending [VOL-135](https://linear.app/mabry-ventures/issue/VOL-135) (pointfreeco SnapshotTesting on VAUI + paywall + onboarding + coach bubble + Live Activity).
 
 ```
 Tests/VolumeArcAppTests/
@@ -104,12 +110,17 @@ Unit tests should:
 
 ## Coverage expectations
 
-| Layer | Coverage target | Enforced |
-|-------|-----------------|----------|
-| `VolumeArcCore` business logic | **80%+** | **Yes (VOL-52, CI gate)** |
-| `VolumeArcCore` data models | 60%+ | No (folded into the 80% module gate) |
-| Host app wiring | 40%+ (exercised by integration tests and UI smoke) | No |
-| UI views | 30%+ (via integration coverage and XCUITest smoke) | No |
+The 2026-05-01 audit established a project-level commitment to **90%+ coverage across all appropriate surfaces** (tracked in [VOL-140](https://linear.app/mabry-ventures/issue/VOL-140)). The current gate is 80% on `VolumeArcCore` only; the table below shows the in-flight target state.
+
+| Layer | Current | Target (post VOL-140) | Enforced |
+|-------|---------|------------------------|----------|
+| `VolumeArcCore` business logic | 80%+ | **90%+** | Yes (CI gate) |
+| `VolumeArcCore` data models | 60%+ | folded into 90% module gate | Yes (CI gate) |
+| `VolumeArcUI` design system + screens | (untracked) | **85%+** | Pending (VOL-140) |
+| `VolumeArcApp` host wiring | 40%+ | **75%+** | Pending (VOL-140) |
+| `VolumeArcWatch` (new test target) | 0% | **85%+** | Pending ([VOL-138](https://linear.app/mabry-ventures/issue/VOL-138)) |
+| `VolumeArcWidgets` + `WatchWidgets` | (integration only) | **75%+** | Pending ([VOL-139](https://linear.app/mabry-ventures/issue/VOL-139)) |
+| Subsystems with new fakes (HealthKit / CloudKit) | (integration only) | **90%+** on the subsystem | Pending ([VOL-136](https://linear.app/mabry-ventures/issue/VOL-136), [VOL-137](https://linear.app/mabry-ventures/issue/VOL-137)) |
 
 ### VolumeArcCore 80% line-coverage gate (VOL-52)
 
@@ -182,3 +193,22 @@ func testProgressionEngineAddsWeightWhenUpperRepBoundHit() { ... }
 ```
 
 Be specific. A test name should describe both the condition and the expected behavior.
+
+## User-journey catalog
+
+[`USER_JOURNEYS.md`](USER_JOURNEYS.md) is the canonical inventory of every distinct user-facing flow in VolumeArc. Each row maps Journey ID → pre-conditions → steps → success criteria → telemetry events → paired XCUITest method. When you add or change a journey:
+
+1. Update the journey row in `USER_JOURNEYS.md`.
+2. Update or add the paired XCUITest.
+3. The `scripts/check_journey_coverage.sh` CI gate (pending [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141)) parses the table and fails any PR introducing a `[ ]` row.
+
+Coverage target: **100%** of journeys covered by an XCUITest paired with telemetry assertions ([VOL-149](https://linear.app/mabry-ventures/issue/VOL-149) telemetry-as-UAT helper). Current coverage: ~15%.
+
+## Snapshot / visual regression
+
+**Pending** — [VOL-135](https://linear.app/mabry-ventures/issue/VOL-135) introduces pointfreeco SnapshotTesting on:
+- Every VAUI design-system component (`VAButton`, `VACard`, `VACoachBubble`, `VAToast`, metric displays, `VAReadinessHero`)
+- Critical screens: `OnboardingView`, `PaywallView`, `RootDashboardView` (each tab), `ActiveWorkoutLiveActivity` lock-screen + Dynamic Island
+- Variants per surface: light + dark × `.medium` + `.accessibility5` Dynamic Type × reduce-transparency on/off
+
+Snapshot artifacts live under `Tests/VolumeArcAppTests/Snapshots/__Snapshots__/`. CI failures from snapshot diffs block merge on the same gate as unit tests; recording new snapshots is a deliberate `--record` local run reviewed in PR.

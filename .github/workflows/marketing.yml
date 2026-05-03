@@ -1,0 +1,63 @@
+name: marketing
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'marketing/**'
+      - '.github/workflows/marketing.yml'
+  pull_request:
+    paths:
+      - 'marketing/**'
+      - '.github/workflows/marketing.yml'
+
+# Marketing site CI — separate from the iOS / watchOS pipeline so it can run on
+# GitHub-hosted ubuntu and stay fast for content-only changes. Vercel performs
+# the actual preview / production deploys via its GitHub App integration; this
+# workflow is the build / typecheck / lint gate that protects against red-build
+# Vercel deploys.
+#
+# Fork-safety: this workflow runs on `pull_request` (not `pull_request_target`)
+# so fork PRs run in their own write-restricted environment without secrets.
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build + lint + typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: marketing
+    env:
+      # Shadcnblocks key is only needed to *install* new blocks. Build does not
+      # require it. We surface the var to the runner anyway so a future build
+      # step that fetches blocks works without further config.
+      SHADCNBLOCKS_API_KEY: ${{ secrets.SHADCNBLOCKS_API_KEY }}
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: marketing/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        # `next build` runs the TypeScript compiler as part of the production
+        # build step, so a separate `tsc --noEmit` job would be redundant
+        # (and would fail on a fresh checkout because `next build` is what
+        # generates `next-env.d.ts`). Run typecheck locally via
+        # `npm run typecheck` once you've built once.
+        run: npm run build

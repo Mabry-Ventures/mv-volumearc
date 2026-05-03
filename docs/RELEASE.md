@@ -10,6 +10,7 @@
 - [ ] Release config validates: `./scripts/validate_release_config.sh`
 - [ ] Smoke test on physical device (iOS + watchOS)
 - [ ] Review `docs/FEATURES.md` for honest feature status
+- [ ] Marketing site (`marketing/`) builds clean and the live `volumearc.app/terms` + `/privacy` URLs that `App/LegalLinks.swift` references resolve to non-placeholder content (VOL-124)
 
 ## Versioning
 
@@ -39,6 +40,16 @@ Required CI secrets:
 - `DEVELOPMENT_TEAM` — Apple team ID (e.g., A886EMZZW6)
 - `APP_STORE_CONNECT_API_KEY_PATH` — path to the `.p8` key file on the runner
 - `VOLUMEARC_PAT` — personal access token (only needed if cross-repo checkout returns)
+
+### Marketing site
+
+The public marketing site (`marketing/` directory) deploys independently to Vercel on every push to `main` and previews on every PR. See [`MARKETING.md`](MARKETING.md) for the full architecture.
+
+The site hosts the legal pages that the iOS paywall links to via `App/LegalLinks.swift`:
+- `volumearc.app/terms`
+- `volumearc.app/privacy`
+
+Until those pages are live with legal-counsel-reviewed content (VOL-124), App Store submission is blocked under Guideline 3.1.2.
 
 ### Wait-for-processing behavior (VOL-96)
 
