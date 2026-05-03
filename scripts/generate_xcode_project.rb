@@ -337,6 +337,12 @@ add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   # logic against real `Event`/`Breadcrumb` instances. Guarded by
   # `#if canImport(Sentry)` inside the file.
   'VolumeArcSentryPIIScrubber.swift',
+  # VOL-129: same pattern as the scrubber — `VolumeArcSentryConfigurationTests`
+  # asserts the release-name format from `computeReleaseName(bundle:)`
+  # against synthetic bundles. The App target doesn't expose a Swift
+  # module that tests can `@testable import`, so the source is compiled
+  # directly into the test bundle. Guarded by `#if canImport(Sentry)`.
+  'VolumeArcSentryConfiguration.swift',
   'VolumeArcWidgetController.swift',
 ])
 
