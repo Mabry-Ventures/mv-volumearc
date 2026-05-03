@@ -53,7 +53,56 @@
   --color-gray-900: oklch(0.205 0 0);
   --color-gray-950: oklch(0.145 0 0);
 
-  --font-sans: var(--font-inter);
+  /* VolumeArc sunrise palette — derived from VolumeArcUI/DesignSystem/Tokens.swift VA.Colors.
+     Anchor: --color-sunrise-500 = primary brand (#F26B33, rgb 0.95/0.42/0.20).
+     End:    --color-coral-500 = sunriseC magenta-coral (#C74A6E, rgb 0.78/0.29/0.43).
+     Used as `bg-sunrise-500`, `text-sunrise-700`, `from-sunrise-400 to-coral-500` etc. */
+  --color-sunrise-50: oklch(0.974 0.027 60);
+  --color-sunrise-100: oklch(0.948 0.058 55);
+  --color-sunrise-200: oklch(0.892 0.116 50);
+  --color-sunrise-300: oklch(0.821 0.158 45);
+  --color-sunrise-400: oklch(0.738 0.182 38);
+  --color-sunrise-500: oklch(0.665 0.198 35); /* #F26B33 anchor */
+  --color-sunrise-600: oklch(0.588 0.197 33);
+  --color-sunrise-700: oklch(0.508 0.184 32); /* primaryDeep #D14F1C */
+  --color-sunrise-800: oklch(0.428 0.158 31);
+  --color-sunrise-900: oklch(0.358 0.124 30);
+  --color-sunrise-950: oklch(0.255 0.085 29);
+
+  --color-coral-50: oklch(0.974 0.022 5);
+  --color-coral-100: oklch(0.940 0.046 5);
+  --color-coral-200: oklch(0.872 0.094 5);
+  --color-coral-300: oklch(0.788 0.131 5);
+  --color-coral-400: oklch(0.690 0.158 5);
+  --color-coral-500: oklch(0.590 0.158 5); /* #C74A6E anchor */
+  --color-coral-600: oklch(0.510 0.142 5);
+  --color-coral-700: oklch(0.430 0.118 5);
+  --color-coral-800: oklch(0.350 0.092 5);
+  --color-coral-900: oklch(0.285 0.072 5);
+  --color-coral-950: oklch(0.200 0.052 5);
+
+  --color-peach-50: oklch(0.985 0.018 70);
+  --color-peach-100: oklch(0.970 0.038 65);
+  --color-peach-200: oklch(0.928 0.078 60);
+  --color-peach-300: oklch(0.872 0.118 55); /* #FFB37A sunriseA */
+  --color-peach-400: oklch(0.795 0.158 50);
+
+  /* Brand semantic aliases — match VA.Colors.primary / .secondary / .success / .warning / .error.
+     Use these in components so future palette tweaks are one-line. */
+  --color-brand: var(--color-sunrise-500);
+  --color-brand-deep: var(--color-sunrise-700);
+  --color-brand-soft: var(--color-sunrise-100);
+  --color-brand-muted: var(--color-sunrise-200);
+  --color-secondary: oklch(0.575 0.165 250);  /* VA secondary blue #3373D9 */
+  --color-success-brand: oklch(0.658 0.158 145); /* VA success green #33B266 */
+  --color-warning-brand: oklch(0.788 0.158 80); /* VA warning amber #F2B326 */
+
+  /* Font stack — leans into Apple's system fonts for the marketing audience.
+     SF Pro renders natively on Apple devices (matches the iOS app exactly).
+     Inter is the fallback for non-Apple platforms. */
+  --font-sans: -apple-system, BlinkMacSystemFont, var(--font-inter), 'SF Pro Text', 'Inter', system-ui, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', var(--font-inter), 'Inter', system-ui, sans-serif;
+  --font-rounded: ui-rounded, -apple-system, BlinkMacSystemFont, 'SF Pro Rounded', var(--font-inter), 'Inter', system-ui, sans-serif;
 
   --container-2xl: 40rem;
 
@@ -78,6 +127,76 @@
   @keyframes marquee {
     100% {
       transform: translateY(-50%);
+    }
+  }
+}
+
+/* VolumeArc utility primitives — mirror VA.Materials and VA.Gradients tokens
+   from VolumeArcUI/DesignSystem/Tokens.swift so the web feels like a native
+   continuation of the iOS surface vocabulary. */
+@layer utilities {
+  /* Sunrise hero gradient — matches VA.Gradients.sunriseHero (peach → orange → coral).
+     Used on hero accents, CTA backgrounds, and the icon callout. */
+  .bg-sunrise-gradient {
+    background-image: linear-gradient(
+      135deg,
+      var(--color-peach-300) 0%,
+      var(--color-sunrise-500) 50%,
+      var(--color-coral-500) 100%
+    );
+  }
+
+  /* Soft sunrise tint — VA.Colors accent card style, equivalent to VACard(.accent). */
+  .bg-sunrise-tint {
+    background-image: linear-gradient(
+      135deg,
+      color-mix(in oklch, var(--color-peach-300) 22%, transparent) 0%,
+      color-mix(in oklch, var(--color-sunrise-500) 12%, transparent) 50%,
+      color-mix(in oklch, var(--color-coral-500) 8%, transparent) 100%
+    );
+  }
+
+  /* Liquid Glass approximation — VA.Materials.glass.
+     Real iOS 26 Glass uses a system shader; on web we approximate with
+     backdrop-blur + a translucent white surface + thin ring stroke. */
+  .va-glass {
+    background-color: color-mix(in oklch, white 70%, transparent);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, white 50%, transparent),
+      0 1px 2px color-mix(in oklch, black 4%, transparent),
+      0 8px 24px color-mix(in oklch, black 6%, transparent);
+  }
+
+  .va-glass-dark {
+    background-color: color-mix(in oklch, oklch(0.205 0 0) 60%, transparent);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, white 8%, transparent),
+      0 1px 2px color-mix(in oklch, black 12%, transparent),
+      0 8px 24px color-mix(in oklch, black 24%, transparent);
+  }
+
+  /* Subtle inner highlight ring — used on featured pricing card and icon container. */
+  .ring-glass-light {
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklch, white 24%, transparent),
+      inset 0 0 0 1px color-mix(in oklch, white 14%, transparent);
+  }
+
+  /* Reduce-transparency fallback (parallels accessibilityReduceTransparency). */
+  @media (prefers-reduced-transparency: reduce) {
+    .va-glass {
+      background-color: white;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    .va-glass-dark {
+      background-color: oklch(0.205 0 0);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
     }
   }
 }
