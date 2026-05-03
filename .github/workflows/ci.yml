@@ -21,6 +21,17 @@ env:
 jobs:
   build-and-test:
     name: Build & Test
+    # VOL-132: fork-PR guard. The `mv-shared` self-hosted runner is a
+    # privileged macOS host (Apple Developer signing identity, Keychain,
+    # decoded SSH key for git operations, persistent DerivedData / SPM
+    # cache, prior-job artifacts). A fork PR carries arbitrary code from a
+    # contributor outside the upstream repo; allowing it to execute on
+    # `mv-shared` would let that code read or modify any of the above.
+    # This guard skips the job on PRs whose head repository differs from
+    # the upstream — push events (main + tags) and same-repo PRs run as
+    # normal. Fork contributors should ask a maintainer to push their
+    # branch into the upstream so CI can execute against trusted code.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, mv-shared]
     # VOL-88 / VOL-111 / VOL-112: self-hosted macOS runners may start
     # with no warm DerivedData / SPM cache, so a cold first run can spend
@@ -370,7 +381,13 @@ jobs:
     # `docs/performance-budgets.json`.
     name: Performance budgets (VOL-99)
     needs: build-and-test
-    if: startsWith(github.ref, 'refs/tags/v')
+    # VOL-132 (defense in depth): the tag-only filter already prevents
+    # fork PRs from triggering this job (forks can't push tags upstream),
+    # but combining with the explicit fork guard keeps the same security
+    # posture if the tag filter is ever loosened.
+    if: |
+      startsWith(github.ref, 'refs/tags/v') &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: [self-hosted, mv-shared]
     timeout-minutes: 45
     permissions:
@@ -424,7 +441,13 @@ jobs:
   deploy-testflight:
     name: Deploy to TestFlight
     needs: [build-and-test, perf-regression]
-    if: startsWith(github.ref, 'refs/tags/v')
+    # VOL-132 (defense in depth): same rationale as perf-regression. This
+    # job consumes `DEVELOPMENT_TEAM` + `APP_STORE_CONNECT_API_KEY_PATH`
+    # secrets — the fork guard is belt-and-suspenders against a future
+    # loosening of the tag-only filter.
+    if: |
+      startsWith(github.ref, 'refs/tags/v') &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: [self-hosted, mv-shared]
     timeout-minutes: 45
 
