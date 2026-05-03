@@ -68,6 +68,31 @@ Practical consequences:
 7. AI Review Gate runs automatically: CodeRabbit Pro (primary reviewer) and Codex Code Review (secondary reviewer) are both requested by the `Request AI Reviews` workflow step. Both must post a review signal on the current head SHA within their wait window or the gate fails.
 8. Merge via squash when all checks pass
 
+### Required status checks (enforced by repository ruleset)
+
+The `Require AI Code Reviews` ruleset on `main` requires the following checks to pass before merge — there is no "advisory" mode:
+
+- `Build & Test` — full iOS/watchOS pipeline on the `mv-shared` self-hosted runner
+- `CodeRabbit Code Review` — wait-for-signal job (20-minute window) in `ai-review-gate.yml`
+- `Codex Code Review` — wait-for-signal job (15-minute window) in `ai-review-gate.yml`
+
+`strict_required_status_checks_policy: true` is set, meaning the PR branch must be up-to-date with `main` before merge. Stale PRs need a rebase or merge from main to retrigger CI.
+
+### Bypass / emergency hotfix
+
+The ruleset's `bypass_actors` list grants Organization Admins a `pull_request`-scoped bypass — i.e. an org admin can merge a PR without all required checks passing, but must still go through a pull request (no direct push to `main`). This exists for genuine emergencies only:
+
+- A SEV1 production incident requiring an immediate hotfix
+- A CI infrastructure outage that's blocking valid PRs
+
+Every bypass should be documented in `docs/incident-log.md` with the reason and a follow-up ticket to fix whatever forced the bypass.
+
+### Forked PRs
+
+The `mv-shared` self-hosted CI runner is privileged (Apple Developer signing identity, Keychain, decoded SSH key, persistent DerivedData) so PRs from external forks **do not run CI** (VOL-132). The `Build & Test`, `Performance budgets`, and `Deploy to TestFlight` jobs all carry an `if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository` guard that skips them on fork PRs.
+
+External contributors should ask a maintainer to push their branch directly into the upstream repo — that branch then triggers CI normally. Until then the AI review gate will time out (no `Build & Test` signal), which is the correct behavior.
+
 ## Code style
 
 - Follow the existing patterns in the codebase
