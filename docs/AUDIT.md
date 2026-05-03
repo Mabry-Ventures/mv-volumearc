@@ -33,7 +33,7 @@
 | # | Finding | Ticket |
 |---|---|---|
 | 3 | `RELEASE.md` claims dSYM upload to Sentry, but `Fastfile` does not do it | [VOL-133](https://linear.app/mabry-ventures/issue/VOL-133) |
-| 4 | Two-bot AI review gate is advisory only (not blocking merge) | [VOL-134](https://linear.app/mabry-ventures/issue/VOL-134) |
+| 4 | ~~Two-bot AI review gate is advisory only (not blocking merge)~~ — **audit error.** Verified 2026-05-03 that the `Require AI Code Reviews` ruleset (`enforcement: active`) requires `Codex Code Review` + `CodeRabbit Code Review` + `Build & Test` as merge-blocking status checks. The original audit relied on the absence of branch protection rules and missed that GitHub rulesets supersede branch protection. Bypass is `OrganizationAdmin` `pull_request`-scoped only. [VOL-134](https://linear.app/mabry-ventures/issue/VOL-134) closed as documentation update — see [`CONTRIBUTING.md`](CONTRIBUTING.md#required-status-checks-enforced-by-repository-ruleset). |
 | 5 | No CodeQL / Trufflehog / Gitleaks; vulnerabilities + secret leaks caught only by Dependabot or manual review | [VOL-143](https://linear.app/mabry-ventures/issue/VOL-143) |
 | 6 | Zero snapshot / visual regression coverage; Liquid Glass + paywall + onboarding + coach bubble can regress invisibly | [VOL-135](https://linear.app/mabry-ventures/issue/VOL-135) |
 | 7 | No HealthKit unit tests with fake `HKHealthStore`; session lifecycle untested in isolation | [VOL-136](https://linear.app/mabry-ventures/issue/VOL-136) |
