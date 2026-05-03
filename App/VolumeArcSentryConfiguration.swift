@@ -107,14 +107,30 @@ enum VolumeArcSentryConfiguration {
 
     /// Build a release identifier matching Sentry's recommended convention
     /// `<bundleId>@<MARKETING_VERSION>+<CFBundleVersion>` (e.g.
-    /// `com.mabryventures.VolumeArc@1.0.2+12345`). Internal so the
-    /// `VolumeArcSentryConfigurationTests` can assert the format without
-    /// spinning up a real `SentrySDK`.
+    /// `com.mabryventures.VolumeArc@1.0.2+12345`).
+    ///
+    /// Two overloads: production calls the `bundle:` form (defaulting to
+    /// `Bundle.main`); `VolumeArcSentryConfigurationTests` calls the
+    /// 3-arg pure form directly so it doesn't have to subclass `Bundle`
+    /// (which trips Foundation's `init(path:)` designated-initializer
+    /// requirement).
     static func computeReleaseName(bundle: Bundle = .main) -> String {
-        let bundleID = bundle.bundleIdentifier ?? "com.mabryventures.VolumeArc"
-        let marketing = (bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "0.0.0"
-        let build = (bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? "0"
-        return "\(bundleID)@\(marketing)+\(build)"
+        computeReleaseName(
+            bundleID: bundle.bundleIdentifier,
+            marketingVersion: bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+            buildNumber: bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+        )
+    }
+
+    static func computeReleaseName(
+        bundleID: String?,
+        marketingVersion: String?,
+        buildNumber: String?
+    ) -> String {
+        let resolvedBundleID = bundleID ?? "com.mabryventures.VolumeArc"
+        let resolvedMarketing = marketingVersion ?? "0.0.0"
+        let resolvedBuild = buildNumber ?? "0"
+        return "\(resolvedBundleID)@\(resolvedMarketing)+\(resolvedBuild)"
     }
 }
 
