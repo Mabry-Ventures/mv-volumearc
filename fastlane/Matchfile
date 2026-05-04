@@ -1,0 +1,29 @@
+# VOL-126: fastlane match config for App Store distribution certificates
+# and provisioning profiles. Storage is a private git repo (the URL +
+# branch are passed at invocation time via env vars / Fastfile params,
+# not pinned here, so the same Matchfile works for any Mabry Ventures
+# project pulling from the org-wide cert repo).
+#
+# Local dev: run `bundle exec fastlane match appstore --git_url <url>`
+# once to bootstrap; subsequent runs auto-fetch.
+#
+# CI: the Fastfile passes `git_url` from MATCH_GIT_URL (org secret),
+# `git_branch` from MATCH_GIT_BRANCH (defaults to "main"), and the
+# decryption passphrase from MATCH_PASSWORD (org secret). The runner's
+# SSH agent must have a deploy key with read access to the cert repo.
+
+storage_mode("git")
+type("appstore")
+
+# All bundle IDs in the VolumeArc app — match generates one App Store
+# provisioning profile per ID. If you add a new app extension, append
+# its bundle ID here so the next `fastlane match appstore` regenerates
+# the profile set.
+app_identifier([
+  "com.mabryventures.VolumeArc",
+  "com.mabryventures.VolumeArc.watchkitapp",
+  "com.mabryventures.VolumeArc.widgets",
+  "com.mabryventures.VolumeArc.watchkitapp.widgets"
+])
+
+team_id(ENV.fetch("DEVELOPMENT_TEAM", ""))

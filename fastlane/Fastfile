@@ -39,21 +39,49 @@ platform :ios do
       xcodeproj: "VolumeArcApple.xcodeproj"
     )
 
+    # VOL-126: sync App Store distribution cert + profiles from the
+    # org-wide match cert repo into the runner's login keychain
+    # before archive. Without this, xcodebuild can't find a signing
+    # cert and bails with "No 'iOS Development' signing certificate
+    # matching team ID … with a private key was found".
+    #
+    # Defensive: if the org secrets aren't set, skip with a UI warning
+    # so local dev / pre-bootstrap CI still works (build will fail
+    # later with a clearer "no profile" message instead of a confusing
+    # match error). Once MATCH_PASSWORD + MATCH_GIT_URL are in place
+    # CI auto-fetches.
+    if ENV["MATCH_PASSWORD"].to_s.empty? || ENV["MATCH_GIT_URL"].to_s.empty?
+      UI.important(
+        "MATCH_PASSWORD or MATCH_GIT_URL unset — skipping fastlane match. " \
+          "xcodebuild will fail at archive unless certs/profiles are " \
+          "manually installed on this machine."
+      )
+    else
+      match(
+        type: "appstore",
+        git_url: ENV.fetch("MATCH_GIT_URL"),
+        git_branch: ENV.fetch("MATCH_GIT_BRANCH", "main"),
+        api_key_path: ENV["APP_STORE_CONNECT_API_KEY_PATH"],
+        readonly: ENV.fetch("CI", "false") == "true",  # CI never modifies; local dev can regen
+        keychain_name: "login.keychain"
+      )
+    end
+
     # VOL-126: the project generator sets `CODE_SIGNING_ALLOWED = NO`
-    # globally so unit/UI tests can build without a signing cert
-    # available. The beta lane needs the inverse — flip it back on for
-    # the archive/export, and pass `team_id:` so the export step
-    # records a team in the .xcarchive's Info.plist (otherwise
-    # `xcodebuild -exportArchive` fails with "No Team Found in Archive"
-    # before sentry-cli or upload_to_testflight even runs). The
-    # `DEVELOPMENT_TEAM` env var comes from the GitHub Actions secret
-    # of the same name in the deploy-testflight job.
+    # globally so unit/UI tests can build without a signing cert. The
+    # beta lane needs the inverse — flip it back on for the archive,
+    # and pass `export_team_id:` so the .xcarchive's Info.plist records
+    # a team. `api_key_path:` enables `-allowProvisioningUpdates` so
+    # gym can refresh / fetch any missing App Store profiles via ASC
+    # at archive time (match handles the cert; this handles the
+    # profile-side edge cases).
     build_app(
       project: "VolumeArcApple.xcodeproj",
       scheme: "VolumeArcApp",
       configuration: "Release",
       export_method: "app-store",
       export_team_id: ENV.fetch("DEVELOPMENT_TEAM"),
+      api_key_path: ENV["APP_STORE_CONNECT_API_KEY_PATH"],
       output_directory: "build/export",
       output_name: "VolumeArc.ipa",
       include_symbols: true,

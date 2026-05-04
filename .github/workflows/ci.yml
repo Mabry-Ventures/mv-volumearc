@@ -505,6 +505,17 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: mabry-ventures-llc
           SENTRY_PROJECT: volumearc-ios
+          # VOL-126: fastlane match credentials. Stored at the org level
+          # so all Mabry Ventures iOS projects share the same cert pool.
+          # The beta lane skips the match step (with a UI warning) when
+          # MATCH_PASSWORD or MATCH_GIT_URL is empty, so local archive
+          # builds without these secrets still progress to the next step
+          # and fail with a clearer "no profile" message.
+          # MATCH_GIT_BRANCH is optional; defaults to "main" inside the
+          # Fastfile when unset.
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_GIT_BRANCH: ${{ secrets.MATCH_GIT_BRANCH }}
         run: bundle exec fastlane ios beta
 
       - name: Upload Sentry dSYM manifest
