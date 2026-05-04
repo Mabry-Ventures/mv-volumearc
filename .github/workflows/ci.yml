@@ -32,7 +32,7 @@ jobs:
     # normal. Fork contributors should ask a maintainer to push their
     # branch into the upstream so CI can execute against trusted code.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, mv-shared]
+    runs-on: [self-hosted, mv-volumearc-runner]
     # VOL-88 / VOL-111 / VOL-112: self-hosted macOS runners may start
     # with no warm DerivedData / SPM cache, so a cold first run can spend
     # a long time compiling Sentry's Swift dependencies and all simulator
@@ -388,7 +388,7 @@ jobs:
     if: |
       startsWith(github.ref, 'refs/tags/v') &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: [self-hosted, mv-shared]
+    runs-on: [self-hosted, mv-volumearc-runner]
     timeout-minutes: 45
     permissions:
       contents: read
@@ -448,7 +448,7 @@ jobs:
     if: |
       startsWith(github.ref, 'refs/tags/v') &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: [self-hosted, mv-shared]
+    runs-on: [self-hosted, mv-volumearc-runner]
     timeout-minutes: 45
 
     steps:
