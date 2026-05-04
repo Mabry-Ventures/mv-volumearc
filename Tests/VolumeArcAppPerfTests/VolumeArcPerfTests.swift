@@ -164,6 +164,17 @@ final class VolumeArcPerfTests: XCTestCase {
 
         let options = XCTMeasureOptions()
         options.iterationCount = 5
+        // VOL-126 / first tag-deploy smoke: opt out of XCTest's autoStop
+        // mode so we can call `stopMeasuring()` + `startMeasuring()`
+        // inside the block. Without `[.manuallyStart, .manuallyStop]`
+        // the framework manages the measured window automatically and
+        // the `stopMeasuring()` call below throws
+        // `NSInternalInconsistencyException: -stopMeasuring shouldn't be
+        // called in autoStop mode`. The pattern (stop → setup → start →
+        // measured action) is intentional: we want the clock to span
+        // only `sendButton.tap()` → `firstResponse.waitForExistence()`,
+        // not the composer setup taps that vary per iteration.
+        options.invocationOptions = [.manuallyStart, .manuallyStop]
 
         measure(metrics: [XCTClockMetric()], options: options) {
             self.stopMeasuring()
