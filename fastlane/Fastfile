@@ -53,7 +53,7 @@ platform :ios do
       scheme: "VolumeArcApp",
       configuration: "Release",
       export_method: "app-store",
-      team_id: ENV.fetch("DEVELOPMENT_TEAM"),
+      export_team_id: ENV.fetch("DEVELOPMENT_TEAM"),
       output_directory: "build/export",
       output_name: "VolumeArc.ipa",
       include_symbols: true,
