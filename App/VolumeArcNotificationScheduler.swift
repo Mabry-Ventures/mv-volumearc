@@ -50,11 +50,18 @@ struct VolumeArcNotificationScheduler {
     }
 
     func cancelAllWorkoutReminders() {
+        // Capture `center` locally so the @Sendable completion closure
+        // doesn't pull in `self` (the struct value) — `self.center` would
+        // produce a Swift 6 strict-concurrency warning about capturing a
+        // non-Sendable type. `UNUserNotificationCenter.current()` returns
+        // the same global singleton each call, so the captured reference
+        // is identical to `self.center`.
+        let center = self.center
         center.getPendingNotificationRequests { requests in
             let reminderIDs = requests
                 .filter { $0.identifier.hasPrefix("workout-reminder-") }
                 .map(\.identifier)
-            self.center.removePendingNotificationRequests(withIdentifiers: reminderIDs)
+            center.removePendingNotificationRequests(withIdentifiers: reminderIDs)
         }
     }
 
