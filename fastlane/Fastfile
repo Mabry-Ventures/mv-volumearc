@@ -39,15 +39,26 @@ platform :ios do
       xcodeproj: "VolumeArcApple.xcodeproj"
     )
 
+    # VOL-126: the project generator sets `CODE_SIGNING_ALLOWED = NO`
+    # globally so unit/UI tests can build without a signing cert
+    # available. The beta lane needs the inverse — flip it back on for
+    # the archive/export, and pass `team_id:` so the export step
+    # records a team in the .xcarchive's Info.plist (otherwise
+    # `xcodebuild -exportArchive` fails with "No Team Found in Archive"
+    # before sentry-cli or upload_to_testflight even runs). The
+    # `DEVELOPMENT_TEAM` env var comes from the GitHub Actions secret
+    # of the same name in the deploy-testflight job.
     build_app(
       project: "VolumeArcApple.xcodeproj",
       scheme: "VolumeArcApp",
       configuration: "Release",
       export_method: "app-store",
+      team_id: ENV.fetch("DEVELOPMENT_TEAM"),
       output_directory: "build/export",
       output_name: "VolumeArc.ipa",
       include_symbols: true,
-      include_bitcode: false
+      include_bitcode: false,
+      xcargs: "CODE_SIGNING_ALLOWED=YES"
     )
 
     # VOL-92: validate signed entitlements on the archived bundle before
