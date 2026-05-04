@@ -17,6 +17,18 @@ env:
   # base tool locations here; prepare_ruby_toolchain.sh appends Ruby and
   # gem bins dynamically via GITHUB_PATH after detecting the runner image.
   PATH: /opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+  # VOL-126: fastlane on Ruby 4.x crashes with
+  # `String#encode: "Cr" on UTF-16 (Encoding::InvalidByteSequenceError)`
+  # when xcodebuild output contains non-ASCII bytes (Apple's © branding,
+  # accented marketing strings, etc.) and the runner's locale isn't set
+  # to UTF-8. The deploy-testflight job hits this on `xcodebuild
+  # -showBuildSettings` inside `Gym::DetectValues.detect_platform`.
+  # Pinning LANG/LC_ALL to en_US.UTF-8 makes Ruby and fastlane consistently
+  # treat output as UTF-8 instead of falling back to ASCII / mis-detecting
+  # as UTF-16. Affects every job since the env block is workflow-wide; no
+  # downside on macOS runners (en_US.UTF-8 is always present).
+  LANG: en_US.UTF-8
+  LC_ALL: en_US.UTF-8
 
 jobs:
   build-and-test:
