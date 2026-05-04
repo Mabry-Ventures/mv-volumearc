@@ -20,30 +20,77 @@
 
 ## TestFlight release
 
-Automated via Fastlane on tag push.
+**As of 2026-05-04 (VOL-126), TestFlight deploys are owned by Xcode Cloud.** Apple-managed signing eliminates the cert/profile management overhead that blocked the earlier self-hosted Fastlane path. GitHub Actions still owns the substantive validation gates (build, tests, perf-regression, lint) — Xcode Cloud only owns archive + sign + upload.
 
-1. Merge all changes to `main`
-2. Tag the release:
+### Tag → TestFlight flow
+
+1. Merge all changes to `main` (GitHub Actions runs the full validation suite on every push).
+2. Bump `VERSION` if needed.
+3. Tag the release:
    ```bash
    git tag v1.2.3
    git push --tags
    ```
-3. CI automatically runs `fastlane ios beta` which:
-   - Regenerates the Xcode project with `BUILD_NUMBER` set
-   - Archives with `CODE_SIGNING_ALLOWED=YES`
-   - Exports to `.ipa`
-   - Validates signed entitlements against `App/VolumeArc.Release.entitlements` (VOL-92)
-   - Uploads dSYMs to Sentry via `sentry-cli debug-files upload --include-sources --wait` (VOL-133) — fail-loud, with the upload manifest captured as a `sentry-dsym-manifest-<sha>` CI artifact (30-day retention)
-   - Uploads to TestFlight via App Store Connect API
-   - **Waits for App Store Connect processing** (up to 30 min, see below)
+4. **GitHub Actions** runs `Build & Test` + `Performance budgets (VOL-99)` against the tag commit. These must pass.
+5. **Xcode Cloud workflow** (configured per [Xcode Cloud setup](#xcode-cloud-setup) below) triggers in parallel on the tag push, archives the app with Apple-managed signing, and uploads to TestFlight.
+6. After archive, `ci_scripts/ci_post_xcodebuild.sh` runs `sentry-cli debug-files upload --include-sources --wait` against the archive's `dSYMs/` (VOL-133). Apple's auto-symbolication for App Store crashes still happens in parallel; this provides the same data to Sentry so our own crash reports symbolicate.
+7. **TestFlight processing** (5-15 min usually). Watch in App Store Connect.
+8. dSYMs visible in Sentry under https://mabry-ventures-llc.sentry.io/settings/projects/volumearc-ios/debug-symbols/ tagged with release `com.mabryventures.VolumeArc@<version>+<build>`.
 
-Required CI secrets:
-- `DEVELOPMENT_TEAM` — Apple team ID (e.g., A886EMZZW6)
-- `APP_STORE_CONNECT_API_KEY_PATH` — path to the `.p8` key file on the runner
-- `SENTRY_AUTH_TOKEN` — Sentry user auth token with `project:write` on `mabry-ventures-llc/volumearc-ios`. Created at [https://sentry.io/settings/account/api/auth-tokens/](https://sentry.io/settings/account/api/auth-tokens/). Recommended rotation: every 90 days. The Fastlane lane skips the dSYM upload (with a `UI.important` warning) when this token is unset, so local archive runs don't fail without it.
+### Xcode Cloud setup
+
+One-time setup, done in App Store Connect's web UI (cannot be done via CLI / API as of 2026-05).
+
+1. https://appstoreconnect.apple.com → Apps → VolumeArc → Xcode Cloud
+2. Click "Get Started" or "Create Workflow".
+3. **Workflow name**: `Tag → TestFlight`
+4. **Project**: `VolumeArcApple.xcodeproj` (the generated project at the repo root — Xcode Cloud needs this checked into git, which it is via `scripts/generate_xcode_project.rb`'s pbxproj output)
+5. **Scheme**: `VolumeArcApp`
+6. **Branch / Tag triggers**:
+   - Add a **Tag Changes** trigger
+   - Pattern: `v*` (matches `v1.0.2`, `v1.0.2-rc1`, etc.)
+7. **Actions**: add an **Archive** action
+   - Configuration: `Release`
+   - Distribution: **TestFlight (Internal Testing Only)** initially; once we trust the pipeline, optionally add an external test group.
+8. **Environment variables** (settings cog → Environment):
+   - `SENTRY_AUTH_TOKEN` — mark as **secret**. Same token as the GitHub `SENTRY_AUTH_TOKEN` secret (Sentry user token with `project:write` on `mabry-ventures-llc/volumearc-ios`).
+   - `SENTRY_ORG` — `mabry-ventures-llc` (optional; script defaults to this)
+   - `SENTRY_PROJECT` — `volumearc-ios` (optional; script defaults to this)
+9. **Post-Actions**: leave empty — the dSYM upload runs from `ci_scripts/ci_post_xcodebuild.sh` which Xcode Cloud invokes automatically after each archive.
+10. **Test grouping** (optional): add a "Test" action with the `VolumeArcAppTests` scheme if you want Xcode Cloud to run unit tests too. Not required since GitHub Actions already runs them.
+
+After setup, push a tag and verify:
+- The Xcode Cloud workflow appears in App Store Connect within ~30s of the tag push.
+- Build completes (typically 25-40 min on hosted Macs).
+- TestFlight build is visible.
+- Sentry's debug-symbols page shows dSYMs for the build.
+
+### Local archive fallback
+
+`fastlane ios beta` still works for local archive — useful for hotfixes or for pushing a build before Xcode Cloud picks up the tag. Requires:
+- A local Apple Developer login in Xcode (Apple Distribution cert in keychain)
+- The provisioning profile installed in `~/Library/MobileDevice/Provisioning Profiles/`
+- `SENTRY_AUTH_TOKEN` env var set if you want dSYMs uploaded
+- `DEVELOPMENT_TEAM` env var set
+- `APP_STORE_CONNECT_API_KEY_PATH` env var pointing to a `.p8` key file (for upload_to_testflight)
+
+```bash
+export SENTRY_AUTH_TOKEN=<token>
+export DEVELOPMENT_TEAM=E896WB332K
+export APP_STORE_CONNECT_API_KEY_PATH=~/.appstoreconnect/private_keys/AuthKey_XXXXXXXXXX.p8
+bundle exec fastlane ios beta
+```
+
+Local archive uses your keychain certs directly; no fastlane match infrastructure required.
+
+### Required GitHub secrets (for the validation gates)
+
+- `SENTRY_AUTH_TOKEN` — for the Sentry SDK init in dev/staging builds (separate concern from dSYM upload)
 - `VOLUMEARC_PAT` — personal access token (only needed if cross-repo checkout returns)
+- `VOLUMEARC_NATIVE_DEPLOY_KEY` — SSH key for the runner's git operations
 
-The deploy job sets `SENTRY_ORG=mabry-ventures-llc` and `SENTRY_PROJECT=volumearc-ios` as env vars in `ci.yml`. If the org or project slug ever changes, update both `ci.yml` AND the `sentry_org`/`sentry_project` defaults in `fastlane/Fastfile`.
+Secrets that were previously required for the old GitHub Actions deploy path but are no longer used by CI (kept in case local devs use them or we add another integration):
+- `DEVELOPMENT_TEAM`, `APP_STORE_CONNECT_API_KEY_PATH`
 
 ### Marketing site
 
