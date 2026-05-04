@@ -20,12 +20,19 @@ platform :ios do
     )
   end
 
-  desc "Build and upload to TestFlight"
-  # Waits for App Store Connect processing (up to 30 minutes) so tag builds
-  # fail loudly when processing is rejected instead of silently succeeding
-  # with a rejected upload. Emits `build_number=<N>` to GITHUB_OUTPUT (when
-  # running under GitHub Actions) so downstream jobs can reference the
-  # processed TestFlight build number.
+  desc "Build and upload to TestFlight (local archive fallback; CI uses Xcode Cloud)"
+  # VOL-126: as of 2026-05-04, CI tag deploys go through Xcode Cloud
+  # (Apple-managed signing) — see `ci_scripts/ci_post_xcodebuild.sh`
+  # and `docs/RELEASE.md` for the canonical path. This lane is kept
+  # for local archive fallback: a developer with an admin Apple
+  # Developer login + signing cert in their keychain can run
+  # `bundle exec fastlane ios beta` to archive + sign + upload from
+  # their Mac. It still emits `build_number=<N>` to GITHUB_OUTPUT
+  # when invoked from a GitHub Actions context.
+  #
+  # Waits for App Store Connect processing (up to 30 minutes) so tag
+  # builds fail loudly when processing is rejected instead of silently
+  # succeeding with a rejected upload.
   lane :beta do
     version = File.read("../VERSION").strip
     build_number = sh("git rev-list --count HEAD").strip

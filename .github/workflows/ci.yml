@@ -450,73 +450,17 @@ jobs:
           path: .build/perf-results.xcresult
           retention-days: 14
 
-  deploy-testflight:
-    name: Deploy to TestFlight
-    needs: [build-and-test, perf-regression]
-    # VOL-132 (defense in depth): same rationale as perf-regression. This
-    # job consumes `DEVELOPMENT_TEAM` + `APP_STORE_CONNECT_API_KEY_PATH`
-    # secrets — the fork guard is belt-and-suspenders against a future
-    # loosening of the tag-only filter.
-    if: |
-      startsWith(github.ref, 'refs/tags/v') &&
-      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: [self-hosted, mv-volumearc-runner]
-    timeout-minutes: 45
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Prepare Ruby toolchain
-        run: bash ./.github/scripts/prepare_ruby_toolchain.sh bundler xcodeproj
-        shell: bash
-
-      - name: Install dependencies
-        run: bundle install
-
-      - name: Install sentry-cli
-        # VOL-133: required by the `beta` Fastlane lane to upload dSYMs to
-        # Sentry so production crashes symbolicate. Idempotent — Homebrew
-        # is a no-op if sentry-cli is already installed by a prior run on
-        # the persistent self-hosted runner. The `getsentry/tools` tap is
-        # the canonical install path per Sentry docs.
-        run: |
-          set -euo pipefail
-          if command -v sentry-cli >/dev/null 2>&1; then
-            echo "sentry-cli already installed: $(sentry-cli --version)"
-          else
-            brew install getsentry/tools/sentry-cli
-            echo "sentry-cli installed: $(sentry-cli --version)"
-          fi
-        shell: bash
-
-      - name: Deploy to TestFlight
-        env:
-          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
-          APP_STORE_CONNECT_API_KEY_PATH: ${{ secrets.APP_STORE_CONNECT_API_KEY_PATH }}
-          # VOL-76 remainder: set so validate_release_config.sh hard-fails
-          # (not just warns) when VERSION matches the latest tag on a tag build.
-          CI_TAG_BUILD: '1'
-          # VOL-133: dSYM upload to Sentry. The Fastlane `beta` lane skips
-          # the upload (with a warning) when the token is unset, so local
-          # archive builds keep working without the secret.
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: mabry-ventures-llc
-          SENTRY_PROJECT: volumearc-ios
-        run: bundle exec fastlane ios beta
-
-      - name: Upload Sentry dSYM manifest
-        # VOL-133: the dSYM upload manifest captured by the beta lane is
-        # uploaded as a CI artifact so the dSYMs landed on Sentry are
-        # traceable per release. Optional — if the file is missing (e.g.,
-        # SENTRY_AUTH_TOKEN was unset) the step is a no-op.
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@v7
-        with:
-          name: sentry-dsym-manifest-${{ github.sha }}
-          path: build/sentry-dsym-manifest.json
-          retention-days: 30
-          if-no-files-found: ignore
+  # VOL-126: TestFlight deploy moved to Xcode Cloud.
+  # ─────────────────────────────────────────────────
+  # Apple-managed signing eliminates the cert/profile bootstrap that
+  # blocked the GitHub Actions deploy path (no fastlane match, no
+  # private cert repo, no SSH deploy keys, no MATCH_PASSWORD). The
+  # Xcode Cloud workflow lives in App Store Connect (configured per
+  # docs/RELEASE.md) and triggers on tag pushes matching `v*`.
+  # `ci_scripts/ci_post_xcodebuild.sh` runs after each archive and
+  # uploads dSYMs to Sentry — so VOL-133's dSYM contract is preserved.
+  #
+  # GitHub Actions still owns the substantive validation gates:
+  # build, unit + UI tests, perf-regression (VOL-99), SwiftLint, and
+  # release-config validation — every PR + every push to main runs
+  # the full suite on the dedicated mv-volumearc-runner.
