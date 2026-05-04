@@ -3,6 +3,16 @@ import UIKit
 
 /// Centralized haptic feedback for VolumeArc iOS.
 /// Every user action that deserves tactile confirmation should call through here.
+///
+/// Marked `@MainActor` because UIKit's feedback generators
+/// (`UIImpactFeedbackGenerator`, `UINotificationFeedbackGenerator`,
+/// `UISelectionFeedbackGenerator`) became MainActor-isolated as of iOS 17. Under
+/// Swift 6 strict concurrency, calling them from a non-MainActor context
+/// produces 25 "Call to main actor-isolated instance method ... in a synchronous
+/// nonisolated context" errors. Every caller is a SwiftUI view body or modifier
+/// closure (already @MainActor-isolated), so this annotation costs nothing at
+/// the call sites.
+@MainActor
 public enum VAHaptics {
     /// Workout session started — firm commitment signal.
     public static func sessionStart() {
