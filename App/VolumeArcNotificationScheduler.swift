@@ -1,6 +1,13 @@
 #if canImport(UserNotifications)
 import Foundation
-import UserNotifications
+// VOL-128: `@preconcurrency` treats Sendable-related diagnostics from
+// the UserNotifications module as warnings instead of errors. Apple's
+// `UNUserNotificationCenter` is not yet Sendable-audited (as of iOS 26.4),
+// so capturing it in a @Sendable completion closure trips
+// "non-Sendable type" diagnostics. The framework is documented as
+// thread-safe at runtime; once Apple ships proper Sendable conformance,
+// the @preconcurrency annotation can be dropped.
+@preconcurrency import UserNotifications
 import VolumeArcCore
 
 struct VolumeArcNotificationScheduler {
@@ -50,18 +57,12 @@ struct VolumeArcNotificationScheduler {
     }
 
     func cancelAllWorkoutReminders() {
-        // Capture `center` locally so the @Sendable completion closure
-        // doesn't pull in `self` (the struct value) — `self.center` would
-        // produce a Swift 6 strict-concurrency warning about capturing a
-        // non-Sendable type. `UNUserNotificationCenter.current()` returns
-        // the same global singleton each call, so the captured reference
-        // is identical to `self.center`.
-        let center = self.center
         center.getPendingNotificationRequests { requests in
             let reminderIDs = requests
                 .filter { $0.identifier.hasPrefix("workout-reminder-") }
                 .map(\.identifier)
-            center.removePendingNotificationRequests(withIdentifiers: reminderIDs)
+            UNUserNotificationCenter.current()
+                .removePendingNotificationRequests(withIdentifiers: reminderIDs)
         }
     }
 
