@@ -263,6 +263,14 @@ for budget in budgets_doc["metrics"]:
     if not budget_met and gate_passed:
         status = "warning"
 
+    # VOL-99 / VOL-126: a budget row with `softFailReason` is degraded
+    # to a warning when it would otherwise fail. Used to keep the gate
+    # functional while a known-broken test is debugged separately —
+    # avoid tying production-readiness to a metric we can't trust.
+    soft_fail_reason = budget.get("softFailReason")
+    if status == "failed" and soft_fail_reason:
+        status = "warning"
+
     if status == "failed":
         failed = True
 
@@ -273,6 +281,7 @@ for budget in budgets_doc["metrics"]:
         "budget": budget["budget"],
         "failThreshold": budget["failThreshold"],
         "units": budget.get("units"),
+        "softFailReason": soft_fail_reason,
     })
 
 # Human-readable output.
