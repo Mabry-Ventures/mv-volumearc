@@ -164,25 +164,28 @@ final class VolumeArcPerfTests: XCTestCase {
 
         let options = XCTMeasureOptions()
         options.iterationCount = 5
-        // VOL-126 / first tag-deploy smoke: opt out of XCTest's autoStop
-        // mode so we can call `stopMeasuring()` + `startMeasuring()`
-        // inside the block. Without `[.manuallyStart, .manuallyStop]`
-        // the framework manages the measured window automatically and
-        // the `stopMeasuring()` call below throws
-        // `NSInternalInconsistencyException: -stopMeasuring shouldn't be
-        // called in autoStop mode`. The pattern (stop → setup → start →
-        // measured action) is intentional: we want the clock to span
-        // only `sendButton.tap()` → `firstResponse.waitForExistence()`,
-        // not the composer setup taps that vary per iteration.
+        // VOL-126 / first tag-deploy smoke: opt into manual measurement
+        // control so each iteration begins with the clock OFF. The
+        // composer setup (find Today's "Ask Coach" quick action, tap to
+        // open Coach, type the prompt) varies per iteration with the
+        // simulator's animation/idle state — including those taps in
+        // the measured window would inflate the latency reading well
+        // beyond the actual ask→first-token cost.
+        //
+        // With `[.manuallyStart, .manuallyStop]` the iteration enters
+        // un-measured: do all setup, then call `startMeasuring()` to
+        // begin, do the measured action (`sendButton.tap()` →
+        // `firstResponse.waitForExistence()`), then `stopMeasuring()`.
+        // Calling `stopMeasuring()` before `startMeasuring()` throws
+        // `NSInternalInconsistencyException: -startMeasuring has to be
+        // called before -stopMeasuring`.
         options.invocationOptions = [.manuallyStart, .manuallyStop]
 
         measure(metrics: [XCTClockMetric()], options: options) {
-            self.stopMeasuring()
-            // Setup (taps, typing) happens outside the measured window
-            // so we isolate the ask→first-token portion. `XCTClockMetric`
-            // measures everything between `startMeasuring()` and the end
-            // of the block; re-entering the measured window with
-            // `startMeasuring()` mid-iteration is the standard pattern.
+            // Setup (taps, typing) happens BEFORE the first
+            // `startMeasuring()` so it stays out of the measured
+            // window. `XCTClockMetric` measures the wall-clock interval
+            // between `startMeasuring()` and `stopMeasuring()`.
             let composerInput = app.textFields["coach.input"].firstMatch
             let sendButton = app.buttons["coach.send"].firstMatch
             let askCoachQuickAction = app.buttons["today.askCoach"].firstMatch
@@ -209,6 +212,7 @@ final class VolumeArcPerfTests: XCTestCase {
                 .matching(identifier: "coach.firstResponse")
                 .firstMatch
             _ = firstResponse.waitForExistence(timeout: 10)
+            self.stopMeasuring()
         }
     }
 
