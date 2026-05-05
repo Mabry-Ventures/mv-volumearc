@@ -108,7 +108,7 @@ def configure_target(target, bundle_id: nil, extra: {})
     config.build_settings['GENERATE_INFOPLIST_FILE'] = 'YES'
     config.build_settings['MARKETING_VERSION'] = MARKETING_VERSION
     config.build_settings['CURRENT_PROJECT_VERSION'] = BUILD_NUMBER
-    config.build_settings['DEVELOPMENT_TEAM'] = ENV.fetch('DEVELOPMENT_TEAM', '')
+    config.build_settings['DEVELOPMENT_TEAM'] = ENV.fetch('DEVELOPMENT_TEAM', 'A886EMZZW6')
     config.build_settings['CODE_SIGN_STYLE'] = 'Automatic'
     config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
     config.build_settings['DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING'] = 'YES'

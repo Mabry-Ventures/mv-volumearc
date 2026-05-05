@@ -26,11 +26,21 @@ enum VolumeArcSentryConfiguration {
 
             // VOL-129: Performance + Profiling. tracesSampleRate stays at
             // 0.2 (20% of transactions become performance events).
-            // profilesSampleRate is multiplied with the trace rate, so
-            // 0.1 here = 2% of all transactions get a profile attached
-            // (10% of the 20% sampled).
+            //
+            // Profiling migrated from the deprecated `profilesSampleRate`
+            // (sentry-cocoa 8.36+) to `configureProfiling` with the new
+            // `SentryProfileOptions` API. `lifecycle = .trace` ties profile
+            // sampling to performance traces (same behavior as the old
+            // multiplicative `profilesSampleRate`). `sessionSampleRate = 0.1`
+            // means 10% of trace-eligible sessions get a profile, which when
+            // combined with `tracesSampleRate = 0.2` gives ~2% of all
+            // transactions a profile attached — the same effective rate as
+            // the previous `profilesSampleRate = 0.1`.
             options.tracesSampleRate = 0.2
-            options.profilesSampleRate = 0.1
+            options.configureProfiling = { profileOptions in
+                profileOptions.lifecycle = .trace
+                profileOptions.sessionSampleRate = 0.1
+            }
 
             // VOL-129: Session Replay for crashed sessions only.
             // sessionSampleRate=0 means we never replay normal sessions

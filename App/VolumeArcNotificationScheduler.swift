@@ -54,7 +54,8 @@ struct VolumeArcNotificationScheduler {
             let reminderIDs = requests
                 .filter { $0.identifier.hasPrefix("workout-reminder-") }
                 .map(\.identifier)
-            self.center.removePendingNotificationRequests(withIdentifiers: reminderIDs)
+            UNUserNotificationCenter.current()
+                .removePendingNotificationRequests(withIdentifiers: reminderIDs)
         }
     }
 

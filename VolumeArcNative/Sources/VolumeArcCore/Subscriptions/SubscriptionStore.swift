@@ -126,7 +126,13 @@ public final class StoreKitSubscriptionStore: ObservableObject, PremiumEntitleme
             for await result in Transaction.updates {
                 if case let .verified(transaction) = result {
                     await MainActor.run {
-                        self?.purchasedProductIDs.insert(transaction.productID)
+                        // `Set.insert` returns `(inserted: Bool, memberAfterInsert: Element)`,
+                        // which `MainActor.run` then forwards. We don't care
+                        // whether the insert was novel — the set is the
+                        // authority and reinserting the same productID is a
+                        // no-op. Discard explicitly to silence the
+                        // unused-result warning.
+                        _ = self?.purchasedProductIDs.insert(transaction.productID)
                     }
                     await transaction.finish()
                 }
