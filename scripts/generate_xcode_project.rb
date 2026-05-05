@@ -432,6 +432,9 @@ BASH
 resign_phase.input_paths = []
 resign_phase.output_paths = []
 resign_phase.run_only_for_deployment_postprocessing = '0'
+# Outputs aren't statically knowable (frameworks depend on SPM resolution),
+# so opt out of dependency analysis instead of declaring fake outputs.
+resign_phase.always_out_of_date = '1'
 app_target.build_phases << resign_phase
 
 project.root_object.attributes['TargetAttributes'] ||= {}
