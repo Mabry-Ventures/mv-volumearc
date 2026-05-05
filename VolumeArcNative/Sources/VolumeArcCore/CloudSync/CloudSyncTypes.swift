@@ -143,6 +143,59 @@ public enum CloudSyncError: Error, LocalizedError {
     }
 }
 
+// MARK: - Timestamp newtype (VOL-130)
+
+/// Wall-clock instant with explicit unit constructors so callers can't
+/// accidentally pass milliseconds where seconds are expected (or vice
+/// versa) when round-tripping through CloudKit, JSON, or legacy
+/// numeric encodings.
+///
+/// VOL-130: prior to this type, the auto-detect path in
+/// `CloudKitSyncTransport.pullChanges` (`raw > 100_000_000_000` ⇒ ms,
+/// else seconds) was the *only* defense against a foreign client
+/// writing a timestamp in the wrong unit. That heuristic is correct
+/// today but fragile — a unit-tagged newtype contains the hazard at
+/// construction time and makes encode/decode round-trips testable in
+/// isolation.
+///
+/// `Timestamp` is intentionally `Date`-bridged so existing public API
+/// surfaces (e.g. `CloudSyncRecord.modifiedAt`) don't have to change
+/// in lockstep. Callsites that handle raw numeric inputs (CKRecord
+/// custom fields, JSON payload decoding) should construct via
+/// `seconds(_:)` / `milliseconds(_:)` / `autoDetect(_:)` so the unit
+/// is stated rather than inferred.
+public struct Timestamp: Hashable, Sendable, Codable {
+    /// Magnitudes above this are interpreted as milliseconds-since-epoch
+    /// by `autoDetect(_:)`. Equivalent to ~5,138 AD if read as
+    /// seconds — well past any plausible user-visible date.
+    public static let secondsVsMillisecondsThreshold: Double = 100_000_000_000
+
+    public let date: Date
+
+    public init(date: Date) { self.date = date }
+
+    public static func seconds(_ value: Double) -> Timestamp {
+        Timestamp(date: Date(timeIntervalSince1970: value))
+    }
+
+    public static func milliseconds(_ value: Double) -> Timestamp {
+        Timestamp(date: Date(timeIntervalSince1970: value / 1_000))
+    }
+
+    /// Best-effort heuristic for foreign data of unknown unit. Use
+    /// `seconds(_:)` or `milliseconds(_:)` whenever the unit is known
+    /// — `autoDetect` is only correct as long as the heuristic
+    /// threshold remains in the future.
+    public static func autoDetect(_ raw: Double) -> Timestamp? {
+        guard raw.isFinite else { return nil }
+        let seconds = abs(raw) > secondsVsMillisecondsThreshold ? raw / 1_000 : raw
+        return Timestamp(date: Date(timeIntervalSince1970: seconds))
+    }
+
+    public var secondsSinceEpoch: Double { date.timeIntervalSince1970 }
+    public var millisecondsSinceEpoch: Double { date.timeIntervalSince1970 * 1_000 }
+}
+
 /// Persists sync cursor/token state to a file on disk so sync can resume across launches.
 public struct FileSyncStateStore: Sendable {
     public let url: URL
