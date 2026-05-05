@@ -81,7 +81,6 @@ final class MocksUsageSmokeTests: XCTestCase {
         }
     }
 
-
     // MARK: - Health store doubles
 
     func testDenyingHealthStoreReturnsFalseAndThrowsOnSessions() async {
