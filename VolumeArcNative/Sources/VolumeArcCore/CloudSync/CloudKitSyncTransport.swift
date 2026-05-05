@@ -25,9 +25,14 @@ public final class CloudKitSyncTransport: CloudSyncTransport, @unchecked Sendabl
 
     public func pushRecords(_ records: [CloudSyncRecord]) async throws {
         guard !records.isEmpty else { return }
-
+        try await checkAccountStatus()
         try await ensureZoneExists()
+        try await withZoneRecovery {
+            try await self.performPush(records)
+        }
+    }
 
+    private func performPush(_ records: [CloudSyncRecord]) async throws {
         let ckRecords = records.map { record -> CKRecord in
             let id = CKRecord.ID(recordName: record.identifier, zoneID: zoneID)
             let ck = CKRecord(recordType: record.kind.rawValue, recordID: id)
@@ -53,6 +58,14 @@ public final class CloudKitSyncTransport: CloudSyncTransport, @unchecked Sendabl
         }
     }
 
+    public func pullChanges(since cursor: String?) async throws -> CloudSyncPullResult {
+        try await checkAccountStatus()
+        try await ensureZoneExists()
+        return try await withZoneRecovery {
+            try await self.performPull(since: cursor)
+        }
+    }
+
     // VOL-87: this function is a CloudKit closure-driven operation handler
     // that depends on `changedRecords`, `deletedRecordIDs`, `nextCursor`,
     // and `legacySynthesisSkips` as shared mutable state. Extracting its
@@ -60,9 +73,7 @@ public final class CloudKitSyncTransport: CloudSyncTransport, @unchecked Sendabl
     // an actor, which would obscure the VOL-67 fixups without removing
     // any real complexity. The body length is documented here.
     // swiftlint:disable:next function_body_length
-    public func pullChanges(since cursor: String?) async throws -> CloudSyncPullResult {
-        try await ensureZoneExists()
-
+    private func performPull(since cursor: String?) async throws -> CloudSyncPullResult {
         var changedRecords: [CloudSyncRecord] = []
         var deletedRecordIDs: [String] = []
         var nextCursor: String? = cursor
@@ -300,6 +311,66 @@ public final class CloudKitSyncTransport: CloudSyncTransport, @unchecked Sendabl
             deletedRecordIDs: deletedRecordIDs,
             nextCursor: nextCursor
         )
+    }
+
+    /// Run a CloudKit operation with one retry on `.zoneNotFound` /
+    /// `.userDeletedZone`. The zone can disappear between
+    /// `ensureZoneExists()` and the actual operation if the user reset
+    /// iCloud, or simply because the bootstrap call raced ahead. When
+    /// that happens, recreate the zone and replay the operation once
+    /// — uniform retry would loop forever (the same call keeps
+    /// failing) and one re-bootstrap is enough.
+    private func withZoneRecovery<T>(
+        _ body: @Sendable () async throws -> T
+    ) async throws -> T {
+        do {
+            return try await body()
+        } catch let error as CKError where error.code == .zoneNotFound || error.code == .userDeletedZone {
+            try await ensureZoneExists()
+            return try await body()
+        }
+    }
+
+    /// Pre-flight the iCloud account state. Maps every non-`.available`
+    /// status to `CloudSyncError.transportUnavailable` so the
+    /// coordinator can degrade the cycle gracefully. The retry
+    /// classifier (`CloudSyncRetryClassifier`) treats `CloudSyncError`
+    /// as non-retryable — there's no point burning the backoff budget
+    /// on `.noAccount`.
+    private func checkAccountStatus() async throws {
+        let status: CKAccountStatus
+        do {
+            status = try await container.accountStatus()
+        } catch {
+            throw CloudSyncError.transportUnavailable(
+                reason: "iCloud account status query failed: \(error.localizedDescription)"
+            )
+        }
+        switch status {
+        case .available:
+            return
+        case .couldNotDetermine:
+            throw CloudSyncError.transportUnavailable(
+                reason: "iCloud account status could not be determined"
+            )
+        case .noAccount:
+            throw CloudSyncError.transportUnavailable(
+                reason: "No iCloud account is signed in on this device"
+            )
+        case .restricted:
+            throw CloudSyncError.transportUnavailable(
+                reason: "The iCloud account is restricted (parental controls or MDM)"
+            )
+        case .temporarilyUnavailable:
+            throw CloudSyncError.transportUnavailable(
+                reason: "The iCloud account is temporarily unavailable"
+            )
+        @unknown default:
+            // Future-proofing: treat unknown future statuses as available
+            // rather than dropping sync. If a future iOS adds a state
+            // we should reject, surface it via a separate update.
+            return
+        }
     }
 
     /// Create the sync zone if it doesn't already exist. Safe to call repeatedly.
