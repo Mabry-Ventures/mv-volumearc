@@ -378,6 +378,62 @@ sentry_tests_dep.package = sentry_ref
 sentry_tests_dep.product_name = 'Sentry'
 app_tests_target.package_product_dependencies << sentry_tests_dep
 
+# VOL-126: re-sign embedded frameworks with the app's distribution
+# identity at archive time. Without this, sentry-cocoa's SPM-managed
+# dynamic framework retains its upstream signature (or no signature)
+# inside `VolumeArc.app/Frameworks/Sentry.framework/Sentry`, and App
+# Store Connect upload fails with:
+#
+#   ITMS-90035: Invalid Signature - Code failed to satisfy specified
+#   code requirement(s). The file at path
+#   "VolumeArc.app/Frameworks/Sentry.framework/Sentry" is not properly
+#   signed. Make sure you have signed your application with a
+#   distribution certificate, not an ad hoc certificate or a
+#   development certificate.
+#
+# The script runs only when CODE_SIGN_IDENTITY is set (i.e., archive
+# / device builds — never on simulator or unit-test runs where signing
+# is disabled). It strips the existing signature and re-signs with the
+# expanded identity so the framework matches the app's distribution
+# trust chain.
+resign_phase = project.new(Xcodeproj::Project::Object::PBXShellScriptBuildPhase)
+resign_phase.name = 'Re-sign embedded frameworks (VOL-126)'
+resign_phase.shell_path = '/bin/bash'
+resign_phase.shell_script = <<~BASH
+  # VOL-126 — re-sign nested frameworks with the app's distribution cert.
+  # See generator comment for ITMS-90035 context.
+  set -euo pipefail
+
+  if [ -z "${CODE_SIGN_IDENTITY:-}" ] || [ "${CODE_SIGN_IDENTITY}" = "" ]; then
+    echo "VOL-126: CODE_SIGN_IDENTITY unset — skipping framework re-sign (test/sim build)"
+    exit 0
+  fi
+
+  IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:-${CODE_SIGN_IDENTITY}}"
+  FRAMEWORKS_DIR="${BUILT_PRODUCTS_DIR}/${FRAMEWORKS_FOLDER_PATH}"
+  if [ ! -d "${FRAMEWORKS_DIR}" ]; then
+    echo "VOL-126: no Frameworks dir at ${FRAMEWORKS_DIR} — nothing to re-sign"
+    exit 0
+  fi
+
+  shopt -s nullglob
+  for fw in "${FRAMEWORKS_DIR}"/*.framework; do
+    name=$(basename "$fw")
+    echo "VOL-126: re-signing ${name} with ${IDENTITY}"
+    /usr/bin/codesign --force \\
+      --sign "${IDENTITY}" \\
+      --preserve-metadata=identifier,entitlements,flags \\
+      --timestamp \\
+      --options=runtime \\
+      "$fw"
+  done
+  echo "VOL-126: framework re-signing complete"
+BASH
+resign_phase.input_paths = []
+resign_phase.output_paths = []
+resign_phase.run_only_for_deployment_postprocessing = '0'
+app_target.build_phases << resign_phase
+
 project.root_object.attributes['TargetAttributes'] ||= {}
 project.targets.each do |target|
   project.root_object.attributes['TargetAttributes'][target.uuid] = {
