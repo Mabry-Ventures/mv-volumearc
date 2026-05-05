@@ -135,6 +135,13 @@ configure_target(app_target, bundle_id: 'com.mabryventures.VolumeArc', extra: {
   'INFOPLIST_KEY_NSHealthUpdateUsageDescription' => 'VolumeArc writes completed workouts so your training history stays in sync with Apple Health.',
   'INFOPLIST_KEY_NSMicrophoneUsageDescription' => 'VolumeArc uses the microphone for voice coaching requests and voice workout logging.',
   'INFOPLIST_KEY_NSSpeechRecognitionUsageDescription' => 'VolumeArc uses speech recognition to understand live coaching requests and voice workout notes.',
+  # Export-compliance declaration. Without this, every TestFlight upload
+  # lands in "Missing Compliance" and stalls the Xcode Cloud post-action
+  # waiting on a manual ASC answer. VolumeArc only uses HTTPS via
+  # URLSession (Sentry, Gemini relay) — that's covered by Apple's
+  # standard exemption, so NO is correct. Revisit if we ever ship
+  # custom crypto.
+  'INFOPLIST_KEY_ITSAppUsesNonExemptEncryption' => 'NO',
   # VOL-55: `VolumeArcCloudKitContainer` used to live in the Info.plist
   # for runtime lookup. `INFOPLIST_KEY_*` silently drops custom
   # (non-Apple-recognized) keys, so the bundle never had it. It now
