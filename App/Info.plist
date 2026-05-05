@@ -57,5 +57,31 @@
 	<string>VolumeArc reads your completed workouts from Apple Health to show your training history and calculate readiness.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>VolumeArc writes completed workouts so your training history stays in sync with Apple Health.</string>
+
+	<!-- VOL-126: App Store Connect validation requires either an explicit
+	     launch screen or UIRequiresFullScreen=YES. Empty UILaunchScreen
+	     dict is the modern SwiftUI default — iOS renders a generic
+	     splash that matches the app's window background while the first
+	     scene loads. No storyboard/xib needed. -->
+	<key>UILaunchScreen</key>
+	<dict/>
+
+	<!-- VOL-126: App Store Connect validation requires interface
+	     orientations to be declared. iPhone is portrait-only (lifting
+	     forms work better in portrait, and our SwiftUI hierarchy is
+	     designed around it). iPad supports all four orientations
+	     because App Store rejects iPad apps that don't (unless
+	     UIRequiresFullScreen=YES, which would block multitasking). -->
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
 	</dict>
 </plist>
