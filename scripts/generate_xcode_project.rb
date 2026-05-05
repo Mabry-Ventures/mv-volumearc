@@ -110,7 +110,17 @@ def configure_target(target, bundle_id: nil, extra: {})
     config.build_settings['CURRENT_PROJECT_VERSION'] = BUILD_NUMBER
     config.build_settings['DEVELOPMENT_TEAM'] = ENV.fetch('DEVELOPMENT_TEAM', 'A886EMZZW6')
     config.build_settings['CODE_SIGN_STYLE'] = 'Automatic'
-    config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+    # Release archives must sign so entitlements get baked into the
+    # `.xcarchive` at archive time. Xcode Cloud's export step doesn't
+    # reliably re-add entitlements when the archive is unsigned —
+    # rc9 / Build 6 launched into a CKContainer SIGTRAP because the
+    # signed `.ipa` produced from an unsigned archive was missing
+    # `com.apple.developer.icloud-services`. Debug stays unsigned so
+    # local sim builds and `xcodebuild test` runs don't need certs.
+    # Test targets override this back to NO via their `extra:` dict
+    # (xctest bundles don't need signing).
+    config.build_settings['CODE_SIGNING_ALLOWED'] =
+      config.name == 'Release' ? 'YES' : 'NO'
     config.build_settings['DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING'] = 'YES'
     config.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = bundle_id if bundle_id
     extra.each do |key, value|
