@@ -132,38 +132,11 @@ final class FailingCloudSyncTransport: CloudSyncTransport, @unchecked Sendable {
     }
 }
 
-/// Cloud sync transport that fails the first `failuresBeforeSuccess` calls
-/// per operation and then delegates to `inner`. Use to simulate transient
-/// network errors and prove that retry / backoff logic eventually succeeds.
-final class RetryingCloudSyncTransport: CloudSyncTransport, @unchecked Sendable {
-    let inner: any CloudSyncTransport
-    var failuresBeforeSuccess: Int
-    private(set) var pushAttempts = 0
-    private(set) var pullAttempts = 0
-
-    init(wrapping inner: any CloudSyncTransport, failuresBeforeSuccess: Int = 1) {
-        self.inner = inner
-        self.failuresBeforeSuccess = failuresBeforeSuccess
-    }
-
-    var isAvailable: Bool { inner.isAvailable }
-
-    func pushRecords(_ records: [CloudSyncRecord]) async throws {
-        pushAttempts += 1
-        if pushAttempts <= failuresBeforeSuccess {
-            throw MockError("transient push failure \(pushAttempts)/\(failuresBeforeSuccess)")
-        }
-        try await inner.pushRecords(records)
-    }
-
-    func pullChanges(since cursor: String?) async throws -> CloudSyncPullResult {
-        pullAttempts += 1
-        if pullAttempts <= failuresBeforeSuccess {
-            throw MockError("transient pull failure \(pullAttempts)/\(failuresBeforeSuccess)")
-        }
-        return try await inner.pullChanges(since: cursor)
-    }
-}
+// VOL-130: the retry-N-times test stub that previously lived here was
+// superseded by the production `RetryingCloudSyncTransport` decorator
+// (with proper exponential backoff + recovery telemetry) plus the
+// scripted `InMemoryCloudSyncTransport` fake. Tests that need transient-
+// failure simulation should use those instead.
 
 // MARK: - Health
 

@@ -85,6 +85,22 @@ VolumeArcUI/
 3. Remote changes flow through `DefaultSyncPayloadApplier` into local repositories.
 4. Cursor persisted to `FileSyncStateStore` so next sync resumes where it left off.
 
+#### Retry / backoff (VOL-130)
+
+Wrap any `CloudSyncTransport` in `RetryingCloudSyncTransport` to get bounded exponential-backoff retry for transient errors. Defaults: 5 attempts, 1s base delay, 60s cap, 2× multiplier — derived from CloudKit guidance. `CloudSyncRetryClassifier` decides which `CKError` codes are transient (network, rate-limit, zone-busy, account-temporarily-unavailable) versus fatal (auth, permission, schema, zone-not-found, quota). `CancellationError` always short-circuits.
+
+Each retry emits `cloudsync.retry`; success after retry emits `cloudsync.recovery.succeeded`; budget exhaustion emits `cloudsync.recovery.failed`. Tests construct `CloudSyncRetryPolicy.immediate(...)` to exercise the loop with zero wall-clock waits.
+
+Zone-not-found auto-bootstrap and account-status preflight are intentionally **not** in the retry decorator — recovery for those requires re-creating the zone or treating the transport as unavailable for a cycle, both of which live (or will live) inside `CloudKitSyncTransport` itself.
+
+#### Timestamp encoding (VOL-130)
+
+Wall-clock instants flowing in/out of CloudKit travel as `Date` (CKRecord custom field, NSDate-bridged) but legacy clients sometimes encoded them as numeric (seconds or milliseconds since 1970, JSON-round-tripped). `Timestamp` is a unit-tagged newtype with explicit `seconds(_:)` / `milliseconds(_:)` / `autoDetect(_:)` constructors so callsites can no longer mix units silently. Property tests cover epoch boundary, leap-second adjacent, +100y future, and pre-epoch negatives.
+
+#### Hermetic testing
+
+`InMemoryCloudSyncTransport` (in `Tests/VolumeArcAppTests/TestSupport/`) is the stateful fake for unit tests that need to assert on exact pushed records, cursor progression, or scripted error sequences. `CKErrorFactory` synthesizes `CKError` instances for code-specific tests without a live CloudKit operation. The thinner `MockCloudSyncTransport` / `FailingCloudSyncTransport` / `RetryingCloudSyncTransport` test stubs remain useful for micro-tests.
+
 ## Key design principles
 
 ### Protocol-oriented dependencies
