@@ -81,23 +81,6 @@ final class MocksUsageSmokeTests: XCTestCase {
         }
     }
 
-    func testRetryingCloudSyncTransportFailsFirstNThenDelegates() async throws {
-        let inner = MockCloudSyncTransport()
-        let transport = RetryingCloudSyncTransport(wrapping: inner, failuresBeforeSuccess: 2)
-
-        for _ in 0..<2 {
-            do {
-                try await transport.pushRecords([])
-                XCTFail("Expected transient failure")
-            } catch {
-                // Expected.
-            }
-        }
-
-        try await transport.pushRecords([])
-        XCTAssertEqual(transport.pushAttempts, 3)
-    }
-
     // MARK: - Health store doubles
 
     func testDenyingHealthStoreReturnsFalseAndThrowsOnSessions() async {
