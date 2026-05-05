@@ -10,15 +10,33 @@ xcuserdata/
 *.xcuserstate
 *.xcarchive
 
-# xcodebuild-generated workspace data (Package.resolved, etc.)
-# The project is Ruby-generated, so this directory is rebuilt by xcodebuild on every run.
-VolumeArcApple.xcodeproj/project.xcworkspace/
+# xcodebuild-generated workspace data — ignore everything in xcworkspace
+# EXCEPT the SPM lockfile that Xcode Cloud requires to be committed (see
+# below). The project is Ruby-generated, so the rest of this dir
+# (contents.xcworkspacedata, xcuserdata, IDEWorkspaceChecks.plist) is
+# rebuilt by xcodebuild on every run and shouldn't be tracked.
+#
+# The canonical "ignore dir but keep one file" pattern requires explicit
+# un-ignore at every parent level, hence the staircase.
+VolumeArcApple.xcodeproj/project.xcworkspace/*
+!VolumeArcApple.xcodeproj/project.xcworkspace/xcshareddata
+VolumeArcApple.xcodeproj/project.xcworkspace/xcshareddata/*
+!VolumeArcApple.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+VolumeArcApple.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/*
 
 # VOL-90: the canonical SPM lockfile lives at repo root, not inside the
 # gitignored workspace dir. Keep it tracked — CI seeds the workspace
 # copy from it (see `.github/workflows/ci.yml` + `scripts/generate_xcode_project.rb`)
 # so every dev + CI resolves to the same Sentry pin.
 !/Package.resolved
+
+# VOL-126: Xcode Cloud requires the workspace-scoped Package.resolved to be
+# committed when SPM auto-resolution is disabled (Apple's CI default).
+# Without this, the archive job fails at xcodebuild -resolvePackageDependencies
+# with: "a resolved file is required when automatic dependency resolution is
+# disabled". The generator keeps this in sync with the root Package.resolved
+# on every regen.
+!VolumeArcApple.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
 # Signing & credentials
 *.mobileprovision
