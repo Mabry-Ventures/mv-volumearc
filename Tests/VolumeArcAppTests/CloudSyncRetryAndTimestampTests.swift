@@ -123,6 +123,22 @@ final class CloudSyncRetryAndTimestampTests: XCTestCase {
         XCTAssertFalse(CloudSyncRetryClassifier.isRetryable(CancellationError()))
     }
 
+    /// `CloudSyncError` is the typed envelope for "transport-level
+    /// refusal" (account unavailable, malformed queue row, local apply
+    /// failure). Retrying any of these is wasted work — the
+    /// coordinator should surface them and move on.
+    func testRetryClassifierTreatsCloudSyncErrorAsNonRetryable() {
+        XCTAssertFalse(CloudSyncRetryClassifier.isRetryable(
+            CloudSyncError.transportUnavailable(reason: "no iCloud account")
+        ))
+        XCTAssertFalse(CloudSyncRetryClassifier.isRetryable(
+            CloudSyncError.applyFailed(underlying: NSError(domain: "test", code: 1))
+        ))
+        XCTAssertFalse(CloudSyncRetryClassifier.isRetryable(
+            CloudSyncError.invalidQueuedRecord(reason: "malformed payload")
+        ))
+    }
+
     // MARK: - RetryingCloudSyncTransport (VOL-130)
 
     /// Push partial failure with retry: transient errors clear, the
@@ -184,6 +200,43 @@ final class CloudSyncRetryAndTimestampTests: XCTestCase {
         XCTAssertEqual(names.filter { $0 == "cloudsync.retry" }.count, 2)
         XCTAssertEqual(names.filter { $0 == "cloudsync.recovery.failed" }.count, 1)
         XCTAssertEqual(names.filter { $0 == "cloudsync.recovery.succeeded" }.count, 0)
+    }
+
+    /// Account-unavailable errors (rendered as `CloudSyncError.transportUnavailable`
+    /// by `CloudKitSyncTransport.checkAccountStatus`) must short-circuit
+    /// the retry decorator — looping on `.noAccount` would waste the
+    /// retry budget and confuse the user.
+    func testRetryingTransportShortCircuitsOnCloudSyncError() async {
+        let inner = InMemoryCloudSyncTransport()
+        let accountError = CloudSyncError.transportUnavailable(
+            reason: "No iCloud account is signed in on this device"
+        )
+        inner.enqueuePushOutcomes([accountError])
+
+        let sink = CapturingTelemetrySink()
+        let transport = RetryingCloudSyncTransport(
+            wrapping: inner,
+            policy: .immediate(maxAttempts: 5),
+            telemetrySink: sink
+        )
+
+        do {
+            try await transport.pushRecords([makeUpsertRecord()])
+            XCTFail("Expected CloudSyncError to throw")
+        } catch let error as CloudSyncError {
+            if case .transportUnavailable = error {
+                // pass
+            } else {
+                XCTFail("Wrong CloudSyncError case: \(error)")
+            }
+        } catch {
+            XCTFail("Unexpected error type: \(error)")
+        }
+
+        let names = sink.events.map(\.name)
+        XCTAssertEqual(names.filter { $0 == "cloudsync.retry" }.count, 0,
+                       "CloudSyncError should never trigger a retry")
+        XCTAssertEqual(names.filter { $0 == "cloudsync.recovery.failed" }.count, 1)
     }
 
     /// Non-retryable errors (auth, permissions, malformed schema)

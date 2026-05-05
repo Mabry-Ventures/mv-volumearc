@@ -91,7 +91,10 @@ Wrap any `CloudSyncTransport` in `RetryingCloudSyncTransport` to get bounded exp
 
 Each retry emits `cloudsync.retry`; success after retry emits `cloudsync.recovery.succeeded`; budget exhaustion emits `cloudsync.recovery.failed`. Tests construct `CloudSyncRetryPolicy.immediate(...)` to exercise the loop with zero wall-clock waits.
 
-Zone-not-found auto-bootstrap and account-status preflight are intentionally **not** in the retry decorator — recovery for those requires re-creating the zone or treating the transport as unavailable for a cycle, both of which live (or will live) inside `CloudKitSyncTransport` itself.
+Zone-not-found auto-bootstrap and account-status preflight live inside `CloudKitSyncTransport` itself, not the retry decorator — recovery for those requires re-creating the zone or treating the transport as unavailable for a cycle.
+
+- **Zone recovery**: `pushRecords` and `pullChanges` wrap their CloudKit operations in `withZoneRecovery`, which catches `CKError.zoneNotFound` / `.userDeletedZone`, calls `ensureZoneExists()` again, and replays the operation once. Uniform retry would loop forever on zone deletion; one re-bootstrap is sufficient.
+- **Account preflight**: `checkAccountStatus` runs before every push/pull and maps every non-`.available` `CKAccountStatus` to `CloudSyncError.transportUnavailable(reason:)`. The retry classifier treats `CloudSyncError` as non-retryable so account failures short-circuit the retry budget instead of looping.
 
 #### Timestamp encoding (VOL-130)
 

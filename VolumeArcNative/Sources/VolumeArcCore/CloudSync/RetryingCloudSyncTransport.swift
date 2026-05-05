@@ -74,6 +74,11 @@ public struct CloudSyncRetryPolicy: Sendable {
 public enum CloudSyncRetryClassifier {
     public static func isRetryable(_ error: Error) -> Bool {
         if error is CancellationError { return false }
+        // CloudSyncError is the typed envelope for "transport-level
+        // refusal" (account unavailable, malformed queue row, local
+        // apply failure). Retrying any of these is wasted work — the
+        // coordinator should surface them and move on.
+        if error is CloudSyncError { return false }
         #if canImport(CloudKit)
         if let ckError = error as? CKError {
             return isRetryable(ckError)
