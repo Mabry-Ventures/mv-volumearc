@@ -104,38 +104,26 @@ enum VolumeArcCloudConfiguration {
     /// `<string>CloudKit</string>` pair appears verbatim in the
     /// executable file when the entitlement is granted.
     ///
-    /// Important: the entitlement key string also appears in the
-    /// `__cstring` data section as a Swift String literal (e.g.
-    /// `iCloud.com.mabryventures.VolumeArc` referenced by the
-    /// `containerIdentifier` constant above). That occurrence is
-    /// NOT followed by the `CloudKit` value — only the entitlements
-    /// blob has the pair. The first call to `Data.range(of:)` would
-    /// hit the `__cstring` occurrence and falsely return nil here, so
-    /// we iterate every occurrence and return true on the first match.
+    /// The bare entitlement key string also appears in the
+    /// `__cstring` data section as a Swift string literal and again
+    /// in a DER-encoded copy of the entitlements blob. Including the
+    /// `</key>` XML closing tag in the search pattern restricts the
+    /// match to the XML form so we don't have to disambiguate
+    /// otherwise-collidable occurrences. The DER form lacks `</key>`
+    /// (it uses ASN.1 length prefixes); the `__cstring` occurrence
+    /// is followed by null bytes.
     private static func scanExecutableForCloudKitEntitlement() -> Bool {
         guard let executable = Bundle.main.executableURL,
               let data = try? Data(contentsOf: executable, options: [.mappedIfSafe]) else {
             return false
         }
-        let keyData = Data("com.apple.developer.icloud-services".utf8)
-        let valueData = Data("CloudKit".utf8)
-        var searchStart = data.startIndex
-        while searchStart < data.endIndex {
-            guard let keyRange = data.range(
-                of: keyData,
-                in: searchStart..<data.endIndex
-            ) else { return false }
-            // The entitlement value (`<array><string>CloudKit</string></array>`
-            // or the DER equivalent) appears within ~256 bytes of the key
-            // in the entitlements blob. In the `__cstring` data section
-            // there's no value nearby, so skip to the next occurrence.
-            let windowEnd = min(keyRange.upperBound + 256, data.count)
-            let window = data[keyRange.upperBound..<windowEnd]
-            if window.range(of: valueData) != nil {
-                return true
-            }
-            searchStart = keyRange.upperBound
-        }
-        return false
+        let keyData = Data("com.apple.developer.icloud-services</key>".utf8)
+        let valueData = Data("<string>CloudKit</string>".utf8)
+        guard let keyRange = data.range(of: keyData) else { return false }
+        // The XML value (`<array>\n\t\t<string>CloudKit</string>`)
+        // appears within ~50 bytes of the key — 256 is generous.
+        let windowEnd = min(keyRange.upperBound + 256, data.count)
+        let window = data[keyRange.upperBound..<windowEnd]
+        return window.range(of: valueData) != nil
     }
 }
