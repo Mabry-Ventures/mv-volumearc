@@ -168,9 +168,13 @@ public struct SignalsView: View {
                             .font(VA.Typography.caption)
                             .foregroundStyle(VA.Colors.textTertiary)
                         Spacer()
+                        let weeklyTarget = model.athlete.weeklyTrainingDays
+                        let targetText = weeklyTarget == 1
+                            ? String(localized: "1 weekly session", comment: "Signals weekly target, singular")
+                            : String(localized: "\(weeklyTarget) weekly sessions", comment: "Signals weekly target, plural")
                         Text(String(
-                            localized: "\(currentWeekSessionCount) of ^[\(model.athlete.weeklyTrainingDays) weekly sessions](inflect: true)",
-                            comment: "Signals frequency summary"
+                            localized: "\(currentWeekSessionCount) of \(targetText)",
+                            comment: "Signals frequency summary combining current count and weekly target"
                         ))
                         .font(VA.Typography.caption)
                         .foregroundStyle(VA.Colors.textSecondary)
