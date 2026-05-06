@@ -45,7 +45,6 @@ xcrun simctl erase all 2>/dev/null || true
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
   -scheme "$SCHEME" \
-  -sdk iphonesimulator \
   -destination "platform=iOS Simulator,name=$IOS_TEST_DEVICE_NAME" \
   -derivedDataPath "$DERIVED_DATA_PATH" \
   -resultBundlePath "$XCRESULT" \

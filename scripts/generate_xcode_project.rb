@@ -31,14 +31,12 @@ require 'xcodeproj'
 #    for a project with ~500 objects). This keeps diffs legible if a
 #    human ever has to open the pbxproj by hand.
 #
-# 2. `predictabilize_uuids` computes object-graph paths using
-#    `remote_global_id_string` fields, which reference other objects by
-#    UUID. On the first pass those references are still the original
-#    random UUIDs, so the computed paths (and therefore the new UUIDs)
-#    still carry randomness. A second pass re-normalizes with the now
-#    deterministic references, converging to a fixed point. We hardcode
-#    two passes rather than looping because the first-pass/second-pass
-#    invariant is easy to reason about and the cost is negligible.
+# 2. `predictabilize_uuids` computes object-graph paths using object
+#    references that can themselves contain UUID strings. On the first
+#    pass those references are still the original random UUIDs, so the
+#    computed paths (and therefore the new UUIDs) still carry randomness.
+#    A few passes re-normalize against increasingly deterministic
+#    references until the project reaches a fixed point.
 module Xcodeproj
   class Project
     class UUIDGenerator
@@ -88,6 +86,7 @@ core_group = shared_group.new_group('VolumeArcCore', PACKAGE_ROOT.join('Sources/
 ui_group = shared_group.new_group('VolumeArcUI', PACKAGE_ROOT.join('Sources/VolumeArcUI').relative_path_from(ROOT).to_s)
 
 core_target = project.new_target(:static_library, 'VolumeArcCore', :ios, IOS_DEPLOYMENT_TARGET, nil, :swift, 'VolumeArcCore')
+core_watch_target = project.new_target(:static_library, 'VolumeArcCoreWatch', :watchos, WATCHOS_DEPLOYMENT_TARGET, nil, :swift, 'VolumeArcCoreWatch')
 ui_target = project.new_target(:static_library, 'VolumeArcUI', :ios, IOS_DEPLOYMENT_TARGET, nil, :swift, 'VolumeArcUI')
 app_target = project.new_target(:application, 'VolumeArcApp', :ios, IOS_DEPLOYMENT_TARGET, nil, :swift, 'VolumeArc')
 watch_target = project.new_target(:application, 'VolumeArcWatch', :watchos, WATCHOS_DEPLOYMENT_TARGET, nil, :swift, 'VolumeArcWatch')
@@ -101,6 +100,11 @@ app_ui_tests_target = project.new_target(:ui_test_bundle, 'VolumeArcAppUITests',
 # `.github/workflows/ci.yml` because each measured test runs several
 # iterations — running on every PR would balloon CI cost.
 app_perf_tests_target = project.new_target(:ui_test_bundle, 'VolumeArcAppPerfTests', :ios, IOS_DEPLOYMENT_TARGET, nil, :swift, 'VolumeArcAppPerfTests')
+
+# xcodeproj only exposes a generic `:app_extension` helper. WidgetKit watch
+# extensions need the watch-specific product type so Xcode archives them as
+# watch content instead of generic extensions.
+watch_widgets_target.product_type = 'com.apple.product-type.watchkit2-extension'
 
 def configure_target(target, bundle_id: nil, extra: {})
   target.build_configurations.each do |config|
@@ -131,6 +135,11 @@ end
 
 configure_target(core_target, extra: {
   'DEFINES_MODULE' => 'YES',
+  'SKIP_INSTALL' => 'YES',
+})
+configure_target(core_watch_target, extra: {
+  'DEFINES_MODULE' => 'YES',
+  'PRODUCT_MODULE_NAME' => 'VolumeArcCore',
   'SKIP_INSTALL' => 'YES',
 })
 configure_target(ui_target, extra: {
@@ -247,10 +256,10 @@ app_target.add_dependency(core_target)
 app_target.add_dependency(ui_target)
 app_target.frameworks_build_phase.add_file_reference(core_target.product_reference, true)
 app_target.frameworks_build_phase.add_file_reference(ui_target.product_reference, true)
-watch_target.add_dependency(core_target)
-watch_target.frameworks_build_phase.add_file_reference(core_target.product_reference, true)
-watch_widgets_target.add_dependency(core_target)
-watch_widgets_target.frameworks_build_phase.add_file_reference(core_target.product_reference, true)
+watch_target.add_dependency(core_watch_target)
+watch_target.frameworks_build_phase.add_file_reference(core_watch_target.product_reference, true)
+watch_widgets_target.add_dependency(core_watch_target)
+watch_widgets_target.frameworks_build_phase.add_file_reference(core_watch_target.product_reference, true)
 widget_target.add_dependency(core_target)
 widget_target.add_dependency(ui_target)
 widget_target.frameworks_build_phase.add_file_reference(core_target.product_reference, true)
@@ -284,6 +293,19 @@ app_ui_tests_target.add_system_framework('XCTest')
 app_ui_tests_target.add_system_framework('StoreKitTest')
 app_perf_tests_target.add_system_framework('XCTest')
 
+embed_watch_extensions_phase = watch_target.new_copy_files_build_phase('Embed Watch Extensions')
+embed_watch_extensions_phase.symbol_dst_subfolder_spec = :plug_ins
+embed_watch_widget_build_file = embed_watch_extensions_phase.add_file_reference(watch_widgets_target.product_reference, true)
+embed_watch_widget_build_file.settings = { 'ATTRIBUTES' => ['RemoveHeadersOnCopy'] }
+
+embed_watch_app_phase = app_target.new_copy_files_build_phase('Embed Watch Content')
+embed_watch_app_phase.symbol_dst_subfolder_spec = :products_directory
+embed_watch_app_phase.dst_path = '$(CONTENTS_FOLDER_PATH)/Watch'
+embed_watch_app_phase.run_only_for_deployment_postprocessing = '1'
+embed_watch_app_build_file = embed_watch_app_phase.add_file_reference(watch_target.product_reference, true)
+embed_watch_app_build_file.settings = { 'ATTRIBUTES' => ['RemoveHeadersOnCopy'] }
+embed_watch_app_build_file.platform_filter = 'iphoneos'
+
 def add_swift_sources(group, target, base_dir)
   refs = Dir[base_dir.join('**/*.swift').to_s].sort.map do |file|
     relative_to_group = Pathname.new(file).relative_path_from(base_dir).to_s
@@ -305,6 +327,7 @@ def add_selected_swift_sources(group, target, base_dir, relative_paths)
 end
 
 add_swift_sources(core_group, core_target, PACKAGE_ROOT.join('Sources/VolumeArcCore'))
+add_swift_sources(core_group, core_watch_target, PACKAGE_ROOT.join('Sources/VolumeArcCore'))
 add_swift_sources(ui_group, ui_target, PACKAGE_ROOT.join('Sources/VolumeArcUI'))
 add_swift_sources(app_group, app_target, ROOT.join('App'))
 add_swift_sources(watch_group, watch_target, ROOT.join('Watch'))
@@ -470,19 +493,29 @@ project.targets.each do |target|
   }
 end
 
-# VOL-95: two passes are required. Pass 1 rewrites most UUIDs from
-# graph-path MD5 hashes, but objects that reference other objects by
-# UUID string (e.g. `PBXContainerItemProxy.remote_global_id_string`)
-# still carry the old random references in their tree-hash paths. Pass
-# 2 runs against the now-deterministic references and converges. Must
-# run before `project.save` and before scheme generation so schemes
-# pick up the final, deterministic target UUIDs as BlueprintIdentifier.
-project.predictabilize_uuids
-project.predictabilize_uuids
+# VOL-95: multiple passes are required. Pass 1 rewrites most UUIDs from
+# graph-path MD5 hashes, but objects that reference other objects by UUID
+# string (e.g. `PBXContainerItemProxy.remote_global_id_string`) still carry
+# old random references in their tree-hash paths. Later passes run against
+# the increasingly deterministic references and converge. Must run before
+# `project.save` and before scheme generation so schemes pick up the final,
+# deterministic target UUIDs as BlueprintIdentifier.
+4.times { project.predictabilize_uuids }
 
 project.save
 app_scheme = Xcodeproj::XCScheme.new
 app_scheme.configure_with_targets(app_target, nil, launch_target: true)
+
+# TestFlight only attaches the watch app when the app archive scheme includes
+# the watch target for archiving. Keep it out of normal build/run/test actions
+# so iOS simulator CI doesn't try to compile watchOS with the iPhone SDK.
+watch_archive_entry = Xcodeproj::XCScheme::BuildAction::Entry.new(watch_target)
+watch_archive_entry.build_for_testing = false
+watch_archive_entry.build_for_running = false
+watch_archive_entry.build_for_profiling = false
+watch_archive_entry.build_for_archiving = true
+watch_archive_entry.build_for_analyzing = false
+app_scheme.build_action.add_entry(watch_archive_entry)
 app_scheme.save_as(PROJECT_PATH, 'VolumeArcApp', true)
 
 test_scheme = Xcodeproj::XCScheme.new

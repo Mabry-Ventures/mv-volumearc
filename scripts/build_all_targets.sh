@@ -12,10 +12,13 @@ ruby "scripts/generate_xcode_project.rb"
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT/.build/derived-data}"
 mkdir -p "$DERIVED_DATA_PATH"
 
+source "$ROOT/scripts/simulators.sh"
+IOS_BUILD_DEVICE="$(resolve_ios_test_device)"
+
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
   -scheme "VolumeArcApp" \
-  -sdk iphonesimulator \
+  -destination "platform=iOS Simulator,name=$IOS_BUILD_DEVICE" \
   -configuration Debug \
   -derivedDataPath "$DERIVED_DATA_PATH" \
   -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
@@ -25,7 +28,7 @@ xcodebuild \
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
   -scheme "VolumeArcWidgets" \
-  -sdk iphonesimulator \
+  -destination "platform=iOS Simulator,name=$IOS_BUILD_DEVICE" \
   -configuration Debug \
   -derivedDataPath "$DERIVED_DATA_PATH" \
   -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
