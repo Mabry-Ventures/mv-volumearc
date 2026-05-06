@@ -28,10 +28,6 @@ enum VolumeArcCloudConfiguration {
         // local run.
         return nil
         #else
-        // Real-device builds without the iCloud entitlement are a
-        // signing/provisioning bug we want to make loud rather than
-        // silently degrade. Surfaces in startup telemetry so the
-        // signal reaches Sentry / the diagnostics view.
         if !runtimeHasCloudKitEntitlement() {
             return """
                 Cloud sync is unavailable on this device because the \
@@ -45,33 +41,43 @@ enum VolumeArcCloudConfiguration {
         #endif
     }
 
-    /// `true` when the current binary's embedded provisioning profile
-    /// actually carries a CloudKit entitlement —
-    /// `CKContainer(identifier:)` traps the process (SIGTRAP / brk 1)
-    /// without it.
+    /// `true` when the current binary's embedded entitlements actually
+    /// grant CloudKit access — `CKContainer(identifier:)` traps the
+    /// process (SIGTRAP / brk 1) without it.
     ///
-    /// The previous `targetEnvironment(simulator)` heuristic assumed
-    /// real-device builds always have the entitlement (TestFlight /
-    /// App Store / dev builds embed the provisioning profile, only
-    /// simulator Debug builds with `CODE_SIGNING_ALLOWED = NO` are
-    /// unentitled). That assumption broke when the v1.0.2-rc9
-    /// TestFlight install crashed on launch with this exact trap on
-    /// a real device: Xcode Cloud's archive produced an unsigned
-    /// `.app` (the project's Release config keeps
-    /// `CODE_SIGNING_ALLOWED = NO` so Release builds compile without
-    /// local certs) and the export-time signing failed to embed the
-    /// iCloud entitlement in the resulting `.ipa`. The heuristic
-    /// returned `true` for the device build, the guard passed, and
-    /// the app trapped on launch.
+    /// Implementation history:
     ///
-    /// The implementation now probes the live binary's
-    /// `embedded.mobileprovision` and looks for `"CloudKit"` in the
-    /// `com.apple.developer.icloud-services` array. Missing → degrade
-    /// to `UnavailableCloudSyncTransport` + local-fallback
-    /// persistence. The app launches in every signing configuration
-    /// (provisioning profile drift, Xcode Cloud signing issue, manual
-    /// `xcodebuild` without certs, XCTest host process inheritance,
-    /// etc.) — sync recovery is a separate signing fix.
+    /// 1. **Original (VOL-59):** static `targetEnvironment(simulator)`
+    ///    heuristic. Returned `true` on every real-device build,
+    ///    which crashed rc9 / Build 6 when Xcode Cloud's signing
+    ///    didn't embed the iCloud entitlement.
+    ///
+    /// 2. **First runtime probe (rc10 hotfix, #118):** parsed the
+    ///    binary's `embedded.mobileprovision`. App launched on rc10
+    ///    + rc11 but rc11's `embedded.mobileprovision` was *missing
+    ///    entirely*: Xcode Cloud archives strip the provisioning
+    ///    profile and bake entitlements straight into the Mach-O
+    ///    code signature, so the probe always returned `false` even
+    ///    after #120 actually started embedding the entitlement.
+    ///    Diagnostics view kept showing the "no entitlement"
+    ///    warning even though sync should have worked.
+    ///
+    /// 3. **`SecStaticCode` attempt:** would have read entitlements
+    ///    out of the binary's signature, but `SecStaticCodeCreateWithPath`
+    ///    is SPI on iOS (only public on macOS). Same goes for
+    ///    `SecTaskCopyValueForEntitlement`. Apple gives no public iOS
+    ///    API for self-introspection of code-signature entitlements.
+    ///
+    /// 4. **Current (this file):** byte-pattern scan of the running
+    ///    executable. The Mach-O `LC_CODE_SIGNATURE` blob stores
+    ///    entitlements as inline XML (a `CSMAGIC_EMBEDDED_ENTITLEMENTS`
+    ///    super-blob), so the literal string
+    ///    `<key>com.apple.developer.icloud-services</key>` paired with
+    ///    `<string>CloudKit</string>` appears verbatim in the binary
+    ///    file when the entitlement is signed in. No SPI required —
+    ///    `Bundle.main.executableURL` is iOS-public, and reading the
+    ///    file is plain Foundation I/O. ~5 MB read at startup, cached
+    ///    for the lifetime of the process.
     static var hasCloudKitEntitlement: Bool {
         #if targetEnvironment(simulator)
         // Sim builds with `CODE_SIGNING_ALLOWED = NO` never have an
@@ -84,72 +90,33 @@ enum VolumeArcCloudConfiguration {
     }
 
     /// Cache the answer — entitlements don't change for the lifetime
-    /// of a process, and the CMS plist extraction is cheap but not free.
-    private static let cachedEntitlement: Bool = {
-        let entitlements = readEmbeddedMobileProvisionEntitlements()
-        // The entitlement is declared as an array of strings:
-        //   <key>com.apple.developer.icloud-services</key>
-        //   <array><string>CloudKit</string></array>
-        // Treat any other shape (missing, empty array, single
-        // string, etc.) as "no usable CloudKit entitlement."
-        if let services = entitlements?["com.apple.developer.icloud-services"] as? [String] {
-            return services.contains("CloudKit")
-        }
-        if let single = entitlements?["com.apple.developer.icloud-services"] as? String {
-            return single == "CloudKit"
-        }
-        return false
-    }()
+    /// of a process.
+    private static let cachedEntitlement: Bool = scanExecutableForCloudKitEntitlement()
 
     private static func runtimeHasCloudKitEntitlement() -> Bool {
         cachedEntitlement
     }
 
-    /// Parse the `Entitlements` dict out of the binary's
-    /// `embedded.mobileprovision`. Used to detect whether the live
-    /// binary actually carries the iCloud entitlement at runtime, so
-    /// `CKContainer(identifier:)` doesn't trap on a signing-misconfigured
-    /// build.
-    ///
-    /// `SecTaskCopyValueForEntitlement` would be the obvious tool here
-    /// but it's SPI on iOS (public on macOS only). The
-    /// `embedded.mobileprovision` blob is a CMS-signed plist with a
-    /// readable XML payload — slice out the `<plist>...</plist>`
-    /// substring and `PropertyListSerialization` does the rest. This
-    /// pattern is widely used in iOS apps for self-introspection of
-    /// entitlements and is safe for App Store review.
-    ///
-    /// Returns nil for App Store-installed builds where Apple strips
-    /// the provisioning profile at install time — in that case we fall
-    /// back to "no entitlement detected," which is conservative for
-    /// the launch-crash defense (the App Store install path *should*
-    /// have the correct entitlement embedded directly in the code
-    /// signature, but `CKContainer` would crash long before our
-    /// probe code runs if it didn't, so a false negative here just
-    /// means we degrade gracefully instead of crashing).
-    private static func readEmbeddedMobileProvisionEntitlements() -> [String: Any]? {
-        let bundlePath = Bundle.main.bundlePath
-        let profilePath = (bundlePath as NSString).appendingPathComponent("embedded.mobileprovision")
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: profilePath)) else {
-            return nil
+    /// Scan the running binary for the iCloud-services / CloudKit
+    /// entitlement pair. The Mach-O code-signature blob stores the
+    /// entitlements plist as inline XML (UTF-8), so the canonical
+    /// `<key>com.apple.developer.icloud-services</key>` /
+    /// `<string>CloudKit</string>` pair appears verbatim in the
+    /// executable file when the entitlement is granted.
+    private static func scanExecutableForCloudKitEntitlement() -> Bool {
+        guard let executable = Bundle.main.executableURL,
+              let data = try? Data(contentsOf: executable, options: [.mappedIfSafe]) else {
+            return false
         }
-        // The CMS envelope wraps a plist payload. Locate it by ASCII
-        // markers — robust enough since the plist is always XML, not
-        // binary, inside the envelope.
-        guard let raw = String(data: data, encoding: .isoLatin1),
-              let plistStart = raw.range(of: "<?xml") ?? raw.range(of: "<plist"),
-              let plistEnd = raw.range(of: "</plist>") else {
-            return nil
+        guard let keyData = "com.apple.developer.icloud-services".data(using: .utf8),
+              let valueData = "CloudKit".data(using: .utf8) else {
+            return false
         }
-        let plistString = String(raw[plistStart.lowerBound..<plistEnd.upperBound])
-        guard let plistData = plistString.data(using: .utf8),
-              let plist = try? PropertyListSerialization.propertyList(
-                from: plistData,
-                options: [],
-                format: nil
-              ) as? [String: Any] else {
-            return nil
-        }
-        return plist["Entitlements"] as? [String: Any]
+        guard let keyRange = data.range(of: keyData) else { return false }
+        // The entitlement value (`<array><string>CloudKit</string></array>`)
+        // appears immediately after the key, well within 256 bytes.
+        let windowEnd = min(keyRange.upperBound + 256, data.count)
+        let window = data.subdata(in: keyRange.upperBound..<windowEnd)
+        return window.range(of: valueData) != nil
     }
 }
