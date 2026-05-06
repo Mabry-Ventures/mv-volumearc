@@ -108,10 +108,8 @@ enum VolumeArcCloudConfiguration {
               let data = try? Data(contentsOf: executable, options: [.mappedIfSafe]) else {
             return false
         }
-        guard let keyData = "com.apple.developer.icloud-services".data(using: .utf8),
-              let valueData = "CloudKit".data(using: .utf8) else {
-            return false
-        }
+        let keyData = Data("com.apple.developer.icloud-services".utf8)
+        let valueData = Data("CloudKit".utf8)
         guard let keyRange = data.range(of: keyData) else { return false }
         // The entitlement value (`<array><string>CloudKit</string></array>`)
         // appears immediately after the key, well within 256 bytes.
