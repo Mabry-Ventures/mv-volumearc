@@ -208,7 +208,7 @@ final class VolumeArcBackgroundTasksTests: XCTestCase {
             surfaceStore: UserDefaultsPlatformSurfaceStateStore(),
             subscriptionStore: StoreKitSubscriptionStore(productIDs: []),
             voiceCoach: LiveVoiceCoachOrchestrator(
-                transport: OpenAIRelayVoiceTransport(provider: aiProvider)
+                transport: AIRelayVoiceTransport(provider: aiProvider)
             )
         )
     }

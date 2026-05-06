@@ -21,7 +21,7 @@ public extension RealtimeVoiceTransport {
 }
 
 /// Single-turn voice transport backed by the same text relay used by
-/// `OpenAIRelayCoachProvider`. Given a context block and user utterance, it
+/// `AIRelayCoachProvider`. Given a context block and user utterance, it
 /// returns the coach's text response, which the caller can then hand to
 /// `AVSpeechSynthesizer` for local TTS playback.
 ///
@@ -30,7 +30,7 @@ public extension RealtimeVoiceTransport {
 /// future feature. The current implementation covers the "ask the coach a
 /// question by voice and get a spoken reply" use case without requiring a
 /// persistent socket, which is sufficient for most in-gym interactions.
-public struct OpenAIRelayVoiceTransport: RealtimeVoiceTransport {
+public struct AIRelayVoiceTransport: RealtimeVoiceTransport {
     private let provider: any AICoachProvider
 
     public init(provider: any AICoachProvider) {
@@ -42,12 +42,12 @@ public struct OpenAIRelayVoiceTransport: RealtimeVoiceTransport {
     }
 }
 
-/// Deprecated name for `OpenAIRelayVoiceTransport`. The struct used to be a
+/// Deprecated name for `AIRelayVoiceTransport`. The struct used to be a
 /// stub with empty methods; it is now functional and delegates to an
 /// `AICoachProvider`. Kept as a typealias for source compatibility with the
 /// Ruby-generated Xcode project's earlier references.
-@available(*, deprecated, renamed: "OpenAIRelayVoiceTransport")
-public typealias OpenAIRealtimeVoiceTransport = OpenAIRelayVoiceTransport
+@available(*, deprecated, renamed: "AIRelayVoiceTransport")
+public typealias AIRealtimeVoiceTransport = AIRelayVoiceTransport
 
 /// Orchestrates a voice-coaching turn: runs the transport's `send` and returns
 /// the text response. Callers are expected to feed that response to
