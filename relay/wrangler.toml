@@ -12,7 +12,7 @@ compatibility_flags = ["nodejs_compat"]
 # so the iOS app continues to work whichever URL is set in
 # `VOLUMEARC_AI_RELAY_URL`.
 [[routes]]
-pattern = "relay.volumearc.app/*"
+pattern = "relay.volumearc.app"
 custom_domain = true
 
 # Rate limit KV namespace. Created via `wrangler kv:namespace create RATE_LIMIT`
