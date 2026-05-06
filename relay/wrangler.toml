@@ -4,15 +4,16 @@ main = "src/worker.ts"
 compatibility_date = "2026-04-23"
 compatibility_flags = ["nodejs_compat"]
 
-# Default deploy target: workers.dev subdomain auto-assigned by Cloudflare.
-# When `volumearc.app` is added as a zone to this Cloudflare account,
-# uncomment the `routes` block below and redeploy to promote to the
-# custom domain. No iOS change required — the allowlist in
-# VolumeArcAIConfiguration already accepts both.
-#
-# [[routes]]
-# pattern = "relay.volumearc.app/*"
-# custom_domain = true
+# `volumearc.app` is on Cloudflare DNS (NS = ali/karl.ns.cloudflare.com),
+# so `custom_domain = true` lets Wrangler auto-provision the DNS record
+# and TLS cert for `relay.volumearc.app` on the next deploy.
+# `VolumeArcAIConfiguration.allowedHosts` already accepts both this and
+# the auto-assigned `volumearc-ai-relay.jared-b6b.workers.dev` subdomain
+# so the iOS app continues to work whichever URL is set in
+# `VOLUMEARC_AI_RELAY_URL`.
+[[routes]]
+pattern = "relay.volumearc.app/*"
+custom_domain = true
 
 # Rate limit KV namespace. Created via `wrangler kv:namespace create RATE_LIMIT`
 # or the Cloudflare MCP `kv_namespace_create` tool. The `id` is populated
