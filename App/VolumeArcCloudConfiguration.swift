@@ -103,6 +103,15 @@ enum VolumeArcCloudConfiguration {
     /// `<key>com.apple.developer.icloud-services</key>` /
     /// `<string>CloudKit</string>` pair appears verbatim in the
     /// executable file when the entitlement is granted.
+    ///
+    /// Important: the entitlement key string also appears in the
+    /// `__cstring` data section as a Swift String literal (e.g.
+    /// `iCloud.com.mabryventures.VolumeArc` referenced by the
+    /// `containerIdentifier` constant above). That occurrence is
+    /// NOT followed by the `CloudKit` value — only the entitlements
+    /// blob has the pair. The first call to `Data.range(of:)` would
+    /// hit the `__cstring` occurrence and falsely return nil here, so
+    /// we iterate every occurrence and return true on the first match.
     private static func scanExecutableForCloudKitEntitlement() -> Bool {
         guard let executable = Bundle.main.executableURL,
               let data = try? Data(contentsOf: executable, options: [.mappedIfSafe]) else {
@@ -110,11 +119,23 @@ enum VolumeArcCloudConfiguration {
         }
         let keyData = Data("com.apple.developer.icloud-services".utf8)
         let valueData = Data("CloudKit".utf8)
-        guard let keyRange = data.range(of: keyData) else { return false }
-        // The entitlement value (`<array><string>CloudKit</string></array>`)
-        // appears immediately after the key, well within 256 bytes.
-        let windowEnd = min(keyRange.upperBound + 256, data.count)
-        let window = data.subdata(in: keyRange.upperBound..<windowEnd)
-        return window.range(of: valueData) != nil
+        var searchStart = data.startIndex
+        while searchStart < data.endIndex {
+            guard let keyRange = data.range(
+                of: keyData,
+                in: searchStart..<data.endIndex
+            ) else { return false }
+            // The entitlement value (`<array><string>CloudKit</string></array>`
+            // or the DER equivalent) appears within ~256 bytes of the key
+            // in the entitlements blob. In the `__cstring` data section
+            // there's no value nearby, so skip to the next occurrence.
+            let windowEnd = min(keyRange.upperBound + 256, data.count)
+            let window = data[keyRange.upperBound..<windowEnd]
+            if window.range(of: valueData) != nil {
+                return true
+            }
+            searchStart = keyRange.upperBound
+        }
+        return false
     }
 }
