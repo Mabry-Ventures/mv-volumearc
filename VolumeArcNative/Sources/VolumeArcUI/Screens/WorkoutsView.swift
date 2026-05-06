@@ -97,10 +97,11 @@ public struct WorkoutsView: View {
                 Text(activeWorkoutTitle)
                     .font(VA.Typography.headline)
                     .foregroundStyle(VA.Colors.textPrimary)
-                Text(String(
-                    localized: "^[\(model.loggedSetCountThisSession) sets](inflect: true) logged",
-                    comment: "Active session subtitle showing how many sets have been logged"
-                ))
+                let loggedSets = model.loggedSetCountThisSession
+                let setsLoggedText = loggedSets == 1
+                    ? String(localized: "1 set logged", comment: "Active session subtitle, singular")
+                    : String(localized: "\(loggedSets) sets logged", comment: "Active session subtitle, zero or plural")
+                Text(setsLoggedText)
                 .font(VA.Typography.footnote)
                 .foregroundStyle(VA.Colors.textSecondary)
             }

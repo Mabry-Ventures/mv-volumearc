@@ -387,13 +387,14 @@ public struct TodayView: View {
     // MARK: - Recent sessions
 
     private var recentSessionsSection: some View {
-        VStack(alignment: .leading, spacing: VA.Space.md) {
+        let count = weeklyVolumeSummary.currentWeekSessionCount
+        let subtitle = count == 1
+            ? String(localized: "1 session this week", comment: "Recent sessions subtitle, singular form")
+            : String(localized: "\(count) sessions this week", comment: "Recent sessions subtitle, zero or plural form")
+        return VStack(alignment: .leading, spacing: VA.Space.md) {
             VASectionHeader(
                 String(localized: "Recent", comment: "Section header on Today tab for recent workout history"),
-                subtitle: String(
-                    localized: "^[\(weeklyVolumeSummary.currentWeekSessionCount) this week](inflect: true)",
-                    comment: "Subtitle showing how many sessions have been logged this week, with plural agreement"
-                ),
+                subtitle: subtitle,
                 action: (
                     label: String(localized: "See all", comment: "Recent sessions section action to open Workouts"),
                     handler: { navigation.selectedTab = .workouts }
@@ -438,13 +439,10 @@ public struct TodayView: View {
                             .font(VA.Typography.headline)
                             .foregroundStyle(VA.Colors.textPrimary)
                         let rpeText = String(format: "%.1f", session.averageRPE)
-                        Text(String(
-                            localized: "^[\(session.completedSetCount) sets](inflect: true) • \(session.durationMinutes)min • RPE \(rpeText)",
-                            comment: """
-                                Session summary metrics showing sets, duration, \
-                                and average RPE — sets uses plural agreement
-                                """
-                        ))
+                        let setsText = session.completedSetCount == 1
+                            ? String(localized: "1 set", comment: "Session summary set count, singular")
+                            : String(localized: "\(session.completedSetCount) sets", comment: "Session summary set count, plural")
+                        Text("\(setsText) • \(session.durationMinutes)min • RPE \(rpeText)")
                         .font(VA.Typography.footnote)
                         .foregroundStyle(VA.Colors.textSecondary)
                     }

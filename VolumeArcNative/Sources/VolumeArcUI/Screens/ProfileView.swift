@@ -132,10 +132,9 @@ public struct ProfileView: View {
             }
             profileRow(
                 label: String(localized: "Equipment", comment: "Profile row label"),
-                value: String(
-                    localized: "^[\(model.athlete.availableEquipment.count) types](inflect: true)",
-                    comment: "Profile equipment count"
-                ),
+                value: model.athlete.availableEquipment.count == 1
+                    ? String(localized: "1 type", comment: "Singular equipment count on Profile row")
+                    : String(localized: "\(model.athlete.availableEquipment.count) types", comment: "Plural equipment count on Profile row"),
                 icon: "dumbbell.fill"
             ) {
                 VAHaptics.tap()
