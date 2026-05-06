@@ -102,7 +102,7 @@ final class VolumeArcCoachPromptTemplateTests: XCTestCase {
     /// the template. We can't make a real HTTP call from XCTest, so we
     /// exercise the provider against a base URL that resolves to a closed
     /// port and intercept the encoded request body via a custom URLProtocol.
-    func testOpenAIRelayProviderRendersOutboundBodyThroughTemplate() async throws {
+    func testAIRelayProviderRendersOutboundBodyThroughTemplate() async throws {
         // Register an interceptor that captures the request body and short-
         // circuits with a synthetic 200. The interceptor is registered on
         // a custom URLSession (not the shared one) to keep test isolation.
@@ -116,11 +116,11 @@ final class VolumeArcCoachPromptTemplateTests: XCTestCase {
         defer { URLProtocol.unregisterClass(CapturingURLProtocol.self) }
         CapturedRelayRequest.shared.reset()
 
-        let relayConfig = OpenAIRelayConfiguration(
+        let relayConfig = AIRelayConfiguration(
             baseURL: URL(string: "https://relay.test.invalid")!,
             bearerToken: "ignored"
         )
-        let provider = OpenAIRelayCoachProvider(
+        let provider = AIRelayCoachProvider(
             configuration: relayConfig,
             credentialsProvider: StaticAuthProvider(value: "Bearer fake")
         )
@@ -137,7 +137,7 @@ final class VolumeArcCoachPromptTemplateTests: XCTestCase {
         let renderedPrompt = try XCTUnwrap(json["prompt"] as? String, "Relay body must include `prompt` field")
         XCTAssertTrue(
             renderedPrompt.contains(CoachPromptTemplate.templateMarker),
-            "OpenAIRelayCoachProvider must route its outbound prompt through CoachPromptTemplate — the template marker is missing from the relay request body"
+            "AIRelayCoachProvider must route its outbound prompt through CoachPromptTemplate — the template marker is missing from the relay request body"
         )
         XCTAssertTrue(
             renderedPrompt.contains("intent=progression"),
@@ -196,7 +196,7 @@ final class VolumeArcCoachPromptTemplateTests: XCTestCase {
 
 // MARK: - Test doubles
 
-private struct StaticAuthProvider: OpenAIRelayCredentialsProviding {
+private struct StaticAuthProvider: AIRelayCredentialsProviding {
     let value: String
     func authorizationHeaderValue() async throws -> String { value }
 }

@@ -721,13 +721,13 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         await orchestrator.end()
     }
 
-    func testOpenAIRelayVoiceTransportDelegatesToProvider() async throws {
+    func testAIRelayVoiceTransportDelegatesToProvider() async throws {
         struct EchoProvider: AICoachProvider {
             func coachResponse(for prompt: String, context: String) async throws -> String {
                 "P:\(prompt)|C:\(context)"
             }
         }
-        let transport = OpenAIRelayVoiceTransport(provider: EchoProvider())
+        let transport = AIRelayVoiceTransport(provider: EchoProvider())
         let response = try await transport.send(context: "Readiness 90", userText: "Push?")
         XCTAssertEqual(response, "P:Push?|C:Readiness 90")
     }

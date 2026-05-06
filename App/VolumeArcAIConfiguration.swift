@@ -28,8 +28,8 @@ enum VolumeArcAIConfiguration {
 
     static func bootstrapRelaySecretsIfNeeded() {
         let environment = ProcessInfo.processInfo.environment
-        let baseURLString = environment["VOLUMEARC_OPENAI_BASE_URL"]
-            ?? Bundle.main.object(forInfoDictionaryKey: "VolumeArcOpenAIBaseURL") as? String
+        let baseURLString = environment["VOLUMEARC_AI_RELAY_URL"]
+            ?? Bundle.main.object(forInfoDictionaryKey: "VolumeArcAIRelayURL") as? String
 
         if let baseURLString, baseURLString.isEmpty == false {
             do {
@@ -41,7 +41,7 @@ enum VolumeArcAIConfiguration {
         }
     }
 
-    static var relayConfiguration: OpenAIRelayConfiguration? {
+    static var relayConfiguration: AIRelayConfiguration? {
         relayConfiguration(telemetrySink: nil)
     }
 
@@ -56,16 +56,16 @@ enum VolumeArcAIConfiguration {
     /// could route traffic to an unintended host. We validate here and
     /// fall back to `nil`, which the AI runtime factory already converts
     /// into `LocalHeuristicAICoachProvider`.
-    static func relayConfiguration(telemetrySink: TelemetrySink?) -> OpenAIRelayConfiguration? {
+    static func relayConfiguration(telemetrySink: TelemetrySink?) -> AIRelayConfiguration? {
         let rawString = (try? secureStore.load(baseURLKey))
-            ?? ProcessInfo.processInfo.environment["VOLUMEARC_OPENAI_BASE_URL"]
-            ?? Bundle.main.object(forInfoDictionaryKey: "VolumeArcOpenAIBaseURL") as? String
+            ?? ProcessInfo.processInfo.environment["VOLUMEARC_AI_RELAY_URL"]
+            ?? Bundle.main.object(forInfoDictionaryKey: "VolumeArcAIRelayURL") as? String
 
         guard let baseURL = validatedRelayURL(from: rawString, telemetrySink: telemetrySink) else {
             return nil
         }
 
-        return OpenAIRelayConfiguration(baseURL: baseURL, bearerToken: "session-managed")
+        return AIRelayConfiguration(baseURL: baseURL, bearerToken: "session-managed")
     }
 
     /// Validate a candidate relay URL string. Returns the parsed `URL` or
@@ -130,7 +130,7 @@ enum VolumeArcAIConfiguration {
         // Use the non-sink variant here: startup surfaces the warning via
         // the operational signal pipeline already, so we don't double-log.
         relayConfiguration == nil
-            ? "OpenAI relay base URL is not configured or invalid, so cloud AI and live voice are unavailable on this build."
+            ? "AI relay base URL is not configured or invalid, so cloud AI and live voice are unavailable on this build."
             : nil
     }
 
@@ -141,8 +141,8 @@ enum VolumeArcAIConfiguration {
     /// this method during signal assembly — once per launch.
     static func startupWarning(recordingTo telemetrySink: TelemetrySink) -> String? {
         let rawString = (try? secureStore.load(baseURLKey))
-            ?? ProcessInfo.processInfo.environment["VOLUMEARC_OPENAI_BASE_URL"]
-            ?? Bundle.main.object(forInfoDictionaryKey: "VolumeArcOpenAIBaseURL") as? String
+            ?? ProcessInfo.processInfo.environment["VOLUMEARC_AI_RELAY_URL"]
+            ?? Bundle.main.object(forInfoDictionaryKey: "VolumeArcAIRelayURL") as? String
 
         if validatedRelayURL(from: rawString, telemetrySink: telemetrySink) == nil {
             return "AI relay URL invalid or missing; cloud AI and live voice are disabled on this build."

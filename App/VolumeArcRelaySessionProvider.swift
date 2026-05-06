@@ -12,7 +12,7 @@ import VolumeArcCore
 /// endpoint; the new Cloudflare Worker computes auth locally via HMAC, so
 /// there's no round-trip. This cuts coach-request latency by one network
 /// hop and removes a class of transient auth failures.
-actor VolumeArcRelaySessionProvider: OpenAIRelayCredentialsProviding {
+actor VolumeArcRelaySessionProvider: AIRelayCredentialsProviding {
     private let secureStore = VolumeArcSecureStore()
     private let signingKeyKey = "ai.relay.signingKey"
     private let deviceIDKey = "ai.relay.deviceID"

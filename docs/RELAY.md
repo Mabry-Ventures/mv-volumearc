@@ -103,7 +103,7 @@ Env vars (non-secret, live in `wrangler.toml`):
 
 The iOS client reads two pieces of config at launch:
 
-1. **Base URL** — from `VOLUMEARC_OPENAI_BASE_URL` env var (Xcode scheme for dev) OR `VolumeArcOpenAIBaseURL` Info.plist key (release). Must be an HTTPS URL whose host is in the allowlist (`App/VolumeArcAIConfiguration.swift`).
+1. **Base URL** — from `VOLUMEARC_AI_RELAY_URL` env var (Xcode scheme for dev) OR `VolumeArcAIRelayURL` Info.plist key (release). Must be an HTTPS URL whose host is in the allowlist (`App/VolumeArcAIConfiguration.swift`).
 2. **Signing key** — from `VOLUMEARC_RELAY_SIGNING_KEY` env var OR `VolumeArcRelaySigningKey` Info.plist key. Must match the Worker's `RELAY_SIGNING_KEY` secret exactly.
 
 Both are bootstrapped into Keychain at first launch and read from there on subsequent launches. Rotating a secret requires an iOS release (acceptable — neither is a per-request credential).
@@ -113,7 +113,7 @@ Both are bootstrapped into Keychain at first launch and read from there on subse
 Xcode scheme env vars (Edit Scheme → Run → Arguments → Environment Variables):
 
 ```
-VOLUMEARC_OPENAI_BASE_URL  = https://volumearc-ai-relay.jared-b6b.workers.dev
+VOLUMEARC_AI_RELAY_URL  = https://volumearc-ai-relay.jared-b6b.workers.dev
 VOLUMEARC_RELAY_SIGNING_KEY = <contents of relay/.secrets/relay_signing_key.txt>
 ```
 
@@ -128,7 +128,7 @@ When `volumearc.app` is added as a zone to the Mabry Ventures Cloudflare account
 1. Uncomment the `[[routes]]` block in `relay/wrangler.toml`
 2. `wrangler deploy`
 3. Confirm DNS is proxied (orange cloud) for the `relay` subdomain
-4. Update `VOLUMEARC_OPENAI_BASE_URL` in the iOS config
+4. Update `VOLUMEARC_AI_RELAY_URL` in the iOS config
 5. Leave the `.workers.dev` host in the allowlist for a release cycle as a fallback
 
 iOS does not require a release to change the URL — it reads from Info.plist / env var.
