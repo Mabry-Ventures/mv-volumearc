@@ -28,6 +28,45 @@ echo "CI_XCODEBUILD_ACTION = ${CI_XCODEBUILD_ACTION:-<unset>}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+normalize_ai_relay_url() {
+  local raw="$1"
+  local normalized
+  local host
+
+  if [[ "$raw" =~ ^[[:space:]] || "$raw" =~ [[:space:]]$ ]]; then
+    echo "ERROR: VOLUMEARC_AI_RELAY_URL has leading/trailing whitespace" >&2
+    return 1
+  fi
+
+  case "$raw" in
+    https://*)
+      normalized="$raw"
+      ;;
+    *://*)
+      echo "ERROR: VOLUMEARC_AI_RELAY_URL must use https" >&2
+      return 1
+      ;;
+    *)
+      normalized="https://$raw"
+      ;;
+  esac
+
+  host="${normalized#https://}"
+  host="${host%%/*}"
+  host="${host%%:*}"
+  host="$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')"
+
+  case "$host" in
+    relay.volumearc.app|volumearc-ai-relay.jared-b6b.workers.dev|relay.mabryventures.com)
+      printf '%s' "$normalized"
+      ;;
+    *)
+      echo "ERROR: VOLUMEARC_AI_RELAY_URL host is not allowlisted: $host" >&2
+      return 1
+      ;;
+  esac
+}
+
 # Patch runtime config from Xcode Cloud env vars into the bundle's
 # Info.plist BEFORE xcodebuild runs. Xcode Cloud's environment
 # variables don't propagate to `xcodebuild` as build settings, so the
@@ -52,8 +91,9 @@ if [[ -f "$INFO_PLIST" ]]; then
     echo "SENTRY_DSN env var unset; leaving Info.plist placeholder"
   fi
   if [[ -n "${VOLUMEARC_AI_RELAY_URL:-}" ]]; then
-    plutil -replace VolumeArcAIRelayURL -string "$VOLUMEARC_AI_RELAY_URL" "$INFO_PLIST"
-    echo "Patched VolumeArcAIRelayURL into Info.plist: $VOLUMEARC_AI_RELAY_URL"
+    normalized_ai_relay_url="$(normalize_ai_relay_url "$VOLUMEARC_AI_RELAY_URL")"
+    plutil -replace VolumeArcAIRelayURL -string "$normalized_ai_relay_url" "$INFO_PLIST"
+    echo "Patched VolumeArcAIRelayURL into Info.plist: $normalized_ai_relay_url"
   else
     echo "VOLUMEARC_AI_RELAY_URL env var unset; leaving Info.plist placeholder"
   fi

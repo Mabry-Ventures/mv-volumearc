@@ -144,6 +144,9 @@ jobs:
           echo "Pre-flight OK"
         shell: bash
 
+      - name: Test Xcode Cloud config patch
+        run: ./scripts/test_ci_post_clone_config_patch.sh
+
       - name: Generate Xcode project
         run: ruby scripts/generate_xcode_project.rb
 
