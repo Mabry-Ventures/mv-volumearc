@@ -86,10 +86,10 @@
 
 	<!--
 	  Runtime configuration injected from environment variables at archive
-	  time. The build settings `SENTRY_DSN` / `VOLUMEARC_OPENAI_BASE_URL`
+	  time. The build settings `SENTRY_DSN` / `VOLUMEARC_AI_RELAY_URL`
 	  default to empty in `scripts/generate_xcode_project.rb`; Xcode Cloud
 	  workflows override them via Environment Variables panel
-	  (`SENTRY_DSN`, `VOLUMEARC_OPENAI_BASE_URL`). `ProcessInfoPlistFile`
+	  (`SENTRY_DSN`, `VOLUMEARC_AI_RELAY_URL`). `ProcessInfoPlistFile`
 	  substitutes the build setting into the bundle plist at archive time,
 	  so the running app's `Bundle.main.object(forInfoDictionaryKey:)`
 	  reads the actual configured value.
@@ -102,7 +102,7 @@
 	-->
 	<key>VolumeArcSentryDSN</key>
 	<string>$(SENTRY_DSN)</string>
-	<key>VolumeArcOpenAIBaseURL</key>
-	<string>$(VOLUMEARC_OPENAI_BASE_URL)</string>
+	<key>VolumeArcAIRelayURL</key>
+	<string>$(VOLUMEARC_AI_RELAY_URL)</string>
 	</dict>
 </plist>

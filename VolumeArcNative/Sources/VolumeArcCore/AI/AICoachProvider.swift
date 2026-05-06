@@ -34,7 +34,7 @@ public protocol AICoachProvider: Sendable {
 
 public extension AICoachProvider {
     /// Default streaming implementation: call the non-streaming response and yield it as chunks.
-    /// Providers that support native streaming (like a real OpenAI relay) should override this.
+    /// Providers that support native streaming (like the AI relay) should override this.
     func streamCoachResponse(for prompt: String, context: String) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             Task {
@@ -55,7 +55,7 @@ public extension AICoachProvider {
     }
 }
 
-public struct OpenAIRelayConfiguration: Sendable {
+public struct AIRelayConfiguration: Sendable {
     public let baseURL: URL
     public let bearerToken: String
     public var applicationID: String { baseURL.host ?? "com.mabryventures.VolumeArc" }
@@ -66,7 +66,7 @@ public struct OpenAIRelayConfiguration: Sendable {
     }
 }
 
-public protocol OpenAIRelayCredentialsProviding: Sendable {
+public protocol AIRelayCredentialsProviding: Sendable {
     func authorizationHeaderValue() async throws -> String
 }
 
@@ -78,24 +78,22 @@ public enum CoachTier: String, Sendable {
 /// Relay-backed coach provider that talks to `volumearc-ai-relay` via SSE.
 ///
 /// VOL-66: real progressive streaming. `streamCoachResponse(for:context:)`
-/// now consumes `text/event-stream` from the Worker and yields token chunks
-/// as Gemini emits them. The non-streaming `coachResponse` joins the stream
-/// to a single string for callers that don't need progressive UI.
-///
-/// Despite the `OpenAI` in the name (kept for stability against in-flight
-/// branches), the Worker now proxies to Gemini 3.1 Flash Lite / Pro. The
-/// type name is intentionally model-agnostic and will be renamed to
-/// `CloudRelayCoachProvider` in a separate churn-free cleanup pass.
-public struct OpenAIRelayCoachProvider: AICoachProvider {
-    private let configuration: OpenAIRelayConfiguration
-    private let credentialsProvider: OpenAIRelayCredentialsProviding
+/// consumes `text/event-stream` from the Worker and yields token chunks as
+/// Gemini emits them. The non-streaming `coachResponse` joins the stream to
+/// a single string for callers that don't need progressive UI. The Worker
+/// proxies to Gemini 3.1 Flash Lite / Pro today; the type name is
+/// intentionally provider-agnostic so the upstream model can change without
+/// further renames.
+public struct AIRelayCoachProvider: AICoachProvider {
+    private let configuration: AIRelayConfiguration
+    private let credentialsProvider: AIRelayCredentialsProviding
     private let coachingStyle: CoachingStyle
     private let tier: CoachTier
     private let session: URLSession
 
     public init(
-        configuration: OpenAIRelayConfiguration,
-        credentialsProvider: OpenAIRelayCredentialsProviding,
+        configuration: AIRelayConfiguration,
+        credentialsProvider: AIRelayCredentialsProviding,
         coachingStyle: CoachingStyle = .motivational,
         tier: CoachTier = .flashLite,
         session: URLSession = .shared

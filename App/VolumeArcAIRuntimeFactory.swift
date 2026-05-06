@@ -33,7 +33,7 @@ enum VolumeArcAIRuntimeFactory {
                 baseURL: configuration.baseURL,
                 applicationID: configuration.applicationID
             )
-            return OpenAIRelayCoachProvider(
+            return AIRelayCoachProvider(
                 configuration: configuration,
                 credentialsProvider: sessionProvider,
                 tier: tier
@@ -91,7 +91,7 @@ enum VolumeArcAIRuntimeFactory {
 
         let transport: RealtimeVoiceTransport
         if voiceEnabled, isPremium, VolumeArcAIConfiguration.relayConfiguration != nil {
-            transport = OpenAIRelayVoiceTransport(
+            transport = AIRelayVoiceTransport(
                 provider: makeCoachProvider(
                     flagGate: flagGate,
                     subscriptionStore: subscriptionStore,

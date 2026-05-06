@@ -36,7 +36,7 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 >
 > **Known hygiene gaps**: closed.
 > - **VOL-61** — `FeatureFlagProvider` is now wired via `FlagGateTelemetry` into voice, sync, Live Activities, and Foundation Models (PR [#56](https://github.com/Mabry-Ventures/mv-volumearc/pull/56))
-> - **VOL-66** — `OpenAIRelayCoachProvider.streamCoachResponse` now consumes real `text/event-stream` from the Worker with Gemini 3.1 (PR [#57](https://github.com/Mabry-Ventures/mv-volumearc/pull/57))
+> - **VOL-66** — `AIRelayCoachProvider.streamCoachResponse` now consumes real `text/event-stream` from the Worker with Gemini 3.1 (PR [#57](https://github.com/Mabry-Ventures/mv-volumearc/pull/57))
 > - **VOL-69** — VAUI adopts real iOS 26 Liquid Glass APIs (`SwiftUI.Glass`, `View.glassEffect`, `GlassEffectContainer`) across cards, toasts, coach bubbles, paywall, onboarding, coach composer, and session metric grid (PR [#54](https://github.com/Mabry-Ventures/mv-volumearc/pull/54))
 > - **VOL-74** — `CloudSync.swift` (1489 lines) split into six focused files under `VolumeArcCore/CloudSync/` (PR [#50](https://github.com/Mabry-Ventures/mv-volumearc/pull/50))
 >
@@ -47,8 +47,8 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 | System | Status | Notes |
 |--------|--------|-------|
 | iPhone UI | Implemented | Full tab bar (Today, Workouts, Coach, Signals, Profile). `RootDashboardView` presents `OnboardingView` via `fullScreenCover` on first launch. `ProfileView` presents `PaywallView` via sheet on upgrade tap. Localized, accessible, Dynamic Type, hero transitions, toast presenter all working |
-| AI coaching | Implemented (streaming — VOL-66; tier-gated — VOL-91) | Three-provider chain works end-to-end. All three providers (`OpenAIRelayCoachProvider`, `LocalHeuristicAICoachProvider`, `FoundationModelCoachProvider`) route their outbound prompts through `CoachPromptTemplate.render(intent:contextBlock:question:style:)` so the system prompt, intent envelope, structured context block, and template marker are identical across the cloud, on-device, and offline paths. `OpenAIRelayCoachProvider.streamCoachResponse` consumes `text/event-stream` from the `volumearc-ai-relay` Cloudflare Worker and yields Gemini 3.1 tokens progressively (VOL-66 / PR #57); the synthetic word-chunking default is retained for providers without native streaming. Cloud tier is entitlement-gated: `VolumeArcAIRuntimeFactory.makeCoachProvider(subscriptionStore:)` installs `OpenAIRelayCoachProvider` with `tier: .pro` (`X-Coach-Tier: pro` → Gemini Pro on the Worker) for premium users, `tier: .flashLite` (→ Gemini Flash Lite) for free. On-device FM and local heuristic fallback are the same for both tiers |
-| Voice coaching | Implemented (single-turn) | `OpenAIRelayVoiceTransport` delegates to the same relay-backed `AICoachProvider` chain; `LiveVoiceCoachOrchestrator` exposes `speak(prompt:context:)` and lifecycle hooks. Live duplex audio is explicit future work |
+| AI coaching | Implemented (streaming — VOL-66; tier-gated — VOL-91) | Three-provider chain works end-to-end. All three providers (`AIRelayCoachProvider`, `LocalHeuristicAICoachProvider`, `FoundationModelCoachProvider`) route their outbound prompts through `CoachPromptTemplate.render(intent:contextBlock:question:style:)` so the system prompt, intent envelope, structured context block, and template marker are identical across the cloud, on-device, and offline paths. `AIRelayCoachProvider.streamCoachResponse` consumes `text/event-stream` from the `volumearc-ai-relay` Cloudflare Worker and yields Gemini 3.1 tokens progressively (VOL-66 / PR #57); the synthetic word-chunking default is retained for providers without native streaming. Cloud tier is entitlement-gated: `VolumeArcAIRuntimeFactory.makeCoachProvider(subscriptionStore:)` installs `AIRelayCoachProvider` with `tier: .pro` (`X-Coach-Tier: pro` → Gemini Pro on the Worker) for premium users, `tier: .flashLite` (→ Gemini Flash Lite) for free. On-device FM and local heuristic fallback are the same for both tiers |
+| Voice coaching | Implemented (single-turn) | `AIRelayVoiceTransport` delegates to the same relay-backed `AICoachProvider` chain; `LiveVoiceCoachOrchestrator` exposes `speak(prompt:context:)` and lifecycle hooks. Live duplex audio is explicit future work |
 | Cloud sync | Implemented (entitlement-gated at runtime) | CloudKit container ID is a compile-time constant (`App/VolumeArcCloudConfiguration.swift`). `CKModifyRecordsOperation` push + `CKFetchRecordZoneChangesOperation` pull + cursor persistence work on device/TestFlight builds with entitlements. Every repository write path calls `stageUpsert` into `OutboundSyncQueue`, which `CloudSyncCoordinator` drains on `syncCycle`. Simulator Debug builds fall back to `UnavailableCloudSyncTransport` because they lack the entitlement |
 | Watch app | Implemented | HealthKit `HKWorkoutSession` + `HKLiveWorkoutBuilder`, rest timer, decisions, accessibility, offline payload queue, real phone/watch sync via WCSession |
 | Widgets | Implemented | `NextWorkoutWidget` + `WatchWidgets` extension read real shared state via `PlatformSurfaceDefaultsReader`, design-system-tokened, accessibility-labelled |
@@ -92,14 +92,14 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 
 **AI coaching** (`VolumeArcAIRuntimeFactory.swift`): Three-tier provider chain with `AsyncThrowingStream` streaming, memory append via `CoachMemoryRepository`, and structured output parsing. Every provider routes its outbound prompt through `CoachPromptTemplate.render(...)` so the system prompt, per-intent envelope, structured context block, and template marker are identical across the cloud, on-device, and offline paths — a regression that bypasses the template drops the marker and trips `VolumeArcCoachPromptTemplateTests`:
 1. `FoundationModelCoachProvider` (on-device, iOS 26.0+ only)
-2. `OpenAIRelayCoachProvider` (cloud relay)
+2. `AIRelayCoachProvider` (cloud relay)
 3. `LocalHeuristicAICoachProvider` (offline fallback)
 
-**Voice coaching** (`VolumeArcCore/AI/VoiceCoach.swift`, `VolumeArcAIRuntimeFactory.swift`): `LiveVoiceCoachOrchestrator` backed by `OpenAIRelayVoiceTransport` (single-turn — delegates to the same relay-backed `AICoachProvider` chain used by the text coach) or `UnavailableVoiceTransport` when relay is unconfigured. The orchestrator exposes `speak(prompt:context:)` for question/response turns and lifecycle hooks (`start`, `interrupt`, `end`) which are no-ops for the single-turn transport. A future feature will introduce a real `OpenAIRealtimeWebRTCTransport` that maintains a persistent duplex audio session against the OpenAI Realtime API; the protocol shape supports both transports without rework.
+**Voice coaching** (`VolumeArcCore/AI/VoiceCoach.swift`, `VolumeArcAIRuntimeFactory.swift`): `LiveVoiceCoachOrchestrator` backed by `AIRelayVoiceTransport` (single-turn — delegates to the same relay-backed `AICoachProvider` chain used by the text coach) or `UnavailableVoiceTransport` when relay is unconfigured. The orchestrator exposes `speak(prompt:context:)` for question/response turns and lifecycle hooks (`start`, `interrupt`, `end`) which are no-ops for the single-turn transport. A future feature will introduce a real `OpenAIRealtimeWebRTCTransport` that maintains a persistent duplex audio session against the OpenAI Realtime API; the protocol shape supports both transports without rework.
 
 **Cloud sync** (`VolumeArcCloudConfiguration.swift`): `CloudSyncCoordinator` drives `CloudKitSyncTransport` using zone `VolumeArcSyncZone` in container `iCloud.com.mabryventures.VolumeArc`. Push uses `CKModifyRecordsOperation`; pull uses `CKFetchRecordZoneChangesOperation` with cursor persistence in `FileSyncStateStore`. `DefaultSyncPayloadApplier` writes changes into SwiftData with conflict resolution. Falls back to `UnavailableCloudSyncTransport` if unconfigured.
 
-**Relay auth** (`VolumeArcRelaySessionProvider.swift`): Actor that manages device-ID-based session tokens for the OpenAI relay. Tokens cached in Keychain with ISO8601 expiration and 60-second refresh skew.
+**Relay auth** (`VolumeArcRelaySessionProvider.swift`): Actor that manages device-ID-based session tokens for the AI relay. Tokens cached in Keychain with ISO8601 expiration and 60-second refresh skew.
 
 **Secure storage** (`VolumeArcSecureStore.swift`): Keychain wrapper with `UserDefaults` fallback in Debug/Simulator builds.
 
@@ -143,8 +143,8 @@ StoreKit 2 with two products and `@Published` entitlement state:
 `StoreKitSubscriptionStore` drives a full `PaywallView` (plans, features, restore, terms/privacy links) and exposes `isPremium: Bool` via the `PremiumEntitlementProviding` protocol that `VolumeArcAIRuntimeFactory` reads at launch.
 
 **Premium unlocks (VOL-91):**
-- **AI coach tier.** Premium users get Gemini Pro (`OpenAIRelayCoachProvider(tier: .pro)` → `X-Coach-Tier: pro` header → Worker routes to Pro). Free users get Gemini Flash Lite.
-- **Live voice coaching.** `OpenAIRelayVoiceTransport` installs only when `isPremium == true` AND the `.voiceCoaching` flag is on; every other combination falls through to `UnavailableVoiceTransport` so `LiveVoiceCoachOrchestrator.speak` throws `AIRuntimeIntegrationError.relayUnavailable`.
+- **AI coach tier.** Premium users get Gemini Pro (`AIRelayCoachProvider(tier: .pro)` → `X-Coach-Tier: pro` header → Worker routes to Pro). Free users get Gemini Flash Lite.
+- **Live voice coaching.** `AIRelayVoiceTransport` installs only when `isPremium == true` AND the `.voiceCoaching` flag is on; every other combination falls through to `UnavailableVoiceTransport` so `LiveVoiceCoachOrchestrator.speak` throws `AIRuntimeIntegrationError.relayUnavailable`.
 
 **Not gated (currently free for all):** cloud sync, Foundation Models (on-device coach), Live Activities. This decision is parked in the VOL-91 PR body for product to revise — switching any of these to premium is a one-line change at the factory / coordinator call site that threads the `subscriptionStore` in.
 
@@ -156,7 +156,7 @@ StoreKit 2 with two products and `@Published` entitlement state:
 
 | Key | Source | Purpose |
 |-----|--------|---------|
-| `VOLUMEARC_OPENAI_BASE_URL` | Env var or `VolumeArcOpenAIBaseURL` in Info.plist | OpenAI relay base URL for AI/voice coaching |
+| `VOLUMEARC_AI_RELAY_URL` | Env var or `VolumeArcAIRelayURL` in Info.plist | AI relay base URL for cloud coach + voice |
 | `VolumeArcCloudKitContainer` | Info.plist | CloudKit container identifier (`iCloud.com.mabryventures.VolumeArc`) |
 | `VOLUMEARC_SENTRY_DSN` | Env var or `VolumeArcSentryDSN` in Info.plist | Sentry DSN for crash reporting and telemetry |
 

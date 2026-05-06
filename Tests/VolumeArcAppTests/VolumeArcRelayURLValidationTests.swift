@@ -3,7 +3,7 @@ import VolumeArcCore
 
 /// Tests for `VolumeArcAIConfiguration.validatedRelayURL(from:telemetrySink:)`.
 ///
-/// These guard the read-time validation that gates the OpenAI relay URL
+/// These guard the read-time validation that gates the AI relay URL
 /// before any request is built. A malformed value flowing through the
 /// Info.plist -> Keychain -> runtime pipeline must be rejected here so
 /// cloud AI traffic never escapes to an unintended host (and so the

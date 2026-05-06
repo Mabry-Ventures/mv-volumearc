@@ -7,7 +7,7 @@ import VolumeArcCore
 // state:
 //   1. Coach tier — `.pro` for premium users, `.flashLite` for free.
 //      (Routed to the relay via `X-Coach-Tier:`.)
-//   2. Live voice transport — `OpenAIRelayVoiceTransport` installed only
+//   2. Live voice transport — `AIRelayVoiceTransport` installed only
 //      when premium AND the `.voiceCoaching` flag is on; otherwise
 //      `UnavailableVoiceTransport` so every `speak(...)` call throws
 //      `AIRuntimeIntegrationError.relayUnavailable`.
