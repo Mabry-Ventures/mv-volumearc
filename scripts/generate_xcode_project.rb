@@ -152,6 +152,15 @@ configure_target(app_target, bundle_id: 'com.mabryventures.VolumeArc', extra: {
   # standard exemption, so NO is correct. Revisit if we ever ship
   # custom crypto.
   'INFOPLIST_KEY_ITSAppUsesNonExemptEncryption' => 'NO',
+  # User-defined build settings declared empty so `App/Info.plist`
+  # `$(SENTRY_DSN)` / `$(VOLUMEARC_OPENAI_BASE_URL)` substitutions
+  # resolve cleanly when no env var is set (local/CI builds without
+  # secrets just get empty strings, which both `resolveDSN()` and
+  # `relayConfiguration()` handle as "not configured"). Xcode Cloud
+  # workflows override these from the Environment Variables panel so
+  # archived builds carry the production values.
+  'SENTRY_DSN' => '',
+  'VOLUMEARC_OPENAI_BASE_URL' => '',
   # VOL-55: `VolumeArcCloudKitContainer` used to live in the Info.plist
   # for runtime lookup. `INFOPLIST_KEY_*` silently drops custom
   # (non-Apple-recognized) keys, so the bundle never had it. It now
