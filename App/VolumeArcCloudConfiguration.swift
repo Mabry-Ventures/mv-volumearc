@@ -103,18 +103,27 @@ enum VolumeArcCloudConfiguration {
     /// `<key>com.apple.developer.icloud-services</key>` /
     /// `<string>CloudKit</string>` pair appears verbatim in the
     /// executable file when the entitlement is granted.
+    ///
+    /// The bare entitlement key string also appears in the
+    /// `__cstring` data section as a Swift string literal and again
+    /// in a DER-encoded copy of the entitlements blob. Including the
+    /// `</key>` XML closing tag in the search pattern restricts the
+    /// match to the XML form so we don't have to disambiguate
+    /// otherwise-collidable occurrences. The DER form lacks `</key>`
+    /// (it uses ASN.1 length prefixes); the `__cstring` occurrence
+    /// is followed by null bytes.
     private static func scanExecutableForCloudKitEntitlement() -> Bool {
         guard let executable = Bundle.main.executableURL,
               let data = try? Data(contentsOf: executable, options: [.mappedIfSafe]) else {
             return false
         }
-        let keyData = Data("com.apple.developer.icloud-services".utf8)
-        let valueData = Data("CloudKit".utf8)
+        let keyData = Data("com.apple.developer.icloud-services</key>".utf8)
+        let valueData = Data("<string>CloudKit</string>".utf8)
         guard let keyRange = data.range(of: keyData) else { return false }
-        // The entitlement value (`<array><string>CloudKit</string></array>`)
-        // appears immediately after the key, well within 256 bytes.
+        // The XML value (`<array>\n\t\t<string>CloudKit</string>`)
+        // appears within ~50 bytes of the key — 256 is generous.
         let windowEnd = min(keyRange.upperBound + 256, data.count)
-        let window = data.subdata(in: keyRange.upperBound..<windowEnd)
+        let window = data[keyRange.upperBound..<windowEnd]
         return window.range(of: valueData) != nil
     }
 }
