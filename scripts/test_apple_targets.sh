@@ -44,7 +44,6 @@ reset_app_state
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
   -scheme "VolumeArcAppTests" \
-  -sdk iphonesimulator \
   -destination "platform=iOS Simulator,name=$IOS_TEST_DEVICE_NAME" \
   -derivedDataPath "$DERIVED_DATA_PATH" \
   -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
@@ -92,7 +91,6 @@ run_ui_tests_once() {
   xcodebuild \
     -project "VolumeArcApple.xcodeproj" \
     -scheme "VolumeArcAppUITests" \
-    -sdk iphonesimulator \
     -destination "platform=iOS Simulator,name=$IOS_TEST_DEVICE_NAME" \
     -derivedDataPath "$DERIVED_DATA_PATH" \
     -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \

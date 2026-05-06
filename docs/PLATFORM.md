@@ -80,9 +80,10 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 | VolumeArcAppUITests | UI Test Bundle | iOS 26.0 | `com.mabryventures.VolumeArc.uitests` |
 | VolumeArcAppPerfTests | UI Test Bundle | iOS 26.0 | `com.mabryventures.VolumeArc.perftests` |
 | VolumeArcCore | Static Library | iOS 26.0 | -- (from `VolumeArcNative/`) |
+| VolumeArcCoreWatch | Static Library | watchOS 26.4 | -- (same `VolumeArcCore` module, built for watchOS from `VolumeArcNative/`) |
 | VolumeArcUI | Static Library | iOS 26.0 | -- (from `VolumeArcNative/`) |
 
-**Dependency graph:** `VolumeArcUI -> VolumeArcCore`. All app targets depend on `VolumeArcCore`. The iOS app and tests also depend on `VolumeArcUI`. The watch and widget targets depend only on `VolumeArcCore`. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module breakdown and data flow.
+**Dependency graph:** `VolumeArcUI -> VolumeArcCore`. iOS app, iOS widgets, and tests depend on the iOS `VolumeArcCore` target. The watch app and watch widgets depend on `VolumeArcCoreWatch`, which compiles the same sources as module `VolumeArcCore` for watchOS so archive builds do not cross-link the iOS static library. The iOS app and tests also depend on `VolumeArcUI`. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module breakdown and data flow.
 
 ## Key Components
 

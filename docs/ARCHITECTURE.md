@@ -14,13 +14,15 @@ VolumeArc is a multi-target Apple platform app composed of:
 ```
 App/         ──┐
                ├── VolumeArcUI   ──┐
-Watch/       ──┤                   ├── VolumeArcCore
 Widgets/     ──┘                   │
                                    │
 Tests/       ─────────────────────┘
+
+Watch/       ──────────────────────── VolumeArcCoreWatch
+WatchWidgets/ ─────────────────────── VolumeArcCoreWatch
 ```
 
-All targets depend on `VolumeArcCore`. Only the iOS app and test target depend on `VolumeArcUI` (Watch and Widgets have their own lightweight views).
+The iOS app, iOS widgets, and tests depend on the iOS `VolumeArcCore` static library. The watch app and watch widgets depend on `VolumeArcCoreWatch`, a generated watchOS static-library target that compiles the same `VolumeArcNative/Sources/VolumeArcCore` sources while preserving the module name `VolumeArcCore`. Only the iOS app and test target depend on `VolumeArcUI` (Watch and Widgets have their own lightweight views).
 
 ## VolumeArcCore modules
 

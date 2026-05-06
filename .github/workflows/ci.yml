@@ -170,6 +170,9 @@ jobs:
         # into the generator.
         run: ./scripts/test_xcode_project_regen_idempotent.sh
 
+      - name: Watch app archive gate
+        run: ruby scripts/test_watch_app_embedding.rb
+
       - name: Seed SPM lockfile into workspace
         # VOL-90: the canonical `Package.resolved` lives at repo root
         # because the `.xcworkspace/` dir is gitignored (rebuilt by

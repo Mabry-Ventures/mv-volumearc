@@ -25,7 +25,7 @@ mkdir -p "$ARCHIVE_DIR" "$OUTPUT_DIR"
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
   -scheme "VolumeArcApp" \
-  -sdk iphoneos \
+  -destination "generic/platform=iOS" \
   -configuration Release \
   -archivePath "$ARCHIVE_PATH" \
   DEVELOPMENT_TEAM="$TEAM" \
