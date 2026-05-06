@@ -83,5 +83,26 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+
+	<!--
+	  Runtime configuration injected from environment variables at archive
+	  time. The build settings `SENTRY_DSN` / `VOLUMEARC_OPENAI_BASE_URL`
+	  default to empty in `scripts/generate_xcode_project.rb`; Xcode Cloud
+	  workflows override them via Environment Variables panel
+	  (`SENTRY_DSN`, `VOLUMEARC_OPENAI_BASE_URL`). `ProcessInfoPlistFile`
+	  substitutes the build setting into the bundle plist at archive time,
+	  so the running app's `Bundle.main.object(forInfoDictionaryKey:)`
+	  reads the actual configured value.
+
+	  Empty string for either key is treated as "not configured" by
+	  `VolumeArcSentryConfiguration.resolveDSN()` /
+	  `VolumeArcAIConfiguration.relayConfiguration` — the app degrades to
+	  the no-Sentry / local-heuristic-coach paths and surfaces a
+	  startup warning so the gap is visible in the diagnostics view.
+	-->
+	<key>VolumeArcSentryDSN</key>
+	<string>$(SENTRY_DSN)</string>
+	<key>VolumeArcOpenAIBaseURL</key>
+	<string>$(VOLUMEARC_OPENAI_BASE_URL)</string>
 	</dict>
 </plist>
