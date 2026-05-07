@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-
 if [[ $# -lt 1 || $# -gt 2 ]]; then
   echo "Usage: $0 <VolumeArc.ipa> [expected-build-number]" >&2
   exit 2
@@ -71,9 +69,21 @@ require_watch_assets_car() {
     exit 1
   fi
 
-  /usr/bin/xcrun assetutil --info "$assets_car" |
+  local asset_info
+  if ! asset_info="$(/usr/bin/xcrun assetutil --info "$assets_car" 2>&1)"; then
+    echo "FAIL: unable to inspect compiled watch Assets.car at $assets_car" >&2
+    printf "%s\n" "$asset_info" >&2
+    exit 1
+  fi
+
+  printf "%s" "$asset_info" |
     /usr/bin/ruby -rjson -e '
-      records = JSON.parse(STDIN.read)
+      begin
+        records = JSON.parse(STDIN.read)
+      rescue JSON::ParserError => error
+        warn "FAIL: unable to parse assetutil output for #{ARGV.fetch(0)}: #{error.message}"
+        exit 1
+      end
       icons = records.select { |record| record["AssetType"] == "Icon Image" && record["Name"] == "AppIcon" }
       required = {
         "marketing 1024x1024" => ->(record) { record["Idiom"] == "marketing" && record["PixelWidth"] == 1024 && record["PixelHeight"] == 1024 },
@@ -93,7 +103,7 @@ require_watch_assets_car() {
         warn "FAIL: compiled watch Assets.car missing AppIcon renditions: #{missing.join(", ")}"
         exit 1
       end
-    '
+    ' "$assets_car"
 }
 
 require_dir "$APP_BUNDLE" "VolumeArc app bundle"

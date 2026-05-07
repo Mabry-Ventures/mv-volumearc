@@ -126,9 +126,21 @@ require_watch_assets_car() {
     exit 1
   fi
 
-  if ! xcrun assetutil --info "$assets_car" |
+  local asset_info
+  if ! asset_info="$(xcrun assetutil --info "$assets_car" 2>&1)"; then
+    echo "::error::VOL-133: unable to inspect compiled watch Assets.car at ${assets_car}"
+    printf "%s\n" "$asset_info"
+    exit 1
+  fi
+
+  if ! printf "%s" "$asset_info" |
     /usr/bin/ruby -rjson -e '
-      records = JSON.parse(STDIN.read)
+      begin
+        records = JSON.parse(STDIN.read)
+      rescue JSON::ParserError => error
+        warn "::error::VOL-133: unable to parse assetutil output for #{ARGV.fetch(0)}: #{error.message}"
+        exit 1
+      end
       icons = records.select { |record| record["AssetType"] == "Icon Image" && record["Name"] == "AppIcon" }
       required = {
         "marketing 1024x1024" => ->(record) { record["Idiom"] == "marketing" && record["PixelWidth"] == 1024 && record["PixelHeight"] == 1024 },
@@ -148,7 +160,7 @@ require_watch_assets_car() {
         warn "::error::VOL-133: compiled watch Assets.car missing AppIcon renditions: #{missing.join(", ")}"
         exit 1
       end
-    '; then
+    ' "$assets_car"; then
     exit 1
   fi
 }
