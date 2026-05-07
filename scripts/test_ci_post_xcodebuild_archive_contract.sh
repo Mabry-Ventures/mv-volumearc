@@ -20,6 +20,7 @@ write_plist() {
   local build_number="$2"
   local relay_url="${3:-}"
   local extension_point="${4:-}"
+  local bundle_kind="${5:-}"
 
   {
     printf '<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -31,6 +32,24 @@ write_plist() {
     if [[ -n "$relay_url" ]]; then
       printf '  <key>VolumeArcAIRelayURL</key>\n'
       printf '  <string>%s</string>\n' "$relay_url"
+    fi
+    if [[ "$bundle_kind" == "watch-app" ]]; then
+      printf '  <key>CFBundleIcons</key>\n'
+      printf '  <dict>\n'
+      printf '    <key>CFBundlePrimaryIcon</key>\n'
+      printf '    <dict>\n'
+      printf '      <key>CFBundleIconFiles</key>\n'
+      printf '      <array>\n'
+      printf '        <string>AppIcon</string>\n'
+      printf '      </array>\n'
+      printf '      <key>CFBundleIconName</key>\n'
+      printf '      <string>AppIcon</string>\n'
+      printf '    </dict>\n'
+      printf '  </dict>\n'
+    fi
+    if [[ "$bundle_kind" == "watch-widget" ]]; then
+      printf '  <key>CFBundleDisplayName</key>\n'
+      printf '  <string>VolumeArc</string>\n'
     fi
     if [[ -n "$extension_point" ]]; then
       printf '  <key>NSExtension</key>\n'
@@ -45,8 +64,8 @@ write_plist() {
 }
 
 write_plist "$APP_BUNDLE/Info.plist" "16" "https://relay.volumearc.app"
-write_plist "$WATCH_BUNDLE/Info.plist" "16"
-write_plist "$WATCH_WIDGET_BUNDLE/Info.plist" "16" "" "com.apple.widgetkit-extension"
+write_plist "$WATCH_BUNDLE/Info.plist" "16" "" "" "watch-app"
+write_plist "$WATCH_WIDGET_BUNDLE/Info.plist" "16" "" "com.apple.widgetkit-extension" "watch-widget"
 
 cat >"$TMP_DIR/bin/sentry-cli" <<'SH'
 #!/usr/bin/env bash

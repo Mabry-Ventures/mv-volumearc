@@ -4,10 +4,17 @@
 <dict>
 	<key>CFBundleDisplayName</key>
 	<string>VolumeArc</string>
-	<key>NSExtension</key>
+	<key>CFBundleIcons</key>
 	<dict>
-		<key>NSExtensionPointIdentifier</key>
-		<string>com.apple.widgetkit-extension</string>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconFiles</key>
+			<array>
+				<string>AppIcon</string>
+			</array>
+			<key>CFBundleIconName</key>
+			<string>AppIcon</string>
+		</dict>
 	</dict>
 </dict>
 </plist>

@@ -32,6 +32,10 @@ def assert_remove_headers(build_file)
          "#{build_file.display_name} must remove headers on copy")
 end
 
+def resource_phase_file?(target, product_path)
+  target.resources_build_phase.files.any? { |file| file.file_ref&.path == product_path }
+end
+
 def plist!(path)
   CFPropertyList.native_types(CFPropertyList::List.new(file: path).value)
 rescue StandardError => e
@@ -51,6 +55,12 @@ assert(watch_widgets_target.product_type == 'com.apple.product-type.watchkit2-ex
        'VolumeArcWatchWidgets must use the watch extension product type')
 assert(watch_widgets_target.build_configurations.all? { |config| config.build_settings['INFOPLIST_FILE'] == 'WatchWidgets/Info.plist' },
        'VolumeArcWatchWidgets must use the explicit WidgetKit Info.plist')
+assert(watch_target.build_configurations.all? { |config| config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] == 'AppIcon' },
+       'VolumeArcWatch must compile the AppIcon asset catalog')
+assert(watch_target.build_configurations.all? { |config| config.build_settings['INFOPLIST_FILE'] == 'Watch/Info.plist' },
+       'VolumeArcWatch must use the explicit watch Info.plist')
+assert(resource_phase_file?(watch_target, 'Assets.xcassets'),
+       'VolumeArcWatch must include its watchOS asset catalog')
 assert(watch_target.dependencies.any? { |dependency| dependency.target&.name == 'VolumeArcCoreWatch' },
        'VolumeArcWatch must depend on the watchOS core target')
 assert(watch_widgets_target.dependencies.any? { |dependency| dependency.target&.name == 'VolumeArcCoreWatch' },
@@ -94,7 +104,15 @@ assert(watch_extensions_phase.symbol_dst_subfolder_spec == :plug_ins,
 assert_remove_headers(phase_file!(watch_extensions_phase, 'VolumeArcWatchWidgets.appex'))
 
 watch_widget_plist = plist!(File.join(root, 'WatchWidgets/Info.plist'))
+assert(watch_widget_plist['CFBundleDisplayName'] == 'VolumeArc',
+       'WatchWidgets/Info.plist must declare CFBundleDisplayName for App Store Connect')
 assert(watch_widget_plist.dig('NSExtension', 'NSExtensionPointIdentifier') == 'com.apple.widgetkit-extension',
        'WatchWidgets/Info.plist must declare the WidgetKit extension point')
+
+watch_plist = plist!(File.join(root, 'Watch/Info.plist'))
+assert(watch_plist.dig('CFBundleIcons', 'CFBundlePrimaryIcon', 'CFBundleIconName') == 'AppIcon',
+       'Watch/Info.plist must declare CFBundleIconName=AppIcon')
+assert(watch_plist.dig('CFBundleIcons', 'CFBundlePrimaryIcon', 'CFBundleIconFiles')&.include?('AppIcon'),
+       'Watch/Info.plist must declare CFBundleIconFiles for App Store Connect')
 
 puts 'Watch app embedding is wired correctly.'

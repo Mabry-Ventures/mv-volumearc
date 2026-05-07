@@ -203,6 +203,12 @@ end
 configure_target(watch_target, bundle_id: 'com.mabryventures.VolumeArc.watchkitapp', extra: {
   'TARGETED_DEVICE_FAMILY' => '4',
   'PRODUCT_NAME' => 'VolumeArcWatch',
+  'ASSETCATALOG_COMPILER_APPICON_NAME' => 'AppIcon',
+  # App Store Connect still validates the watch app's legacy
+  # CFBundleIconFiles array in addition to the asset-catalog
+  # CFBundleIconName. Keep those structured icon keys in a real plist;
+  # INFOPLIST_KEY_* cannot express the nested dictionary/array shape.
+  'INFOPLIST_FILE' => 'Watch/Info.plist',
   'INFOPLIST_KEY_WKApplication' => 'YES',
   'INFOPLIST_KEY_WKCompanionAppBundleIdentifier' => 'com.mabryventures.VolumeArc',
   'INFOPLIST_KEY_UISupportedInterfaceOrientations' => 'UIInterfaceOrientationPortrait',
@@ -343,6 +349,7 @@ add_resource(app_group, app_target, 'PrivacyInfo.xcprivacy')
 add_resource(watch_group, watch_target, 'PrivacyInfo.xcprivacy')
 add_resource(watch_widgets_group, watch_widgets_target, 'PrivacyInfo.xcprivacy')
 add_resource(widgets_group, widget_target, 'PrivacyInfo.xcprivacy')
+add_resource(watch_group, watch_target, 'Assets.xcassets')
 
 # VOL-105 Phase 2: ship the exercise-illustration asset catalog with the
 # app target. The catalog provides namespacing via Contents.json so each
@@ -558,10 +565,9 @@ storekit_reference = <<~XML.chomp
       </StoreKitConfigurationFileReference>
 XML
 unless ui_scheme_xml.include?('StoreKitConfigurationFileReference')
-  inserted = ui_scheme_xml.sub!(
-    "      allowLocationSimulation = \"YES\">\n   </LaunchAction>",
-    "      allowLocationSimulation = \"YES\">\n#{app_runnable}\n#{storekit_reference}\n   </LaunchAction>"
-  )
+  launch_action_close = '   </LaunchAction>'
+  launch_action_payload = ui_scheme_xml.include?('BuildableProductRunnable') ? storekit_reference : "#{app_runnable}\n#{storekit_reference}"
+  inserted = ui_scheme_xml.sub!(launch_action_close, "#{launch_action_payload}\n#{launch_action_close}")
   unless inserted
     raise "Failed to insert StoreKitConfigurationFileReference into #{ui_scheme_path}; " \
           'VolumeArcAppUITests LaunchAction XML format may have changed.'
