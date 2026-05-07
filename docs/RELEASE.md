@@ -15,7 +15,7 @@
 ## Versioning
 
 - **Marketing version** (`1.2.3`): read from `VERSION` file at repo root
-- **Build number**: pinned to `1` in the committed pbxproj; release tooling (`scripts/archive_for_distribution.sh`, Fastlane `ios beta`) overrides `CURRENT_PROJECT_VERSION` to `git rev-list --count HEAD` at `xcodebuild archive` time, so TestFlight/App Store uploads keep a monotonic build number. Pass `BUILD_NUMBER=<n>` explicitly to force a specific value. (VOL-106 pinned the generator default; the prior behavior baked the git count into the pbxproj on every regen and cascaded UUID churn through `predictabilize_uuids`.)
+- **Build number**: pinned to `1` in the committed pbxproj; release tooling (`scripts/archive_for_distribution.sh`, Fastlane `ios beta`) overrides `CURRENT_PROJECT_VERSION` to `git rev-list --count HEAD` at `xcodebuild archive` time, so TestFlight/App Store uploads keep a monotonic build number. Xcode Cloud uses `ci_scripts/ci_post_clone.sh` to patch the throwaway checked-out project to `CI_BUILD_NUMBER` before archive because that value is only available to the hook shell environment. Pass `BUILD_NUMBER=<n>` explicitly to force a specific value in local release tooling. (VOL-106 pinned the generator default; the prior behavior baked the git count into the pbxproj on every regen and cascaded UUID churn through `predictabilize_uuids`.)
 - Bump `VERSION` in a dedicated PR before tagging
 
 ## TestFlight release

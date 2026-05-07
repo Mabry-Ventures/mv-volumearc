@@ -103,20 +103,30 @@ else
 fi
 
 # Xcode Cloud assigns a monotonically increasing CI_BUILD_NUMBER, but that
-# value is only a shell environment variable. Regenerate the committed Xcode
+# value is only a shell environment variable. Patch the checked-out generated
 # project for archive workflows so CURRENT_PROJECT_VERSION is baked into every
-# app/extension target before Xcode Cloud invokes xcodebuild. Without this,
-# the generated project defaults to build 1 even when the Xcode Cloud run is
-# Build 14, which can make TestFlight/App Store processing drift from the run
-# users see in Xcode Cloud.
+# app/extension target before Xcode Cloud invokes xcodebuild. Do this directly
+# instead of regenerating the project: Apple's clean Xcode Cloud image does not
+# include the Ruby xcodeproj gem.
 if [[ "${CI_XCODEBUILD_ACTION:-}" == "archive" && -n "${CI_BUILD_NUMBER:-}" ]]; then
-  echo "Regenerating Xcode project with Xcode Cloud build number ${CI_BUILD_NUMBER}"
-  (
-    cd "$REPO_ROOT"
-    DEVELOPMENT_TEAM="${CI_TEAM_ID:-A886EMZZW6}" \
-      BUILD_NUMBER="${CI_BUILD_NUMBER}" \
-      ruby scripts/generate_xcode_project.rb
-  )
+  if [[ ! "$CI_BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: CI_BUILD_NUMBER must be numeric: $CI_BUILD_NUMBER" >&2
+    exit 1
+  fi
+
+  PROJECT_FILE="$REPO_ROOT/VolumeArcApple.xcodeproj/project.pbxproj"
+  if [[ ! -f "$PROJECT_FILE" ]]; then
+    echo "ERROR: Xcode project file not found at $PROJECT_FILE" >&2
+    exit 1
+  fi
+
+  /usr/bin/perl -0pi -e "s/CURRENT_PROJECT_VERSION = [^;]+;/CURRENT_PROJECT_VERSION = ${CI_BUILD_NUMBER};/g" "$PROJECT_FILE"
+  patched_count="$(grep -c "CURRENT_PROJECT_VERSION = ${CI_BUILD_NUMBER};" "$PROJECT_FILE" || true)"
+  if [[ "$patched_count" -eq 0 ]]; then
+    echo "ERROR: Failed to patch CURRENT_PROJECT_VERSION in $PROJECT_FILE" >&2
+    exit 1
+  fi
+  echo "Patched CURRENT_PROJECT_VERSION to ${CI_BUILD_NUMBER} in Xcode project (${patched_count} build settings)"
 fi
 
 # Only install sentry-cli for archive workflows; tests and PR builds
