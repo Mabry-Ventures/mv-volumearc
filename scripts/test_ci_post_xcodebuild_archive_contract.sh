@@ -114,6 +114,47 @@ if ! grep -q "missing embedded watch app" "$LOG_PATH"; then
   exit 1
 fi
 
+mkdir -p "$WATCH_WIDGET_BUNDLE"
+write_plist "$WATCH_BUNDLE/Info.plist" "16"
+write_plist "$WATCH_WIDGET_BUNDLE/Info.plist" "16" "" "com.apple.widgetkit-extension" "watch-widget"
+if CI_XCODEBUILD_ACTION="archive" \
+  CI_XCODEBUILD_EXIT_CODE="0" \
+  CI_BUILD_NUMBER="16" \
+  CI_ARCHIVE_PATH="$ARCHIVE_PATH" \
+  SENTRY_AUTH_TOKEN="fake-token" \
+  SENTRY_CLI_TEST_LOG="$SENTRY_LOG" \
+  PATH="$TMP_DIR/bin:$PATH" \
+  bash "$ROOT_DIR/ci_scripts/ci_post_xcodebuild.sh" >"$LOG_PATH" 2>&1; then
+  echo "FAIL: ci_post_xcodebuild.sh accepted a watch plist missing icon metadata" >&2
+  exit 1
+fi
+
+if ! grep -q "expected non-empty CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconName" "$LOG_PATH"; then
+  echo "FAIL: missing-icon failure did not explain the archive contract violation" >&2
+  cat "$LOG_PATH" >&2
+  exit 1
+fi
+
+write_plist "$WATCH_BUNDLE/Info.plist" "16" "" "" "watch-app"
+write_plist "$WATCH_WIDGET_BUNDLE/Info.plist" "16" "" "com.apple.widgetkit-extension"
+if CI_XCODEBUILD_ACTION="archive" \
+  CI_XCODEBUILD_EXIT_CODE="0" \
+  CI_BUILD_NUMBER="16" \
+  CI_ARCHIVE_PATH="$ARCHIVE_PATH" \
+  SENTRY_AUTH_TOKEN="fake-token" \
+  SENTRY_CLI_TEST_LOG="$SENTRY_LOG" \
+  PATH="$TMP_DIR/bin:$PATH" \
+  bash "$ROOT_DIR/ci_scripts/ci_post_xcodebuild.sh" >"$LOG_PATH" 2>&1; then
+  echo "FAIL: ci_post_xcodebuild.sh accepted a watch widget plist missing CFBundleDisplayName" >&2
+  exit 1
+fi
+
+if ! grep -q "expected CFBundleDisplayName=VolumeArc" "$LOG_PATH"; then
+  echo "FAIL: missing-widget-display-name failure did not explain the archive contract violation" >&2
+  cat "$LOG_PATH" >&2
+  exit 1
+fi
+
 CI_XCODEBUILD_ACTION="archive" \
   CI_XCODEBUILD_EXIT_CODE="65" \
   SENTRY_AUTH_TOKEN="fake-token" \

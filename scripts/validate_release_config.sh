@@ -270,14 +270,14 @@ for widget_plist in "Widgets/Info.plist" "WatchWidgets/Info.plist"; do
   fi
 done
 
-for watch_icon_file in \
+for watch_icon_asset in \
   "Watch/Info.plist" \
   "Watch/Assets.xcassets/Contents.json" \
   "Watch/Assets.xcassets/AccentColor.colorset/Contents.json" \
   "Watch/Assets.xcassets/AppIcon.appiconset/Contents.json" \
   "Watch/Assets.xcassets/AppIcon.appiconset/AppIcon.png"; do
-  if [[ ! -f "$watch_icon_file" ]]; then
-    echo "FAIL: Missing watch app icon asset $watch_icon_file" >&2
+  if [[ ! -f "$watch_icon_asset" ]]; then
+    echo "FAIL: Missing watch app icon asset $watch_icon_asset" >&2
     exit 1
   fi
 done
