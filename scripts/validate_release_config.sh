@@ -244,12 +244,20 @@ xcodebuild \
 widget_required=(
   "PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.widgets"
   "CODE_SIGN_ENTITLEMENTS = Widgets/VolumeArcWidgets.entitlements"
-  "INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier = com.apple.widgetkit-extension"
+  "INFOPLIST_FILE = Widgets/Info.plist"
 )
 
 for required in "${widget_required[@]}"; do
   if ! grep -F "$required" "$tmp_settings" >/dev/null; then
     echo "Missing required widget build setting: $required" >&2
+    exit 1
+  fi
+done
+
+for widget_plist in "Widgets/Info.plist" "WatchWidgets/Info.plist"; do
+  extension_point="$(plutil -extract NSExtension.NSExtensionPointIdentifier raw -o - "$widget_plist" 2>/dev/null || echo "")"
+  if [[ "$extension_point" != "com.apple.widgetkit-extension" ]]; then
+    echo "Missing WidgetKit extension point in $widget_plist" >&2
     exit 1
   fi
 done

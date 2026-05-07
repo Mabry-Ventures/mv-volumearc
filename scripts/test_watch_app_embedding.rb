@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require 'xcodeproj'
+require 'cfpropertylist'
 require 'rexml/document'
 
 root = File.expand_path('..', __dir__)
@@ -31,6 +32,12 @@ def assert_remove_headers(build_file)
          "#{build_file.display_name} must remove headers on copy")
 end
 
+def plist!(path)
+  CFPropertyList.native_types(CFPropertyList::List.new(file: path).value)
+rescue StandardError => e
+  abort("FAIL: Could not read plist #{path}: #{e.message}")
+end
+
 app_target = target!(project, 'VolumeArcApp')
 core_watch_target = target!(project, 'VolumeArcCoreWatch')
 watch_target = target!(project, 'VolumeArcWatch')
@@ -42,6 +49,8 @@ assert(core_watch_target.build_configurations.all? { |config| config.build_setti
        'VolumeArcCoreWatch must preserve the VolumeArcCore module name')
 assert(watch_widgets_target.product_type == 'com.apple.product-type.watchkit2-extension',
        'VolumeArcWatchWidgets must use the watch extension product type')
+assert(watch_widgets_target.build_configurations.all? { |config| config.build_settings['INFOPLIST_FILE'] == 'WatchWidgets/Info.plist' },
+       'VolumeArcWatchWidgets must use the explicit WidgetKit Info.plist')
 assert(watch_target.dependencies.any? { |dependency| dependency.target&.name == 'VolumeArcCoreWatch' },
        'VolumeArcWatch must depend on the watchOS core target')
 assert(watch_widgets_target.dependencies.any? { |dependency| dependency.target&.name == 'VolumeArcCoreWatch' },
@@ -83,5 +92,9 @@ watch_extensions_phase = copy_phase!(watch_target, 'Embed Watch Extensions')
 assert(watch_extensions_phase.symbol_dst_subfolder_spec == :plug_ins,
        'Embed Watch Extensions must copy watch extensions into PlugIns')
 assert_remove_headers(phase_file!(watch_extensions_phase, 'VolumeArcWatchWidgets.appex'))
+
+watch_widget_plist = plist!(File.join(root, 'WatchWidgets/Info.plist'))
+assert(watch_widget_plist.dig('NSExtension', 'NSExtensionPointIdentifier') == 'com.apple.widgetkit-extension',
+       'WatchWidgets/Info.plist must declare the WidgetKit extension point')
 
 puts 'Watch app embedding is wired correctly.'

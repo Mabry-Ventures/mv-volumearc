@@ -20,6 +20,7 @@ set -euo pipefail
 echo "VOL-126: ci_post_clone.sh starting"
 echo "CI_WORKFLOW = ${CI_WORKFLOW:-<unset>}"
 echo "CI_XCODEBUILD_ACTION = ${CI_XCODEBUILD_ACTION:-<unset>}"
+echo "CI_BUILD_NUMBER = ${CI_BUILD_NUMBER:-<unset>}"
 
 # Resolve the repo root regardless of where Xcode Cloud invokes the
 # script from. `CI_WORKSPACE` / `CI_PRIMARY_REPOSITORY_PATH` are
@@ -99,6 +100,23 @@ if [[ -f "$INFO_PLIST" ]]; then
   fi
 else
   echo "WARNING: Info.plist not found at $INFO_PLIST — runtime config not patched"
+fi
+
+# Xcode Cloud assigns a monotonically increasing CI_BUILD_NUMBER, but that
+# value is only a shell environment variable. Regenerate the committed Xcode
+# project for archive workflows so CURRENT_PROJECT_VERSION is baked into every
+# app/extension target before Xcode Cloud invokes xcodebuild. Without this,
+# the generated project defaults to build 1 even when the Xcode Cloud run is
+# Build 14, which can make TestFlight/App Store processing drift from the run
+# users see in Xcode Cloud.
+if [[ "${CI_XCODEBUILD_ACTION:-}" == "archive" && -n "${CI_BUILD_NUMBER:-}" ]]; then
+  echo "Regenerating Xcode project with Xcode Cloud build number ${CI_BUILD_NUMBER}"
+  (
+    cd "$REPO_ROOT"
+    DEVELOPMENT_TEAM="${CI_TEAM_ID:-A886EMZZW6}" \
+      BUILD_NUMBER="${CI_BUILD_NUMBER}" \
+      ruby scripts/generate_xcode_project.rb
+  )
 fi
 
 # Only install sentry-cli for archive workflows; tests and PR builds
