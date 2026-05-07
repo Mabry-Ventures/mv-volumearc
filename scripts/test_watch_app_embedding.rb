@@ -32,6 +32,10 @@ def assert_remove_headers(build_file)
          "#{build_file.display_name} must remove headers on copy")
 end
 
+def array_build_setting(value)
+  Array(value).flat_map { |entry| entry.to_s.split(/\s+/) }
+end
+
 def resource_phase_file?(target, product_path)
   target.resources_build_phase.files.any? { |file| file.file_ref&.path == product_path }
 end
@@ -55,6 +59,9 @@ assert(watch_widgets_target.product_type == 'com.apple.product-type.watchkit2-ex
        'VolumeArcWatchWidgets must use the watch extension product type')
 assert(watch_widgets_target.build_configurations.all? { |config| config.build_settings['INFOPLIST_FILE'] == 'WatchWidgets/Info.plist' },
        'VolumeArcWatchWidgets must use the explicit WidgetKit Info.plist')
+assert(watch_widgets_target.build_configurations.all? { |config|
+  array_build_setting(config.build_settings['OTHER_LDFLAGS']).include?('_NSExtensionMain')
+}, 'VolumeArcWatchWidgets must link with _NSExtensionMain as the extension entry point')
 assert(watch_target.build_configurations.all? { |config| config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] == 'AppIcon' },
        'VolumeArcWatch must compile the AppIcon asset catalog')
 assert(watch_target.build_configurations.all? { |config| config.build_settings['INFOPLIST_FILE'] == 'Watch/Info.plist' },

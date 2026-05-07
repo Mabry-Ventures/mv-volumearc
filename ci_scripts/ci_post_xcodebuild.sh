@@ -165,6 +165,36 @@ require_watch_assets_car() {
   fi
 }
 
+require_extension_entry_point() {
+  local bundle="$1"
+  local label="$2"
+  local executable_name
+  executable_name="$(plist_value "CFBundleExecutable" "${bundle}/Info.plist")"
+  if [[ -z "$executable_name" ]]; then
+    echo "::error::VOL-133: ${label} missing CFBundleExecutable in ${bundle}/Info.plist"
+    exit 1
+  fi
+
+  local executable_path="${bundle}/${executable_name}"
+  if [[ ! -f "$executable_path" ]]; then
+    echo "::error::VOL-133: ${label} missing executable at ${executable_path}"
+    exit 1
+  fi
+
+  local symbols
+  local nm_bin="${NM_BIN:-/usr/bin/nm}"
+  if ! symbols="$("$nm_bin" -m "$executable_path" 2>&1)"; then
+    echo "::error::VOL-133: unable to inspect ${label} symbols at ${executable_path}"
+    printf "%s\n" "$symbols"
+    exit 1
+  fi
+
+  if ! printf "%s\n" "$symbols" | /usr/bin/grep -Eq '(^|[[:space:]])_NSExtensionMain($|[[:space:]])'; then
+    echo "::error::VOL-133: ${label} executable must link with -e _NSExtensionMain; App Store Connect rejects extension binaries that enter through _main"
+    exit 1
+  fi
+}
+
 APP_BUNDLE="${ARCHIVE_PATH}/Products/Applications/VolumeArc.app"
 WATCH_BUNDLE="${APP_BUNDLE}/Watch/VolumeArcWatch.app"
 WATCH_WIDGET_BUNDLE="${WATCH_BUNDLE}/PlugIns/VolumeArcWatchWidgets.appex"
@@ -177,6 +207,7 @@ require_plist_nonempty "CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconName" "${W
 require_plist_nonempty "CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconFiles.0" "${WATCH_BUNDLE}/Info.plist"
 require_plist_value "CFBundleDisplayName" "VolumeArc" "${WATCH_WIDGET_BUNDLE}/Info.plist"
 require_plist_value "NSExtension.NSExtensionPointIdentifier" "com.apple.widgetkit-extension" "${WATCH_WIDGET_BUNDLE}/Info.plist"
+require_extension_entry_point "${WATCH_WIDGET_BUNDLE}" "watch widget extension"
 require_watch_assets_car "${WATCH_BUNDLE}/Assets.car"
 
 if [[ -n "${CI_BUILD_NUMBER:-}" ]]; then
@@ -193,7 +224,7 @@ if [[ -n "${VOLUMEARC_AI_RELAY_URL:-}" ]]; then
   fi
 fi
 
-echo "VOL-133: archive contract OK (watch app, watch icon renditions, watch widget, build numbers, relay config)"
+echo "VOL-133: archive contract OK (watch app, watch icon renditions, watch widget entry point, build numbers, relay config)"
 
 DSYM_DIR="${ARCHIVE_PATH}/dSYMs"
 if [[ ! -d "${DSYM_DIR}" ]] || [[ -z "$(ls -A "${DSYM_DIR}" 2>/dev/null)" ]]; then

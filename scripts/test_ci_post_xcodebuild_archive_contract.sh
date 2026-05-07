@@ -9,6 +9,7 @@ ARCHIVE_PATH="$TMP_DIR/Derived/VolumeArc.xcarchive"
 APP_BUNDLE="$ARCHIVE_PATH/Products/Applications/VolumeArc.app"
 WATCH_BUNDLE="$APP_BUNDLE/Watch/VolumeArcWatch.app"
 WATCH_WIDGET_BUNDLE="$WATCH_BUNDLE/PlugIns/VolumeArcWatchWidgets.appex"
+WATCH_WIDGET_EXECUTABLE="$WATCH_WIDGET_BUNDLE/VolumeArcWatchWidgets"
 WATCH_ASSETS_CAR="$WATCH_BUNDLE/Assets.car"
 DSYM_DIR="$ARCHIVE_PATH/dSYMs"
 LOG_PATH="$TMP_DIR/ci_post_xcodebuild.log"
@@ -16,6 +17,7 @@ SENTRY_LOG="$TMP_DIR/sentry-cli.log"
 
 mkdir -p "$WATCH_WIDGET_BUNDLE" "$DSYM_DIR/VolumeArc.app.dSYM" "$TMP_DIR/bin"
 touch "$WATCH_ASSETS_CAR"
+touch "$WATCH_WIDGET_EXECUTABLE"
 
 write_plist() {
   local path="$1"
@@ -50,6 +52,8 @@ write_plist() {
       printf '  </dict>\n'
     fi
     if [[ "$bundle_kind" == "watch-widget" ]]; then
+      printf '  <key>CFBundleExecutable</key>\n'
+      printf '  <string>VolumeArcWatchWidgets</string>\n'
       printf '  <key>CFBundleDisplayName</key>\n'
       printf '  <string>VolumeArc</string>\n'
     fi
@@ -100,6 +104,16 @@ exit 64
 SH
 chmod +x "$TMP_DIR/bin/xcrun"
 
+cat >"$TMP_DIR/bin/nm" <<'SH'
+#!/usr/bin/env bash
+if [[ "${NM_OUTPUT_MODE:-valid}" == "invalid" ]]; then
+  echo '0000000100009d70 (__TEXT,__text) external _main'
+else
+  echo '                 (undefined) external _NSExtensionMain (from Foundation)'
+fi
+SH
+chmod +x "$TMP_DIR/bin/nm"
+
 CI_XCODEBUILD_ACTION="archive" \
   CI_XCODEBUILD_EXIT_CODE="0" \
   CI_BUILD_NUMBER="16" \
@@ -107,6 +121,7 @@ CI_XCODEBUILD_ACTION="archive" \
   VOLUMEARC_AI_RELAY_URL="https://relay.volumearc.app" \
   SENTRY_AUTH_TOKEN="fake-token" \
   SENTRY_CLI_TEST_LOG="$SENTRY_LOG" \
+  NM_BIN="$TMP_DIR/bin/nm" \
   PATH="$TMP_DIR/bin:$PATH" \
   bash "$ROOT_DIR/ci_scripts/ci_post_xcodebuild.sh" >"$LOG_PATH"
 
@@ -129,6 +144,7 @@ if CI_XCODEBUILD_ACTION="archive" \
   CI_ARCHIVE_PATH="$ARCHIVE_PATH" \
   SENTRY_AUTH_TOKEN="fake-token" \
   SENTRY_CLI_TEST_LOG="$SENTRY_LOG" \
+  NM_BIN="$TMP_DIR/bin/nm" \
   PATH="$TMP_DIR/bin:$PATH" \
   bash "$ROOT_DIR/ci_scripts/ci_post_xcodebuild.sh" >"$LOG_PATH" 2>&1; then
   echo "FAIL: ci_post_xcodebuild.sh accepted an archive without an embedded watch app" >&2
@@ -142,6 +158,7 @@ if ! grep -q "missing embedded watch app" "$LOG_PATH"; then
 fi
 
 mkdir -p "$WATCH_WIDGET_BUNDLE"
+touch "$WATCH_WIDGET_EXECUTABLE"
 write_plist "$WATCH_BUNDLE/Info.plist" "16"
 write_plist "$WATCH_WIDGET_BUNDLE/Info.plist" "16" "" "com.apple.widgetkit-extension" "watch-widget"
 if CI_XCODEBUILD_ACTION="archive" \
@@ -150,6 +167,7 @@ if CI_XCODEBUILD_ACTION="archive" \
   CI_ARCHIVE_PATH="$ARCHIVE_PATH" \
   SENTRY_AUTH_TOKEN="fake-token" \
   SENTRY_CLI_TEST_LOG="$SENTRY_LOG" \
+  NM_BIN="$TMP_DIR/bin/nm" \
   PATH="$TMP_DIR/bin:$PATH" \
   bash "$ROOT_DIR/ci_scripts/ci_post_xcodebuild.sh" >"$LOG_PATH" 2>&1; then
   echo "FAIL: ci_post_xcodebuild.sh accepted a watch plist missing icon metadata" >&2
@@ -170,6 +188,7 @@ if CI_XCODEBUILD_ACTION="archive" \
   CI_ARCHIVE_PATH="$ARCHIVE_PATH" \
   SENTRY_AUTH_TOKEN="fake-token" \
   SENTRY_CLI_TEST_LOG="$SENTRY_LOG" \
+  NM_BIN="$TMP_DIR/bin/nm" \
   PATH="$TMP_DIR/bin:$PATH" \
   bash "$ROOT_DIR/ci_scripts/ci_post_xcodebuild.sh" >"$LOG_PATH" 2>&1; then
   echo "FAIL: ci_post_xcodebuild.sh accepted a watch widget plist missing CFBundleDisplayName" >&2
@@ -183,6 +202,26 @@ if ! grep -q "expected CFBundleDisplayName=VolumeArc" "$LOG_PATH"; then
 fi
 
 write_plist "$WATCH_WIDGET_BUNDLE/Info.plist" "16" "" "com.apple.widgetkit-extension" "watch-widget"
+if CI_XCODEBUILD_ACTION="archive" \
+  CI_XCODEBUILD_EXIT_CODE="0" \
+  CI_BUILD_NUMBER="16" \
+  CI_ARCHIVE_PATH="$ARCHIVE_PATH" \
+  SENTRY_AUTH_TOKEN="fake-token" \
+  SENTRY_CLI_TEST_LOG="$SENTRY_LOG" \
+  NM_BIN="$TMP_DIR/bin/nm" \
+  NM_OUTPUT_MODE="invalid" \
+  PATH="$TMP_DIR/bin:$PATH" \
+  bash "$ROOT_DIR/ci_scripts/ci_post_xcodebuild.sh" >"$LOG_PATH" 2>&1; then
+  echo "FAIL: ci_post_xcodebuild.sh accepted a watch widget executable without _NSExtensionMain" >&2
+  exit 1
+fi
+
+if ! grep -q "must link with -e _NSExtensionMain" "$LOG_PATH"; then
+  echo "FAIL: missing-extension-entry-point failure did not explain the archive contract violation" >&2
+  cat "$LOG_PATH" >&2
+  exit 1
+fi
+
 rm -f "$WATCH_ASSETS_CAR"
 if CI_XCODEBUILD_ACTION="archive" \
   CI_XCODEBUILD_EXIT_CODE="0" \
@@ -190,6 +229,7 @@ if CI_XCODEBUILD_ACTION="archive" \
   CI_ARCHIVE_PATH="$ARCHIVE_PATH" \
   SENTRY_AUTH_TOKEN="fake-token" \
   SENTRY_CLI_TEST_LOG="$SENTRY_LOG" \
+  NM_BIN="$TMP_DIR/bin/nm" \
   PATH="$TMP_DIR/bin:$PATH" \
   bash "$ROOT_DIR/ci_scripts/ci_post_xcodebuild.sh" >"$LOG_PATH" 2>&1; then
   echo "FAIL: ci_post_xcodebuild.sh accepted a watch bundle without compiled Assets.car" >&2
@@ -206,6 +246,7 @@ touch "$WATCH_ASSETS_CAR"
 CI_XCODEBUILD_ACTION="archive" \
   CI_XCODEBUILD_EXIT_CODE="65" \
   SENTRY_AUTH_TOKEN="fake-token" \
+  NM_BIN="$TMP_DIR/bin/nm" \
   PATH="$TMP_DIR/bin:$PATH" \
   bash "$ROOT_DIR/ci_scripts/ci_post_xcodebuild.sh" >"$LOG_PATH"
 
