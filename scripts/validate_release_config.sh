@@ -221,7 +221,9 @@ xcodebuild \
 
 watch_required=(
   "PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.watchkitapp"
+  "ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon"
   "CODE_SIGN_ENTITLEMENTS = Watch/VolumeArcWatch.entitlements"
+  "INFOPLIST_FILE = Watch/Info.plist"
   "INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.mabryventures.VolumeArc"
 )
 
@@ -255,12 +257,42 @@ for required in "${widget_required[@]}"; do
 done
 
 for widget_plist in "Widgets/Info.plist" "WatchWidgets/Info.plist"; do
+  display_name="$(plutil -extract CFBundleDisplayName raw -o - "$widget_plist" 2>/dev/null || echo "")"
+  if [[ "$display_name" != "VolumeArc" ]]; then
+    echo "Missing CFBundleDisplayName=VolumeArc in $widget_plist" >&2
+    exit 1
+  fi
+
   extension_point="$(plutil -extract NSExtension.NSExtensionPointIdentifier raw -o - "$widget_plist" 2>/dev/null || echo "")"
   if [[ "$extension_point" != "com.apple.widgetkit-extension" ]]; then
     echo "Missing WidgetKit extension point in $widget_plist" >&2
     exit 1
   fi
 done
+
+for watch_icon_asset in \
+  "Watch/Info.plist" \
+  "Watch/Assets.xcassets/Contents.json" \
+  "Watch/Assets.xcassets/AccentColor.colorset/Contents.json" \
+  "Watch/Assets.xcassets/AppIcon.appiconset/Contents.json" \
+  "Watch/Assets.xcassets/AppIcon.appiconset/AppIcon.png"; do
+  if [[ ! -f "$watch_icon_asset" ]]; then
+    echo "FAIL: Missing watch app icon asset $watch_icon_asset" >&2
+    exit 1
+  fi
+done
+
+watch_icon_name="$(plutil -extract CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconName raw -o - "Watch/Info.plist" 2>/dev/null || echo "")"
+if [[ "$watch_icon_name" != "AppIcon" ]]; then
+  echo "FAIL: Watch/Info.plist must declare CFBundleIconName=AppIcon" >&2
+  exit 1
+fi
+
+watch_icon_file="$(plutil -extract CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconFiles.0 raw -o - "Watch/Info.plist" 2>/dev/null || echo "")"
+if [[ "$watch_icon_file" != "AppIcon" ]]; then
+  echo "FAIL: Watch/Info.plist must declare CFBundleIconFiles with AppIcon" >&2
+  exit 1
+fi
 
 # VolumeArcAppTests scheme has no build target (tests-only), so -scheme +
 # -derivedDataPath would resolve against nothing. The tests target has no

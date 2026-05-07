@@ -108,6 +108,17 @@ require_plist_value() {
   fi
 }
 
+require_plist_nonempty() {
+  local key="$1"
+  local plist="$2"
+  local actual
+  actual="$(plist_value "$key" "$plist")"
+  if [[ -z "$actual" ]]; then
+    echo "::error::VOL-133: expected non-empty ${key} in ${plist}"
+    exit 1
+  fi
+}
+
 APP_BUNDLE="${ARCHIVE_PATH}/Products/Applications/VolumeArc.app"
 WATCH_BUNDLE="${APP_BUNDLE}/Watch/VolumeArcWatch.app"
 WATCH_WIDGET_BUNDLE="${WATCH_BUNDLE}/PlugIns/VolumeArcWatchWidgets.appex"
@@ -116,6 +127,9 @@ require_dir "$APP_BUNDLE" "VolumeArc app bundle"
 require_dir "$WATCH_BUNDLE" "embedded watch app"
 require_dir "$WATCH_WIDGET_BUNDLE" "embedded watch widget extension"
 
+require_plist_nonempty "CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconName" "${WATCH_BUNDLE}/Info.plist"
+require_plist_nonempty "CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconFiles.0" "${WATCH_BUNDLE}/Info.plist"
+require_plist_value "CFBundleDisplayName" "VolumeArc" "${WATCH_WIDGET_BUNDLE}/Info.plist"
 require_plist_value "NSExtension.NSExtensionPointIdentifier" "com.apple.widgetkit-extension" "${WATCH_WIDGET_BUNDLE}/Info.plist"
 
 if [[ -n "${CI_BUILD_NUMBER:-}" ]]; then
@@ -132,7 +146,7 @@ if [[ -n "${VOLUMEARC_AI_RELAY_URL:-}" ]]; then
   fi
 fi
 
-echo "VOL-133: archive contract OK (watch app, watch widget, build numbers, relay config)"
+echo "VOL-133: archive contract OK (watch app, watch icons, watch widget, build numbers, relay config)"
 
 DSYM_DIR="${ARCHIVE_PATH}/dSYMs"
 if [[ ! -d "${DSYM_DIR}" ]] || [[ -z "$(ls -A "${DSYM_DIR}" 2>/dev/null)" ]]; then
