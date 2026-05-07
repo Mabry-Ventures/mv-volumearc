@@ -55,11 +55,26 @@ require_plist_value() {
 require_codesign() {
   local bundle="$1"
   local label="$2"
+  local expected_team="${3:-}"
   if ! /usr/bin/codesign --verify --deep --strict "$bundle" >/dev/null 2>&1; then
     echo "FAIL: $label codesign verification failed at $bundle" >&2
     /usr/bin/codesign --verify --deep --strict "$bundle" >&2 || true
     exit 1
   fi
+
+  local team_identifier
+  team_identifier="$(/usr/bin/codesign -d --verbose=4 "$bundle" 2>&1 | /usr/bin/awk -F= '/^TeamIdentifier=/ { print $2; exit }')"
+  if [[ -z "$team_identifier" ]]; then
+    echo "FAIL: $label codesign TeamIdentifier missing at $bundle" >&2
+    exit 1
+  fi
+
+  if [[ -n "$expected_team" && "$team_identifier" != "$expected_team" ]]; then
+    echo "FAIL: $label codesign TeamIdentifier mismatch at $bundle: expected $expected_team, got $team_identifier" >&2
+    exit 1
+  fi
+
+  LAST_TEAM_IDENTIFIER="$team_identifier"
 }
 
 require_watch_assets_car() {
@@ -123,9 +138,11 @@ if [[ -n "$EXPECTED_BUILD" ]]; then
   require_plist_value "CFBundleVersion" "$EXPECTED_BUILD" "$WATCH_WIDGET_BUNDLE/Info.plist"
 fi
 
-require_codesign "$APP_BUNDLE" "VolumeArc app"
-require_codesign "$WATCH_BUNDLE" "VolumeArc watch app"
-require_codesign "$WATCH_WIDGET_BUNDLE" "VolumeArc watch widget"
+LAST_TEAM_IDENTIFIER=""
+require_codesign "$APP_BUNDLE" "VolumeArc app" "${EXPECTED_TEAM_IDENTIFIER:-}"
+APP_TEAM_IDENTIFIER="$LAST_TEAM_IDENTIFIER"
+require_codesign "$WATCH_BUNDLE" "VolumeArc watch app" "$APP_TEAM_IDENTIFIER"
+require_codesign "$WATCH_WIDGET_BUNDLE" "VolumeArc watch widget" "$APP_TEAM_IDENTIFIER"
 require_watch_assets_car "$WATCH_ASSETS_CAR"
 
 echo "Exported IPA contract OK: watch app/widget embedded, relay config patched, signing valid, watch AppIcon renditions compiled."
