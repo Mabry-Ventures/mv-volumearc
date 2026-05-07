@@ -121,6 +121,36 @@ require_watch_assets_car() {
     ' "$assets_car"
 }
 
+require_extension_entry_point() {
+  local bundle="$1"
+  local label="$2"
+  local executable_name
+  executable_name="$(plist_value "CFBundleExecutable" "$bundle/Info.plist")"
+  if [[ -z "$executable_name" ]]; then
+    echo "FAIL: $label missing CFBundleExecutable in $bundle/Info.plist" >&2
+    exit 1
+  fi
+
+  local executable_path="$bundle/$executable_name"
+  if [[ ! -f "$executable_path" ]]; then
+    echo "FAIL: $label missing executable at $executable_path" >&2
+    exit 1
+  fi
+
+  local symbols
+  local nm_bin="${NM_BIN:-/usr/bin/nm}"
+  if ! symbols="$("$nm_bin" -m "$executable_path" 2>&1)"; then
+    echo "FAIL: unable to inspect $label symbols at $executable_path" >&2
+    printf "%s\n" "$symbols" >&2
+    exit 1
+  fi
+
+  if ! printf "%s\n" "$symbols" | /usr/bin/grep -Eq '(^|[[:space:]])_NSExtensionMain($|[[:space:]])'; then
+    echo "FAIL: $label executable must link with -e _NSExtensionMain; App Store Connect rejects extension binaries that enter through _main" >&2
+    exit 1
+  fi
+}
+
 require_dir "$APP_BUNDLE" "VolumeArc app bundle"
 require_dir "$WATCH_BUNDLE" "embedded watch app"
 require_dir "$WATCH_WIDGET_BUNDLE" "embedded watch widget extension"
@@ -143,6 +173,7 @@ require_codesign "$APP_BUNDLE" "VolumeArc app" "${EXPECTED_TEAM_IDENTIFIER:-}"
 APP_TEAM_IDENTIFIER="$LAST_TEAM_IDENTIFIER"
 require_codesign "$WATCH_BUNDLE" "VolumeArc watch app" "$APP_TEAM_IDENTIFIER"
 require_codesign "$WATCH_WIDGET_BUNDLE" "VolumeArc watch widget" "$APP_TEAM_IDENTIFIER"
+require_extension_entry_point "$WATCH_WIDGET_BUNDLE" "VolumeArc watch widget"
 require_watch_assets_car "$WATCH_ASSETS_CAR"
 
-echo "Exported IPA contract OK: watch app/widget embedded, relay config patched, signing valid, watch AppIcon renditions compiled."
+echo "Exported IPA contract OK: watch app/widget embedded, relay config patched, signing valid, watch widget entry point and AppIcon renditions compiled."

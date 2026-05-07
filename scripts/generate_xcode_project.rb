@@ -230,6 +230,7 @@ configure_target(watch_target, bundle_id: 'com.mabryventures.VolumeArc.watchkita
 configure_target(widget_target, bundle_id: 'com.mabryventures.VolumeArc.widgets', extra: {
   'PRODUCT_NAME' => 'VolumeArcWidgets',
   'APPLICATION_EXTENSION_API_ONLY' => 'YES',
+  'OTHER_LDFLAGS' => ['$(inherited)', '-e', '_NSExtensionMain'],
   'SKIP_INSTALL' => 'YES',
   'CODE_SIGN_ENTITLEMENTS' => 'Widgets/VolumeArcWidgets.entitlements',
   # WidgetKit requires a nested NSExtension dictionary. INFOPLIST_KEY_* build
@@ -240,6 +241,7 @@ configure_target(watch_widgets_target, bundle_id: 'com.mabryventures.VolumeArc.w
   'PRODUCT_NAME' => 'VolumeArcWatchWidgets',
   'TARGETED_DEVICE_FAMILY' => '4',
   'APPLICATION_EXTENSION_API_ONLY' => 'YES',
+  'OTHER_LDFLAGS' => ['$(inherited)', '-e', '_NSExtensionMain'],
   'SKIP_INSTALL' => 'YES',
   'CODE_SIGN_ENTITLEMENTS' => 'WatchWidgets/VolumeArcWatchWidgets.entitlements',
   # Same WidgetKit nested-plist requirement as the iOS widget extension.
