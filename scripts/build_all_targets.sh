@@ -37,7 +37,7 @@ xcodebuild \
 
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
-  -scheme "VolumeArcWatch" \
+  -scheme "VolumeArcWatchWidgets" \
   -sdk watchsimulator \
   -configuration Debug \
   -derivedDataPath "$DERIVED_DATA_PATH" \
@@ -47,7 +47,7 @@ xcodebuild \
 
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
-  -scheme "VolumeArcWatchWidgets" \
+  -scheme "VolumeArcWatch" \
   -sdk watchsimulator \
   -configuration Debug \
   -derivedDataPath "$DERIVED_DATA_PATH" \

@@ -133,6 +133,17 @@ def configure_target(target, bundle_id: nil, extra: {})
   end
 end
 
+def assign_deterministic_uuid(object, seed)
+  uuid = Digest::MD5.hexdigest(seed).upcase[0, 24]
+  project = object.project
+  existing = project.objects_by_uuid[uuid]
+  raise "Deterministic UUID collision for #{seed}: #{uuid}" if existing && existing != object
+
+  project.objects_by_uuid.delete(object.uuid)
+  object.instance_variable_set(:@uuid, uuid)
+  project.objects_by_uuid[uuid] = object
+end
+
 configure_target(core_target, extra: {
   'DEFINES_MODULE' => 'YES',
   'SKIP_INSTALL' => 'YES',
@@ -508,8 +519,21 @@ end
 # old random references in their tree-hash paths. Later passes run against
 # the increasingly deterministic references and converge. Must run before
 # `project.save` and before scheme generation so schemes pick up the final,
-# deterministic target UUIDs as BlueprintIdentifier.
-4.times { project.predictabilize_uuids }
+# deterministic target UUIDs as BlueprintIdentifier. Keep iterating to a
+# fixed point so new target-dependency shapes do not silently reintroduce
+# one-pass UUID drift.
+12.times { project.predictabilize_uuids }
+
+# The watch app must build its WidgetKit extension before copying it into
+# `VolumeArcWatch.app/PlugIns`. Adding this dependency before
+# `predictabilize_uuids` makes xcodeproj's graph-path hashing oscillate
+# because the target and dependency reference each other's generated UUIDs.
+# Add it after the rest of the graph reaches its deterministic fixed point,
+# then pin the two new dependency objects to content-derived UUIDs.
+watch_target.add_dependency(watch_widgets_target)
+watch_widget_dependency = watch_target.dependency_for_target(watch_widgets_target)
+assign_deterministic_uuid(watch_widget_dependency, 'VolumeArcWatch/PBXTargetDependency/VolumeArcWatchWidgets')
+assign_deterministic_uuid(watch_widget_dependency.target_proxy, 'VolumeArcWatch/PBXContainerItemProxy/VolumeArcWatchWidgets')
 
 project.save
 app_scheme = Xcodeproj::XCScheme.new

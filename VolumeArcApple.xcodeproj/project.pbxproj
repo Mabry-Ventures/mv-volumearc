@@ -244,6 +244,13 @@
 			remoteGlobalIDString = 0508B9DD0D5A033A2A9AFD59;
 			remoteInfo = VolumeArcCoreWatch;
 		};
+		5E0C64D082D6BD18EAEA8D4C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F8493584A9042E13605CEF3C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F45D9C10EAD81326473981A3;
+			remoteInfo = VolumeArcWatchWidgets;
+		};
 		66B54478C68F4CBF3581809F /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F8493584A9042E13605CEF3C /* Project object */;
@@ -1019,6 +1026,7 @@
 			);
 			dependencies = (
 				4A7C67C149888EC2B39D72C9 /* PBXTargetDependency */,
+				1E45B9A157B491C069AB1396 /* PBXTargetDependency */,
 			);
 			name = VolumeArcWatch;
 			productName = VolumeArcWatch;
@@ -1529,6 +1537,12 @@
 			name = VolumeArcUI;
 			target = 5BA860FBC7F9FAFF70C75FDA /* VolumeArcUI */;
 			targetProxy = 961F2FFD7566B11D17287F36 /* PBXContainerItemProxy */;
+		};
+		1E45B9A157B491C069AB1396 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = VolumeArcWatchWidgets;
+			target = F45D9C10EAD81326473981A3 /* VolumeArcWatchWidgets */;
+			targetProxy = 5E0C64D082D6BD18EAEA8D4C /* PBXContainerItemProxy */;
 		};
 		457296C84AEF0A9FABCC68F4 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;

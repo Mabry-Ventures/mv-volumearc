@@ -9,11 +9,13 @@ ARCHIVE_PATH="$TMP_DIR/Derived/VolumeArc.xcarchive"
 APP_BUNDLE="$ARCHIVE_PATH/Products/Applications/VolumeArc.app"
 WATCH_BUNDLE="$APP_BUNDLE/Watch/VolumeArcWatch.app"
 WATCH_WIDGET_BUNDLE="$WATCH_BUNDLE/PlugIns/VolumeArcWatchWidgets.appex"
+WATCH_ASSETS_CAR="$WATCH_BUNDLE/Assets.car"
 DSYM_DIR="$ARCHIVE_PATH/dSYMs"
 LOG_PATH="$TMP_DIR/ci_post_xcodebuild.log"
 SENTRY_LOG="$TMP_DIR/sentry-cli.log"
 
 mkdir -p "$WATCH_WIDGET_BUNDLE" "$DSYM_DIR/VolumeArc.app.dSYM" "$TMP_DIR/bin"
+touch "$WATCH_ASSETS_CAR"
 
 write_plist() {
   local path="$1"
@@ -72,6 +74,31 @@ cat >"$TMP_DIR/bin/sentry-cli" <<'SH'
 echo "sentry-cli $*" >> "${SENTRY_CLI_TEST_LOG:?}"
 SH
 chmod +x "$TMP_DIR/bin/sentry-cli"
+
+cat >"$TMP_DIR/bin/xcrun" <<'SH'
+#!/usr/bin/env bash
+if [[ "$1" == "assetutil" && "$2" == "--info" ]]; then
+  cat <<'JSON'
+[
+  {"AssetType":"Icon Image","Name":"AppIcon","Idiom":"marketing","PixelWidth":1024,"PixelHeight":1024},
+  {"AssetType":"Icon Image","Name":"AppIcon","Idiom":"watch","PixelWidth":48,"PixelHeight":48},
+  {"AssetType":"Icon Image","Name":"AppIcon","Idiom":"watch","PixelWidth":55,"PixelHeight":55},
+  {"AssetType":"Icon Image","Name":"AppIcon","Idiom":"watch","PixelWidth":58,"PixelHeight":58},
+  {"AssetType":"Icon Image","Name":"AppIcon","Idiom":"watch","PixelWidth":80,"PixelHeight":80},
+  {"AssetType":"Icon Image","Name":"AppIcon","Idiom":"watch","PixelWidth":87,"PixelHeight":87},
+  {"AssetType":"Icon Image","Name":"AppIcon","Idiom":"watch","PixelWidth":88,"PixelHeight":88},
+  {"AssetType":"Icon Image","Name":"AppIcon","Idiom":"watch","PixelWidth":100,"PixelHeight":100},
+  {"AssetType":"Icon Image","Name":"AppIcon","Idiom":"watch","PixelWidth":172,"PixelHeight":172},
+  {"AssetType":"Icon Image","Name":"AppIcon","Idiom":"watch","PixelWidth":196,"PixelHeight":196},
+  {"AssetType":"Icon Image","Name":"AppIcon","Idiom":"watch","PixelWidth":216,"PixelHeight":216}
+]
+JSON
+  exit 0
+fi
+echo "unexpected xcrun invocation: $*" >&2
+exit 64
+SH
+chmod +x "$TMP_DIR/bin/xcrun"
 
 CI_XCODEBUILD_ACTION="archive" \
   CI_XCODEBUILD_EXIT_CODE="0" \
@@ -154,6 +181,27 @@ if ! grep -q "expected CFBundleDisplayName=VolumeArc" "$LOG_PATH"; then
   cat "$LOG_PATH" >&2
   exit 1
 fi
+
+write_plist "$WATCH_WIDGET_BUNDLE/Info.plist" "16" "" "com.apple.widgetkit-extension" "watch-widget"
+rm -f "$WATCH_ASSETS_CAR"
+if CI_XCODEBUILD_ACTION="archive" \
+  CI_XCODEBUILD_EXIT_CODE="0" \
+  CI_BUILD_NUMBER="16" \
+  CI_ARCHIVE_PATH="$ARCHIVE_PATH" \
+  SENTRY_AUTH_TOKEN="fake-token" \
+  SENTRY_CLI_TEST_LOG="$SENTRY_LOG" \
+  PATH="$TMP_DIR/bin:$PATH" \
+  bash "$ROOT_DIR/ci_scripts/ci_post_xcodebuild.sh" >"$LOG_PATH" 2>&1; then
+  echo "FAIL: ci_post_xcodebuild.sh accepted a watch bundle without compiled Assets.car" >&2
+  exit 1
+fi
+
+if ! grep -q "missing compiled watch Assets.car" "$LOG_PATH"; then
+  echo "FAIL: missing-Assets.car failure did not explain the archive contract violation" >&2
+  cat "$LOG_PATH" >&2
+  exit 1
+fi
+touch "$WATCH_ASSETS_CAR"
 
 CI_XCODEBUILD_ACTION="archive" \
   CI_XCODEBUILD_EXIT_CODE="65" \

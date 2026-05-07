@@ -6,34 +6,51 @@ cd "$ROOT"
 
 ruby "scripts/generate_xcode_project.rb"
 
+# Match `build_all_targets.sh`: keep package resolution and build products
+# inside the workspace so local release checks do not inherit stale global
+# DerivedData artifacts.
+DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT/.build/derived-data-release}"
+mkdir -p "$DERIVED_DATA_PATH"
+
+source "$ROOT/scripts/simulators.sh"
+IOS_BUILD_DEVICE="$(resolve_ios_test_device)"
+
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
-  -target "VolumeArcApp" \
-  -sdk iphonesimulator \
+  -scheme "VolumeArcApp" \
+  -destination "platform=iOS Simulator,name=$IOS_BUILD_DEVICE" \
   -configuration Release \
+  -derivedDataPath "$DERIVED_DATA_PATH" \
+  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
   CODE_SIGNING_ALLOWED=NO \
   build
 
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
-  -target "VolumeArcWidgets" \
-  -sdk iphonesimulator \
+  -scheme "VolumeArcWidgets" \
+  -destination "platform=iOS Simulator,name=$IOS_BUILD_DEVICE" \
   -configuration Release \
+  -derivedDataPath "$DERIVED_DATA_PATH" \
+  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
   CODE_SIGNING_ALLOWED=NO \
   build
 
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
-  -target "VolumeArcWatch" \
+  -scheme "VolumeArcWatchWidgets" \
   -sdk watchsimulator \
   -configuration Release \
+  -derivedDataPath "$DERIVED_DATA_PATH" \
+  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
   CODE_SIGNING_ALLOWED=NO \
   build
 
 xcodebuild \
   -project "VolumeArcApple.xcodeproj" \
-  -target "VolumeArcWatchWidgets" \
+  -scheme "VolumeArcWatch" \
   -sdk watchsimulator \
   -configuration Release \
+  -derivedDataPath "$DERIVED_DATA_PATH" \
+  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
   CODE_SIGNING_ALLOWED=NO \
   build
