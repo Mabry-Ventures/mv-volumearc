@@ -147,6 +147,9 @@ jobs:
       - name: Test Xcode Cloud config patch
         run: ./scripts/test_ci_post_clone_config_patch.sh
 
+      - name: Test Xcode Cloud archive contract hook
+        run: ./scripts/test_ci_post_xcodebuild_archive_contract.sh
+
       - name: Generate Xcode project
         run: ruby scripts/generate_xcode_project.rb
 
