@@ -29,6 +29,7 @@ set -euo pipefail
 echo "VOL-126: ci_post_xcodebuild.sh starting"
 echo "CI_WORKFLOW = ${CI_WORKFLOW:-<unset>}"
 echo "CI_XCODEBUILD_ACTION = ${CI_XCODEBUILD_ACTION:-<unset>}"
+echo "CI_XCODEBUILD_EXIT_CODE = ${CI_XCODEBUILD_EXIT_CODE:-<unset>}"
 echo "CI_ARCHIVE_PATH = ${CI_ARCHIVE_PATH:-<unset>}"
 
 # Only run on archive workflows. For test/build workflows there's no
@@ -38,21 +39,111 @@ if [[ "${CI_XCODEBUILD_ACTION:-}" != "archive" ]]; then
   exit 0
 fi
 
+if [[ -n "${CI_XCODEBUILD_EXIT_CODE:-}" && "${CI_XCODEBUILD_EXIT_CODE}" != "0" ]]; then
+  echo "VOL-126: xcodebuild already failed (exit=${CI_XCODEBUILD_EXIT_CODE}); skipping post-archive validation/upload"
+  exit 0
+fi
+
+resolve_archive_path() {
+  if [[ -n "${CI_ARCHIVE_PATH:-}" && -d "${CI_ARCHIVE_PATH}" ]]; then
+    printf '%s\n' "${CI_ARCHIVE_PATH}"
+    return 0
+  fi
+
+  local roots=()
+  local root
+  for root in \
+    "${CI_DERIVED_DATA_PATH:-}" \
+    "${CI_WORKSPACE_PATH:-}" \
+    "${CI_PRIMARY_REPOSITORY_PATH:-}" \
+    "$PWD" \
+    "$HOME/Library/Developer/Xcode/Archives" \
+    "/Volumes/workspace"; do
+    if [[ -n "$root" && -d "$root" ]]; then
+      roots+=("$root")
+    fi
+  done
+
+  if [[ "${#roots[@]}" -eq 0 ]]; then
+    return 1
+  fi
+
+  /usr/bin/find "${roots[@]}" -type d -name '*.xcarchive' -maxdepth 8 -print0 2>/dev/null |
+    /usr/bin/xargs -0 /usr/bin/stat -f '%m %N' 2>/dev/null |
+    /usr/bin/sort -rn |
+    /usr/bin/awk 'NR == 1 { $1=""; sub(/^ /, ""); print; exit }'
+}
+
+ARCHIVE_PATH="$(resolve_archive_path || true)"
+if [[ -z "$ARCHIVE_PATH" || ! -d "$ARCHIVE_PATH" ]]; then
+  echo "::error::VOL-133: could not resolve Xcode archive path (CI_ARCHIVE_PATH=${CI_ARCHIVE_PATH:-<empty>})"
+  exit 1
+fi
+echo "Resolved archive path = ${ARCHIVE_PATH}"
+
+plist_value() {
+  local key="$1"
+  local plist="$2"
+  /usr/bin/plutil -extract "$key" raw "$plist" 2>/dev/null || true
+}
+
+require_dir() {
+  local path="$1"
+  local label="$2"
+  if [[ ! -d "$path" ]]; then
+    echo "::error::VOL-133: missing ${label} at ${path}"
+    exit 1
+  fi
+}
+
+require_plist_value() {
+  local key="$1"
+  local expected="$2"
+  local plist="$3"
+  local actual
+  actual="$(plist_value "$key" "$plist")"
+  if [[ "$actual" != "$expected" ]]; then
+    echo "::error::VOL-133: expected ${key}=${expected} in ${plist}, got ${actual:-<empty>}"
+    exit 1
+  fi
+}
+
+APP_BUNDLE="${ARCHIVE_PATH}/Products/Applications/VolumeArc.app"
+WATCH_BUNDLE="${APP_BUNDLE}/Watch/VolumeArcWatch.app"
+WATCH_WIDGET_BUNDLE="${WATCH_BUNDLE}/PlugIns/VolumeArcWatchWidgets.appex"
+
+require_dir "$APP_BUNDLE" "VolumeArc app bundle"
+require_dir "$WATCH_BUNDLE" "embedded watch app"
+require_dir "$WATCH_WIDGET_BUNDLE" "embedded watch widget extension"
+
+require_plist_value "NSExtension.NSExtensionPointIdentifier" "com.apple.widgetkit-extension" "${WATCH_WIDGET_BUNDLE}/Info.plist"
+
+if [[ -n "${CI_BUILD_NUMBER:-}" ]]; then
+  require_plist_value "CFBundleVersion" "$CI_BUILD_NUMBER" "${APP_BUNDLE}/Info.plist"
+  require_plist_value "CFBundleVersion" "$CI_BUILD_NUMBER" "${WATCH_BUNDLE}/Info.plist"
+  require_plist_value "CFBundleVersion" "$CI_BUILD_NUMBER" "${WATCH_WIDGET_BUNDLE}/Info.plist"
+fi
+
+if [[ -n "${VOLUMEARC_AI_RELAY_URL:-}" ]]; then
+  relay_url="$(plist_value "VolumeArcAIRelayURL" "${APP_BUNDLE}/Info.plist")"
+  if [[ "$relay_url" != "https://relay.volumearc.app" ]]; then
+    echo "::error::VOL-133: expected VolumeArcAIRelayURL=https://relay.volumearc.app in archived app, got ${relay_url:-<empty>}"
+    exit 1
+  fi
+fi
+
+echo "VOL-133: archive contract OK (watch app, watch widget, build numbers, relay config)"
+
+DSYM_DIR="${ARCHIVE_PATH}/dSYMs"
+if [[ ! -d "${DSYM_DIR}" ]] || [[ -z "$(ls -A "${DSYM_DIR}" 2>/dev/null)" ]]; then
+  echo "::error::VOL-133: dSYM directory missing or empty at ${DSYM_DIR}"
+  exit 1
+fi
+
 if [[ -z "${SENTRY_AUTH_TOKEN:-}" ]]; then
   echo "::warning::SENTRY_AUTH_TOKEN unset — skipping dSYM upload. Crashes from this build will arrive in Sentry as obfuscated frames."
   echo "  Set SENTRY_AUTH_TOKEN as a secret env var in the Xcode Cloud workflow to fix."
   exit 0
-fi
-
-if [[ -z "${CI_ARCHIVE_PATH:-}" || ! -d "${CI_ARCHIVE_PATH}" ]]; then
-  echo "::error::VOL-133: CI_ARCHIVE_PATH unset or not a directory: ${CI_ARCHIVE_PATH:-<empty>}"
-  exit 1
-fi
-
-DSYM_DIR="${CI_ARCHIVE_PATH}/dSYMs"
-if [[ ! -d "${DSYM_DIR}" ]] || [[ -z "$(ls -A "${DSYM_DIR}" 2>/dev/null)" ]]; then
-  echo "::error::VOL-133: dSYM directory missing or empty at ${DSYM_DIR}"
-  exit 1
 fi
 
 if ! command -v sentry-cli >/dev/null 2>&1; then
@@ -64,12 +155,22 @@ SENTRY_ORG="${SENTRY_ORG:-mabry-ventures-llc}"
 SENTRY_PROJECT="${SENTRY_PROJECT:-volumearc-ios}"
 
 echo "VOL-133: uploading dSYMs from ${DSYM_DIR} → ${SENTRY_ORG}/${SENTRY_PROJECT}"
-sentry-cli debug-files upload \
-  --org "${SENTRY_ORG}" \
-  --project "${SENTRY_PROJECT}" \
-  --include-sources \
-  --wait \
-  --log-level=info \
-  "${DSYM_DIR}"
+for attempt in 1 2 3; do
+  if sentry-cli debug-files upload \
+    --org "${SENTRY_ORG}" \
+    --project "${SENTRY_PROJECT}" \
+    --include-sources \
+    --wait \
+    --log-level=info \
+    "${DSYM_DIR}"; then
+    echo "VOL-133: dSYM upload complete"
+    exit 0
+  fi
+  echo "::warning::VOL-133: sentry-cli dSYM upload attempt ${attempt} failed"
+  if [[ "$attempt" -lt 3 ]]; then
+    sleep $((attempt * 10))
+  fi
+done
 
-echo "VOL-133: dSYM upload complete"
+echo "::error::VOL-133: dSYM upload failed after 3 attempts"
+exit 1
