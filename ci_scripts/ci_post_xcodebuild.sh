@@ -119,6 +119,52 @@ require_plist_nonempty() {
   fi
 }
 
+require_watch_assets_car() {
+  local assets_car="$1"
+  if [[ ! -f "$assets_car" ]]; then
+    echo "::error::VOL-133: missing compiled watch Assets.car at ${assets_car}"
+    exit 1
+  fi
+
+  local asset_info
+  if ! asset_info="$(xcrun assetutil --info "$assets_car" 2>&1)"; then
+    echo "::error::VOL-133: unable to inspect compiled watch Assets.car at ${assets_car}"
+    printf "%s\n" "$asset_info"
+    exit 1
+  fi
+
+  if ! printf "%s" "$asset_info" |
+    /usr/bin/ruby -rjson -e '
+      begin
+        records = JSON.parse(STDIN.read)
+      rescue JSON::ParserError => error
+        warn "::error::VOL-133: unable to parse assetutil output for #{ARGV.fetch(0)}: #{error.message}"
+        exit 1
+      end
+      icons = records.select { |record| record["AssetType"] == "Icon Image" && record["Name"] == "AppIcon" }
+      required = {
+        "marketing 1024x1024" => ->(record) { record["Idiom"] == "marketing" && record["PixelWidth"] == 1024 && record["PixelHeight"] == 1024 },
+        "watch 48x48" => ->(record) { record["Idiom"] == "watch" && record["PixelWidth"] == 48 && record["PixelHeight"] == 48 },
+        "watch 55x55" => ->(record) { record["Idiom"] == "watch" && record["PixelWidth"] == 55 && record["PixelHeight"] == 55 },
+        "watch 58x58" => ->(record) { record["Idiom"] == "watch" && record["PixelWidth"] == 58 && record["PixelHeight"] == 58 },
+        "watch 80x80" => ->(record) { record["Idiom"] == "watch" && record["PixelWidth"] == 80 && record["PixelHeight"] == 80 },
+        "watch 87x87" => ->(record) { record["Idiom"] == "watch" && record["PixelWidth"] == 87 && record["PixelHeight"] == 87 },
+        "watch 88x88" => ->(record) { record["Idiom"] == "watch" && record["PixelWidth"] == 88 && record["PixelHeight"] == 88 },
+        "watch 100x100" => ->(record) { record["Idiom"] == "watch" && record["PixelWidth"] == 100 && record["PixelHeight"] == 100 },
+        "watch 172x172" => ->(record) { record["Idiom"] == "watch" && record["PixelWidth"] == 172 && record["PixelHeight"] == 172 },
+        "watch 196x196" => ->(record) { record["Idiom"] == "watch" && record["PixelWidth"] == 196 && record["PixelHeight"] == 196 },
+        "watch 216x216" => ->(record) { record["Idiom"] == "watch" && record["PixelWidth"] == 216 && record["PixelHeight"] == 216 }
+      }
+      missing = required.keys.reject { |name| icons.any? { |record| required.fetch(name).call(record) } }
+      if missing.any?
+        warn "::error::VOL-133: compiled watch Assets.car missing AppIcon renditions: #{missing.join(", ")}"
+        exit 1
+      end
+    ' "$assets_car"; then
+    exit 1
+  fi
+}
+
 APP_BUNDLE="${ARCHIVE_PATH}/Products/Applications/VolumeArc.app"
 WATCH_BUNDLE="${APP_BUNDLE}/Watch/VolumeArcWatch.app"
 WATCH_WIDGET_BUNDLE="${WATCH_BUNDLE}/PlugIns/VolumeArcWatchWidgets.appex"
@@ -131,6 +177,7 @@ require_plist_nonempty "CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconName" "${W
 require_plist_nonempty "CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconFiles.0" "${WATCH_BUNDLE}/Info.plist"
 require_plist_value "CFBundleDisplayName" "VolumeArc" "${WATCH_WIDGET_BUNDLE}/Info.plist"
 require_plist_value "NSExtension.NSExtensionPointIdentifier" "com.apple.widgetkit-extension" "${WATCH_WIDGET_BUNDLE}/Info.plist"
+require_watch_assets_car "${WATCH_BUNDLE}/Assets.car"
 
 if [[ -n "${CI_BUILD_NUMBER:-}" ]]; then
   require_plist_value "CFBundleVersion" "$CI_BUILD_NUMBER" "${APP_BUNDLE}/Info.plist"
@@ -146,7 +193,7 @@ if [[ -n "${VOLUMEARC_AI_RELAY_URL:-}" ]]; then
   fi
 fi
 
-echo "VOL-133: archive contract OK (watch app, watch icons, watch widget, build numbers, relay config)"
+echo "VOL-133: archive contract OK (watch app, watch icon renditions, watch widget, build numbers, relay config)"
 
 DSYM_DIR="${ARCHIVE_PATH}/dSYMs"
 if [[ ! -d "${DSYM_DIR}" ]] || [[ -z "$(ls -A "${DSYM_DIR}" 2>/dev/null)" ]]; then

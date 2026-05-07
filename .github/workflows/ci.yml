@@ -150,6 +150,9 @@ jobs:
       - name: Test Xcode Cloud archive contract hook
         run: ./scripts/test_ci_post_xcodebuild_archive_contract.sh
 
+      - name: Validate watch AppIcon asset catalog
+        run: ruby scripts/validate_watch_app_icon_asset.rb
+
       - name: Generate Xcode project
         run: ruby scripts/generate_xcode_project.rb
 

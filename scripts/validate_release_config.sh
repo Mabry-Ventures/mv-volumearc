@@ -282,6 +282,8 @@ for watch_icon_asset in \
   fi
 done
 
+ruby scripts/validate_watch_app_icon_asset.rb
+
 watch_icon_name="$(plutil -extract CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconName raw -o - "Watch/Info.plist" 2>/dev/null || echo "")"
 if [[ "$watch_icon_name" != "AppIcon" ]]; then
   echo "FAIL: Watch/Info.plist must declare CFBundleIconName=AppIcon" >&2

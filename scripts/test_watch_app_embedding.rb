@@ -63,6 +63,8 @@ assert(resource_phase_file?(watch_target, 'Assets.xcassets'),
        'VolumeArcWatch must include its watchOS asset catalog')
 assert(watch_target.dependencies.any? { |dependency| dependency.target&.name == 'VolumeArcCoreWatch' },
        'VolumeArcWatch must depend on the watchOS core target')
+assert(watch_target.dependencies.any? { |dependency| dependency.target&.name == 'VolumeArcWatchWidgets' },
+       'VolumeArcWatch must depend on its widget extension before embedding the appex')
 assert(watch_widgets_target.dependencies.any? { |dependency| dependency.target&.name == 'VolumeArcCoreWatch' },
        'VolumeArcWatchWidgets must depend on the watchOS core target')
 
