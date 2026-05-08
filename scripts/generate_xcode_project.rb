@@ -322,7 +322,7 @@ embed_watch_widget_build_file.settings = { 'ATTRIBUTES' => ['RemoveHeadersOnCopy
 embed_watch_app_phase = app_target.new_copy_files_build_phase('Embed Watch Content')
 embed_watch_app_phase.symbol_dst_subfolder_spec = :products_directory
 embed_watch_app_phase.dst_path = '$(CONTENTS_FOLDER_PATH)/Watch'
-embed_watch_app_phase.run_only_for_deployment_postprocessing = '1'
+embed_watch_app_phase.run_only_for_deployment_postprocessing = '0'
 embed_watch_app_build_file = embed_watch_app_phase.add_file_reference(watch_target.product_reference, true)
 embed_watch_app_build_file.settings = { 'ATTRIBUTES' => ['RemoveHeadersOnCopy'] }
 embed_watch_app_build_file.platform_filter = 'iphoneos'
@@ -542,14 +542,15 @@ app_scheme = Xcodeproj::XCScheme.new
 app_scheme.configure_with_targets(app_target, nil, launch_target: true)
 
 # TestFlight only attaches the watch app when the app archive scheme includes
-# the watch target for archiving. Keep it out of normal build/run/test actions
-# so iOS simulator CI doesn't try to compile watchOS with the iPhone SDK.
+# the watch target. Xcode-generated iOS+watch projects keep the watch target
+# in the normal app build graph too; otherwise the iOS simulator app copy phase
+# can run before the watchsimulator product exists.
 watch_archive_entry = Xcodeproj::XCScheme::BuildAction::Entry.new(watch_target)
-watch_archive_entry.build_for_testing = false
-watch_archive_entry.build_for_running = false
-watch_archive_entry.build_for_profiling = false
+watch_archive_entry.build_for_testing = true
+watch_archive_entry.build_for_running = true
+watch_archive_entry.build_for_profiling = true
 watch_archive_entry.build_for_archiving = true
-watch_archive_entry.build_for_analyzing = false
+watch_archive_entry.build_for_analyzing = true
 app_scheme.build_action.add_entry(watch_archive_entry)
 app_scheme.save_as(PROJECT_PATH, 'VolumeArcApp', true)
 

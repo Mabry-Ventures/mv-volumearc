@@ -87,21 +87,24 @@ end
 assert(watch_archive_entries.length == 1,
        'VolumeArcApp scheme must include VolumeArcWatch exactly once')
 watch_archive_entry = watch_archive_entries.first
-assert(watch_archive_entry.attributes['buildForArchiving'] == 'YES',
-       'VolumeArcWatch must be enabled for app archives')
-assert(watch_archive_entry.attributes['buildForTesting'] == 'NO' &&
-       watch_archive_entry.attributes['buildForRunning'] == 'NO' &&
-       watch_archive_entry.attributes['buildForProfiling'] == 'NO' &&
-       watch_archive_entry.attributes['buildForAnalyzing'] == 'NO',
-       'VolumeArcWatch must stay out of non-archive app scheme actions')
+%w[
+  buildForTesting
+  buildForRunning
+  buildForProfiling
+  buildForArchiving
+  buildForAnalyzing
+].each do |attribute|
+  assert(watch_archive_entry.attributes[attribute] == 'YES',
+         "VolumeArcWatch must be enabled for app scheme #{attribute}")
+end
 
 watch_content_phase = copy_phase!(app_target, 'Embed Watch Content')
 assert(watch_content_phase.symbol_dst_subfolder_spec == :products_directory,
        'Embed Watch Content must copy from the built products directory')
 assert(watch_content_phase.dst_path == '$(CONTENTS_FOLDER_PATH)/Watch',
        'Embed Watch Content must copy into the iOS app Watch folder')
-assert(watch_content_phase.run_only_for_deployment_postprocessing == '1',
-       'Embed Watch Content must not run for ordinary simulator builds')
+assert(watch_content_phase.run_only_for_deployment_postprocessing == '0',
+       'Embed Watch Content must match Xcode-generated watch app embedding phases')
 watch_content_file = phase_file!(watch_content_phase, 'VolumeArcWatch.app')
 assert(watch_content_file.platform_filter == 'iphoneos',
        'Embed Watch Content must only run for device/archive builds')
