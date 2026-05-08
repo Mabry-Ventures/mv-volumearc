@@ -230,6 +230,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		0C3F0296EC7DFE4AC2F1F37F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F8493584A9042E13605CEF3C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BF2E1CD368C7783F67504E0C;
+			remoteInfo = VolumeArcWatch;
+		};
 		1792A71F481DAAF2F4E969CF /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F8493584A9042E13605CEF3C /* Project object */;
@@ -971,6 +978,7 @@
 			dependencies = (
 				9984ACB3C18E81C872EF38DE /* PBXTargetDependency */,
 				3F09844061793579E5B2EEB5 /* PBXTargetDependency */,
+				AE35CC3B0BD6C0992715CCF9 /* PBXTargetDependency */,
 			);
 			name = VolumeArcApp;
 			packageProductDependencies = (
@@ -1579,6 +1587,12 @@
 			name = VolumeArcCore;
 			target = 50299758BA3F393110D1801C /* VolumeArcCore */;
 			targetProxy = 7FDEE8D98EE0847252B64CAD /* PBXContainerItemProxy */;
+		};
+		AE35CC3B0BD6C0992715CCF9 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = VolumeArcWatch;
+			target = BF2E1CD368C7783F67504E0C /* VolumeArcWatch */;
+			targetProxy = 0C3F0296EC7DFE4AC2F1F37F /* PBXContainerItemProxy */;
 		};
 		C8EBD5127A8A52D6A934CA43 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;

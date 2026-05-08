@@ -526,12 +526,18 @@ end
 # one-pass UUID drift.
 12.times { project.predictabilize_uuids }
 
-# The watch app must build its WidgetKit extension before copying it into
-# `VolumeArcWatch.app/PlugIns`. Adding this dependency before
-# `predictabilize_uuids` makes xcodeproj's graph-path hashing oscillate
-# because the target and dependency reference each other's generated UUIDs.
-# Add it after the rest of the graph reaches its deterministic fixed point,
-# then pin the two new dependency objects to content-derived UUIDs.
+# The app/watch copy phases need explicit target dependencies so isolated
+# schemes, including the tag-gated perf scheme, build the watch products before
+# copying them. Adding these dependencies before `predictabilize_uuids` makes
+# xcodeproj's graph-path hashing oscillate because the targets and dependency
+# proxies reference each other's generated UUIDs. Add them after the rest of the
+# graph reaches its deterministic fixed point, then pin the new dependency
+# objects to content-derived UUIDs.
+app_target.add_dependency(watch_target)
+app_watch_dependency = app_target.dependency_for_target(watch_target)
+assign_deterministic_uuid(app_watch_dependency, 'VolumeArcApp/PBXTargetDependency/VolumeArcWatch')
+assign_deterministic_uuid(app_watch_dependency.target_proxy, 'VolumeArcApp/PBXContainerItemProxy/VolumeArcWatch')
+
 watch_target.add_dependency(watch_widgets_target)
 watch_widget_dependency = watch_target.dependency_for_target(watch_widgets_target)
 assign_deterministic_uuid(watch_widget_dependency, 'VolumeArcWatch/PBXTargetDependency/VolumeArcWatchWidgets')

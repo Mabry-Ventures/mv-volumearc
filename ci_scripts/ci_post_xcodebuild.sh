@@ -189,7 +189,9 @@ require_extension_entry_point() {
     exit 1
   fi
 
-  if ! printf "%s\n" "$symbols" | /usr/bin/grep -Eq '(^|[[:space:]])_NSExtensionMain($|[[:space:]])'; then
+  # Avoid a grep -q pipeline under pipefail: grep exits as soon as it finds the
+  # symbol, which can make the producer report SIGPIPE on large nm output.
+  if ! /usr/bin/grep -Eq '(^|[[:space:]])_NSExtensionMain($|[[:space:]])' <<<"$symbols"; then
     echo "::error::VOL-133: ${label} executable must link with -e _NSExtensionMain; App Store Connect rejects extension binaries that enter through _main"
     exit 1
   fi

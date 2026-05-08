@@ -145,7 +145,7 @@ require_extension_entry_point() {
     exit 1
   fi
 
-  if ! printf "%s\n" "$symbols" | /usr/bin/grep -Eq '(^|[[:space:]])_NSExtensionMain($|[[:space:]])'; then
+  if ! /usr/bin/grep -Eq '(^|[[:space:]])_NSExtensionMain($|[[:space:]])' <<<"$symbols"; then
     echo "FAIL: $label executable must link with -e _NSExtensionMain; App Store Connect rejects extension binaries that enter through _main" >&2
     exit 1
   fi
