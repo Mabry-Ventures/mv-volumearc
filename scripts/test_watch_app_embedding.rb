@@ -74,6 +74,8 @@ assert(watch_target.dependencies.any? { |dependency| dependency.target&.name == 
        'VolumeArcWatch must depend on its widget extension before embedding the appex')
 assert(watch_widgets_target.dependencies.any? { |dependency| dependency.target&.name == 'VolumeArcCoreWatch' },
        'VolumeArcWatchWidgets must depend on the watchOS core target')
+assert(app_target.dependencies.any? { |dependency| dependency.target&.name == 'VolumeArcWatch' },
+       'VolumeArcApp must depend on VolumeArcWatch so isolated app schemes build the watch app before embedding it')
 
 scheme_path = File.join(root, 'VolumeArcApple.xcodeproj/xcshareddata/xcschemes/VolumeArcApp.xcscheme')
 scheme = REXML::Document.new(File.read(scheme_path))

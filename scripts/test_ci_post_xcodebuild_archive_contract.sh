@@ -110,6 +110,9 @@ if [[ "${NM_OUTPUT_MODE:-valid}" == "invalid" ]]; then
   echo '0000000100009d70 (__TEXT,__text) external _main'
 else
   echo '                 (undefined) external _NSExtensionMain (from Foundation)'
+  for i in $(seq 1 5000); do
+    printf '0000000100%06x (__TEXT,__text) non-external <redacted function %s>\n' "$i" "$i"
+  done
 fi
 SH
 chmod +x "$TMP_DIR/bin/nm"
