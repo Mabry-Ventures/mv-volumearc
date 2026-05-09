@@ -159,8 +159,7 @@ final class VolumeArcPerfTests: XCTestCase {
     /// time is dominated by view setup, not network.
     func testCoachFirstTokenLatency() throws {
         let app = makePerfApp()
-        app.launch()
-        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
+        defer { app.terminate() }
 
         let options = XCTMeasureOptions()
         options.iterationCount = 5
@@ -172,51 +171,92 @@ final class VolumeArcPerfTests: XCTestCase {
         // the measured window would inflate the latency reading well
         // beyond the actual ask→first-token cost.
         //
-        // With `[.manuallyStart, .manuallyStop]` the iteration enters
-        // un-measured: do all setup, then call `startMeasuring()` to
-        // begin, do the measured action (`sendButton.tap()` →
-        // `firstResponse.waitForExistence()`), then `stopMeasuring()`.
-        // Calling `stopMeasuring()` before `startMeasuring()` throws
-        // `NSInternalInconsistencyException: -startMeasuring has to be
-        // called before -stopMeasuring`.
+        // With `[.manuallyStart, .manuallyStop]` each iteration enters
+        // un-measured: launch a fresh seeded app, navigate to Coach, type
+        // the prompt, then call `startMeasuring()` to begin the measured
+        // action (`sendButton.tap()` → first-token response) and
+        // `stopMeasuring()` immediately after the wait returns.
         options.invocationOptions = [.manuallyStart, .manuallyStop]
 
         measure(metrics: [XCTClockMetric()], options: options) {
-            // Setup (taps, typing) happens BEFORE the first
-            // `startMeasuring()` so it stays out of the measured
-            // window. `XCTClockMetric` measures the wall-clock interval
-            // between `startMeasuring()` and `stopMeasuring()`.
+            app.terminate()
+            app.launch()
+            XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
+
+            openCoachComposer(in: app)
+
             let composerInput = app.textFields["coach.input"].firstMatch
+            XCTAssertTrue(composerInput.waitForExistence(timeout: 5))
+            composerInput.tap()
+            composerInput.typeText("How does my recent volume look?")
+
             let sendButton = app.buttons["coach.send"].firstMatch
-            let askCoachQuickAction = app.buttons["today.askCoach"].firstMatch
-
-            if askCoachQuickAction.waitForExistence(timeout: 5) {
-                askCoachQuickAction.tap()
-            } else {
-                // Fall back to the Coach tab directly if the Today tab
-                // isn't the foreground tab on this iteration.
-                app.tabBars.buttons["tab.coach"].tap()
-            }
-
-            if composerInput.waitForExistence(timeout: 5) {
-                composerInput.tap()
-                composerInput.typeText("How does my recent volume look?")
-            }
-
-            self.startMeasuring()
-            if sendButton.exists {
-                sendButton.tap()
-            }
+            XCTAssertTrue(sendButton.waitForExistence(timeout: 5))
+            XCTAssertTrue(sendButton.isEnabled && sendButton.isHittable, "Coach send button should be armed before measuring.")
 
             let firstResponse = app.descendants(matching: .any)
                 .matching(identifier: "coach.firstResponse")
                 .firstMatch
-            _ = firstResponse.waitForExistence(timeout: 10)
+            XCTAssertFalse(firstResponse.exists, "Fresh perf launch should not contain a stale coach response.")
+
+            self.startMeasuring()
+            sendButton.tap()
+
+            let didReceiveFirstToken = firstResponse.waitForExistence(timeout: 10)
             self.stopMeasuring()
+            XCTAssertTrue(didReceiveFirstToken, "Coach first response should stream within the perf timeout.")
         }
     }
 
     // MARK: - Helpers
+
+    private func openCoachComposer(in app: XCUIApplication) {
+        let composer = app.descendants(matching: .any)
+            .matching(identifier: "coach.composer")
+            .firstMatch
+        let composerInput = app.textFields["coach.input"].firstMatch
+        if composer.waitForExistence(timeout: 1),
+           composerInput.waitForExistence(timeout: 1),
+           composerInput.isHittable {
+            return
+        }
+
+        if tapCoachTab(in: app),
+           composer.waitForExistence(timeout: 5),
+           composerInput.waitForExistence(timeout: 1),
+           composerInput.isHittable {
+            return
+        }
+
+        let askCoachQuickAction = app.buttons["today.askCoach"].firstMatch
+        if askCoachQuickAction.waitForExistence(timeout: 5) {
+            askCoachQuickAction.tap()
+        }
+
+        XCTAssertTrue(
+            composer.waitForExistence(timeout: 10),
+            "Coach composer should be visible after opening the Coach surface."
+        )
+        XCTAssertTrue(
+            composerInput.waitForExistence(timeout: 5) && composerInput.isHittable,
+            "Coach composer input should be hittable before typing."
+        )
+    }
+
+    private func tapCoachTab(in app: XCUIApplication) -> Bool {
+        let candidates = [
+            app.tabBars.buttons["tab.coach"].firstMatch,
+            app.buttons["tab.coach"].firstMatch,
+            app.tabBars.buttons["Coach"].firstMatch,
+        ]
+
+        for candidate in candidates where candidate.waitForExistence(timeout: 2) {
+            candidate.tap()
+            return true
+        }
+
+        return false
+    }
 
     /// Build the XCUIApplication configured for perf-mode:
     ///
