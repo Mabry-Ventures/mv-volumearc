@@ -230,6 +230,7 @@ public struct CoachView: View {
             }
             .disabled(!canSend)
             .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "Send", comment: "Coach composer send button accessibility label"))
             // VOL-99: perf test taps this to dispatch the coach request
             // and start the first-token latency measurement.
             .accessibilityIdentifier("coach.send")
@@ -241,6 +242,7 @@ public struct CoachView: View {
         .padding(.horizontal, VA.Space.lg)
         .padding(.bottom, VA.Space.lg)
         .background(VA.Colors.surfaceGrouped)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("coach.composer")
     }
 
