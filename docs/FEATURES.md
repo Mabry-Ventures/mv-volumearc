@@ -104,7 +104,7 @@ This is the granular per-feature checklist. For high-level system status, see [`
 | Accessibility labels | ✅ | Data displays, interactive controls, widgets, watch surfaces, and toast announcements have shipped accessibility coverage. |
 | Hard-failing release validation | ✅ | `scripts/validate_release_config.sh` hard-checks the checked-in `App/Info.plist` via `plutil -extract` for `CFBundleURLTypes`, `BGTaskSchedulerPermittedIdentifiers`, `UIBackgroundModes`, the `volumearc` URL scheme, and both BGTask identifiers (VOL-85), and validates signed entitlements on the built `.app` via `codesign -d --entitlements -` for `aps-environment = production`, iCloud container identifier, HealthKit, and App Groups (VOL-92). Fastlane runs it against the archived bundle before TestFlight upload. |
 | Checked-in `App/Info.plist` (vs `INFOPLIST_KEY_*`) | ✅ | `App/Info.plist` is checked in and wired via `INFOPLIST_FILE`. Array-valued keys that `INFOPLIST_KEY_*` silently drops now live in the plist file. |
-| AI review gate (CodeRabbit Pro + Codex) on PRs | ✅ | Two-bot review gate is part of the protected-branch merge contract. `Request AI Reviews` posts current-head review requests for CodeRabbit Pro and Codex Code Review, then waits for both bots to signal on that head SHA. |
+| AI review gate (CodeRabbit Pro) on PRs | ✅ | Single-bot review gate is part of the protected-branch merge contract. `Request AI Reviews` posts a current-head review request for CodeRabbit Pro and waits for the bot to signal on that head SHA. (VOL-174: Codex was the secondary reviewer through 2026-05-10; removed when org credits ran out. Re-enable in `ai-review-gate.yml` + the `Require AI Code Reviews` ruleset if credits return.) |
 
 ## Design
 

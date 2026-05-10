@@ -65,7 +65,7 @@ Practical consequences:
 4. Open a PR with a clear title and description
 5. CI must pass (build, test, lint, validate)
 6. At least one code review required
-7. AI Review Gate runs automatically: CodeRabbit Pro (primary reviewer) and Codex Code Review (secondary reviewer) are both requested by the `Request AI Reviews` workflow step. Both must post a review signal on the current head SHA within their wait window or the gate fails.
+7. AI Review Gate runs automatically: CodeRabbit Pro is requested by the `Request AI Reviews` workflow step and must post a review signal on the current head SHA within its wait window or the gate fails. (VOL-174: Codex Code Review was the secondary reviewer through 2026-05-10; removed when org credits were exhausted. The Codex job is preserved in git history for easy revert if credits return — see the workflow file's header comment.)
 8. Merge via squash when all checks pass
 
 ### Required status checks (enforced by repository ruleset)
@@ -74,9 +74,10 @@ The `Require AI Code Reviews` ruleset on `main` requires the following checks to
 
 - `Build & Test` — full iOS/watchOS pipeline on the `mv-shared` self-hosted runner
 - `CodeRabbit Code Review` — wait-for-signal job (20-minute window) in `ai-review-gate.yml`
-- `Codex Code Review` — wait-for-signal job (15-minute window) in `ai-review-gate.yml`
 
 `strict_required_status_checks_policy: true` is set, meaning the PR branch must be up-to-date with `main` before merge. Stale PRs need a rebase or merge from main to retrigger CI.
+
+If a second AI bot is added back to the gate (e.g. Codex credits return, or a different bot is wired up), update **both** this list and the ruleset's required status checks at https://github.com/Mabry-Ventures/mv-volumearc/rules/15027038 — they must stay in sync.
 
 ### Bypass / emergency hotfix
 
