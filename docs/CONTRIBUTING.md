@@ -68,6 +68,23 @@ Practical consequences:
 7. AI Review Gate runs automatically: CodeRabbit Pro (primary reviewer) and Codex Code Review (secondary reviewer) are both requested by the `Request AI Reviews` workflow step. Both must post a review signal on the current head SHA within their wait window or the gate fails.
 8. Merge via squash when all checks pass
 
+### Branch cleanup after merge
+
+`gh pr merge --squash --delete-branch` deletes the remote branch automatically — but only when no local worktree has that branch checked out. The common interaction failure is: an open `mv-volumearc` worktree is on `main`, and `gh pr merge` tries to remove the merged branch locally first, which fails with `'main' is already used by worktree at ...`. The remote branch stays around even though main got the squash commit.
+
+To clean up the accumulated drift periodically:
+
+```bash
+gh pr list --state merged --limit 200 --json headRefName --jq '.[].headRefName' | sort -u > /tmp/merged.txt
+git ls-remote --heads origin 'claude/*' 'jared/*' 'codex/*' 'feature/*' 'fix/*' 'sprint/*' \
+  | awk '{print $2}' | sed 's|refs/heads/||' | sort -u > /tmp/remote.txt
+comm -12 /tmp/merged.txt /tmp/remote.txt | while read -r ref; do
+  git push origin --delete "$ref"
+done
+```
+
+`comm -12` outputs only lines present in both files (i.e. branches that are squash-merged AND still on origin). Running this once per cycle keeps the remote tidy. VOL-165 captured this as a one-time cleanup; the loop above is the recurring fix.
+
 ### Required status checks (enforced by repository ruleset)
 
 The `Require AI Code Reviews` ruleset on `main` requires the following checks to pass before merge — there is no "advisory" mode:
