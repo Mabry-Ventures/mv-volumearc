@@ -3,20 +3,45 @@
 ## Dev setup
 
 1. Install Xcode 26.4+
-2. Install Ruby with `xcodeproj` gem:
+2. Install the pinned Ruby (see `.ruby-version`, currently `4.0`):
    ```bash
-   gem install --user-install xcodeproj
+   brew install ruby           # Homebrew currently provides 4.0.3
    ```
-3. Clone the repo:
+3. Install gems (versions pinned in `Gemfile`, exact pins in `Gemfile.lock` when present):
+   ```bash
+   gem install bundler
+   bundle install              # installs fastlane + xcodeproj at pinned versions
+   # Or, if you don't want bundler in the loop:
+   gem install --user-install xcodeproj -v '~> 1.27'
+   ```
+4. Install SwiftLint (≥ 0.62; CI asserts):
+   ```bash
+   brew install swiftlint
+   ```
+5. Clone the repo:
    ```bash
    git clone https://github.com/Mabry-Ventures/mv-volumearc.git
    cd mv-volumearc
    ```
-4. Generate the Xcode project:
+6. Generate the Xcode project:
    ```bash
    ruby scripts/generate_xcode_project.rb
    ```
-5. Open `VolumeArcApple.xcodeproj` in Xcode
+7. Open `VolumeArcApple.xcodeproj` in Xcode
+
+### Toolchain pinning (VOL-151)
+
+The repo declares its expected versions in three places so a Homebrew or RubyGems bump doesn't silently break CI:
+
+| Tool | Pin file | Constraint |
+|---|---|---|
+| Xcode | CI assertion in `ci.yml` | ≥ 26.4 |
+| Ruby | `.ruby-version` | major.minor (currently `4.0`) — CI warns on drift |
+| `xcodeproj` gem | `Gemfile` | `~> 1.27` |
+| `fastlane` gem | `Gemfile` | `~> 2.233` |
+| SwiftLint | CI assertion in `ci.yml` | ≥ 0.62; warns on 1.x major |
+
+When updating a pin: bump the constraint, run the relevant tool locally, verify CI green on a small PR before bulk work depends on the change.
 
 ## Build commands
 

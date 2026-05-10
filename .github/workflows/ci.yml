@@ -112,8 +112,37 @@ jobs:
           xcode_version_output=$(xcodebuild -version)
           printf '%s\n' "$xcode_version_output"
           ruby --version | grep -qE 'ruby (3|4)\.' || { echo "::error::Ruby < 3.0 (EOL)"; exit 1; }
+          # VOL-151: warn (don't fail) when the runner's Ruby diverges from
+          # `.ruby-version`. We can't `brew install ruby@N` reliably across
+          # Homebrew versions, so the pin is advisory until the toolchain
+          # bootstrap is migrated to bundler. The warning catches Homebrew
+          # bumps that change behavior so we can update the pin deliberately.
+          if [[ -f .ruby-version ]]; then
+            expected_ruby=$(tr -d '[:space:]' < .ruby-version)
+            actual_ruby=$(ruby --version | awk '{print $2}' | cut -d'.' -f1-2)
+            if [[ "$expected_ruby" != "$actual_ruby"* && "$actual_ruby" != "$expected_ruby"* ]]; then
+              echo "::warning::Ruby version drift: .ruby-version=$expected_ruby, runner=$actual_ruby"
+            fi
+          fi
           gem list xcodeproj --installed --version '>= 1.0' >/dev/null || { echo "::error::xcodeproj gem missing"; exit 1; }
           command -v swiftlint >/dev/null || { echo "::error::swiftlint missing on runner"; exit 1; }
+          # VOL-151: SwiftLint version assertion. The lint config in
+          # `.swiftlint.yml` was tuned against a specific minor; new minors
+          # can introduce rule renames or default changes that break --strict
+          # silently. Assert ≥ 0.62 (where the rules our config uses
+          # stabilized) and warn on a major bump (1.x will likely require
+          # rule audits).
+          swiftlint_version="$(swiftlint version 2>/dev/null | head -n1 | awk '{print $NF}')"
+          swiftlint_major=$(printf '%s\n' "$swiftlint_version" | cut -d'.' -f1)
+          swiftlint_minor=$(printf '%s\n' "$swiftlint_version" | cut -d'.' -f2)
+          if [[ "$swiftlint_major" -eq 0 && "$swiftlint_minor" -lt 62 ]]; then
+            echo "::error::SwiftLint $swiftlint_version is below the 0.62 floor (rule config tuned against ≥ 0.62)"
+            exit 1
+          fi
+          if [[ "$swiftlint_major" -ge 1 ]]; then
+            echo "::warning::SwiftLint $swiftlint_version is on a 1.x major; rule config may need a re-audit"
+          fi
+          echo "Toolchain: ruby=$(ruby --version | awk '{print $2}') xcodeproj=$(gem list xcodeproj --installed --details 2>/dev/null | head -n1) swiftlint=$swiftlint_version"
           # Toolchain pin: Xcode 26.4+ is required so the Swift 6.3 language
           # mode and the iOS 26 SDK that build settings depend on are
           # available. `xcodebuild -version` prints e.g. "Xcode 26.4" on the
