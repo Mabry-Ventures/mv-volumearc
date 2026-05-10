@@ -307,16 +307,22 @@ jobs:
               core.info('Created sticky coverage comment.');
             }
 
-      # VOL-97: historical trend. On every push to main we append a
-      # {commit, date, coverage} record to docs/coverage-trend.json and
-      # commit it back. The append step is guarded on the event name +
-      # ref so PR runs and tag-build runs are no-ops. We use the
-      # job-scoped GITHUB_TOKEN (needs `permissions: contents: write`,
-      # granted at the job level above) — no extra PAT required. If a
-      # repo-level branch protection rule ever blocks bot pushes to
-      # main, flip this block to open a PR via peter-evans/create-pull-request
-      # or disable it with a TODO.
-      - name: Append coverage to trend
+      # VOL-97 / VOL-166: historical trend stored on the unprotected
+      # `metrics` branch (orphan, data-only). Pushing to main is blocked
+      # by the `Require AI Code Reviews` ruleset — verified May 9 by
+      # tracing run 25562451096's `Failed to push coverage-trend update
+      # after 3 attempts` warning. The bot can push freely to any
+      # non-protected branch, and a separate `metrics` branch keeps
+      # data writes off the code branch.
+      #
+      # Read the trend via the GitHub Pages-style URL pattern:
+      #   https://raw.githubusercontent.com/<repo>/metrics/coverage-trend.json
+      #
+      # The append step is guarded on event_name + ref so PR runs and
+      # tag-build runs are no-ops. Uses the job-scoped GITHUB_TOKEN
+      # (needs `permissions: contents: write`, granted at the job
+      # level above) — no extra PAT required.
+      - name: Append coverage to metrics branch
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && success()
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -326,17 +332,47 @@ jobs:
             echo "::warning::No coverage-summary.json; skipping trend append."
             exit 0
           fi
+
+          # Snapshot the summary so the metrics worktree can read it
+          # after we switch branches.
+          cp .build/coverage-summary.json /tmp/coverage-summary.json
+
+          # Stage a clean worktree on the metrics branch. If it doesn't
+          # exist yet, bootstrap an orphan branch with just the trend file.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin metrics --depth=1 2>/dev/null || true
+
+          metrics_dir="$(mktemp -d)"
+          if git rev-parse --verify origin/metrics >/dev/null 2>&1; then
+            git worktree add "$metrics_dir" origin/metrics
+            cd "$metrics_dir"
+            git checkout -B metrics origin/metrics
+          else
+            git worktree add --detach "$metrics_dir"
+            cd "$metrics_dir"
+            git checkout --orphan metrics
+            git rm -rf . >/dev/null 2>&1 || true
+            printf '%s\n' \
+              '# metrics' \
+              '' \
+              'Data-only branch. Read from GitHub raw URLs; do not edit by hand.' \
+              '' \
+              'See `docs/TESTING.md#coverage-artifacts` and the badge in `docs/PLATFORM.md`.' \
+              > README.md
+          fi
+
           python3 <<'PY'
-          import json, os, subprocess, datetime
-          summary = json.load(open(".build/coverage-summary.json"))
-          trend_path = "docs/coverage-trend.json"
+          import json, os, datetime
+          summary = json.load(open("/tmp/coverage-summary.json"))
+          trend_path = "coverage-trend.json"
           try:
               trend = json.load(open(trend_path))
           except FileNotFoundError:
               trend = {
                   "target": summary["target"],
                   "threshold": summary["threshold"],
-                  "note": "Append-only log of VolumeArcCore line coverage per main-branch commit.",
+                  "note": "Append-only log of VolumeArcCore line coverage per main-branch commit. Written by .github/workflows/ci.yml (VOL-97 / VOL-166). Stored on `metrics` branch — the `main` branch's docs/coverage-trend.json is a placeholder.",
                   "records": [],
               }
           sha = os.environ.get("GITHUB_SHA", "")
@@ -358,25 +394,30 @@ jobs:
                   handle.write("\n")
               print(f"Appended record for {sha}: {summary['coverage']}%")
           PY
-          if git diff --quiet docs/coverage-trend.json; then
-            echo "No trend-file change; skipping commit."
-            exit 0
+
+          if git diff --quiet coverage-trend.json 2>/dev/null && [ -f coverage-trend.json ]; then
+            existing_count=$(python3 -c "import json; print(len(json.load(open('coverage-trend.json'))['records']))")
+            if [[ "$existing_count" -gt 0 ]]; then
+              echo "No trend-file change; skipping commit."
+              exit 0
+            fi
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/coverage-trend.json
-          git commit -m "chore(ci): append coverage trend for ${GITHUB_SHA::7}" \
-            -m "[skip ci]"
-          # Push with retry on non-fast-forward; another concurrent main
-          # run may have appended first.
+
+          git add coverage-trend.json README.md 2>/dev/null || git add coverage-trend.json
+          git commit -m "chore(metrics): coverage trend for ${GITHUB_SHA::7} (${{ github.run_id }})"
+
+          # Push with retry on non-fast-forward; another concurrent
+          # main run may have appended first.
           for attempt in 1 2 3; do
-            if git push origin HEAD:main; then
+            if git push origin metrics; then
+              echo "Pushed coverage trend update to metrics branch."
               exit 0
             fi
             echo "Push attempt $attempt failed; rebasing and retrying."
-            git pull --rebase origin main || true
+            git fetch origin metrics --depth=1 || true
+            git pull --rebase origin metrics || true
           done
-          echo "::warning::Failed to push coverage-trend update after 3 attempts."
+          echo "::warning::Failed to push coverage-trend update to metrics after 3 attempts."
 
       - name: Lint (SwiftLint)
         # VOL-113: `--strict` re-enabled now that all warnings clear.
