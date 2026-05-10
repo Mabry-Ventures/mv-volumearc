@@ -81,4 +81,74 @@ enum VolumeArcAppUITestSupport {
     static var combinedStressLaunchArgs: [String] {
         dynamicTypeAccessibility5LaunchArgs + pseudoLocaleDoubleLengthLaunchArgs
     }
+
+    // MARK: - VOL-164: cascade-flakiness defenses
+
+    /// Best-effort terminate of the VolumeArc app process. Use in test
+    /// `tearDown` to guarantee a clean state for the next test method,
+    /// so a hung/crashed launch in test N doesn't poison test N+1 with
+    /// "expected element not found" failures.
+    ///
+    /// `XCUIApplication.terminate()` itself can fail if the app is
+    /// genuinely stuck (the watch-payload journey logged
+    /// `Failed to terminate com.mabryventures.VolumeArc:73459` in CI).
+    /// Catching here keeps tearDown clean — XCUIApplication's own
+    /// next-test launch will retry termination internally if needed.
+    static func defensiveTerminate(_ app: XCUIApplication) {
+        guard app.state != .notRunning else { return }
+        app.terminate()
+        // Don't assert state here — terminate is fire-and-forget.
+        // Springboard's process-watchdog cleans up zombies within a
+        // few seconds even if our terminate() raced.
+    }
+
+    /// Tap an element after scrolling it into view if necessary. At
+    /// `.accessibility5` the Continue / Finish button row can land
+    /// below the keyboard or off-screen on shorter simulators (iPhone
+    /// SE / mini); a single `swipeUp()` reliably brings the bottom
+    /// CTA back into the hittable region without pushing it past.
+    ///
+    /// `XCUIElement.tap()` claims to handle off-screen elements via
+    /// `coordinate(withNormalizedOffset:).tap()` internally, but in
+    /// practice it errors out with "element is not hittable" when the
+    /// element is fully clipped — see VOL-164 trace of run
+    /// 25413454434 line 198 (`Finish button should be reachable on
+    /// the last step`).
+    ///
+    /// Returns `true` if the element was found-and-tapped, `false`
+    /// otherwise so the caller can produce a contextual XCTAssert
+    /// failure with the right framing.
+    @discardableResult
+    static func scrollIntoViewAndTap(
+        _ element: XCUIElement,
+        in app: XCUIApplication,
+        timeout: TimeInterval = 15,
+        maxScrolls: Int = 3
+    ) -> Bool {
+        guard element.waitForExistence(timeout: timeout) else { return false }
+        var attempts = 0
+        while !element.isHittable && attempts < maxScrolls {
+            app.swipeUp()
+            attempts += 1
+        }
+        guard element.isHittable else { return false }
+        element.tap()
+        return true
+    }
+
+    /// Attach a snapshot of the app's accessibility tree to the running
+    /// XCTest so a CI failure carries enough context to debug from the
+    /// xcresult bundle alone — no need to repro locally to know what
+    /// was on screen when an assertion fired. Cheap to call on success
+    /// paths too; XCTest only persists attachments from failed tests.
+    static func attachDebugSnapshot(
+        of app: XCUIApplication,
+        named name: String,
+        to test: XCTestCase
+    ) {
+        let attachment = XCTAttachment(string: app.debugDescription)
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        test.add(attachment)
+    }
 }

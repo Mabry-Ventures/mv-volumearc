@@ -33,6 +33,17 @@ final class VolumeArcHealthKitPermissionJourneyTests: XCTestCase {
         continueAfterFailure = false
     }
 
+    /// VOL-164: defensively terminate the host app between test methods.
+    override func tearDownWithError() throws {
+        let app = XCUIApplication()
+        VolumeArcAppUITestSupport.attachDebugSnapshot(
+            of: app,
+            named: "tearDown.\(name).accessibility-tree",
+            to: self
+        )
+        VolumeArcAppUITestSupport.defensiveTerminate(app)
+    }
+
     /// VOL-109 contract: a fresh user can complete onboarding by tapping
     /// Continue through every step, including permissions, without
     /// engaging the Connect Apple Health button. The prompt-skipped path
