@@ -370,9 +370,29 @@ jobs:
           # exist yet, bootstrap an orphan branch with just the trend file.
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin metrics --depth=1 2>/dev/null || true
+
+          # Codex review (PR #144): a bare `git fetch origin metrics --depth=1`
+          # only populates FETCH_HEAD, not `origin/metrics`, in the
+          # single-branch checkout that `actions/checkout@v6` produces. Use an
+          # explicit destination refspec so `git rev-parse --verify
+          # origin/metrics` resolves on every run after bootstrap. `|| true`
+          # keeps the first-ever run (where the remote ref doesn't exist)
+          # from short-circuiting before the orphan-branch path runs.
+          git fetch origin 'metrics:refs/remotes/origin/metrics' --depth=1 2>/dev/null || true
 
           metrics_dir="$(mktemp -d)"
+
+          # CodeRabbit review (PR #144): persistent self-hosted runners
+          # accumulate `.git/worktrees/` orphans without an explicit cleanup.
+          # `git worktree remove --force` is idempotent against missing or
+          # already-pruned worktrees, so the trap is safe on both happy and
+          # error paths.
+          cleanup_metrics_worktree() {
+            cd "$GITHUB_WORKSPACE"
+            git worktree remove --force "$metrics_dir" 2>/dev/null || true
+          }
+          trap cleanup_metrics_worktree EXIT
+
           if git rev-parse --verify origin/metrics >/dev/null 2>&1; then
             git worktree add "$metrics_dir" origin/metrics
             cd "$metrics_dir"

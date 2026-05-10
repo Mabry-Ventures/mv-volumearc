@@ -3,30 +3,44 @@
 ## Dev setup
 
 1. Install Xcode 26.4+
-2. Install the pinned Ruby (see `.ruby-version`, currently `4.0`):
+2. Install the pinned Ruby (see `.ruby-version`, currently `4.0`). `brew install ruby` would install whatever Homebrew's bare `ruby` formula points at today (4.0.2 as of 2026-05-09), which is fine for now but won't track `.ruby-version` if Homebrew advances. Use a version manager so dev and CI converge:
+
    ```bash
-   brew install ruby           # Homebrew currently provides 4.0.3
+   # Recommended: mise (https://mise.jdx.dev) — reads .ruby-version automatically
+   brew install mise
+   mise use --pin ruby@4.0    # installs latest 4.0.x and pins to mise.toml
    ```
+
+   Or use `rbenv`, `asdf`, or `chruby` — any of them will read `.ruby-version`.
+
 3. Install gems (versions pinned in `Gemfile`, exact pins in `Gemfile.lock` when present):
+
    ```bash
    gem install bundler
    bundle install              # installs fastlane + xcodeproj at pinned versions
    # Or, if you don't want bundler in the loop:
    gem install --user-install xcodeproj -v '~> 1.27'
    ```
+
 4. Install SwiftLint (≥ 0.62; CI asserts):
+
    ```bash
    brew install swiftlint
    ```
+
 5. Clone the repo:
+
    ```bash
    git clone https://github.com/Mabry-Ventures/mv-volumearc.git
    cd mv-volumearc
    ```
+
 6. Generate the Xcode project:
+
    ```bash
    ruby scripts/generate_xcode_project.rb
    ```
+
 7. Open `VolumeArcApple.xcodeproj` in Xcode
 
 ### Toolchain pinning (VOL-151)
@@ -100,15 +114,32 @@ Practical consequences:
 To clean up the accumulated drift periodically:
 
 ```bash
+# Branches that have been merged at some point (sometimes the same name
+# is reused for a NEW open PR — the open-list below is what protects us).
 gh pr list --state merged --limit 200 --json headRefName --jq '.[].headRefName' | sort -u > /tmp/merged.txt
+
+# Branches with open PRs RIGHT NOW. Subtracted below so we never delete
+# a branch that's actively being worked on, even if its name was used
+# for a prior merged PR.
+gh pr list --state open --limit 200 --json headRefName --jq '.[].headRefName' | sort -u > /tmp/open.txt
+
+# Remote feature branches.
 git ls-remote --heads origin 'claude/*' 'jared/*' 'codex/*' 'feature/*' 'fix/*' 'sprint/*' \
   | awk '{print $2}' | sed 's|refs/heads/||' | sort -u > /tmp/remote.txt
-comm -12 /tmp/merged.txt /tmp/remote.txt | while read -r ref; do
+
+# Eligible = (merged ∩ remote) − open. Print the dry-run list first so
+# you can eyeball it before any destructive call.
+comm -12 /tmp/merged.txt /tmp/remote.txt | comm -23 - /tmp/open.txt > /tmp/to-delete.txt
+echo "Will delete:"
+cat /tmp/to-delete.txt
+
+# Confirm, then delete.
+while read -r ref; do
   git push origin --delete "$ref"
-done
+done < /tmp/to-delete.txt
 ```
 
-`comm -12` outputs only lines present in both files (i.e. branches that are squash-merged AND still on origin). Running this once per cycle keeps the remote tidy. VOL-165 captured this as a one-time cleanup; the loop above is the recurring fix.
+`comm -12` outputs lines present in both files (i.e. squash-merged AND still on origin). The second `comm -23 - /tmp/open.txt` subtracts any branch with an open PR — that's the safety net for the case where a branch name (e.g. `claude/foo`) was used for a previous merged PR and then re-used for a new one currently in flight. The dry-run print + explicit `while`-loop separates the discovery and destructive steps so a typo or stale state doesn't take down active work. Running this once per cycle keeps the remote tidy. VOL-165 captured this as a one-time cleanup; the loop above is the recurring fix.
 
 ### Required status checks (enforced by repository ruleset)
 
