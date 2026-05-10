@@ -6,12 +6,14 @@
 2. Install the pinned Ruby (see `.ruby-version`, currently `4.0`). `brew install ruby` would install whatever Homebrew's bare `ruby` formula points at today (4.0.2 as of 2026-05-09), which is fine for now but won't track `.ruby-version` if Homebrew advances. Use a version manager so dev and CI converge:
 
    ```bash
-   # Recommended: mise (https://mise.jdx.dev) — reads .ruby-version automatically
+   # Recommended: mise (https://mise.jdx.dev)
    brew install mise
-   mise use --pin ruby@4.0    # installs latest 4.0.x and pins to mise.toml
+   mise install              # reads .ruby-version (4.0) and installs the matching toolchain
    ```
 
    Or use `rbenv`, `asdf`, or `chruby` — any of them will read `.ruby-version`.
+
+   **`.ruby-version` vs `mise.toml`.** `.ruby-version` is the single source of truth — it's checked into the repo, every common Ruby version manager honors it, and CI reads it via `mise install` in the pre-flight step. `mise install` (or `rbenv install`, etc.) is enough; you don't need to run `mise use --pin` and you don't need a committed `mise.toml`. If you want to pin extra tools beyond Ruby (e.g. a specific Bundler version) on your own machine, run `mise use --pin tool@version` to write a personal `mise.local.toml` — that filename is gitignored. Don't commit `mise.toml` to the repo: it would shadow `.ruby-version` and silently diverge, defeating the point of having one source of truth.
 
 3. Install gems (versions pinned in `Gemfile`, exact pins in `Gemfile.lock` when present):
 

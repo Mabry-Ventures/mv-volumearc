@@ -444,15 +444,24 @@ jobs:
               print(f"Appended record for {sha}: {summary['coverage']}%")
           PY
 
-          if git diff --quiet coverage-trend.json 2>/dev/null && [ -f coverage-trend.json ]; then
-            existing_count=$(python3 -c "import json; print(len(json.load(open('coverage-trend.json'))['records']))")
-            if [[ "$existing_count" -gt 0 ]]; then
-              echo "No trend-file change; skipping commit."
-              exit 0
-            fi
+          # Codex review (PR #144): stage first, then ask the index whether
+          # anything actually changed. The previous order — `git diff --quiet
+          # coverage-trend.json` before `git add` — silently no-op'd the
+          # bootstrap commit because `git diff` returns 0 for *untracked*
+          # files (the orphan branch's first run creates the trend file
+          # untracked, so the diff check passed and existing_count=1 then
+          # exited before staging). `git diff --cached --quiet` after staging
+          # handles all three cases correctly:
+          #   - bootstrap (orphan): README + trend are new index entries → non-zero → commit
+          #   - update (existing): trend has a new record vs HEAD → non-zero → commit
+          #   - duplicate (re-run): trend unchanged vs HEAD → zero → skip
+          git add coverage-trend.json README.md 2>/dev/null || git add coverage-trend.json
+
+          if git diff --cached --quiet; then
+            echo "No staged changes to coverage trend; skipping commit."
+            exit 0
           fi
 
-          git add coverage-trend.json README.md 2>/dev/null || git add coverage-trend.json
           git commit -m "chore(metrics): coverage trend for ${GITHUB_SHA::7} (${{ github.run_id }})"
 
           # Push with retry on non-fast-forward; another concurrent
