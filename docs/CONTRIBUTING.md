@@ -117,6 +117,17 @@ A `Tests/.swiftlint.yml` override disables `implicitly_unwrapped_optional`, `for
 - `./scripts/test_apple_targets.sh` runs both `VolumeArcAppTests` and `VolumeArcAppUITests`
 - CI runs both schemes on every PR
 
+## Security tooling (VOL-143)
+
+Two automated security workflows run independently of the main CI lane so they don't block — and aren't blocked by — Apple toolchain churn:
+
+| Workflow | What | Triggers | Runner |
+|---|---|---|---|
+| `codeql.yml` | SAST. CodeQL `security-extended` query suite against Swift + JS/TS. Findings → repo Security tab. | push to main · weekly cron · manual dispatch | macos-latest (Swift) / ubuntu-latest (JS) |
+| `trufflehog.yml` | Secret-leak detection. Scans diffs on PRs and full history on main. Catches committed `.env`s, API keys, JWTs. | PRs against main · push to main · weekly cron · manual dispatch | ubuntu-latest |
+
+Findings surface via GitHub's Security tab (CodeQL → Code Scanning, Trufflehog → Secret Scanning when configured to upload SARIF). PR-time Trufflehog failures should block merge — credentials in a PR diff is a near-certain leak even if the commit is "private".
+
 ## Documentation
 
 - `docs/PLATFORM.md` — **canonical platform reference** (start here)

@@ -1,0 +1,81 @@
+name: CodeQL
+
+# VOL-143: SAST coverage. Runs the GitHub-managed CodeQL static analyzer
+# against Swift (app + tests) and JavaScript/TypeScript (relay Worker)
+# code. Findings surface in the repo's Security tab. We pin to the
+# `github/codeql-action` v3 family.
+#
+# Schedule + triggers:
+# - Push to main: full scan after each merge so a regression surfaces
+#   quickly. Uses the same job-scoped GITHUB_TOKEN as ci.yml.
+# - Weekly cron (Sunday 03:00 UTC): catches new vulnerability rules
+#   that ship in CodeQL itself between our merges.
+# - Manual dispatch: ad-hoc scans for spelunking or pre-release sweeps.
+#
+# Deliberately NOT triggered on PRs to keep the main CI cycle short
+# (a Swift CodeQL build takes ~30 min on a hosted Mac). The weekly
+# cron + main-push runs are sufficient for find-rate; PR runs would
+# be redundant for the most-recently-changed code that the sticky
+# coverage comment + AI review gate already cover.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    # Hosted runner — does NOT use mv-volumearc-runner self-hosted to
+    # avoid blocking the primary CI lane during the long Swift build.
+    # macos-latest currently provides Xcode 26.x which is sufficient
+    # for CodeQL's Swift extractor.
+    runs-on: ${{ matrix.language == 'swift' && 'macos-latest' || 'ubuntu-latest' }}
+    timeout-minutes: 60
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [swift, javascript-typescript]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # `security-extended` adds rules beyond the default suite —
+          # not as exhaustive as `security-and-quality` but a better
+          # signal-to-noise ratio for an app codebase.
+          queries: security-extended
+
+      # CodeQL builds the code itself for compiled languages. Swift
+      # uses the autobuild path which runs `xcodebuild` against the
+      # generated project.
+      - name: Generate Xcode project (Swift only)
+        if: matrix.language == 'swift'
+        run: ruby scripts/generate_xcode_project.rb
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:${{ matrix.language }}'
+          # Upload SARIF to the Security tab even on partial failures
+          # so we still see the findings the analyzer DID extract.
+          upload: always

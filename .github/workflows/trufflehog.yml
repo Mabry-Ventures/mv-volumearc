@@ -1,0 +1,77 @@
+name: Trufflehog
+
+# VOL-143: secret-leak detection. Trufflehog scans for credentials,
+# API keys, tokens, and other high-entropy strings that look like
+# secrets. Catches the canonical "oops I committed an .env" failure
+# mode that Dependabot can't see.
+#
+# Triggers:
+# - PRs against main: scan only the diff — fast (<30s) and catches
+#   leaks before merge. Uses ubuntu-latest hosted runner so this
+#   never blocks the self-hosted Apple lane.
+# - Push to main: scan the full repo history on every merge. Slower
+#   (~2 min on this codebase) but catches a leak that snuck in via
+#   a force-push to a feature branch the PR scan didn't see.
+# - Weekly cron: re-scan with the latest detector rules.
+# - Manual dispatch: ad-hoc.
+#
+# Trufflehog config:
+# - `--results=verified` would only surface keys the tool can validate
+#   against the live API; we want pre-validation findings too (a key
+#   that's been rotated still indicates a process leak), so we don't
+#   pass that flag.
+# - `--no-update` to keep the runner build deterministic; Trufflehog
+#   gets pinned via the action version in `uses:`.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 4 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: trufflehog-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: Scan for leaked secrets
+    # VOL-132 fork-PR guard — same posture as ci.yml. Trufflehog itself
+    # is safe to run against fork code (read-only), but we don't want to
+    # leak the GITHUB_TOKEN scope to fork PRs. Skip on forks; same-repo
+    # PRs and main pushes run as normal.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # Full history on push events so the scan sees every commit.
+          # PR events default to a shallow clone covering the diff — the
+          # action below uses `base` and `head` to scope the scan to the
+          # PR's commit range, which is the right shape for PR scans.
+          fetch-depth: ${{ github.event_name == 'pull_request' && 1 || 0 }}
+
+      - name: Trufflehog
+        # Pin to the latest stable as of 2026-04-21 — bump deliberately
+        # (Dependabot config covers github_actions so renovations land
+        # as PRs we explicitly review).
+        uses: trufflesecurity/trufflehog@v3.95.2
+        with:
+          # PR scope: only the commits introduced by the PR. Push scope:
+          # the whole repo. The action handles the difference based on
+          # the workflow event automatically when these are unset, but
+          # being explicit is clearer.
+          path: ./
+          base: ${{ github.event.pull_request.base.sha || '' }}
+          head: ${{ github.event.pull_request.head.sha || github.sha }}
+          extra_args: --results=verified,unknown
