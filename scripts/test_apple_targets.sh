@@ -12,6 +12,69 @@ ruby "scripts/generate_xcode_project.rb"
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT/.build/derived-data}"
 mkdir -p "$DERIVED_DATA_PATH"
 
+# VOL-164 round 2 (2026-05-10): defense in depth against hung test runs.
+# Two layers:
+#   1. Per-test execution-time allowance via xcodebuild's
+#      `-test-timeouts-enabled YES` + `-default-test-execution-time-allowance`
+#      + `-maximum-test-execution-time-allowance`. XCTest kills any
+#      individual test method that runs past its allowance.
+#   2. Wall-clock outer timeout via a shell watchdog around the
+#      `xcodebuild test` invocation, in case the XCTRunner itself fails
+#      to come up (the "Timed out waiting for AX loaded notification"
+#      pattern documented below). Per-test timeouts can't catch that
+#      because no test has started yet.
+#
+# PR #147's first run hung 76 minutes inside `Run tests` before being
+# cancelled — exactly the failure shape this defense is for. The
+# defaults below give tests room to complete on a slow runner while
+# bounding the worst case to ~35 min total instead of "forever."
+UNIT_TEST_DEFAULT_ALLOWANCE="${UNIT_TEST_DEFAULT_ALLOWANCE:-60}"
+UNIT_TEST_MAX_ALLOWANCE="${UNIT_TEST_MAX_ALLOWANCE:-180}"
+UNIT_TEST_WALL_TIMEOUT="${UNIT_TEST_WALL_TIMEOUT:-1200}"   # 20 min
+UI_TEST_DEFAULT_ALLOWANCE="${UI_TEST_DEFAULT_ALLOWANCE:-180}"
+UI_TEST_MAX_ALLOWANCE="${UI_TEST_MAX_ALLOWANCE:-360}"
+UI_TEST_WALL_TIMEOUT="${UI_TEST_WALL_TIMEOUT:-2100}"        # 35 min
+
+# Run a command with a wall-clock timeout. Returns the command's exit
+# status, or 124 if killed by the watchdog. The command must be a
+# function or simple binary — pipelines should be wrapped in a function
+# so PIPESTATUS resolves inside the subshell.
+run_with_wallclock_timeout() {
+  local timeout_sec="$1"
+  local label="$2"
+  shift 2
+
+  ( "$@" ) &
+  local cmd_pid=$!
+
+  (
+    sleep "$timeout_sec"
+    if kill -0 "$cmd_pid" 2>/dev/null; then
+      echo "::error::${label} exceeded ${timeout_sec}s wall-clock timeout; killing pid $cmd_pid"
+      kill -TERM "$cmd_pid" 2>/dev/null || true
+      pkill -TERM -P "$cmd_pid" 2>/dev/null || true
+      sleep 10
+      kill -KILL "$cmd_pid" 2>/dev/null || true
+      pkill -KILL -P "$cmd_pid" 2>/dev/null || true
+    fi
+  ) &
+  local watchdog_pid=$!
+
+  set +e
+  wait "$cmd_pid" 2>/dev/null
+  local status=$?
+  set -e
+
+  kill "$watchdog_pid" 2>/dev/null || true
+  wait "$watchdog_pid" 2>/dev/null || true
+
+  if [ "$status" -gt 128 ]; then
+    # 128 + signal number — treat as timeout-killed.
+    return 124
+  fi
+  return "$status"
+}
+
 . "$ROOT/scripts/simulators.sh"
 
 IOS_TEST_DEVICE_NAME="$(resolve_ios_test_device)"
@@ -41,16 +104,30 @@ reset_app_state() {
 TEST_RESULT_BUNDLE="${TEST_RESULT_BUNDLE:-$DERIVED_DATA_PATH/TestResults.xcresult}"
 rm -rf "$TEST_RESULT_BUNDLE"
 reset_app_state
-xcodebuild \
-  -project "VolumeArcApple.xcodeproj" \
-  -scheme "VolumeArcAppTests" \
-  -destination "platform=iOS Simulator,name=$IOS_TEST_DEVICE_NAME" \
-  -derivedDataPath "$DERIVED_DATA_PATH" \
-  -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
-  -enableCodeCoverage YES \
-  -resultBundlePath "$TEST_RESULT_BUNDLE" \
-  CODE_SIGNING_ALLOWED=NO \
-  test
+
+run_unit_tests() {
+  xcodebuild \
+    -project "VolumeArcApple.xcodeproj" \
+    -scheme "VolumeArcAppTests" \
+    -destination "platform=iOS Simulator,name=$IOS_TEST_DEVICE_NAME" \
+    -derivedDataPath "$DERIVED_DATA_PATH" \
+    -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
+    -enableCodeCoverage YES \
+    -resultBundlePath "$TEST_RESULT_BUNDLE" \
+    -test-timeouts-enabled YES \
+    -default-test-execution-time-allowance "$UNIT_TEST_DEFAULT_ALLOWANCE" \
+    -maximum-test-execution-time-allowance "$UNIT_TEST_MAX_ALLOWANCE" \
+    CODE_SIGNING_ALLOWED=NO \
+    test
+}
+
+if ! run_with_wallclock_timeout "$UNIT_TEST_WALL_TIMEOUT" "Unit tests" run_unit_tests; then
+  status=$?
+  if [ "$status" = "124" ]; then
+    echo "::error::Unit-test wall-clock timeout fired. The likely cause is the XCTRunner failing to launch on the simulator (search prior runs for 'Timed out waiting for AX loaded notification'). Inspect the .xcresult bundle for the last test method that started; that's where execution stalled."
+  fi
+  exit "$status"
+fi
 
 # XCUITests (journey coverage)
 reset_app_state
@@ -83,22 +160,35 @@ warm_simulator_for_ui_tests() {
 }
 warm_simulator_for_ui_tests
 
-run_ui_tests_once() {
-  local attempt="$1"
-  local log_path="$DERIVED_DATA_PATH/ui-test-attempt-${attempt}.log"
-
-  set +e
+ui_test_pipeline() {
+  local log_path="$1"
   xcodebuild \
     -project "VolumeArcApple.xcodeproj" \
     -scheme "VolumeArcAppUITests" \
     -destination "platform=iOS Simulator,name=$IOS_TEST_DEVICE_NAME" \
     -derivedDataPath "$DERIVED_DATA_PATH" \
     -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
+    -test-timeouts-enabled YES \
+    -default-test-execution-time-allowance "$UI_TEST_DEFAULT_ALLOWANCE" \
+    -maximum-test-execution-time-allowance "$UI_TEST_MAX_ALLOWANCE" \
     CODE_SIGNING_ALLOWED=NO \
     test 2>&1 | tee "$log_path"
-  local status=${PIPESTATUS[0]}
+  return "${PIPESTATUS[0]}"
+}
+
+run_ui_tests_once() {
+  local attempt="$1"
+  local log_path="$DERIVED_DATA_PATH/ui-test-attempt-${attempt}.log"
+
+  set +e
+  run_with_wallclock_timeout "$UI_TEST_WALL_TIMEOUT" "UI test attempt $attempt" \
+    ui_test_pipeline "$log_path"
+  local status=$?
   set -e
 
+  if [ "$status" = "124" ]; then
+    echo "::error::UI-test attempt $attempt hit ${UI_TEST_WALL_TIMEOUT}s wall-clock timeout (xcodebuild was likely stuck before any test method ran — see ui-test-attempt-${attempt}.log)."
+  fi
   return "$status"
 }
 
