@@ -400,6 +400,16 @@ jobs:
           else
             git worktree add --detach "$metrics_dir"
             cd "$metrics_dir"
+            # Codex review (PR #144 round 3): on a persistent self-hosted
+            # runner, a prior bootstrap whose `git push origin metrics`
+            # failed leaves a stale local `metrics` ref in
+            # `.git/refs/heads/`. The next run still sees no
+            # `origin/metrics`, lands here, and `git checkout --orphan
+            # metrics` errors with "a branch named 'metrics' already
+            # exists" because `--orphan` (unlike `-B`) cannot reset an
+            # existing branch. Delete any stale local ref before
+            # bootstrapping so the orphan path is idempotent.
+            git branch -D metrics 2>/dev/null || true
             git checkout --orphan metrics
             git rm -rf . >/dev/null 2>&1 || true
             printf '%s\n' \
