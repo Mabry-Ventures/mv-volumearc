@@ -449,6 +449,32 @@ sentry_tests_dep.package = sentry_ref
 sentry_tests_dep.product_name = 'Sentry'
 app_tests_target.package_product_dependencies << sentry_tests_dep
 
+# VOL-135 Phase 1: swift-snapshot-testing dependency for the unit-test
+# target only. The library powers visual-regression coverage for VAUI
+# components and screens — Phase 1 wires the dependency + ships one
+# proof-of-concept snapshot test; Phase 2 expands across the full
+# component matrix per VOL-135's acceptance criteria.
+#
+# Pinned with `upToNextMajorVersion` (not Sentry-style `exactVersion`)
+# because test-only deps don't ship to users — minor bumps are
+# low-risk and Dependabot still surfaces them as explicit PRs.
+snapshot_url = 'https://github.com/pointfreeco/swift-snapshot-testing.git'
+snapshot_requirement = {
+  'kind' => 'upToNextMajorVersion',
+  'minimumVersion' => '1.17.0',
+}
+snapshot_ref = project.root_object.package_references.find { |r| r.repositoryURL == snapshot_url }
+unless snapshot_ref
+  snapshot_ref = project.new(Xcodeproj::Project::Object::XCRemoteSwiftPackageReference)
+  snapshot_ref.repositoryURL = snapshot_url
+  project.root_object.package_references << snapshot_ref
+end
+snapshot_ref.requirement = snapshot_requirement
+snapshot_tests_dep = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+snapshot_tests_dep.package = snapshot_ref
+snapshot_tests_dep.product_name = 'SnapshotTesting'
+app_tests_target.package_product_dependencies << snapshot_tests_dep
+
 # VOL-126: re-sign embedded frameworks with the app's distribution
 # identity at archive time. Without this, sentry-cocoa's SPM-managed
 # dynamic framework retains its upstream signature (or no signature)
