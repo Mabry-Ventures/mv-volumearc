@@ -3,20 +3,61 @@
 ## Dev setup
 
 1. Install Xcode 26.4+
-2. Install Ruby with `xcodeproj` gem:
+2. Install the pinned Ruby (see `.ruby-version`, currently `4.0`). `brew install ruby` would install whatever Homebrew's bare `ruby` formula points at today (4.0.2 as of 2026-05-09), which is fine for now but won't track `.ruby-version` if Homebrew advances. Use a version manager so dev and CI converge:
+
    ```bash
-   gem install --user-install xcodeproj
+   # Recommended: mise (https://mise.jdx.dev)
+   brew install mise
+   mise install              # reads .ruby-version (4.0) and installs the matching toolchain
    ```
-3. Clone the repo:
+
+   Or use `rbenv`, `asdf`, or `chruby` — any of them will read `.ruby-version`.
+
+   **`.ruby-version` vs `mise.toml`.** `.ruby-version` is the single source of truth — it's checked into the repo, every common Ruby version manager honors it, and CI reads it via `mise install` in the pre-flight step. `mise install` (or `rbenv install`, etc.) is enough; you don't need to run `mise use --pin` and you don't need a committed `mise.toml`. If you want to pin extra tools beyond Ruby (e.g. a specific Bundler version) on your own machine, run `mise use --pin tool@version` to write a personal `mise.local.toml` — that filename is gitignored. Don't commit `mise.toml` to the repo: it would shadow `.ruby-version` and silently diverge, defeating the point of having one source of truth.
+
+3. Install gems (versions pinned in `Gemfile`, exact pins in `Gemfile.lock` when present):
+
+   ```bash
+   gem install bundler
+   bundle install              # installs fastlane + xcodeproj at pinned versions
+   # Or, if you don't want bundler in the loop:
+   gem install --user-install xcodeproj -v '~> 1.27'
+   ```
+
+4. Install SwiftLint (≥ 0.62; CI asserts):
+
+   ```bash
+   brew install swiftlint
+   ```
+
+5. Clone the repo:
+
    ```bash
    git clone https://github.com/Mabry-Ventures/mv-volumearc.git
    cd mv-volumearc
    ```
-4. Generate the Xcode project:
+
+6. Generate the Xcode project:
+
    ```bash
    ruby scripts/generate_xcode_project.rb
    ```
-5. Open `VolumeArcApple.xcodeproj` in Xcode
+
+7. Open `VolumeArcApple.xcodeproj` in Xcode
+
+### Toolchain pinning (VOL-151)
+
+The repo declares its expected versions in three places so a Homebrew or RubyGems bump doesn't silently break CI:
+
+| Tool | Pin file | Constraint |
+|---|---|---|
+| Xcode | CI assertion in `ci.yml` | ≥ 26.4 |
+| Ruby | `.ruby-version` | major.minor (currently `4.0`) — CI warns on drift |
+| `xcodeproj` gem | `Gemfile` | `~> 1.27` |
+| `fastlane` gem | `Gemfile` | `~> 2.233` |
+| SwiftLint | CI assertion in `ci.yml` | ≥ 0.62; warns on 1.x major |
+
+When updating a pin: bump the constraint, run the relevant tool locally, verify CI green on a small PR before bulk work depends on the change.
 
 ## Build commands
 
@@ -67,6 +108,40 @@ Practical consequences:
 6. At least one code review required
 7. AI Review Gate runs automatically: CodeRabbit Pro (primary reviewer) and Codex Code Review (secondary reviewer) are both requested by the `Request AI Reviews` workflow step. Both must post a review signal on the current head SHA within their wait window or the gate fails.
 8. Merge via squash when all checks pass
+
+### Branch cleanup after merge
+
+`gh pr merge --squash --delete-branch` deletes the remote branch automatically — but only when no local worktree has that branch checked out. The common interaction failure is: an open `mv-volumearc` worktree is on `main`, and `gh pr merge` tries to remove the merged branch locally first, which fails with `'main' is already used by worktree at ...`. The remote branch stays around even though main got the squash commit.
+
+To clean up the accumulated drift periodically:
+
+```bash
+# Branches that have been merged at some point (sometimes the same name
+# is reused for a NEW open PR — the open-list below is what protects us).
+gh pr list --state merged --limit 200 --json headRefName --jq '.[].headRefName' | sort -u > /tmp/merged.txt
+
+# Branches with open PRs RIGHT NOW. Subtracted below so we never delete
+# a branch that's actively being worked on, even if its name was used
+# for a prior merged PR.
+gh pr list --state open --limit 200 --json headRefName --jq '.[].headRefName' | sort -u > /tmp/open.txt
+
+# Remote feature branches.
+git ls-remote --heads origin 'claude/*' 'jared/*' 'codex/*' 'feature/*' 'fix/*' 'sprint/*' \
+  | awk '{print $2}' | sed 's|refs/heads/||' | sort -u > /tmp/remote.txt
+
+# Eligible = (merged ∩ remote) − open. Print the dry-run list first so
+# you can eyeball it before any destructive call.
+comm -12 /tmp/merged.txt /tmp/remote.txt | comm -23 - /tmp/open.txt > /tmp/to-delete.txt
+echo "Will delete:"
+cat /tmp/to-delete.txt
+
+# Confirm, then delete.
+while read -r ref; do
+  git push origin --delete "$ref"
+done < /tmp/to-delete.txt
+```
+
+`comm -12` outputs lines present in both files (i.e. squash-merged AND still on origin). The second `comm -23 - /tmp/open.txt` subtracts any branch with an open PR — that's the safety net for the case where a branch name (e.g. `claude/foo`) was used for a previous merged PR and then re-used for a new one currently in flight. The dry-run print + explicit `while`-loop separates the discovery and destructive steps so a typo or stale state doesn't take down active work. Running this once per cycle keeps the remote tidy. VOL-165 captured this as a one-time cleanup; the loop above is the recurring fix.
 
 ### Required status checks (enforced by repository ruleset)
 

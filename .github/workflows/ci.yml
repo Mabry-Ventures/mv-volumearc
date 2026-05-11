@@ -112,8 +112,37 @@ jobs:
           xcode_version_output=$(xcodebuild -version)
           printf '%s\n' "$xcode_version_output"
           ruby --version | grep -qE 'ruby (3|4)\.' || { echo "::error::Ruby < 3.0 (EOL)"; exit 1; }
+          # VOL-151: warn (don't fail) when the runner's Ruby diverges from
+          # `.ruby-version`. We can't `brew install ruby@N` reliably across
+          # Homebrew versions, so the pin is advisory until the toolchain
+          # bootstrap is migrated to bundler. The warning catches Homebrew
+          # bumps that change behavior so we can update the pin deliberately.
+          if [[ -f .ruby-version ]]; then
+            expected_ruby=$(tr -d '[:space:]' < .ruby-version)
+            actual_ruby=$(ruby --version | awk '{print $2}' | cut -d'.' -f1-2)
+            if [[ "$expected_ruby" != "$actual_ruby"* && "$actual_ruby" != "$expected_ruby"* ]]; then
+              echo "::warning::Ruby version drift: .ruby-version=$expected_ruby, runner=$actual_ruby"
+            fi
+          fi
           gem list xcodeproj --installed --version '>= 1.0' >/dev/null || { echo "::error::xcodeproj gem missing"; exit 1; }
           command -v swiftlint >/dev/null || { echo "::error::swiftlint missing on runner"; exit 1; }
+          # VOL-151: SwiftLint version assertion. The lint config in
+          # `.swiftlint.yml` was tuned against a specific minor; new minors
+          # can introduce rule renames or default changes that break --strict
+          # silently. Assert ≥ 0.62 (where the rules our config uses
+          # stabilized) and warn on a major bump (1.x will likely require
+          # rule audits).
+          swiftlint_version="$(swiftlint version 2>/dev/null | head -n1 | awk '{print $NF}')"
+          swiftlint_major=$(printf '%s\n' "$swiftlint_version" | cut -d'.' -f1)
+          swiftlint_minor=$(printf '%s\n' "$swiftlint_version" | cut -d'.' -f2)
+          if [[ "$swiftlint_major" -eq 0 && "$swiftlint_minor" -lt 62 ]]; then
+            echo "::error::SwiftLint $swiftlint_version is below the 0.62 floor (rule config tuned against ≥ 0.62)"
+            exit 1
+          fi
+          if [[ "$swiftlint_major" -ge 1 ]]; then
+            echo "::warning::SwiftLint $swiftlint_version is on a 1.x major; rule config may need a re-audit"
+          fi
+          echo "Toolchain: ruby=$(ruby --version | awk '{print $2}') xcodeproj=$(gem list xcodeproj --installed --details 2>/dev/null | head -n1) swiftlint=$swiftlint_version"
           # Toolchain pin: Xcode 26.4+ is required so the Swift 6.3 language
           # mode and the iOS 26 SDK that build settings depend on are
           # available. `xcodebuild -version` prints e.g. "Xcode 26.4" on the
@@ -307,16 +336,22 @@ jobs:
               core.info('Created sticky coverage comment.');
             }
 
-      # VOL-97: historical trend. On every push to main we append a
-      # {commit, date, coverage} record to docs/coverage-trend.json and
-      # commit it back. The append step is guarded on the event name +
-      # ref so PR runs and tag-build runs are no-ops. We use the
-      # job-scoped GITHUB_TOKEN (needs `permissions: contents: write`,
-      # granted at the job level above) — no extra PAT required. If a
-      # repo-level branch protection rule ever blocks bot pushes to
-      # main, flip this block to open a PR via peter-evans/create-pull-request
-      # or disable it with a TODO.
-      - name: Append coverage to trend
+      # VOL-97 / VOL-166: historical trend stored on the unprotected
+      # `metrics` branch (orphan, data-only). Pushing to main is blocked
+      # by the `Require AI Code Reviews` ruleset — verified May 9 by
+      # tracing run 25562451096's `Failed to push coverage-trend update
+      # after 3 attempts` warning. The bot can push freely to any
+      # non-protected branch, and a separate `metrics` branch keeps
+      # data writes off the code branch.
+      #
+      # Read the trend via the GitHub Pages-style URL pattern:
+      #   https://raw.githubusercontent.com/<repo>/metrics/coverage-trend.json
+      #
+      # The append step is guarded on event_name + ref so PR runs and
+      # tag-build runs are no-ops. Uses the job-scoped GITHUB_TOKEN
+      # (needs `permissions: contents: write`, granted at the job
+      # level above) — no extra PAT required.
+      - name: Append coverage to metrics branch
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && success()
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -326,17 +361,77 @@ jobs:
             echo "::warning::No coverage-summary.json; skipping trend append."
             exit 0
           fi
+
+          # Snapshot the summary so the metrics worktree can read it
+          # after we switch branches.
+          cp .build/coverage-summary.json /tmp/coverage-summary.json
+
+          # Stage a clean worktree on the metrics branch. If it doesn't
+          # exist yet, bootstrap an orphan branch with just the trend file.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Codex review (PR #144): a bare `git fetch origin metrics --depth=1`
+          # only populates FETCH_HEAD, not `origin/metrics`, in the
+          # single-branch checkout that `actions/checkout@v6` produces. Use an
+          # explicit destination refspec so `git rev-parse --verify
+          # origin/metrics` resolves on every run after bootstrap. `|| true`
+          # keeps the first-ever run (where the remote ref doesn't exist)
+          # from short-circuiting before the orphan-branch path runs.
+          git fetch origin 'metrics:refs/remotes/origin/metrics' --depth=1 2>/dev/null || true
+
+          metrics_dir="$(mktemp -d)"
+
+          # CodeRabbit review (PR #144): persistent self-hosted runners
+          # accumulate `.git/worktrees/` orphans without an explicit cleanup.
+          # `git worktree remove --force` is idempotent against missing or
+          # already-pruned worktrees, so the trap is safe on both happy and
+          # error paths.
+          cleanup_metrics_worktree() {
+            cd "$GITHUB_WORKSPACE"
+            git worktree remove --force "$metrics_dir" 2>/dev/null || true
+          }
+          trap cleanup_metrics_worktree EXIT
+
+          if git rev-parse --verify origin/metrics >/dev/null 2>&1; then
+            git worktree add "$metrics_dir" origin/metrics
+            cd "$metrics_dir"
+            git checkout -B metrics origin/metrics
+          else
+            git worktree add --detach "$metrics_dir"
+            cd "$metrics_dir"
+            # Codex review (PR #144 round 3): on a persistent self-hosted
+            # runner, a prior bootstrap whose `git push origin metrics`
+            # failed leaves a stale local `metrics` ref in
+            # `.git/refs/heads/`. The next run still sees no
+            # `origin/metrics`, lands here, and `git checkout --orphan
+            # metrics` errors with "a branch named 'metrics' already
+            # exists" because `--orphan` (unlike `-B`) cannot reset an
+            # existing branch. Delete any stale local ref before
+            # bootstrapping so the orphan path is idempotent.
+            git branch -D metrics 2>/dev/null || true
+            git checkout --orphan metrics
+            git rm -rf . >/dev/null 2>&1 || true
+            printf '%s\n' \
+              '# metrics' \
+              '' \
+              'Data-only branch. Read from GitHub raw URLs; do not edit by hand.' \
+              '' \
+              'See `docs/TESTING.md#coverage-artifacts` and the badge in `docs/PLATFORM.md`.' \
+              > README.md
+          fi
+
           python3 <<'PY'
-          import json, os, subprocess, datetime
-          summary = json.load(open(".build/coverage-summary.json"))
-          trend_path = "docs/coverage-trend.json"
+          import json, os, datetime
+          summary = json.load(open("/tmp/coverage-summary.json"))
+          trend_path = "coverage-trend.json"
           try:
               trend = json.load(open(trend_path))
           except FileNotFoundError:
               trend = {
                   "target": summary["target"],
                   "threshold": summary["threshold"],
-                  "note": "Append-only log of VolumeArcCore line coverage per main-branch commit.",
+                  "note": "Append-only log of VolumeArcCore line coverage per main-branch commit. Written by .github/workflows/ci.yml (VOL-97 / VOL-166). Stored on `metrics` branch — the `main` branch's docs/coverage-trend.json is a placeholder.",
                   "records": [],
               }
           sha = os.environ.get("GITHUB_SHA", "")
@@ -358,25 +453,39 @@ jobs:
                   handle.write("\n")
               print(f"Appended record for {sha}: {summary['coverage']}%")
           PY
-          if git diff --quiet docs/coverage-trend.json; then
-            echo "No trend-file change; skipping commit."
+
+          # Codex review (PR #144): stage first, then ask the index whether
+          # anything actually changed. The previous order — `git diff --quiet
+          # coverage-trend.json` before `git add` — silently no-op'd the
+          # bootstrap commit because `git diff` returns 0 for *untracked*
+          # files (the orphan branch's first run creates the trend file
+          # untracked, so the diff check passed and existing_count=1 then
+          # exited before staging). `git diff --cached --quiet` after staging
+          # handles all three cases correctly:
+          #   - bootstrap (orphan): README + trend are new index entries → non-zero → commit
+          #   - update (existing): trend has a new record vs HEAD → non-zero → commit
+          #   - duplicate (re-run): trend unchanged vs HEAD → zero → skip
+          git add coverage-trend.json README.md 2>/dev/null || git add coverage-trend.json
+
+          if git diff --cached --quiet; then
+            echo "No staged changes to coverage trend; skipping commit."
             exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/coverage-trend.json
-          git commit -m "chore(ci): append coverage trend for ${GITHUB_SHA::7}" \
-            -m "[skip ci]"
-          # Push with retry on non-fast-forward; another concurrent main
-          # run may have appended first.
+
+          git commit -m "chore(metrics): coverage trend for ${GITHUB_SHA::7} (${{ github.run_id }})"
+
+          # Push with retry on non-fast-forward; another concurrent
+          # main run may have appended first.
           for attempt in 1 2 3; do
-            if git push origin HEAD:main; then
+            if git push origin metrics; then
+              echo "Pushed coverage trend update to metrics branch."
               exit 0
             fi
             echo "Push attempt $attempt failed; rebasing and retrying."
-            git pull --rebase origin main || true
+            git fetch origin metrics --depth=1 || true
+            git pull --rebase origin metrics || true
           done
-          echo "::warning::Failed to push coverage-trend update after 3 attempts."
+          echo "::warning::Failed to push coverage-trend update to metrics after 3 attempts."
 
       - name: Lint (SwiftLint)
         # VOL-113: `--strict` re-enabled now that all warnings clear.

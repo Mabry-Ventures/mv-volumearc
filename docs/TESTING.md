@@ -147,9 +147,9 @@ CI publishes three coverage surfaces per run so reviewers never need to scrape t
 
 **3. Sticky PR comment.** PR runs post (or update) a single coverage comment on the pull request showing `VolumeArcCore | XX.XX% | gate`. Gets rewritten on every re-run, so the comment always reflects the latest CI. Implemented via `actions/github-script` with a hidden `<!-- volumearc-coverage-comment -->` marker to find the comment on repeat runs.
 
-**4. Historical trend file.** After each merge to `main`, CI appends `{commit, date, coverage, passed}` to [`docs/coverage-trend.json`](coverage-trend.json) and commits it back. The coverage badge at the top of [`docs/PLATFORM.md`](PLATFORM.md) reads the tail record from that file via a dynamic-json shields.io endpoint, so the badge always reflects the most recent main-branch coverage number. The file is append-only — tampering with old records is a correctness bug.
+**4. Historical trend file.** After each merge to `main`, CI appends `{commit, date, coverage, passed}` to `coverage-trend.json` on the **`metrics` branch** (not main). Main is protected by the `Require AI Code Reviews` ruleset, so bot pushes to main are rejected — VOL-166 moved the trend storage to an unprotected, data-only branch. The coverage badge at the top of [`docs/PLATFORM.md`](PLATFORM.md) reads the tail record from `https://raw.githubusercontent.com/Mabry-Ventures/mv-volumearc/metrics/coverage-trend.json` via a dynamic-json shields.io endpoint. The placeholder [`docs/coverage-trend.json`](coverage-trend.json) on main is documentation only — do not edit it. The file on `metrics` is append-only; tampering with old records is a correctness bug.
 
-Permissions note: the trend-append step commits via `GITHUB_TOKEN` with job-level `permissions: contents: write`. If branch protection on `main` is later tightened to forbid bot pushes, flip the step to open a PR via a first-party action or disable it with a TODO.
+The trend file on `metrics` is bootstrapped automatically on the first main push that produces coverage data: the workflow checks out `origin/metrics` if it exists, otherwise creates an orphan `metrics` branch with a tiny README and the trend JSON. Subsequent main pushes append-and-push.
 
 ### Inspecting coverage locally
 

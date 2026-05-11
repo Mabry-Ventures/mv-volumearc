@@ -1,6 +1,6 @@
 {
   "target": "VolumeArcCore",
   "threshold": 80,
-  "note": "Append-only log of VolumeArcCore line coverage per main-branch commit. Written by .github/workflows/ci.yml via scripts/check_coverage.sh. See docs/TESTING.md#coverage-artifacts.",
+  "note": "Placeholder. Live trend data lives on the `metrics` branch — main is protected and bot pushes are rejected. See docs/TESTING.md#coverage-artifacts. Live URL: https://raw.githubusercontent.com/Mabry-Ventures/mv-volumearc/metrics/coverage-trend.json",
   "records": []
 }

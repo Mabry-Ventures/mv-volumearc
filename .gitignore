@@ -64,6 +64,15 @@ fastlane/test_output/
 # Claude Code local session state
 .claude/
 
+# Toolchain (VOL-151): `.ruby-version` is the single source of truth.
+# `mise.local.toml` is mise's per-developer override file — gitignored
+# so a contributor's local pin (e.g. for Bundler or another tool) doesn't
+# leak into the repo. `mise.toml` itself is intentionally not in the repo
+# (see docs/CONTRIBUTING.md "Dev setup") so it can't shadow `.ruby-version`;
+# adding it here keeps an accidental `mise use --pin` from sneaking it in.
+mise.toml
+mise.local.toml
+
 # Marketing site (Next.js) build artifacts
 # marketing/ has its own .gitignore for the bulk; these are belt-and-suspenders.
 marketing/.next/
