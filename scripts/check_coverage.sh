@@ -46,8 +46,16 @@ mkdir -p "$(dirname "$SUMMARY_JSON")"
 # module lives in `scripts/_compute_coverage_summary.py` (see VOL-140
 # Phase 1 note in the header comment) and reads TARGET / THRESHOLD /
 # SUMMARY_JSON from the environment.
-TARGET="$TARGET" THRESHOLD="$THRESHOLD" SUMMARY_JSON="$SUMMARY_JSON" \
-  xcrun xccov view --report --json "$XCRESULT" \
+#
+# `export` the variables rather than using a `VAR=... cmd` prefix:
+# env-var assignments preceding a *pipeline* only apply to the first
+# command in that pipeline, so the python receiver on the far side of
+# `|` would get `KeyError: 'TARGET'` otherwise. Caught in PR #150 CI
+# run 25649937456 — a one-liner regression from inlining the python
+# into a pipeline. The python module is the only consumer of these
+# vars, so `export` has no other side effects.
+export TARGET THRESHOLD SUMMARY_JSON
+xcrun xccov view --report --json "$XCRESULT" \
   | python3 "$ROOT/scripts/_compute_coverage_summary.py"
 
 # Re-read the JSON we just wrote so the rest of the script works in
