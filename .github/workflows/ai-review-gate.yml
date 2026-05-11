@@ -1,3 +1,9 @@
+# VOL-174: single-bot review gate (CodeRabbit Pro only).
+# Codex Code Review was removed when the org's Codex code-review credits
+# were exhausted (2026-05-10). Re-enable the second bot here AND in the
+# `Require AI Code Reviews` ruleset's required status checks if/when
+# additional credits land. The Codex job is preserved in git history at
+# the commit before this rename for easy revert.
 name: AI Review Gate
 
 on:
@@ -51,129 +57,9 @@ jobs:
             };
 
             await ensureComment(
-              `<!-- codex-review-request:${sha} -->`,
-              `<!-- codex-review-request:${sha} -->\n@codex review`
-            );
-            await ensureComment(
               `<!-- coderabbit-review-request:${sha} -->`,
               `<!-- coderabbit-review-request:${sha} -->\n@coderabbitai review`
             );
-
-  codex-review:
-    name: Codex Code Review
-    if: >-
-      github.event_name == 'pull_request_target' ||
-      github.event_name == 'issue_comment' ||
-      github.event_name == 'pull_request_review' ||
-      github.event_name == 'pull_request_review_comment'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Wait for Codex review signal
-        uses: actions/github-script@v9
-        env:
-          AI_LOGINS: '["codex","chatgpt-codex-connector[bot]"]'
-          AI_NAME: Codex
-          WAIT_MINUTES: '15'
-        with:
-          script: |
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const botLogins = JSON.parse(process.env.AI_LOGINS);
-            const aiName = process.env.AI_NAME || 'AI';
-            const waitMinutes = Number(process.env.WAIT_MINUTES || '15');
-            const delayMs = 30000;
-            const deadline = Date.now() + waitMinutes * 60 * 1000;
-
-            async function sleep(ms) {
-              await new Promise((resolve) => setTimeout(resolve, ms));
-            }
-
-            async function getPullNumber() {
-              if (context.payload.pull_request?.number) return context.payload.pull_request.number;
-              if (context.payload.issue?.pull_request) return context.payload.issue.number;
-              if (context.payload.review?.pull_request_url) {
-                return Number(context.payload.review.pull_request_url.split('/').pop());
-              }
-              if (context.payload.comment?.pull_request_review_id && context.payload.pull_request?.number) {
-                return context.payload.pull_request.number;
-              }
-              core.setFailed(`Unable to determine pull request number for ${aiName} review gate.`);
-              return null;
-            }
-
-            async function hasSignal(prNumber) {
-              const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
-              if (pr.draft) return { ok: true, reason: 'Draft PR, skipping until ready for review.' };
-
-              const headSha = pr.head.sha;
-              const { data: commit } = await github.rest.repos.getCommit({ owner, repo, ref: headSha });
-              const baseline = new Date(
-                commit.commit.committer?.date ||
-                commit.commit.author?.date ||
-                pr.updated_at
-              );
-
-              const reviews = await github.paginate(github.rest.pulls.listReviews, {
-                owner,
-                repo,
-                pull_number: prNumber,
-                per_page: 100,
-              });
-
-              const issueComments = await github.paginate(github.rest.issues.listComments, {
-                owner,
-                repo,
-                issue_number: prNumber,
-                per_page: 100,
-              });
-
-              const reviewComments = await github.paginate(github.rest.pulls.listReviewComments, {
-                owner,
-                repo,
-                pull_number: prNumber,
-                per_page: 100,
-              });
-
-              const matches = (login) => botLogins.includes(login || '');
-              const isFresh = (value) => value && new Date(value) >= baseline;
-
-              const review = reviews.find((item) => matches(item.user?.login) && isFresh(item.submitted_at));
-              if (review) {
-                return { ok: true, reason: `Review from ${review.user.login} at ${review.submitted_at}` };
-              }
-
-              const issueComment = issueComments.find((item) => matches(item.user?.login) && isFresh(item.created_at));
-              if (issueComment) {
-                return { ok: true, reason: `Issue comment from ${issueComment.user.login} at ${issueComment.created_at}` };
-              }
-
-              const reviewComment = reviewComments.find((item) => matches(item.user?.login) && isFresh(item.created_at));
-              if (reviewComment) {
-                return { ok: true, reason: `Review comment from ${reviewComment.user.login} at ${reviewComment.created_at}` };
-              }
-
-              return {
-                ok: false,
-                reason: `No fresh ${aiName} review signal yet for head ${headSha.slice(0, 7)} after ${baseline.toISOString()}`,
-              };
-            }
-
-            const prNumber = await getPullNumber();
-            if (!prNumber) return;
-
-            let lastReason = `No ${aiName} signal observed yet.`;
-            while (Date.now() < deadline) {
-              const result = await hasSignal(prNumber);
-              if (result.ok) {
-                core.info(result.reason);
-                return;
-              }
-              lastReason = result.reason;
-              core.info(lastReason);
-              await sleep(delayMs);
-            }
-
-            core.setFailed(`${lastReason}. Timed out waiting for ${aiName} review.`);
 
   coderabbit-review:
     name: CodeRabbit Code Review
