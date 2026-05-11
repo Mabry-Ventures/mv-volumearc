@@ -30,6 +30,22 @@ final class VolumeArcAccessibilityJourneyTests: XCTestCase {
         continueAfterFailure = false
     }
 
+    /// VOL-164: defensively terminate the host app between test methods
+    /// so a hung/crashed launch in test N doesn't poison test N+1 with
+    /// "expected element not found" failures. `XCUIApplication()` with
+    /// no launch args references the test target's host bundle —
+    /// terminate() then kills whatever instance is running for that
+    /// bundle ID, no per-test tracking required.
+    override func tearDownWithError() throws {
+        let app = XCUIApplication()
+        VolumeArcAppUITestSupport.attachDebugSnapshot(
+            of: app,
+            named: "tearDown.\(name).accessibility-tree",
+            to: self
+        )
+        VolumeArcAppUITestSupport.defensiveTerminate(app)
+    }
+
     // MARK: - 1. Onboarding journey under stress
 
     /// Boots the onboarding flow with Dynamic Type forced to
@@ -180,26 +196,27 @@ final class VolumeArcAccessibilityJourneyTests: XCTestCase {
         // Same 5-Continue + 1-Finish loop as the parent journey (welcome,
         // profile, preferences, coachingStyle, permissions). Larger type
         // / longer strings only stress the layout — the step count is
-        // unchanged from the parent journey.
+        // unchanged from the parent journey. VOL-164: scrollIntoViewAndTap
+        // handles the case where the CTA row falls below the keyboard or
+        // off-screen at .accessibility5, which was the canonical failure
+        // shape for `testOnboardingJourneyAtAccessibility5`.
         for stepIndex in 0..<5 {
             dismissKeyboardIfPresent(in: app)
             let continueButton = app.descendants(matching: .any)
                 .matching(identifier: "onboarding.continue").firstMatch
             XCTAssertTrue(
-                continueButton.waitForExistence(timeout: 15),
+                VolumeArcAppUITestSupport.scrollIntoViewAndTap(continueButton, in: app),
                 "[\(contextLabel)] Continue button should be reachable on step \(stepIndex + 1)"
             )
-            continueButton.tap()
         }
 
         dismissKeyboardIfPresent(in: app)
         let finishButton = app.descendants(matching: .any)
             .matching(identifier: "onboarding.finish").firstMatch
         XCTAssertTrue(
-            finishButton.waitForExistence(timeout: 15),
+            VolumeArcAppUITestSupport.scrollIntoViewAndTap(finishButton, in: app),
             "[\(contextLabel)] Finish button should be reachable on the last step"
         )
-        finishButton.tap()
 
         let dashboard = app.otherElements["root.dashboard"]
         XCTAssertTrue(

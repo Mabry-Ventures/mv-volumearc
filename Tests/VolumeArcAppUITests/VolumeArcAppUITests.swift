@@ -17,6 +17,11 @@ final class VolumeArcAppUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    /// VOL-164: defensively terminate the host app between test methods.
+    override func tearDownWithError() throws {
+        VolumeArcAppUITestSupport.defensiveTerminate(XCUIApplication())
+    }
+
     // MARK: - Launch smoke
 
     func testAppReachesForegroundOnLaunch() throws {

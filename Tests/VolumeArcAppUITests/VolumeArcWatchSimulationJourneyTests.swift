@@ -35,6 +35,20 @@ final class VolumeArcWatchSimulationJourneyTests: XCTestCase {
         continueAfterFailure = false
     }
 
+    /// VOL-164: defensively terminate the host app between test methods.
+    /// This suite specifically logged `Failed to terminate
+    /// com.mabryventures.VolumeArc:73459` in CI run 25412302961 — exactly
+    /// the cascade pattern this teardown fights.
+    override func tearDownWithError() throws {
+        let app = XCUIApplication()
+        VolumeArcAppUITestSupport.attachDebugSnapshot(
+            of: app,
+            named: "tearDown.\(name).accessibility-tree",
+            to: self
+        )
+        VolumeArcAppUITestSupport.defensiveTerminate(app)
+    }
+
     /// Post a `restTimer` payload at launch and confirm the dashboard
     /// observes the kind. `restTimer` is the most common Watch-→-iPhone
     /// payload (the watch ticks down rest, the phone learns when the

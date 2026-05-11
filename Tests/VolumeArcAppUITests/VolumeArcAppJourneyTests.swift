@@ -19,6 +19,18 @@ final class VolumeArcAppJourneyTests: XCTestCase {
         continueAfterFailure = false
     }
 
+    /// VOL-164: defensively terminate the host app between test methods
+    /// so a hung/crashed launch in test N doesn't poison test N+1.
+    override func tearDownWithError() throws {
+        let app = XCUIApplication()
+        VolumeArcAppUITestSupport.attachDebugSnapshot(
+            of: app,
+            named: "tearDown.\(name).accessibility-tree",
+            to: self
+        )
+        VolumeArcAppUITestSupport.defensiveTerminate(app)
+    }
+
     // MARK: - 1. Onboarding → first workout
 
     /// Boots the app with onboarding present, taps through every step,
