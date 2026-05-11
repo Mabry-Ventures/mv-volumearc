@@ -306,14 +306,39 @@ jobs:
             const data = JSON.parse(fs.readFileSync(path, 'utf8'));
             const marker = '<!-- volumearc-coverage-comment -->';
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const gate = data.passed ? `passed (>= ${data.threshold}%)` : `FAILED (< ${data.threshold}%)`;
+
+            // VOL-140 Phase 1: render one row per measured target if
+            // the multi-target array is present; fall back to the
+            // single-row layout for back-compat with any old summary
+            // JSON still on disk.
+            const formatGate = (row) => {
+              if (!row.gated) return '_(measure only)_';
+              return row.passed
+                ? `passed (>= ${row.threshold}%)`
+                : `FAILED (< ${row.threshold}%)`;
+            };
+
+            const rows = Array.isArray(data.targets) && data.targets.length
+              ? data.targets
+              : [{
+                  target: data.target,
+                  coverage: data.coverage,
+                  gated: true,
+                  threshold: data.threshold,
+                  passed: data.passed,
+                }];
+
+            const tableLines = [
+              '| Module | Coverage | Gate |',
+              '|---|---:|---|',
+              ...rows.map((row) => `| \`${row.target}\` | ${row.coverage}% | ${formatGate(row)} |`),
+            ];
+
             const body = [
               marker,
               '### Coverage',
               '',
-              '| Module | Coverage | Gate |',
-              '|---|---|---|',
-              `| ${data.target} | ${data.coverage}% | ${gate} |`,
+              ...tableLines,
               '',
               `Full report: [xcresult artifact](${runUrl}) (TestResults-${context.runId}, 14-day retention)`,
             ].join('\n');
@@ -431,7 +456,7 @@ jobs:
               trend = {
                   "target": summary["target"],
                   "threshold": summary["threshold"],
-                  "note": "Append-only log of VolumeArcCore line coverage per main-branch commit. Written by .github/workflows/ci.yml (VOL-97 / VOL-166). Stored on `metrics` branch — the `main` branch's docs/coverage-trend.json is a placeholder.",
+                  "note": "Append-only log of per-target line coverage per main-branch commit. Written by .github/workflows/ci.yml (VOL-97 / VOL-166 / VOL-140). Stored on `metrics` branch — the `main` branch's docs/coverage-trend.json is a placeholder.",
                   "records": [],
               }
           sha = os.environ.get("GITHUB_SHA", "")
@@ -442,11 +467,24 @@ jobs:
           if any(r.get("commit") == sha for r in records):
               print(f"Skipping duplicate record for {sha}.")
           else:
+              # VOL-140 Phase 1: persist per-target measurements so the
+              # trend file lets us calibrate per-module thresholds in
+              # Phase 2. The legacy top-level `coverage`/`passed` fields
+              # are still written for back-compat with any chart that
+              # reads them.
+              per_target = {}
+              for row in summary.get("targets") or []:
+                  per_target[row["target"]] = {
+                      "coverage": row["coverage"],
+                      "executable": row.get("executable", 0),
+                      "covered": row.get("covered", 0),
+                  }
               records.append({
                   "commit": sha,
                   "date": date,
                   "coverage": summary["coverage"],
                   "passed": summary["passed"],
+                  "targets": per_target,
               })
               with open(trend_path, "w", encoding="utf-8") as handle:
                   json.dump(trend, handle, indent=2)

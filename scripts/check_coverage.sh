@@ -13,6 +13,17 @@
 # machine-readable `.build/coverage-summary.json` for the CI workflow
 # to append to the historical trend file and post the sticky PR
 # comment.
+#
+# VOL-140 Phase 1 (2026-05-11): the summary JSON now carries a `targets`
+# array with measurements for *every* non-test target xccov surfaces,
+# not just the primary gated target. The gate itself is unchanged —
+# only the primary `TARGET` is enforced — but downstream consumers
+# (sticky PR comment, metrics-branch trend) report all targets so we
+# can calibrate per-module thresholds in Phase 2. The python that
+# computes the payload was factored out to
+# `scripts/_compute_coverage_summary.py` to escape a bash-3.2 parser
+# limitation with `python3 -c "$(cat <<'PY' ... PY)"` heredocs that
+# contain alternation / parens.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -31,90 +42,21 @@ fi
 
 mkdir -p "$(dirname "$SUMMARY_JSON")"
 
-# Capture xccov JSON to a variable, then feed it to Python via a here
-# string. We can't do `xcrun ... | python3 <<'PY' ... PY` because
-# bash's heredoc-stdin redirect wins over the pipe — Python would read
-# the heredoc as script source but see empty stdin for
-# `sys.stdin.read()`. Writing the script body inline with `python3 -c`
-# + command substitution avoids that entirely: `-c` takes the code as
-# an argument, leaving stdin free for the xccov payload passed via
-# `<<<`.
-coverage_json=$(xcrun xccov view --report --json "$XCRESULT")
-
-TARGET="$TARGET" THRESHOLD="$THRESHOLD" SUMMARY_JSON="$SUMMARY_JSON" \
-  python3 -c "$(cat <<'PY'
-"""VOL-52 + VOL-97: compute the coverage gate outcome and emit the
-machine-readable summary JSON downstream steps consume."""
-import json, os, sys
-
-target_name = os.environ["TARGET"]
-threshold = float(os.environ["THRESHOLD"])
-summary_path = os.environ["SUMMARY_JSON"]
-
-# VolumeArcCore is built as a static library, so xccov reports the
-# target as 'libVolumeArcCore.a' rather than the bare module name.
-# Accept either form so the gate works whether we ever migrate to a
-# framework target later.
-candidates = {target_name, f"lib{target_name}.a", f"{target_name}.framework"}
-
-data = json.load(sys.stdin)
-target = None
-for candidate in data.get("targets", []):
-    name = candidate.get("name", "")
-    if name in candidates or name.startswith(target_name + "."):
-        target = candidate
-        break
-
-coverage_pct = 0.0
-files_table = []
-if target is not None:
-    coverage_pct = round(target.get("lineCoverage", 0.0) * 100, 2)
-    files = target.get("files", []) or []
-
-    def uncovered_count(entry):
-        executable = entry.get("executableLines", 0) or 0
-        covered = entry.get("coveredLines", 0) or 0
-        return max(executable - covered, 0)
-
-    ranked = sorted(
-        files,
-        key=lambda entry: (
-            uncovered_count(entry),
-            entry.get("executableLines", 0) or 0,
-        ),
-        reverse=True,
-    )
-    for entry in ranked[:10]:
-        executable = entry.get("executableLines", 0) or 0
-        line_cov = round((entry.get("lineCoverage", 0.0) or 0.0) * 100, 2)
-        path = entry.get("path") or entry.get("name") or "(unknown)"
-        # xccov paths are absolute on the build host — trim to a stable
-        # repo-relative suffix when possible for readability in the
-        # step summary.
-        marker = "/VolumeArcNative/"
-        if marker in path:
-            path = "VolumeArcNative/" + path.split(marker, 1)[1]
-        files_table.append(
-            {
-                "path": path,
-                "uncovered": uncovered_count(entry),
-                "executable": executable,
-                "coverage": line_cov,
-            }
-        )
-
-passed = coverage_pct + 1e-9 >= threshold
-payload = {
-    "target": target_name,
-    "coverage": coverage_pct,
-    "threshold": threshold,
-    "passed": passed,
-    "topUncovered": files_table,
-}
-with open(summary_path, "w", encoding="utf-8") as handle:
-    json.dump(payload, handle, indent=2)
-PY
-)" <<<"$coverage_json"
+# Stream xccov's JSON straight to the summary writer. The python
+# module lives in `scripts/_compute_coverage_summary.py` (see VOL-140
+# Phase 1 note in the header comment) and reads TARGET / THRESHOLD /
+# SUMMARY_JSON from the environment.
+#
+# `export` the variables rather than using a `VAR=... cmd` prefix:
+# env-var assignments preceding a *pipeline* only apply to the first
+# command in that pipeline, so the python receiver on the far side of
+# `|` would get `KeyError: 'TARGET'` otherwise. Caught in PR #150 CI
+# run 25649937456 — a one-liner regression from inlining the python
+# into a pipeline. The python module is the only consumer of these
+# vars, so `export` has no other side effects.
+export TARGET THRESHOLD SUMMARY_JSON
+xcrun xccov view --report --json "$XCRESULT" \
+  | python3 "$ROOT/scripts/_compute_coverage_summary.py"
 
 # Re-read the JSON we just wrote so the rest of the script works in
 # pure bash — easier to wire into shell output + downstream tooling.
@@ -153,6 +95,35 @@ else:
     print("|---|---:|---:|---:|")
     for row in rows:
         print(f"| `{row['path']}` | {row['uncovered']} | {row['executable']} | {row['coverage']}% |")
+PY
+
+    # VOL-140 Phase 1: per-target measurements. The gated target is
+    # marked; everything else is "measure only" until follow-up PRs
+    # calibrate per-module thresholds.
+    echo ""
+    echo "### All measured targets"
+    echo ""
+    SUMMARY_JSON="$SUMMARY_JSON" python3 - <<'PY'
+import json, os
+data = json.load(open(os.environ["SUMMARY_JSON"]))
+rows = data.get("targets") or []
+if not rows:
+    print("_No per-target measurements available._")
+else:
+    print("| Target | Coverage | Executable | Covered | Gate |")
+    print("|---|---:|---:|---:|---|")
+    for row in rows:
+        if row.get("gated"):
+            if row.get("passed"):
+                gate = f"passed (>= {row['threshold']:g}%)"
+            else:
+                gate = f"FAILED (< {row['threshold']:g}%)"
+        else:
+            gate = "_(measure only)_"
+        print(
+            f"| `{row['target']}` | {row['coverage']}% | "
+            f"{row['executable']} | {row['covered']} | {gate} |"
+        )
 PY
   } >> "$GITHUB_STEP_SUMMARY"
 fi

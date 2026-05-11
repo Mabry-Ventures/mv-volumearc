@@ -64,6 +64,11 @@ fastlane/test_output/
 # Claude Code local session state
 .claude/
 
+# Python bytecode caches from helper scripts (e.g.
+# scripts/_compute_coverage_summary.py imported during local testing).
+__pycache__/
+*.pyc
+
 # Toolchain (VOL-151): `.ruby-version` is the single source of truth.
 # `mise.local.toml` is mise's per-developer override file — gitignored
 # so a contributor's local pin (e.g. for Bundler or another tool) doesn't
