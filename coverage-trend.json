@@ -1,0 +1,13 @@
+{
+  "target": "VolumeArcCore",
+  "threshold": 80.0,
+  "note": "Append-only log of VolumeArcCore line coverage per main-branch commit. Written by .github/workflows/ci.yml (VOL-97 / VOL-166). Stored on `metrics` branch \u2014 the `main` branch's docs/coverage-trend.json is a placeholder.",
+  "records": [
+    {
+      "commit": "f709ce35a3b0a1502e5fc2f2ec011fd4a7ee9659",
+      "date": "2026-05-11T01:33:12Z",
+      "coverage": 80.51,
+      "passed": true
+    }
+  ]
+}
