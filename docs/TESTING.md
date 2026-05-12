@@ -97,6 +97,40 @@ Run locally:
 
 The perf suite relies on the `-PerfTestMode 1` launch argument, which flips `VolumeArcRuntimeFlags.isPerformanceTestMode` on, seeds 50 deterministic history sessions via the launch bootstrapper, and removes the Today tab's `.prefix(3)` cap on recent sessions so the scroll test has real rows to scroll past.
 
+## Snapshot regression (VOL-135)
+
+Visual regression coverage for VAUI components and the critical screens (Onboarding, Paywall, RootDashboard tabs, Live Activity layouts) is **in flight**:
+
+- **Phase 1 (this PR's introduction):** `pointfreeco/swift-snapshot-testing` v1.19 wired into the `VolumeArcAppTests` target. `Tests/VolumeArcAppTests/Snapshots/` is the canonical home; one infrastructure smoke test (`VolumeArcSnapshotInfrastructureTests`) proves the dependency links and the directory layout works. No baseline PNGs yet.
+
+- **Phase 2+ (follow-up PRs):** each component / screen lands in its own PR with its baseline PNG committed under `Tests/VolumeArcAppTests/Snapshots/__Snapshots__/`. See VOL-135's acceptance criteria for the full matrix (light + dark, `.medium` + `.accessibility5` Dynamic Type, reduce-transparency on/off).
+
+### Recording a new snapshot
+
+1. Add the test under `Tests/VolumeArcAppTests/Snapshots/<Surface>SnapshotTests.swift`.
+2. Run **on the same simulator CI uses** (iPhone 17, iOS 26.4) so the PNG matches CI's pixel output. Set record mode via env var:
+
+   ```bash
+   SNAPSHOT_TESTING_RECORD_MODE=all \
+   xcodebuild test \
+     -project VolumeArcApple.xcodeproj \
+     -scheme VolumeArcAppTests \
+     -destination "platform=iOS Simulator,name=iPhone 17,OS=26.4" \
+     -only-testing:VolumeArcAppTests/<YourSnapshotTestClass>
+   ```
+
+   The first run writes the PNG; subsequent runs compare against it.
+
+3. Commit the generated PNG(s) under `Tests/VolumeArcAppTests/Snapshots/__Snapshots__/`. PRs that don't include baselines for new snapshot tests will silently auto-record on CI and never actually gate — reviewers should reject any new snapshot test missing its PNG.
+
+### Diff workflow when CI fails
+
+If a snapshot test fails on CI, the xcresult bundle (`TestResults-<run-id>` artifact) contains both the expected PNG and the recorded PNG plus a diff overlay. Download the artifact, open `TestResults.xcresult` in Xcode, find the failing test under the Tests tab. If the visual change is intentional (e.g. you updated `VA.Colors.accent`), re-record locally and commit the new baseline. If unintentional, fix the regression.
+
+### Why not auto-record on CI
+
+The library's default record mode is `.missing`: if there's no baseline, the test silently records one and passes. On CI's read-only branch, the recorded PNG never gets committed back, so the next CI run again has no baseline and again silently records. That gives the illusion of a regression gate without one. The discipline above (record locally, commit baseline, CI compares) keeps the gate honest.
+
 ## Writing unit tests
 
 Unit tests should:
