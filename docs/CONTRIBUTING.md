@@ -168,6 +168,28 @@ The `mv-shared` self-hosted CI runner is privileged (Apple Developer signing ide
 
 External contributors should ask a maintainer to push their branch directly into the upstream repo — that branch then triggers CI normally. Until then the AI review gate will time out (no `Build & Test` signal), which is the correct behavior.
 
+### Runner policy: zero GitHub-hosted jobs
+
+**Every workflow in this repo runs on the self-hosted `mv-volumearc-runner` label** — there are no `runs-on: ubuntu-latest` / `macos-latest` jobs. The standard is enforced by code review: any new workflow file MUST use `runs-on: [self-hosted, mv-volumearc-runner]`.
+
+Rationale:
+
+- **Caching.** Persistent `~/Library/Developer/Xcode/DerivedData/`, SPM `SourcePackages/`, Homebrew, mise toolchains, etc. on the self-hosted runner cut a typical build from ~15 min (cold GitHub-hosted Mac) to ~3 min (warm cache).
+- **Signing.** The Apple Developer identity, App Store Connect API key, and provisioning profile live in the runner's Keychain — GitHub-hosted Macs would need credential injection on every run.
+- **Cost.** GitHub-hosted macOS is billed per minute and adds up under the Sprint-3 cadence; the dedicated machine amortizes.
+- **Determinism.** A single known-good Xcode + simulator runtime install across all workflows avoids "works on GitHub but not the deploy runner" drift.
+
+#### Runner maintenance
+
+The runner needs occasional hands-on maintenance:
+
+- **iOS simulator runtimes.** When Xcode auto-updates to a new minor (e.g. 26.4 → 26.5), the matching simulator runtime isn't auto-installed. Symptom: `xcodebuild: error: Unable to find a destination matching ... iOS X.Y is not installed`. Fix: `xcodebuild -downloadPlatform iOS` on the runner. Tracked in VOL-173 with a pre-flight hardening plan that fails fast in 10s instead of 30s of confusing xcodebuild output.
+- **Homebrew tools required by workflows.** Some workflow steps shell out to brew-installed binaries:
+  - `trufflehog` (for `.github/workflows/trufflehog.yml`) — `brew install trufflehog`
+  - `swiftlint` ≥ 0.62 (already documented in the dev-setup section above) — `brew install swiftlint`
+  - `actionlint` (optional, used by some pre-commit setups) — `brew install actionlint`
+- **Concurrency.** With every workflow on the single runner, a typical PR queues ~5 jobs (`Build & Test` + 3 AI gate jobs + Trufflehog). The runner is configured for multiple concurrent jobs via the actions/runner service; verify after major macOS upgrades that the service is still running `--unattended --replace --labels self-hosted,mv-volumearc-runner` with parallel-job support enabled.
+
 ## Code style
 
 - Follow the existing patterns in the codebase
@@ -194,14 +216,16 @@ A `Tests/.swiftlint.yml` override disables `implicitly_unwrapped_optional`, `for
 
 ## Security tooling (VOL-143)
 
-Two automated security workflows run independently of the main CI lane so they don't block — and aren't blocked by — Apple toolchain churn:
+Two automated security workflows run on the self-hosted runner per the "zero GitHub-hosted jobs" policy:
 
-| Workflow | What | Triggers | Runner |
-|---|---|---|---|
-| `codeql.yml` | SAST. CodeQL `security-extended` query suite against Swift + JS/TS. Findings → repo Security tab. | push to main · weekly cron · manual dispatch | macos-latest (Swift) / ubuntu-latest (JS) |
-| `trufflehog.yml` | Secret-leak detection. Scans diffs on PRs and full history on main. Catches committed `.env`s, API keys, JWTs. | PRs against main · push to main · weekly cron · manual dispatch | ubuntu-latest |
+| Workflow | What | Triggers |
+|---|---|---|
+| `codeql.yml` | SAST. CodeQL `security-extended` query suite against Swift + JS/TS. Findings → repo Security tab. | push to main · weekly cron · manual dispatch |
+| `trufflehog.yml` | Secret-leak detection. Scans diffs on PRs and full history on main. Catches committed `.env`s, API keys, JWTs. | PRs against main · push to main · weekly cron · manual dispatch |
 
 Findings surface via GitHub's Security tab (CodeQL → Code Scanning, Trufflehog → Secret Scanning when configured to upload SARIF). PR-time Trufflehog failures should block merge — credentials in a PR diff is a near-certain leak even if the commit is "private".
+
+The trufflehog workflow shells out to the Homebrew-installed binary rather than the upstream `trufflesecurity/trufflehog@v3` action because the action runs inside a Docker container and the self-hosted Apple Silicon runner doesn't ship Docker. Update path: `brew upgrade trufflehog`.
 
 ## Documentation
 
