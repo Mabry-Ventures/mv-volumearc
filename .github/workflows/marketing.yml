@@ -26,7 +26,7 @@ permissions:
 jobs:
   build:
     name: build + lint + typecheck
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, mv-volumearc-runner]
     timeout-minutes: 15
     defaults:
       run:

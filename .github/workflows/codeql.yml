@@ -37,11 +37,13 @@ concurrency:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    # Hosted runner — does NOT use mv-volumearc-runner self-hosted to
-    # avoid blocking the primary CI lane during the long Swift build.
-    # macos-latest currently provides Xcode 26.x which is sufficient
-    # for CodeQL's Swift extractor.
-    runs-on: ${{ matrix.language == 'swift' && 'macos-latest' || 'ubuntu-latest' }}
+    # Self-hosted by policy (zero GitHub-hosted jobs across the repo).
+    # The runner is macOS Apple Silicon with Xcode 26.4, which satisfies
+    # CodeQL's Swift extractor; the JS/TS extractor runs on any host
+    # CodeQL supports, including macOS. Swift CodeQL is slow (~30 min)
+    # but only runs on push to main + weekly cron + manual dispatch,
+    # so the queue impact on PR builds is bounded.
+    runs-on: [self-hosted, mv-volumearc-runner]
     timeout-minutes: 60
 
     strategy:

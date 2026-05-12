@@ -7,21 +7,26 @@ name: Trufflehog
 #
 # Triggers:
 # - PRs against main: scan only the diff — fast (<30s) and catches
-#   leaks before merge. Uses ubuntu-latest hosted runner so this
-#   never blocks the self-hosted Apple lane.
+#   leaks before merge.
 # - Push to main: scan the full repo history on every merge. Slower
 #   (~2 min on this codebase) but catches a leak that snuck in via
 #   a force-push to a feature branch the PR scan didn't see.
 # - Weekly cron: re-scan with the latest detector rules.
 # - Manual dispatch: ad-hoc.
 #
-# Trufflehog config:
-# - `--results=verified` would only surface keys the tool can validate
-#   against the live API; we want pre-validation findings too (a key
-#   that's been rotated still indicates a process leak), so we don't
-#   pass that flag.
-# - `--no-update` to keep the runner build deterministic; Trufflehog
-#   gets pinned via the action version in `uses:`.
+# Trufflehog runtime:
+# - The upstream `trufflesecurity/trufflehog@v3` GitHub Action runs
+#   inside a Docker container, which our self-hosted Apple Silicon
+#   runner doesn't have. We invoke the trufflehog binary directly via
+#   Homebrew (pre-installed on the runner; `brew install trufflehog`
+#   is documented in `docs/CONTRIBUTING.md` under "Runner maintenance").
+# - `--results=verified,unknown` surfaces pre-validation findings too
+#   (a key that's been rotated still indicates a process leak).
+# - `--no-update` keeps the binary deterministic; the Homebrew formula
+#   pin handles version control.
+# - The binary is invoked once per scan path; PR scans pass `--since-commit`
+#   and `--branch` to scope to the diff, push scans run over the full
+#   repo history.
 
 on:
   pull_request:
@@ -48,7 +53,7 @@ jobs:
     # leak the GITHUB_TOKEN scope to fork PRs. Skip on forks; same-repo
     # PRs and main pushes run as normal.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, mv-volumearc-runner]
     timeout-minutes: 10
 
     steps:
@@ -56,22 +61,53 @@ jobs:
         uses: actions/checkout@v6
         with:
           # Full history on push events so the scan sees every commit.
-          # PR events default to a shallow clone covering the diff — the
-          # action below uses `base` and `head` to scope the scan to the
-          # PR's commit range, which is the right shape for PR scans.
-          fetch-depth: ${{ github.event_name == 'pull_request' && 1 || 0 }}
+          # PR events default to a shallow clone covering the diff; we
+          # then `git fetch` the base ref so trufflehog's --since-commit
+          # has both endpoints locally.
+          fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 0 }}
 
-      - name: Trufflehog
-        # Pin to the latest stable as of 2026-04-21 — bump deliberately
-        # (Dependabot config covers github_actions so renovations land
-        # as PRs we explicitly review).
-        uses: trufflesecurity/trufflehog@v3.95.2
-        with:
-          # PR scope: only the commits introduced by the PR. Push scope:
-          # the whole repo. The action handles the difference based on
-          # the workflow event automatically when these are unset, but
-          # being explicit is clearer.
-          path: ./
-          base: ${{ github.event.pull_request.base.sha || '' }}
-          head: ${{ github.event.pull_request.head.sha || github.sha }}
-          extra_args: --results=verified,unknown
+      - name: Verify trufflehog binary
+        # The Homebrew formula `trufflehog` should be pre-installed on
+        # the mv-volumearc-runner per the runbook in
+        # docs/CONTRIBUTING.md "Runner maintenance". This step fails
+        # fast with a clear remediation if it isn't, instead of letting
+        # the scan step error out with a generic "command not found".
+        run: |
+          set -euo pipefail
+          if ! command -v trufflehog >/dev/null; then
+            echo "::error::trufflehog binary not on PATH. Run \`brew install trufflehog\` on the self-hosted runner. See docs/CONTRIBUTING.md."
+            exit 1
+          fi
+          version=$(trufflehog --version 2>&1 | head -1)
+          echo "Using $version"
+
+      - name: Scan
+        env:
+          # The action used to set this automatically; the binary needs
+          # an explicit token for higher rate limits on its private-leak
+          # lookup. GITHUB_TOKEN is sufficient for repo-scope scans.
+          TRUFFLEHOG_GITHUB_TOKEN: ${{ github.token }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+
+          # Scope the scan based on event:
+          #   - pull_request: --since-commit + --branch limits to the diff
+          #   - push / schedule / dispatch: scan the full repo + history
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            echo "Scanning PR diff: $PR_BASE_SHA..$PR_HEAD_SHA"
+            trufflehog git "file://$PWD" \
+              --since-commit="$PR_BASE_SHA" \
+              --branch="$PR_HEAD_SHA" \
+              --results=verified,unknown \
+              --no-update \
+              --fail
+          else
+            echo "Scanning entire repo history on $EVENT_NAME"
+            trufflehog git "file://$PWD" \
+              --results=verified,unknown \
+              --no-update \
+              --fail
+          fi
