@@ -61,24 +61,66 @@ public struct FanoutTelemetrySink: TelemetrySink {
     }
 }
 
+extension Notification.Name {
+    /// VOL-149: posted after `InMemoryTelemetrySink` records an event
+    /// when the sink was constructed with `postsNotificationOnRecord:
+    /// true`. The deterministic-mode app shell observes this to refresh
+    /// the test-only `debug.telemetry.events` accessibility overlay so
+    /// XCUITests can poll the accessibility tree and assert that a
+    /// specific (category, name) event fired during a journey.
+    ///
+    /// `userInfo` carries the `TelemetryEvent` under the key
+    /// `TelemetryNotificationKey.event` so observers don't need a
+    /// sink reference to inspect what just happened.
+    ///
+    /// Production-mode sinks never post this — the notification only
+    /// fires when the test harness explicitly opts in via the factory.
+    public static let volumeArcTelemetryDidRecord = Notification.Name(
+        "VolumeArc.TelemetryDidRecord"
+    )
+}
+
+public enum TelemetryNotificationKey {
+    public static let event = "event"
+}
+
 /// In-memory telemetry sink that keeps the last N events in a bounded buffer.
 /// Thread-safe via an internal lock.
 public final class InMemoryTelemetrySink: TelemetrySink, @unchecked Sendable {
     private let lock = NSLock()
     private let maxEvents: Int
     private var events: [TelemetryEvent]
+    private let postsNotificationOnRecord: Bool
 
-    public init(events: [TelemetryEvent] = [], maxEvents: Int = 200) {
+    public init(
+        events: [TelemetryEvent] = [],
+        maxEvents: Int = 200,
+        postsNotificationOnRecord: Bool = false
+    ) {
         self.events = events
         self.maxEvents = maxEvents
+        self.postsNotificationOnRecord = postsNotificationOnRecord
     }
 
     public func record(_ event: TelemetryEvent) {
         lock.lock()
-        defer { lock.unlock() }
         events.append(event)
         if events.count > maxEvents {
             events.removeFirst(events.count - maxEvents)
+        }
+        lock.unlock()
+
+        // VOL-149: notify after releasing the lock so observers can
+        // safely call back into the sink without deadlocking. Only
+        // fires when the factory opted in (deterministic / UITest mode).
+        // userInfo carries the event so observers don't need a sink
+        // reference to inspect what just happened.
+        if postsNotificationOnRecord {
+            NotificationCenter.default.post(
+                name: .volumeArcTelemetryDidRecord,
+                object: nil,
+                userInfo: [TelemetryNotificationKey.event: event]
+            )
         }
     }
 

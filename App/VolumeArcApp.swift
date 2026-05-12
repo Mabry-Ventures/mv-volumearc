@@ -93,6 +93,14 @@ enum VolumeArcLaunchArguments {
 @main
 struct VolumeArcApp: App {
     @StateObject private var navigation = DashboardNavigationModel()
+    // VOL-149: deterministic-mode-only telemetry probe. In release
+    // builds the probe never installs its NotificationCenter observer
+    // (gated inside its init), so this object is effectively inert
+    // and the `debug.telemetry.events` overlay shows the empty
+    // placeholder. Lifecycle is owned by the App so it survives
+    // navigation churn — XCUITests need a stable reader across the
+    // whole journey.
+    @StateObject private var telemetryDebugProbe = VolumeArcTelemetryDebugProbe()
     private let dashboardModel: WorkoutDashboardModel
     private let widgetController = VolumeArcWidgetController()
     #if canImport(ActivityKit)
@@ -436,6 +444,23 @@ struct VolumeArcApp: App {
                         .frame(width: 1, height: 1)
                         .accessibilityIdentifier("debug.watch.last-payload-kind")
                         .accessibilityLabel(Text(verbatim: dashboardModel.lastWatchPayloadKindForTesting ?? ""))
+                        .allowsHitTesting(false)
+                        .opacity(0.001)
+                }
+            }
+            // VOL-149: hidden test-only overlay carrying a JSON-encoded
+            // snapshot of recent telemetry events. XCUITests use the
+            // `assertTelemetryFired(category:name:within:)` helper
+            // (`VolumeArcAppUITestSupport`) to poll the label and
+            // assert that a specific (category, name) pair fired during
+            // a journey. Same deterministic-mode gating + opacity
+            // hiding as the watch-payload overlay above.
+            .overlay(alignment: .topLeading) {
+                if VolumeArcRuntimeFlags.isDeterministicMode {
+                    Text(verbatim: telemetryDebugProbe.recentEventsJSON)
+                        .frame(width: 1, height: 1)
+                        .accessibilityIdentifier("debug.telemetry.events")
+                        .accessibilityLabel(Text(verbatim: telemetryDebugProbe.recentEventsJSON))
                         .allowsHitTesting(false)
                         .opacity(0.001)
                 }

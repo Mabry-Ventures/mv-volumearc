@@ -65,6 +65,36 @@ final class VolumeArcAppUITests: XCTestCase {
         )
     }
 
+    // MARK: - VOL-149: telemetry-as-UAT
+
+    /// Proof-of-concept for the telemetry assertion helper:
+    /// `WorkoutDashboardModel.refresh()` records a `dashboard.refresh`
+    /// info event whenever the dashboard reloads. This test launches
+    /// a seeded app, waits for the dashboard, then asserts the event
+    /// appeared in the test probe's buffer.
+    ///
+    /// If this passes, every other journey can adopt the same pattern
+    /// (Onboarding → `onboarding.completed`, workout completion →
+    /// `workout.completed`, etc.) — the wiring proven here generalizes.
+    /// If this fails, the bug is in the probe / overlay plumbing, not
+    /// in any one journey.
+    func testDashboardRefreshTelemetryReachesTheProbe() throws {
+        let app = makeSeededApp()
+        app.launch()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
+
+        // Wait briefly for the dashboard to render and the model to
+        // record its refresh event. The probe is updated on the main
+        // queue via NotificationCenter, so the budget is small.
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "dashboard",
+            name: "refresh",
+            within: 10,
+            test: self
+        )
+    }
+
     func testOnboardingAppearsWhenLaunchDoesNotSkipIt() throws {
         let app = makeOnboardingApp()
         app.launch()

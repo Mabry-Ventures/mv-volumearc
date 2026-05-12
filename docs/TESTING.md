@@ -77,6 +77,39 @@ The UI suite is intentionally **smoke-level** today:
 
 This suite stays shallow on purpose because tab bar element identity can vary across SwiftUI runtime revisions, which makes deep navigation assertions brittle. Deeper end-to-end behavior is covered by `VolumeArcDashboardIntegrationTests`, which exercise the create → log → complete chain against in-memory SwiftData. The smoke suite still runs in CI on every PR.
 
+### Telemetry-as-UAT (VOL-149)
+
+A `TelemetryEvent` recorded during a journey is a much stabler assertion target than a "did this accessibility identifier appear" check. Tab bars, button positions, and view hierarchies churn across SwiftUI revisions; the event a flow emits doesn't. VOL-149 wired a deterministic-mode-only probe that lets XCUITests assert on those events without polling shared state.
+
+How it works:
+
+1. In deterministic mode (`-UITestMode 1`), `VolumeArcAppFactories.makeTelemetrySink` returns an `InMemoryTelemetrySink` constructed with `postsNotificationOnRecord: true`. Every recorded event fires a `.volumeArcTelemetryDidRecord` `Notification.Name` with the `TelemetryEvent` in `userInfo`.
+2. `VolumeArcTelemetryDebugProbe` (an `ObservableObject` owned by `VolumeArcApp`) observes that notification and maintains a JSON-encoded rolling 50-event buffer of `{c, n, s}` records (category / name / severity).
+3. A hidden 1×1 accessibility overlay in the root `View` renders the JSON string with `accessibilityIdentifier("debug.telemetry.events")`. Production builds skip the overlay because the deterministic-mode gate is false.
+4. `VolumeArcAppUITestSupport.assertTelemetryFired(in:category:name:within:test:)` polls the overlay's `label`, parses the JSON, and returns when the target `(category, name)` appears — or attaches a snapshot and `XCTFail`s with the most-recent label on timeout.
+
+Pattern:
+
+```swift
+func testOnboardingFiresCompletedEvent() throws {
+    let app = makeOnboardingApp()
+    app.launch()
+    // ... drive Continue × N and Finish ...
+    VolumeArcAppUITestSupport.assertTelemetryFired(
+        in: app,
+        category: "onboarding",
+        name: "completed",
+        test: self
+    )
+}
+```
+
+This is preferred over "did the dashboard tab appear" assertions for any flow that has a canonical completion event. The probe buffer holds the last 50 events; bursty flows are fine, but if your journey emits more events than that you'll need to clear the buffer mid-run (currently not exposed — file a follow-up if you hit it).
+
+**Parser unit test:** `Tests/VolumeArcAppUITests/VolumeArcTelemetryProbeMatcherTests.swift` exercises the JSON parser in isolation so a regression in the matcher surfaces there instead of as a confusing XCUITest timeout downstream.
+
+**Phase 2 (follow-up):** wire every journey in the suite to the canonical events listed in the VOL-149 acceptance criteria — onboarding, workout start/log/complete, coach session, paywall, watch sync, HealthKit permission.
+
 ## Performance tests (VOL-99)
 
 The perf suite (`Tests/VolumeArcAppPerfTests/VolumeArcPerfTests.swift`) enforces four budgets:

@@ -227,7 +227,15 @@ extension VolumeArcApp {
 
     static func makeTelemetrySink(initialEvents: [TelemetryEvent] = []) -> TelemetrySink {
         if VolumeArcRuntimeFlags.isDeterministicMode {
-            return InMemoryTelemetrySink(events: initialEvents)
+            // VOL-149: enable notification posting so the
+            // `debug.telemetry.events` accessibility overlay can
+            // refresh after every emitted event, letting XCUITests
+            // assert that specific (category, name) events fired
+            // during a journey without polling shared state.
+            return InMemoryTelemetrySink(
+                events: initialEvents,
+                postsNotificationOnRecord: true
+            )
         }
 
         let persistent = UserDefaultsTelemetrySink()
