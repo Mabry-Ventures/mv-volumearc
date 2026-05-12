@@ -9,7 +9,7 @@ Every distinct user-facing flow in VolumeArc is documented here. Each row maps:
 - **Pre-conditions** — app state required to start
 - **Steps** — ordered user actions
 - **Success criteria** — what proves the journey worked
-- **Telemetry** — events that should fire (asserted by [VOL-149](https://linear.app/mabry-ventures/issue/VOL-149) telemetry-as-UAT helper)
+- **Telemetry** — events that should fire (assert via `VolumeArcAppUITestSupport.assertTelemetryFired(in:category:name:within:test:)` — [VOL-149](https://linear.app/mabry-ventures/issue/VOL-149) Phase 1 landed the helper; Phase 2 wires every row below)
 - **XCUITest** — paired test method, or `[ ]` if uncovered
 
 When you add or change a journey: update this table, then update the paired XCUITest. CI should not let an uncovered journey ship.

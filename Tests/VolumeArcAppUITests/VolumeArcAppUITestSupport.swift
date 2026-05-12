@@ -151,4 +151,83 @@ enum VolumeArcAppUITestSupport {
         attachment.lifetime = .keepAlways
         test.add(attachment)
     }
+
+    // MARK: - VOL-149: telemetry-as-UAT
+
+    /// Assert that a telemetry event with the given `category` + `name`
+    /// has fired since the app launched, within `timeout` seconds.
+    /// Reads the `debug.telemetry.events` accessibility overlay which
+    /// the deterministic-mode app shell populates from
+    /// `VolumeArcTelemetryDebugProbe`.
+    ///
+    /// The overlay's label is a JSON array of `{c, n, s}` records
+    /// (category / name / severity raw value), maintained as a rolling
+    /// 50-event buffer. The poll loop reads the label once per 0.1s
+    /// until either the event appears or the budget expires.
+    ///
+    /// Failure attaches a snapshot of the failing label and the full
+    /// accessibility tree to the xcresult so a CI breakage is
+    /// debuggable from the artifact alone.
+    static func assertTelemetryFired(
+        in app: XCUIApplication,
+        category: String,
+        name: String,
+        within timeout: TimeInterval = 5,
+        test: XCTestCase,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let overlay = app.descendants(matching: .any)
+            .matching(identifier: "debug.telemetry.events")
+            .firstMatch
+        guard overlay.waitForExistence(timeout: 5) else {
+            XCTFail(
+                "[VOL-149] debug.telemetry.events overlay missing — is the app launched with -UITestMode 1?",
+                file: file,
+                line: line
+            )
+            return
+        }
+
+        let deadline = Date().addingTimeInterval(timeout)
+        var lastLabel = ""
+        while Date() < deadline {
+            lastLabel = overlay.label
+            if telemetryLabel(lastLabel, contains: category, name: name) {
+                return
+            }
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+
+        let attachment = XCTAttachment(
+            string: "telemetry probe label at timeout:\n\(lastLabel)"
+        )
+        attachment.name = "telemetry.probe.timeout-snapshot"
+        attachment.lifetime = .keepAlways
+        test.add(attachment)
+        attachDebugSnapshot(
+            of: app,
+            named: "telemetry.assertion-failed.\(category).\(name).a11y-tree",
+            to: test
+        )
+
+        XCTFail(
+            "[VOL-149] Expected telemetry event (\(category)/\(name)) within \(timeout)s; not found in probe buffer.",
+            file: file,
+            line: line
+        )
+    }
+
+    /// Internal parser for the compact JSON the probe writes. Public
+    /// only so the test target itself can unit-test the matcher.
+    static func telemetryLabel(_ label: String, contains category: String, name: String) -> Bool {
+        guard let data = label.data(using: .utf8) else { return false }
+        guard let raw = try? JSONSerialization.jsonObject(with: data),
+              let entries = raw as? [[String: Any]] else {
+            return false
+        }
+        return entries.contains { entry in
+            (entry["c"] as? String) == category && (entry["n"] as? String) == name
+        }
+    }
 }
