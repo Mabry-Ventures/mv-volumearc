@@ -159,14 +159,7 @@ configure_target(ui_target, extra: {
 })
 configure_target(app_target, bundle_id: 'com.mabryventures.VolumeArc', extra: {
   'PRODUCT_NAME' => 'VolumeArc',
-  # VOL-131: iPhone-only for v1.0 TestFlight. iPad support deferred
-  # until VOL-158 completes its UX-audit pass against the iPad form
-  # factor. The TestFlight-eligible matrix is the iPhone family (1);
-  # iPad lands as a separate explicit decision once the audit signs
-  # off on the experience. Snapfile + CI test matrix are already
-  # iPhone-only — this change brings the entitlement / device-family
-  # declaration in line with the shipped surface.
-  'TARGETED_DEVICE_FAMILY' => '1',
+  'TARGETED_DEVICE_FAMILY' => '1,2',
   'INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents' => 'YES',
   'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc reads your completed workouts from Apple Health to show your training history and calculate readiness.',
   'INFOPLIST_KEY_NSHealthUpdateUsageDescription' => 'VolumeArc writes completed workouts so your training history stays in sync with Apple Health.',
@@ -236,11 +229,6 @@ configure_target(watch_target, bundle_id: 'com.mabryventures.VolumeArc.watchkita
 })
 configure_target(widget_target, bundle_id: 'com.mabryventures.VolumeArc.widgets', extra: {
   'PRODUCT_NAME' => 'VolumeArcWidgets',
-  # VOL-131: match the iPhone-only host app. Widget extensions
-  # inherit the host's eligible-device set at install time, but
-  # being explicit avoids a future App Store reviewer flagging the
-  # widget for "claims iPad support but parent app doesn't."
-  'TARGETED_DEVICE_FAMILY' => '1',
   'APPLICATION_EXTENSION_API_ONLY' => 'YES',
   'OTHER_LDFLAGS' => ['$(inherited)', '-e', '_NSExtensionMain'],
   'SKIP_INSTALL' => 'YES',
@@ -322,6 +310,11 @@ app_tests_target.add_system_framework('AuthenticationServices')
 app_tests_target.add_system_framework('Security')
 app_tests_target.add_system_framework('AppIntents')
 app_tests_target.add_system_framework('ActivityKit')
+# VOL-142: StoreKitTest powers `SKTestSession`-based unit tests
+# (`StoreKitSubscriptionRevocationTests`) for refund / family-share /
+# grace-period coverage at the model level. UITest target already has
+# this dependency for journey-level paywall tests.
+app_tests_target.add_system_framework('StoreKitTest')
 app_ui_tests_target.add_system_framework('XCTest')
 app_ui_tests_target.add_system_framework('StoreKitTest')
 app_perf_tests_target.add_system_framework('XCTest')
@@ -370,6 +363,12 @@ add_swift_sources(tests_group, app_tests_target, ROOT.join('Tests/VolumeArcAppTe
 add_swift_sources(ui_tests_group, app_ui_tests_target, ROOT.join('Tests/VolumeArcAppUITests'))
 add_swift_sources(perf_tests_group, app_perf_tests_target, ROOT.join('Tests/VolumeArcAppPerfTests'))
 add_resource(ui_tests_group, app_ui_tests_target, 'VolumeArcTests.storekit')
+# VOL-142: the same StoreKit configuration powers `SKTestSession`-based
+# unit tests under `Tests/VolumeArcAppTests/`. Reuse the existing
+# `PBXFileReference` rather than creating a second one — same file on
+# disk, just present in both test bundles at build time.
+storekit_resource_ref = ui_tests_group.find_file_by_path('VolumeArcTests.storekit')
+app_tests_target.resources_build_phase.add_file_reference(storekit_resource_ref, true)
 add_resource(app_group, app_target, 'PrivacyInfo.xcprivacy')
 add_resource(watch_group, watch_target, 'PrivacyInfo.xcprivacy')
 add_resource(watch_widgets_group, watch_widgets_target, 'PrivacyInfo.xcprivacy')

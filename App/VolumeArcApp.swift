@@ -199,8 +199,14 @@ struct VolumeArcApp: App {
         #if canImport(StoreKit)
         let syncStateStore = FileSyncStateStore(url: Self.syncStateStoreURL())
         let syncTransport = Self.makeSyncTransport()
+        // VOL-142: pass the shared telemetry sink so entitlement
+        // transitions (granted / revoked / purchase_pending) are
+        // visible alongside the rest of the platform's diagnostics.
+        // The store emits at most one event per state change, never
+        // per refresh, so this stays low-volume in production.
         let subscriptionStore = StoreKitSubscriptionStore(
-            productIDs: VolumeArcPremiumCatalog.subscriptionProductIDs
+            productIDs: VolumeArcPremiumCatalog.subscriptionProductIDs,
+            telemetry: telemetrySink
         )
         // VOL-91: construct AI runtime AFTER the subscription store so the
         // factory can gate coach tier + voice transport on the user's

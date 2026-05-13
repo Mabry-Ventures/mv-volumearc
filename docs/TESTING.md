@@ -114,6 +114,27 @@ This is preferred over "did the dashboard tab appear" assertions for any flow th
 
 [`docs/CHAOS.md`](CHAOS.md) is the source of truth. The short version: every chaos flag is a `-CHAOS_*` launch argument that the `ChaosController` (`App/Debug/`) reads, which causes `VolumeArcAppFactories` to wrap the matching subsystem in a fault-injecting decorator. Paired journeys in `VolumeArcChaosJourneyTests` exercise the fault and assert graceful degradation — including the diagnostic telemetry event via VOL-149's `assertTelemetryFired` helper. The wiring is `#if DEBUG`-gated everywhere so Release builds compile every chaos check down to `return false`. Phase 1 ships the HealthKit-auth-denied flag + journey; Phase 2 extends to WatchConnectivity / StoreKit / BGTaskScheduler / AIRelay.
 
+## StoreKit edge cases (VOL-142)
+
+Apple's IAP reviewers stress the unhappy paths — refund, family sharing, grace period, billing retry, ask-to-buy. Happy-path purchase tests (`testPremiumPurchaseFlowWithStoreKitTest` in `VolumeArcAppJourneyTests`) pass before submission and fail at review.
+
+The Phase 1 coverage lives in `Tests/VolumeArcAppTests/StoreKitSubscriptionRevocationTests.swift` and uses `SKTestSession` against the shared `Tests/VolumeArcAppUITests/VolumeArcTests.storekit` configuration. Pattern:
+
+```swift
+let session = try SKTestSession(configurationFileNamed: "VolumeArcTests")
+session.disableDialogs = true
+session.clearTransactions()
+let store = StoreKitSubscriptionStore(productIDs: ..., telemetry: telemetry)
+// ... purchase ...
+let transactions = session.allTransactions  // synchronous property; not async
+try await session.refundTransaction(identifier: UInt(txn.identifier))
+// ... assert revocation + telemetry ...
+```
+
+The store now routes every `Transaction.updates` event through `applyTransactionUpdate(_:)`, which inspects `revocationDate` and either inserts or removes the productID from `purchasedProductIDs`. Telemetry events (`subscription.entitlement.granted`, `subscription.entitlement.revoked`, `subscription.entitlement.purchase_pending`) fire on every state change so support correlations between "I got refunded" and the model's actual state are direct.
+
+Phase 2+ (separate PRs): family sharing (`ownershipType == .familyShared`), grace period (`subscription.renewalState == .inGracePeriod`), billing retry, ask-to-buy approve/deny flow driven from `SKTestSession.askToBuyEnabled`, receipt-validation edge cases, `showManageSubscriptions(in:)` deep-link smoke test.
+
 ## Performance tests (VOL-99)
 
 The perf suite (`Tests/VolumeArcAppPerfTests/VolumeArcPerfTests.swift`) enforces four budgets:
