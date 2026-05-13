@@ -316,28 +316,40 @@ public struct OnboardingView: View {
                     healthRationaleBullet(
                         symbol: "figure.strengthtraining.traditional",
                         text: String(
-                            localized: "Reads completed workouts (and, on Apple Watch, heart rate + active energy during a session) to chart your training history.",
+                            localized: """
+                            Reads completed workouts (and, on Apple Watch, heart rate + \
+                            active energy during a session) to chart your training history.
+                            """,
                             comment: "Onboarding permissions step — what HealthKit data VolumeArc reads"
                         )
                     )
                     healthRationaleBullet(
                         symbol: "sparkles",
                         text: String(
-                            localized: "Coach prescription uses your recent workout volume + readiness signals to suggest the next session.",
+                            localized: """
+                            Coach prescription uses your recent workout volume + readiness \
+                            signals to suggest the next session.
+                            """,
                             comment: "Onboarding permissions step — why VolumeArc needs the HealthKit data"
                         )
                     )
                     healthRationaleBullet(
                         symbol: "iphone.gen3",
                         text: String(
-                            localized: "Your Health data stays in Apple Health on this device. VolumeArc does not upload it to our servers.",
+                            localized: """
+                            Your Health data stays in Apple Health on this device. \
+                            VolumeArc does not upload it to our servers.
+                            """,
                             comment: "Onboarding permissions step — on-device storage guarantee"
                         )
                     )
                     healthRationaleBullet(
                         symbol: "icloud",
                         text: String(
-                            localized: "Workouts you save sync to your private iCloud database (not ours). Revoke anytime in Settings → Privacy → Health.",
+                            localized: """
+                            Workouts you save sync to your private iCloud database \
+                            (not ours). Revoke anytime in Settings → Privacy → Health.
+                            """,
                             comment: "Onboarding permissions step — CloudKit private database + revocation guidance"
                         )
                     )
