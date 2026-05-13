@@ -219,6 +219,177 @@ platform :ios do
     )
   end
 
+  desc "Roll back the public TestFlight group to a prior processed build (VOL-178)"
+  # Operator workflow: a SEV1/SEV2 incident requires reinstating the prior
+  # build for external testers. Apple has no "App Store recall" API, but
+  # TestFlight build assignment is reversible.
+  #
+  # Inputs (positional or build:/reason:/severity:):
+  #   build:    the build_number to roll back TO (the known-good prior build).
+  #   reason:   a one-sentence description recorded in docs/incident-log.md.
+  #   severity: SEV1 | SEV2 | SEV3 | SEV4 (default SEV2).
+  #
+  # What the lane DOES today:
+  #   1. Validates inputs (build numeric, reason present, severity valid).
+  #   2. Reads VERSION + ASC API credentials from env.
+  #   3. Confirms via App Store Connect (`latest_testflight_build_number`)
+  #      that the target build is NOT already the latest — i.e. we're
+  #      actually rolling backward, not sideways.
+  #   4. Prints the canonical operator walk-through for the TestFlight
+  #      public-group swap.
+  #   5. Appends a structured entry to docs/incident-log.md.
+  #
+  # What the lane does NOT do (yet):
+  #   - Automated swap of the public TestFlight build. Spaceship can drive
+  #     this via BetaGroup updates, but the failure mode of getting it
+  #     wrong (sending an OLDER bad build wide) is bad enough that v1.0
+  #     keeps a manual confirm-in-UI step. Once we've run a real rollback
+  #     drill the lane can become one-step.
+  #   - App Store (production) recall — there's no API for it; the lane
+  #     prints the "expedited review" walk-through for prod incidents.
+  #
+  # Usage:
+  #   bundle exec fastlane ios rollback \
+  #     build:142 \
+  #     reason:"SEV2: paywall crash on iOS 26.4" \
+  #     severity:SEV2
+  lane :rollback do |options|
+    target_build_number = options[:build].to_s.strip
+    if target_build_number.empty? || !target_build_number.match?(/\A\d+\z/)
+      UI.user_error!("VOL-178: build:<N> required and must be numeric (the build_number to roll back TO)")
+    end
+
+    reason = options[:reason].to_s.strip
+    if reason.empty?
+      UI.user_error!("VOL-178: reason:\"<one sentence>\" required (recorded in docs/incident-log.md)")
+    end
+
+    severity = options[:severity].to_s.strip.upcase
+    severity = "SEV2" if severity.empty?
+    unless %w[SEV1 SEV2 SEV3 SEV4].include?(severity)
+      UI.user_error!("VOL-178: severity must be one of SEV1, SEV2, SEV3, SEV4 (default SEV2)")
+    end
+
+    api_key_path = ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+    if api_key_path.to_s.empty? || !File.exist?(api_key_path.to_s)
+      UI.user_error!(
+        "VOL-178: APP_STORE_CONNECT_API_KEY_PATH unset or path missing. " \
+          "Rollback requires App Store Connect API access — see docs/RELEASE.md."
+      )
+    end
+
+    version = File.read("../VERSION").strip
+    UI.message("VOL-178: rolling back TestFlight to build #{target_build_number} of v#{version}")
+    UI.message("VOL-178: reason: #{reason}")
+    UI.message("VOL-178: severity: #{severity}")
+
+    # Sanity-check via spaceship — `latest_testflight_build_number` returns
+    # the latest processed build for this version. If the target equals
+    # latest, the operator is rolling sideways, not back; abort with a
+    # clear error rather than letting them paste a no-op walk-through.
+    UI.message("VOL-178: verifying target build state in App Store Connect...")
+    bundle_id = ENV.fetch("VOLUMEARC_BUNDLE_ID", "com.mabryventures.VolumeArc")
+
+    begin
+      latest = latest_testflight_build_number(
+        version: version,
+        app_identifier: bundle_id,
+        api_key_path: api_key_path
+      )
+      UI.message("VOL-178: latest processed TestFlight build for v#{version}: #{latest}")
+
+      if latest.to_s == target_build_number
+        UI.user_error!(
+          "VOL-178: target build #{target_build_number} is ALREADY the latest. " \
+            "Did you mean to roll back to an OLDER build? Check ASC and pass " \
+            "the correct prior build number."
+        )
+      end
+    rescue FastlaneCore::Interface::FastlaneError
+      raise
+    rescue => e
+      UI.important(
+        "VOL-178: could not confirm build state via fastlane API; " \
+          "continuing with operator walk-through. Underlying error: " \
+          "#{e.message.lines.first&.strip}"
+      )
+    end
+
+    # ---- Operator walk-through ---------------------------------------------
+    walk_through = <<~STEPS
+
+      ====================================================================
+      VOL-178 TestFlight rollback — operator confirmation required
+      --------------------------------------------------------------------
+      App:           VolumeArc (#{bundle_id})
+      Version:       #{version}
+      Target build:  #{target_build_number}
+      Severity:      #{severity}
+      Reason:        #{reason}
+      --------------------------------------------------------------------
+      Steps:
+
+      1. Open https://appstoreconnect.apple.com/apps/<APP-ID>/testflight/ios
+      2. Click "External Testers" → "VolumeArc Testers" (or your default
+         public group).
+      3. Click "Builds" tab.
+      4. Verify build #{target_build_number} is present and processed.
+         If not present, you need to re-upload the prior build via
+         `bundle exec fastlane ios beta` at the prior tag — STOP HERE
+         and coordinate with on-call.
+      5. Add build #{target_build_number} to the group. The current build
+         is automatically demoted to "available to internal only" for the
+         public group.
+      6. (Optional) Add a tester-facing message: "Investigating issue —
+         please install build #{target_build_number}."
+      7. Confirm at https://appstoreconnect.apple.com/.../testflight that
+         the public group now shows build #{target_build_number}.
+      8. File a #{severity} postmortem ticket in Linear using
+         docs/INCIDENTS.md → "Post-incident → postmortem template".
+
+      For PROD App Store (live release) recall:
+        There is no API for App Store recall. File an "Expedited review
+        request" at https://developer.apple.com/contact/app-store/?topic=expedite
+        and submit a hotfix build via `bundle exec fastlane ios release`
+        pointing at the rollback target. See docs/INCIDENTS.md SEV1
+        runbook for the full sequence.
+      ====================================================================
+
+    STEPS
+    UI.message(walk_through)
+
+    # ---- Incident log append -----------------------------------------------
+    incident_log_path = File.expand_path("../docs/incident-log.md", __dir__)
+    timestamp = Time.now.utc.strftime("%Y-%m-%d %H:%M UTC")
+    entry = <<~ENTRY
+
+      ## #{timestamp} — TestFlight rollback v#{version} build → #{target_build_number} (#{severity})
+
+      - **Reason:** #{reason}
+      - **Rolled back to build:** #{target_build_number}
+      - **Operator:** #{ENV.fetch('USER', 'unknown')}
+      - **Triggered via:** `fastlane ios rollback build:#{target_build_number} reason:"#{reason}" severity:#{severity}`
+      - **Postmortem:** _to be filed in Linear; link here once created_
+    ENTRY
+
+    unless File.exist?(incident_log_path)
+      UI.user_error!(
+        "VOL-178: docs/incident-log.md missing. Bootstrap it with the " \
+          "template at the top of docs/INCIDENTS.md."
+      )
+    end
+
+    File.open(incident_log_path, "a") { |f| f.write(entry) }
+    UI.success("VOL-178: appended rollback entry to docs/incident-log.md")
+
+    if ENV["GITHUB_OUTPUT"] && !ENV["GITHUB_OUTPUT"].empty?
+      File.open(ENV["GITHUB_OUTPUT"], "a") do |f|
+        f.puts("rollback_target_build=#{target_build_number}")
+        f.puts("rollback_severity=#{severity}")
+      end
+    end
+  end
+
   desc "Submit to App Store review"
   # Release runs beta first (waits for processing), then generates and
   # uploads screenshots before submitting for review. `deliver` picks
