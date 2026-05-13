@@ -225,6 +225,8 @@ If a release introduces a regression:
 3. Tag and push — CI will build and deploy the fix
 4. File a ticket with the incident postmortem
 
+For the full incident-response runbook — severity ladder, Sentry alert routing, postmortem template, and per-subsystem failure-shape runbooks — see [`docs/INCIDENTS.md`](INCIDENTS.md). The `fastlane ios rollback` lane is VOL-156 Phase 2.
+
 ## Hotfix process
 
 For critical production issues:

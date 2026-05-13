@@ -15,6 +15,7 @@ Topic-specific deep dives:
 - [`docs/TESTING.md`](docs/TESTING.md) — test architecture, writing tests, coverage targets
 - [`docs/USER_JOURNEYS.md`](docs/USER_JOURNEYS.md) — canonical user-journey catalog with paired XCUITest references (VOL-141)
 - [`docs/RELEASE.md`](docs/RELEASE.md) — release process, versioning, TestFlight, hotfixes
+- [`docs/INCIDENTS.md`](docs/INCIDENTS.md) — incident response runbook: severity ladder, Sentry alert routing, postmortem template, per-subsystem failure-shape runbooks (VOL-156)
 - [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) — dev setup, branch strategy, PR process
 - [`docs/MARKETING.md`](docs/MARKETING.md) — marketing site (`marketing/` → `volumearc.app`) architecture + deploy flow
 - [`docs/AUDIT.md`](docs/AUDIT.md) — 2026-05-01 forensic production-readiness audit + the [Production Readiness](https://linear.app/mabry-ventures/project/volumearc-production-readiness-af810008523d) project that tracks burndown
