@@ -16,23 +16,27 @@ When you add or change a journey: update this table, then update the paired XCUI
 
 ## Coverage summary
 
+VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` method names against the journey table. The pre-audit summary listed test methods that don't exist (e.g. `testFirstLaunchCompletesOnboarding`, `testTodayTabRenders`, `testCoachQuestionStreams`). The corrected counts below reflect the real wiring, plus the journeys covered by `VolumeArcHealthKitPermissionJourneyTests` (added in VOL-109) and `VolumeArcWatchSimulationJourneyTests` (added in VOL-112) that were missing from the original table.
+
 | Surface | Total | Covered | Coverage |
 |---|---|---|---|
-| Onboarding | 5 | 1 | 20% |
+| Onboarding | 5 | 2 | 40% |
 | Today | 5 | 1 | 20% |
 | Workouts | 7 | 3 | 43% |
-| Coach | 6 | 1 | 17% |
+| Coach | 6 | 0 | 0% |
 | Signals | 3 | 0 | 0% |
-| Profile | 8 | 1 | 13% |
+| Profile | 8 | 3 | 38% |
 | Watch | 6 | 2 | 33% |
 | Widgets | 3 | 0 | 0% |
 | Live Activities | 3 | 0 | 0% |
 | App Intents | 6 | 0 | 0% |
 | Background | 4 | 0 | 0% |
 | Failure paths | 6 | 0 | 0% |
-| **Total** | **62** | **9** | **15%** |
+| **Total** | **62** | **11** | **18%** |
 
 > Goal: 100% by end of Wave 2 (cycle 7, 2026-05-31). Burn down via [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141).
+>
+> Phase 1 audited references; Phase 2+ adds the actually-missing tests using the VOL-149 `assertTelemetryFired` helper + VOL-168 chaos infra. Each `[ ]` row below is an item to close.
 
 ---
 
@@ -40,17 +44,17 @@ When you add or change a journey: update this table, then update the paired XCUI
 
 | ID | Pre-conditions | Steps | Success | Telemetry | Test |
 |---|---|---|---|---|---|
-| `onboard.first-launch` | Fresh install | Launch → tap through screens → tap Done | `RootDashboardView.showOnboarding == false`; Today tab visible | `onboarding.completed` | `VolumeArcAppJourneyTests.testFirstLaunchCompletesOnboarding` |
-| `onboard.healthkit-grant` | Onboarding open, HK page | Tap "Allow Health" → grant in system sheet | `HealthKit.authorized` for read types; rationale screen NOT shown again | `healthkit.authorized` | `[ ]` |
-| `onboard.healthkit-deny` | Onboarding open, HK page | Tap "Allow Health" → deny in system sheet | App still completes onboarding; coach uses fallback context | `healthkit.denied` | `[ ]` |
-| `onboard.healthkit-skip` | Onboarding open, HK page | Tap "Not now" | Onboarding continues; entry into Profile to grant later remains | `healthkit.skipped` | `[ ]` |
+| `onboard.first-launch` | Fresh install | Launch → tap through screens → tap Done | `RootDashboardView.showOnboarding == false`; Today tab visible | `onboarding.completed` | `VolumeArcAppJourneyTests.testOnboardingToFirstWorkout` |
+| `onboard.healthkit-grant` | Onboarding open, HK page | Tap "Allow Health" → grant in system sheet | `HealthKit.authorized` for read types; rationale screen NOT shown again | `healthkit.authorized` | `[ ]` (system-sheet automation; needs `addUIInterruptionMonitor` work, tracked in VOL-127 P2) |
+| `onboard.healthkit-deny` | Onboarding open, HK page | Tap "Allow Health" → deny in system sheet | App still completes onboarding; coach uses fallback context | `healthkit.denied` | `[ ]` (VOL-168 chaos covers the model path via `-CHAOS_HEALTH_AUTH_DENIED`; full UI journey in VOL-127 P2) |
+| `onboard.healthkit-skip` | Onboarding open, HK page | Tap "Not now" (Continue advances regardless of grant) | Onboarding continues; entry into Profile to grant later remains | `healthkit.skipped` | `VolumeArcHealthKitPermissionJourneyTests.testOnboardingPermissionsStepCanBeSkippedByContinuing` |
 | `onboard.voice-mic` | Onboarding open, Voice page (premium gate may apply) | Tap "Enable voice" → grant mic | Voice transport installed | `voice.enabled` | `[ ]` |
 
 ## Today
 
 | ID | Pre-conditions | Steps | Success | Telemetry | Test |
 |---|---|---|---|---|---|
-| `today.dashboard-view` | Onboarded, seeded data | Open app → Today tab | Readiness hero + next workout + recent sessions visible | `today.viewed` | `VolumeArcAppJourneyTests.testTodayTabRenders` |
+| `today.dashboard-view` | Onboarded, seeded data | Open app → Today tab | Readiness hero + next workout + recent sessions visible | `today.viewed` | `VolumeArcAppUITests.testRootDashboardIdentifierExists` (loose match — asserts the root identifier renders; full hero/cards check pending) |
 | `today.readiness-tap` | Today visible | Tap readiness hero | Signals tab opens to readiness breakdown | `signals.readiness.opened` | `[ ]` |
 | `today.next-workout-tap` | Next workout card present | Tap card | Workout detail opens with hero transition | `workout.detail.opened` | `[ ]` |
 | `today.recent-session-tap` | Recent sessions present | Tap a session | Session detail opens | `workout.history.opened` | `[ ]` |
@@ -60,10 +64,10 @@ When you add or change a journey: update this table, then update the paired XCUI
 
 | ID | Pre-conditions | Steps | Success | Telemetry | Test |
 |---|---|---|---|---|---|
-| `workouts.start-session` | Workouts tab | Tap "Start" on prescribed workout | Active session view opens; `WorkoutRecord` created | `workout.started` | `VolumeArcAppJourneyTests.testStartActiveWorkout` |
-| `workouts.log-set` | Active session | Tap "Log set" → enter rep/weight/RPE → confirm | `WorkoutSet` appended; aggregate updated | `workout.set_logged` | `VolumeArcAppJourneyTests.testLogSet` |
+| `workouts.start-session` | Workouts tab | Tap "Start" on prescribed workout | Active session view opens; `WorkoutRecord` created | `workout.started` | `VolumeArcAppJourneyTests.testStartLogCompleteWorkoutSession` (start phase) |
+| `workouts.log-set` | Active session | Tap "Log set" → enter rep/weight/RPE → confirm | `WorkoutSet` appended; aggregate updated | `workout.set_logged` | `VolumeArcAppJourneyTests.testStartLogCompleteWorkoutSession` (log phase) |
 | `workouts.rest-timer-expire` | Set logged | Wait 90s | Notification fires; haptic; UI updates | `workout.rest_timer.expired` | `[ ]` |
-| `workouts.complete-session` | Active session | Tap "Complete" | Session closed; summary shown; CloudKit push staged | `workout.completed` | `VolumeArcAppJourneyTests.testCompleteWorkout` |
+| `workouts.complete-session` | Active session | Tap "Complete" | Session closed; summary shown; CloudKit push staged | `workout.completed` | `VolumeArcAppJourneyTests.testStartLogCompleteWorkoutSession` (complete phase) |
 | `workouts.view-detail` | History present | Tap a completed session | Detail view shows sets + summary | `workout.detail.opened` | `[ ]` |
 | `workouts.history-scroll` | History tab | Scroll | List paginates without hitches | (perf-only) | `[ ]` |
 | `workouts.delete-session` | Completed session | Tap delete (confirm sheet) | Session removed; CloudKit delete staged | `workout.deleted` | `[ ]` |
@@ -72,7 +76,7 @@ When you add or change a journey: update this table, then update the paired XCUI
 
 | ID | Pre-conditions | Steps | Success | Telemetry | Test |
 |---|---|---|---|---|---|
-| `coach.ask-question` | Coach tab | Type question → tap Send | Response stream starts within 2s | `coach.question_sent` + `coach.first_token_received` | `VolumeArcAppJourneyTests.testCoachQuestionStreams` |
+| `coach.ask-question` | Coach tab | Type question → tap Send | Response stream starts within 2s | `coach.question_sent` + `coach.first_token_received` | `[ ]` (test method does not yet exist; integration coverage via `VolumeArcDashboardIntegrationTests`. Phase 2 wires the journey-level XCUITest using VOL-149's `assertTelemetryFired`) |
 | `coach.scroll-memory` | Memory present | Scroll Coach tab | Memory loads paginated | (perf-only) | `[ ]` |
 | `coach.voice-prompt` | Premium + voice flag on | Tap mic → speak → release | Question transcribed → response spoken | `voice.session_started` | `[ ]` |
 | `coach.follow-up-turn` | Question answered | Type follow-up → Send | Memory context referenced in response | `coach.session_continued` | `[ ]` |
@@ -95,20 +99,20 @@ When you add or change a journey: update this table, then update the paired XCUI
 | `profile.coaching-style` | Profile tab | Change coaching style | Style saved; coach persona changes on next turn | `profile.coaching_style.changed` | `[ ]` |
 | `profile.privacy-mode` | Profile tab | Change privacy mode | Mode saved; coach prompt redaction applies | `profile.privacy_mode.changed` | `[ ]` |
 | `profile.diagnostics` | Profile tab | Open Diagnostics | Telemetry events visible; export works | `diagnostics.opened` | `[ ]` |
-| `profile.restore-purchase` | Free tier | Tap Restore | StoreKit restore runs; entitlement updates | `subscription.restored` | `[ ]` |
-| `profile.open-paywall` | Free tier | Tap Upgrade | Paywall sheet opens | `paywall.opened` | `VolumeArcAppJourneyTests.testPaywallOpens` |
-| `profile.complete-purchase` | Paywall open, sandbox tester | Tap plan → confirm | Premium entitlement granted; tier routes to Pro | `paywall.purchase_succeeded` | `[ ]` |
-| `profile.manage-subscription` | Premium | Tap Manage | iOS Settings opens (no crash) | `subscription.manage_opened` | `[ ]` |
+| `profile.restore-purchase` | Free tier | Tap Restore | StoreKit restore runs; entitlement updates | `subscription.restored` | `VolumeArcAppJourneyTests.testRestorePurchasesFlow` |
+| `profile.open-paywall` | Free tier | Tap Upgrade | Paywall sheet opens | `paywall.opened` | `VolumeArcAppJourneyTests.testPaywallPresentationAndDismissal` |
+| `profile.complete-purchase` | Paywall open, sandbox tester | Tap plan → confirm | Premium entitlement granted; tier routes to Pro | `paywall.purchase_succeeded` | `VolumeArcAppJourneyTests.testPremiumPurchaseFlowWithStoreKitTest` |
+| `profile.manage-subscription` | Premium | Tap Manage | iOS Settings opens (no crash) | `subscription.manage_opened` | `[ ]` (deferred to VOL-142 Phase 2 deep-link smoke test) |
 
 ## Watch
 
 | ID | Pre-conditions | Steps | Success | Telemetry | Test |
 |---|---|---|---|---|---|
-| `watch.start-workout` | Watch app open, paired | Tap Start | `HKWorkoutSession` begins | `watch.workout.started` | `VolumeArcWatchSimulationJourneyTests.testStartFromWatch` |
+| `watch.start-workout` | Watch app open, paired | Tap Start | `HKWorkoutSession` begins | `watch.workout.started` | `VolumeArcWatchSimulationJourneyTests.testRestTimerPayloadFromWatchUpdatesDashboardState` (phone side of the wire; full watch-side journey requires the watch unit-test target — VOL-138) |
 | `watch.log-set` | Active workout on watch | Use crown / buttons to log set | Set persisted; payload sent to phone | `watch.set_logged` + `watch.payload_sent` | `[ ]` |
 | `watch.coach-cue` | Active workout | Wait for cue | Cue rendered; haptic | `watch.coach_cue.received` | `[ ]` |
 | `watch.action-decision` | Active workout, between sets | Tap Increase/Hold/Decrease | Decision recorded; next prescription adjusted | `watch.set_decision` | `[ ]` |
-| `watch.end-session` | Active workout | Tap End | Session ended; payload pushed | `watch.workout.completed` | `VolumeArcWatchSimulationJourneyTests.testEndSession` |
+| `watch.end-session` | Active workout | Tap End | Session ended; payload pushed | `watch.workout.completed` | `VolumeArcWatchSimulationJourneyTests.testEndSessionPayloadFromWatchUpdatesDashboardState` (phone side of the wire) |
 | `watch.offline-replay` | Phone unreachable; payloads queued | Reconnect | Queue drains; phone receives | `watch.payload_replayed` | `[ ]` |
 
 ## Widgets
