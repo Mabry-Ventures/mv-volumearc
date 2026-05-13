@@ -16,17 +16,9 @@ final class FeedbackBundleAssemblerTests: XCTestCase {
 
     func testEmailAddressIsRedactedFromDescription() {
         let assembler = FeedbackBundleAssembler()
-        let bundle = assembler.makeBundle(
-            category: .bug,
-            userDescription: "I tried logging in with jared@example.com and the app froze.",
-            buildVersion: "1.0.0",
-            buildNumber: "1",
-            osVersion: "26.0",
-            deviceModel: "iPhone17,3",
-            recentTelemetry: [],
-            appStateHash: "deadbeef",
-            submittedAt: Date(timeIntervalSince1970: 1_715_000_000)
-        )
+        let bundle = assembler.makeBundle(inputs: makeInputs(
+            userDescription: "I tried logging in with jared@example.com and the app froze."
+        ))
         XCTAssertFalse(
             bundle.userDescription.contains("jared@example.com"),
             "Email address must be redacted from user-typed feedback"
@@ -45,20 +37,7 @@ final class FeedbackBundleAssemblerTests: XCTestCase {
             "(415) 555-9876 was where I tested",
         ]
         for input in inputs {
-            let bundle = assembler.makeBundle(
-                category: .bug,
-                userDescription: input,
-                buildVersion: "1.0.0",
-                buildNumber: "1",
-                osVersion: "26.0",
-                deviceModel: "iPhone17,3",
-                recentTelemetry: [],
-                appStateHash: "abc",
-                submittedAt: Date()
-            )
-            // Each input should have its phone number replaced by
-            // `[redacted]` — assert that no digit run that looks
-            // like a phone number survives.
+            let bundle = assembler.makeBundle(inputs: makeInputs(userDescription: input))
             XCTAssertTrue(
                 bundle.userDescription.contains("[redacted]"),
                 "Phone shape should be scrubbed: \(input)"
@@ -68,17 +47,10 @@ final class FeedbackBundleAssemblerTests: XCTestCase {
 
     func testNonPIIDescriptionIsPreserved() {
         let assembler = FeedbackBundleAssembler()
-        let bundle = assembler.makeBundle(
+        let bundle = assembler.makeBundle(inputs: makeInputs(
             category: .idea,
-            userDescription: "Wish the coach asked about sleep before the morning workout.",
-            buildVersion: "1.0.0",
-            buildNumber: "1",
-            osVersion: "26.0",
-            deviceModel: "iPhone17,3",
-            recentTelemetry: [],
-            appStateHash: "abc",
-            submittedAt: Date()
-        )
+            userDescription: "Wish the coach asked about sleep before the morning workout."
+        ))
         XCTAssertEqual(
             bundle.userDescription,
             "Wish the coach asked about sleep before the morning workout.",
@@ -95,17 +67,10 @@ final class FeedbackBundleAssemblerTests: XCTestCase {
             message: "Relay rejected token for jared@example.com",
             timestampISO8601: "2026-05-13T14:00:00Z"
         )
-        let bundle = assembler.makeBundle(
-            category: .bug,
+        let bundle = assembler.makeBundle(inputs: makeInputs(
             userDescription: "Coach unavailable",
-            buildVersion: "1.0.0",
-            buildNumber: "1",
-            osVersion: "26.0",
-            deviceModel: "iPhone17,3",
-            recentTelemetry: [snapshot],
-            appStateHash: "abc",
-            submittedAt: Date()
-        )
+            recentTelemetry: [snapshot]
+        ))
         let firstTelemetry = bundle.recentTelemetry.first
         XCTAssertNotNil(firstTelemetry)
         XCTAssertFalse(
@@ -122,25 +87,17 @@ final class FeedbackBundleAssemblerTests: XCTestCase {
 
     func testRecentTelemetryIsBoundedByMaxEvents() {
         let assembler = FeedbackBundleAssembler()
-        let manySnapshots = (0..<100).map { i in
+        let manySnapshots = (0..<100).map { index in
             FeedbackBundle.TelemetrySnapshot(
                 category: "test",
-                name: "event_\(i)",
+                name: "event_\(index)",
                 severity: "info",
-                message: "Message \(i)",
+                message: "Message \(index)",
                 timestampISO8601: "2026-05-13T14:00:00Z"
             )
         }
         let bundle = assembler.makeBundle(
-            category: .other,
-            userDescription: "",
-            buildVersion: "1.0.0",
-            buildNumber: "1",
-            osVersion: "26.0",
-            deviceModel: "iPhone17,3",
-            recentTelemetry: manySnapshots,
-            appStateHash: "abc",
-            submittedAt: Date(),
+            inputs: makeInputs(category: .other, recentTelemetry: manySnapshots),
             maxTelemetryEvents: 10
         )
         XCTAssertEqual(
@@ -163,22 +120,16 @@ final class FeedbackBundleAssemblerTests: XCTestCase {
 
     func testEncodeJSONProducesStableSortedOutput() throws {
         let assembler = FeedbackBundleAssembler()
-        let bundle = assembler.makeBundle(
+        let bundle = assembler.makeBundle(inputs: makeInputs(
             category: .coachQuality,
             userDescription: "Coach response was off-topic",
-            buildVersion: "1.0.0",
-            buildNumber: "1",
-            osVersion: "26.0",
-            deviceModel: "iPhone17,3",
-            recentTelemetry: [],
-            appStateHash: "abc",
             submittedAt: Date(timeIntervalSince1970: 1_715_000_000)
-        )
+        ))
         let json = try assembler.encodeJSON(bundle)
-        // Sorted-keys output is stable across runs — pin a couple of
-        // anchor substrings to catch a regression in the encoder
-        // config (which could leak unscrubbed PII via, e.g., a
-        // pretty-print spacing change that breaks downstream parsers).
+        // Sorted-keys output is stable across runs — pin anchor
+        // substrings to catch a regression in the encoder config
+        // (which could leak unscrubbed PII via, e.g., a pretty-print
+        // spacing change that breaks downstream parsers).
         XCTAssertTrue(json.contains("\"category\":\"coach_quality\""))
         XCTAssertTrue(json.contains("\"buildVersion\":\"1.0.0\""))
         XCTAssertTrue(json.contains("\"userDescription\":\"Coach response was off-topic\""))
@@ -187,17 +138,10 @@ final class FeedbackBundleAssemblerTests: XCTestCase {
     func testCategoryRoundTripsThroughJSON() throws {
         let assembler = FeedbackBundleAssembler()
         for category in FeedbackBundle.Category.allCases {
-            let bundle = assembler.makeBundle(
+            let bundle = assembler.makeBundle(inputs: makeInputs(
                 category: category,
-                userDescription: "test",
-                buildVersion: "1.0.0",
-                buildNumber: "1",
-                osVersion: "26.0",
-                deviceModel: "iPhone17,3",
-                recentTelemetry: [],
-                appStateHash: "abc",
-                submittedAt: Date()
-            )
+                userDescription: "test"
+            ))
             let json = try assembler.encodeJSON(bundle)
             let data = try XCTUnwrap(json.data(using: .utf8))
             let decoder = JSONDecoder()
@@ -205,5 +149,34 @@ final class FeedbackBundleAssemblerTests: XCTestCase {
             let decoded = try decoder.decode(FeedbackBundle.self, from: data)
             XCTAssertEqual(decoded.category, category)
         }
+    }
+
+    // MARK: - Helpers
+
+    /// Factory for `FeedbackBundleAssembler.Inputs` with sensible
+    /// defaults. Lets each test override only the fields under test
+    /// without restating the boilerplate metadata every call.
+    private func makeInputs(
+        category: FeedbackBundle.Category = .bug,
+        userDescription: String = "",
+        buildVersion: String = "1.0.0",
+        buildNumber: String = "1",
+        osVersion: String = "26.0",
+        deviceModel: String = "iPhone17,3",
+        recentTelemetry: [FeedbackBundle.TelemetrySnapshot] = [],
+        appStateHash: String = "abc",
+        submittedAt: Date = Date()
+    ) -> FeedbackBundleAssembler.Inputs {
+        FeedbackBundleAssembler.Inputs(
+            category: category,
+            userDescription: userDescription,
+            buildVersion: buildVersion,
+            buildNumber: buildNumber,
+            osVersion: osVersion,
+            deviceModel: deviceModel,
+            recentTelemetry: recentTelemetry,
+            appStateHash: appStateHash,
+            submittedAt: submittedAt
+        )
     }
 }

@@ -143,26 +143,64 @@ public enum FeedbackTextScrubber {
 /// `ProcessInfo`, and `UIDevice` values into the explicit parameters.
 public struct FeedbackBundleAssembler: Sendable {
 
+    /// Grouped inputs for `makeBundle(...)`. Packaged as a struct so
+    /// the function-parameter-count SwiftLint rule stays satisfied and
+    /// so call sites at the App layer can construct the inputs once
+    /// and pass them through.
+    public struct Inputs: Sendable {
+        public let category: FeedbackBundle.Category
+        public let userDescription: String
+        public let buildVersion: String
+        public let buildNumber: String
+        public let osVersion: String
+        public let deviceModel: String
+        public let recentTelemetry: [FeedbackBundle.TelemetrySnapshot]
+        public let appStateHash: String
+        public let submittedAt: Date
+
+        public init(
+            category: FeedbackBundle.Category,
+            userDescription: String,
+            buildVersion: String,
+            buildNumber: String,
+            osVersion: String,
+            deviceModel: String,
+            recentTelemetry: [FeedbackBundle.TelemetrySnapshot],
+            appStateHash: String,
+            submittedAt: Date
+        ) {
+            self.category = category
+            self.userDescription = userDescription
+            self.buildVersion = buildVersion
+            self.buildNumber = buildNumber
+            self.osVersion = osVersion
+            self.deviceModel = deviceModel
+            self.recentTelemetry = recentTelemetry
+            self.appStateHash = appStateHash
+            self.submittedAt = submittedAt
+        }
+    }
+
+    /// Thrown when `encodeJSON(_:)` can't decode its own UTF-8 output.
+    /// Practically impossible since `JSONEncoder` writes UTF-8 by
+    /// contract, but the failable initializer surface requires a
+    /// concrete error to throw.
+    public enum EncodingError: Error {
+        case invalidUTF8
+    }
+
     public init() {}
 
     public func makeBundle(
-        category: FeedbackBundle.Category,
-        userDescription: String,
-        buildVersion: String,
-        buildNumber: String,
-        osVersion: String,
-        deviceModel: String,
-        recentTelemetry: [FeedbackBundle.TelemetrySnapshot],
-        appStateHash: String,
-        submittedAt: Date,
+        inputs: Inputs,
         maxTelemetryEvents: Int = 50
     ) -> FeedbackBundle {
         // VOL-146: scrub user text + every telemetry message before
         // the bundle is constructed. Scrubbing at this layer keeps the
         // serialized JSON consumers (Sentry, Linear webhook in
         // Phase 2) from re-implementing the regex pipeline.
-        let scrubbedDescription = FeedbackTextScrubber.scrub(userDescription)
-        let scrubbedTelemetry = recentTelemetry
+        let scrubbedDescription = FeedbackTextScrubber.scrub(inputs.userDescription)
+        let scrubbedTelemetry = inputs.recentTelemetry
             .suffix(maxTelemetryEvents)
             .map { snapshot in
                 FeedbackBundle.TelemetrySnapshot(
@@ -175,15 +213,15 @@ public struct FeedbackBundleAssembler: Sendable {
             }
 
         return FeedbackBundle(
-            category: category,
+            category: inputs.category,
             userDescription: scrubbedDescription,
-            buildVersion: buildVersion,
-            buildNumber: buildNumber,
-            osVersion: osVersion,
-            deviceModel: deviceModel,
+            buildVersion: inputs.buildVersion,
+            buildNumber: inputs.buildNumber,
+            osVersion: inputs.osVersion,
+            deviceModel: inputs.deviceModel,
             recentTelemetry: scrubbedTelemetry,
-            appStateHash: appStateHash,
-            submittedAt: submittedAt
+            appStateHash: inputs.appStateHash,
+            submittedAt: inputs.submittedAt
         )
     }
 
@@ -191,11 +229,22 @@ public struct FeedbackBundleAssembler: Sendable {
     /// `SentrySDK.captureUserFeedback(_:)` call (the SDK's
     /// `UserFeedback.comments` is a free-text field; we pack the
     /// JSON in there).
+    ///
+    /// SwiftLint's `optional_data_string_conversion` rule prefers the
+    /// failable `String(bytes:encoding:)` initializer over
+    /// `String(decoding:as:)` because the latter silently substitutes
+    /// the Unicode replacement character on invalid UTF-8 instead of
+    /// surfacing the problem. JSONEncoder always writes valid UTF-8,
+    /// so the nil branch is practically unreachable — we still throw
+    /// rather than force-unwrap.
     public func encodeJSON(_ bundle: FeedbackBundle) throws -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
         let data = try encoder.encode(bundle)
-        return String(decoding: data, as: UTF8.self)
+        guard let json = String(bytes: data, encoding: .utf8) else {
+            throw EncodingError.invalidUTF8
+        }
+        return json
     }
 }
