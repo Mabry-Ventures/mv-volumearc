@@ -172,11 +172,17 @@ enum VolumeArcAppUITestSupport {
         in app: XCUIApplication,
         category: String,
         name: String,
-        within timeout: TimeInterval = 5,
+        within timeout: TimeInterval = 15,
         test: XCTestCase,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
+        // VOL-175: default bumped from 5s to 15s. The original 5s was
+        // generous for individual events but tight under load — when
+        // the test bundle grows (e.g., new test class added), cold-
+        // launch overhead can push the first probe assertion past 5s
+        // even though the probe itself is healthy. 15s preserves
+        // fail-fast semantics while absorbing realistic CI variance.
         let overlay = app.descendants(matching: .any)
             .matching(identifier: "debug.telemetry.events")
             .firstMatch

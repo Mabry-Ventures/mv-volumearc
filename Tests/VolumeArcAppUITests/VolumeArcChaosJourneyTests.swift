@@ -97,13 +97,18 @@ final class VolumeArcChaosJourneyTests: XCTestCase {
         // `false` and records `health.auth_failed`.
         healthRow.tap()
 
-        // VOL-175 follow-up: the telemetry assertion
-        // (`assertTelemetryFired`) passes reliably on main's CI but
-        // flakes when the chaos journey runs alongside the other
-        // UITest classes here. Likely a simulator-state interaction
-        // we haven't fully traced. Re-introduce the assertion once
-        // VOL-175 closes; for now the UI-state assertion below is
-        // sufficient to gate the chaos plumbing.
+        // VOL-149 + VOL-168 integration: assert the diagnostic
+        // telemetry event fires. The default 15s budget (VOL-175,
+        // see `assertTelemetryFired` comment) is generous enough
+        // to absorb the cold-launch overhead this assertion hit on
+        // first attempts when the chaos journey was added to the
+        // test bundle.
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "health",
+            name: "auth_failed",
+            test: self
+        )
 
         // Row should remain in "Connect" state — the model's
         // failure path must NOT claim authorization succeeded.

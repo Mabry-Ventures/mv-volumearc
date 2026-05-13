@@ -83,14 +83,20 @@ final class VolumeArcAppUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
 
-        // Wait briefly for the dashboard to render and the model to
-        // record its refresh event. The probe is updated on the main
-        // queue via NotificationCenter, so the budget is small.
+        // Wait for the dashboard to render and the model to record
+        // its refresh event. The probe is updated on the main queue
+        // via NotificationCenter; under a warm simulator + small
+        // bundle the assertion lands in ~4s. The 30s budget is
+        // VOL-175-driven: adding more test classes to the bundle
+        // (VolumeArcChaosJourneyTests landed in PR #154) shifted
+        // the cold-launch path's first-test-run latency past the
+        // original 10s threshold. 30s gives ample headroom while
+        // still failing fast if the probe is genuinely broken.
         VolumeArcAppUITestSupport.assertTelemetryFired(
             in: app,
             category: "dashboard",
             name: "refresh",
-            within: 10,
+            within: 30,
             test: self
         )
     }
