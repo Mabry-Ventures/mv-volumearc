@@ -4,6 +4,39 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+# VOL-177 Phase 2A: `--no-build` mode skips the SPM resolve + xcodebuild
+# `-showBuildSettings` block (the bottom half of this script) and only
+# runs the static plist/entitlement/source-grep assertions. The full
+# CI lane still runs without the flag. Wired into lefthook's
+# `release-config` pre-commit slot so `git commit` runs the static
+# subset in <2s. Anything that needs a real build setting (signing
+# identity, deployment target, Sentry SPM version) stays in the CI-only
+# set.
+NO_BUILD=0
+for arg in "$@"; do
+  case "$arg" in
+    --no-build) NO_BUILD=1 ;;
+    --help|-h)
+      cat <<HELP
+Usage: $(basename "$0") [--no-build]
+
+  (default)   Full check: static assertions + SPM resolve + xcodebuild
+              -showBuildSettings drift checks. Used by CI. Takes ~45-60s
+              on a warm runner.
+  --no-build  Static-only subset (entitlements, PrivacyInfo, Info.plist,
+              app-group, CloudKit container source-grep). Skips xcodebuild,
+              the ruby project regen, and the SPM resolve. Used by the
+              lefthook pre-commit slot. Targets <2s.
+HELP
+      exit 0
+      ;;
+    *)
+      echo "FAIL: unknown argument: $arg (use --help)" >&2
+      exit 64
+      ;;
+  esac
+done
+
 # VOL-75 P2: match per-job DerivedData used by build_all_targets.sh and
 # test_apple_targets.sh so xcodebuild -showBuildSettings can reach the
 # SPM artifacts those builds resolved. Without this, -showBuildSettings
@@ -12,7 +45,13 @@ cd "$ROOT"
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT/.build/derived-data}"
 mkdir -p "$DERIVED_DATA_PATH"
 
-ruby "scripts/generate_xcode_project.rb" >/dev/null
+# VOL-177: in --no-build mode, skip the regen — the static checks below
+# read source-tree files directly (entitlements, PrivacyInfo, app-group,
+# the CloudKit container constant) and don't depend on a freshly
+# generated pbxproj. Saves the 1-2s regen cost.
+if [ "$NO_BUILD" -eq 0 ]; then
+  ruby "scripts/generate_xcode_project.rb" >/dev/null
+fi
 
 PROJECT="VolumeArcApple.xcodeproj/project.pbxproj"
 
@@ -103,6 +142,14 @@ if ! grep -F 'static let containerIdentifier: String = "iCloud.com.mabryventures
   App/VolumeArcCloudConfiguration.swift >/dev/null; then
   echo "FAIL: VolumeArcCloudConfiguration.containerIdentifier constant is missing or changed" >&2
   exit 1
+fi
+
+# VOL-177: --no-build exits here. Everything above is static file/text
+# assertions that match what pre-commit can afford to run. Everything
+# below shells to xcodebuild (5-10s per call) and is CI-only.
+if [ "$NO_BUILD" -eq 1 ]; then
+  echo "validate_release_config.sh --no-build: static assertions OK"
+  exit 0
 fi
 
 # VOL-90: the canonical SPM lockfile lives at repo root; the workspace
