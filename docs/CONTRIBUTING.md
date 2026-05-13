@@ -70,15 +70,16 @@ lefthook install                   # one-time per clone; writes .git/hooks/pre-c
 
 Hooks are defined in `lefthook.yml` at repo root. To bypass a single commit (e.g. WIP that won't go to PR): `LEFTHOOK=0 git commit`. To override a check locally without touching the committed file, create a gitignored `lefthook-local.yml`.
 
-The release-config validator (`scripts/validate_release_config.sh`) is intentionally NOT in the pre-commit set — it shells out to `xcodebuild` for entitlement assertions and each invocation adds 5–10 seconds. That gate runs in CI; pre-commit's job is the sub-second loop. A future `--no-build` mode could earn a slot here.
+The release-config validator (`scripts/validate_release_config.sh`) supports a `--no-build` mode (VOL-177) that runs only the static plist/entitlement/PrivacyInfo/source-grep assertions in <2s. This subset is wired into lefthook's pre-commit set as the `release-config-static` command and triggers only when a staged file matches one of the inputs the static subset actually reads (entitlements, PrivacyInfo, `App/VolumeArcCloudConfiguration.swift`) — docs-only commits don't pay the cost. The full validator (xcodebuild `-showBuildSettings` drift checks, ~45-60s) still runs on every PR via `ci.yml`'s "Validate release configuration" step.
 
 ## Build commands
 
 ```bash
-./scripts/build_all_targets.sh        # Debug build
-./scripts/build_release_targets.sh    # Release build
-./scripts/test_apple_targets.sh       # Run tests
-./scripts/validate_release_config.sh  # Validate release config
+./scripts/build_all_targets.sh                      # Debug build
+./scripts/build_release_targets.sh                  # Release build
+./scripts/test_apple_targets.sh                     # Run tests
+./scripts/validate_release_config.sh                # Validate release config (CI default, ~45-60s)
+./scripts/validate_release_config.sh --no-build     # Static plist/entitlement subset (<2s, pre-commit)
 ```
 
 ## Build system: the Xcode project is generated
