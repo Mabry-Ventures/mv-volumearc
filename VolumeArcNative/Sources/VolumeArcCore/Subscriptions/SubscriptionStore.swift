@@ -185,7 +185,7 @@ public final class StoreKitSubscriptionStore: ObservableObject, PremiumEntitleme
                     message: "Entitlement revoked via Transaction.updates (refund or family-share removal).",
                     metadata: [
                         "productID": transaction.productID,
-                        "reason": String(describing: transaction.revocationReason),
+                        "revocationReason": String(describing: transaction.revocationReason),
                         "source": "updates",
                     ]
                 ))
