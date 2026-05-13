@@ -1,0 +1,82 @@
+# VOL-152: local pre-commit hooks via lefthook
+# (https://github.com/evilmartians/lefthook).
+#
+# Devs install lefthook via Homebrew (`brew install lefthook`) and run
+# `lefthook install` once in the repo to wire the hooks into `.git/hooks/`.
+# Subsequent commits then run the checks below before allowing the
+# commit through.
+#
+# Design goals:
+#
+#   - **Fast feedback.** Anything that can fail on CI in <1s should
+#     fail on commit. SwiftLint + the release-config validator both
+#     run in single-digit seconds against the staged file set.
+#   - **No surprises.** Nothing here is a hard block that lacks an
+#     escape hatch. `LEFTHOOK=0 git commit` skips every hook; the
+#     `tags: skip-ci` annotation on each command keeps the door open
+#     for cleanup commits that intentionally bypass lint (e.g. WIP
+#     branches that aren't going to a PR yet).
+#   - **Match CI.** Every check here also runs in CI on the same
+#     paths; this is the local accelerator, not a divergent rule.
+#     If lefthook passes and CI fails, that's a bug — file it.
+#
+# Documented in `docs/CONTRIBUTING.md` under "Dev setup → Pre-commit
+# hooks." Skip rules + override behavior covered there too.
+
+# Lefthook runs hooks against the SET of files that match `glob`.
+# `{staged_files}` only sends git-staged paths so we don't lint the
+# whole repo on every commit — just what's about to land.
+pre-commit:
+  parallel: true
+  commands:
+
+    # SwiftLint against staged Swift files. Project rule config in
+    # .swiftlint.yml; the `--use-script-input-files` flag lets
+    # SwiftLint read the file list from env vars (`SCRIPT_INPUT_FILE_*`)
+    # but `lefthook` doesn't set those, so we pass paths directly. The
+    # `--quiet` flag suppresses summary lines; SwiftLint still exits
+    # nonzero on errors.
+    swiftlint:
+      tags: lint quick
+      glob: "*.swift"
+      run: swiftlint --quiet {staged_files}
+      skip:
+        - merge
+        - rebase
+
+    # Release-config validator (`validate_release_config.sh`) is
+    # intentionally NOT wired here — it shells out to xcodebuild for
+    # the entitlement / build-setting checks and each invocation
+    # adds 5–10 seconds. The release-config gate already runs in CI;
+    # pre-commit's job is the sub-second feedback loop. A future
+    # `--no-build` mode that splits static-plist assertions from
+    # xcodebuild-driven ones could earn a slot here (tracked as
+    # VOL-152 Phase 2).
+
+    # Defensive: catch DEMOFIX / TEMPFIX / DELETEME markers that
+    # devs leave in staged code. Lint won't catch these because
+    # they're free-text. Use grep + a non-zero exit on match.
+    no-temp-markers:
+      tags: lint quick
+      glob: "*.{swift,ts,js,rb,sh,yml,yaml,md}"
+      run: |
+        if grep -nE '(DEMOFIX|TEMPFIX|DELETEME|XXX-HACK)' {staged_files}; then
+          echo ""
+          echo "✗ lefthook: found a TEMPFIX-style marker in staged files."
+          echo "  Either resolve it before committing, or set LEFTHOOK=0 to bypass."
+          exit 1
+        fi
+      skip:
+        - merge
+        - rebase
+
+# Pre-push: lighter checks that need network or the full repo state.
+# Today this lane is empty; future additions could include a fast
+# `xcodebuild -showBuildSettings` smoke check or `actionlint` against
+# the workflows directory.
+pre-push:
+  commands: {}
+
+# Hooks NOT installed by default (commit-msg, prepare-commit-msg,
+# post-checkout, etc.) — keep the surface minimal. Add only when a
+# specific failure mode justifies the friction.

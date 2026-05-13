@@ -69,6 +69,12 @@ fastlane/test_output/
 __pycache__/
 *.pyc
 
+# Lefthook (VOL-152): per-developer hook overrides. The committed
+# lefthook.yml is the team standard; lefthook-local.yml is gitignored
+# so a contributor can disable or add personal hooks without touching
+# the shared config.
+lefthook-local.yml
+
 # Toolchain (VOL-151): `.ruby-version` is the single source of truth.
 # `mise.local.toml` is mise's per-developer override file — gitignored
 # so a contributor's local pin (e.g. for Bundler or another tool) doesn't
