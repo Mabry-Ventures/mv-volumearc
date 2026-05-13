@@ -162,6 +162,27 @@ jobs:
             exit 1
           fi
           echo "Xcode version: $xcode_version_line (>= ${required_major}.${required_minor})"
+          # VOL-173: iOS Simulator runtime probe. Xcode auto-update, storage
+          # cleanup, or a botched Components install can leave the device
+          # types registered while the runtime resolves to (null). The
+          # downstream failure is a 30-second `xcodebuild -showdestinations`
+          # log dump that bottoms out in "iOS X.Y is not installed" — fail
+          # fast here with a precise message instead. We assert at least one
+          # available iOS 26.x runtime rather than pinning to a patch version
+          # so Xcode point updates don't churn this gate. If the available
+          # set is empty, install with `xcodebuild -downloadPlatform iOS`
+          # on the runner (see docs/CONTRIBUTING.md "Runner maintenance").
+          ios_runtime_count=$(xcrun simctl list runtimes -j 2>/dev/null \
+            | jq '[.runtimes[]? | select(.isAvailable == true) | select(.version | startswith("26."))] | length' \
+            2>/dev/null || echo 0)
+          if [ "${ios_runtime_count:-0}" -lt 1 ]; then
+            echo "::error::No available iOS 26.x simulator runtime on this runner."
+            echo "::error::Install with: xcodebuild -downloadPlatform iOS  (or Xcode > Settings > Platforms)"
+            echo "::error::Available runtimes follow:"
+            xcrun simctl list runtimes 2>&1 || true
+            exit 1
+          fi
+          echo "iOS runtime: ${ios_runtime_count} available iOS 26.x runtime(s)"
           # Absolute-available is more meaningful than percent on shared
           # runner Macs with big drives; iOS build+test needs ~5GB headroom.
           avail_gb=$(df -g "$HOME" | awk 'NR==2 {print $4}')
@@ -591,6 +612,16 @@ jobs:
              || { [ "${xcode_major:-0}" -eq "$required_major" ] \
                   && [ "${xcode_minor:-0}" -lt "$required_minor" ]; }; then
             echo "::error::Xcode $xcode_version_line is below the required ${required_major}.${required_minor}"
+            exit 1
+          fi
+          # VOL-173: iOS Simulator runtime probe (mirrors build-and-test).
+          ios_runtime_count=$(xcrun simctl list runtimes -j 2>/dev/null \
+            | jq '[.runtimes[]? | select(.isAvailable == true) | select(.version | startswith("26."))] | length' \
+            2>/dev/null || echo 0)
+          if [ "${ios_runtime_count:-0}" -lt 1 ]; then
+            echo "::error::No available iOS 26.x simulator runtime on this runner."
+            echo "::error::Install with: xcodebuild -downloadPlatform iOS"
+            xcrun simctl list runtimes 2>&1 || true
             exit 1
           fi
         shell: bash

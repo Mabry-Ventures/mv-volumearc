@@ -196,11 +196,37 @@ Rationale:
 
 The runner needs occasional hands-on maintenance:
 
-- **iOS simulator runtimes.** When Xcode auto-updates to a new minor (e.g. 26.4 → 26.5), the matching simulator runtime isn't auto-installed. Symptom: `xcodebuild: error: Unable to find a destination matching ... iOS X.Y is not installed`. Fix: `xcodebuild -downloadPlatform iOS` on the runner. Tracked in VOL-173 with a pre-flight hardening plan that fails fast in 10s instead of 30s of confusing xcodebuild output.
+- **iOS simulator runtimes (VOL-173).** When Xcode auto-updates to a new minor (e.g. 26.4 → 26.5), the matching simulator runtime isn't always auto-installed. Symptom: `xcodebuild: error: Unable to find a destination matching ... iOS X.Y is not installed`. The build-and-test and perf-regression Pre-flight steps in `ci.yml` probe `xcrun simctl list runtimes` and fail fast in ~1s with a precise message (instead of ~30s of confusing xcodebuild output) when no available iOS 26.x runtime is present.
+
+  Fix on the runner machine:
+
+  ```bash
+  # Command-line install (preferred — non-interactive, scriptable):
+  xcodebuild -downloadPlatform iOS
+
+  # GUI alternative if Xcode rejects the CLI download (rare):
+  # Open Xcode → Settings → Platforms → install the missing iOS runtime
+  ```
+
+  After the runtime is back, re-run any jobs that failed Pre-flight via the GitHub Actions UI or `gh run rerun --failed <run-id>`.
+
+- **Pin Xcode auto-updates.** macOS App Store auto-updates can introduce surprise SDK changes mid-CI-run. On the runner, prefer manual Xcode upgrades scheduled around release boundaries:
+
+  ```bash
+  # Disable automatic app updates entirely on the runner account:
+  defaults write com.apple.SoftwareUpdate AutomaticDownload -bool false
+  defaults write com.apple.commerce AutoUpdate -bool false
+  ```
+
+  When manually upgrading Xcode, immediately follow with `xcodebuild -downloadPlatform iOS` (and `watchOS` if the watch app is unblocked) so the matching simulator runtimes land in the same maintenance window.
+
+- **Disk-space watchdog.** The DerivedData + simulator-runtime + SPM cache footprint trends upward. CI Pre-flight asserts ≥ 10 GB free at `$HOME` but won't catch a slow leak across runs. A daily `launchd` job that posts to Slack when free space drops below 50 GB is a one-line follow-up; for now, eyeball `df -h ~` during release prep.
+
 - **Homebrew tools required by workflows.** Some workflow steps shell out to brew-installed binaries:
   - `trufflehog` (for `.github/workflows/trufflehog.yml`) — `brew install trufflehog`
   - `swiftlint` ≥ 0.62 (already documented in the dev-setup section above) — `brew install swiftlint`
   - `actionlint` (optional, used by some pre-commit setups) — `brew install actionlint`
+
 - **Concurrency.** With every workflow on the single runner, a typical PR queues ~5 jobs (`Build & Test` + 3 AI gate jobs + Trufflehog). The runner is configured for multiple concurrent jobs via the actions/runner service; verify after major macOS upgrades that the service is still running `--unattended --replace --labels self-hosted,mv-volumearc-runner` with parallel-job support enabled.
 
 ## Code style
