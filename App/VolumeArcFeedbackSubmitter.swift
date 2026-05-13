@@ -76,13 +76,16 @@ struct VolumeArcFeedbackSubmitter {
         }
 
         #if canImport(Sentry)
+        // VOL-176 fix on PR #169 second CI run: `SentryFeedback` in the
+        // pinned sentry-cocoa 8.58.1 surface has no public `contactEmail`
+        // setter — the previous line was redundant with `email: nil`
+        // already passed to the initializer. Dropped.
         let feedback = SentryFeedback(
             message: encoded,
             name: nil,
             email: nil,
             source: .custom
         )
-        feedback.contactEmail = nil
         SentrySDK.capture(feedback: feedback)
         #endif
 
