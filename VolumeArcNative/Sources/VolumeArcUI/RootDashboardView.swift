@@ -7,9 +7,20 @@ public struct RootDashboardView: View {
     @ObservedObject private var model: WorkoutDashboardModel
     @StateObject private var toastPresenter = VAToastPresenter()
 
-    public init(navigation: DashboardNavigationModel, model: WorkoutDashboardModel) {
+    /// VOL-176: App-layer feedback submission hook. Propagated to the
+    /// Profile tab so it can present the feedback sheet and forward
+    /// the user's input to the Sentry/telemetry adapter the App
+    /// constructs in `VolumeArcAppFactories`.
+    private let onSendFeedback: ((FeedbackBundle.Category, String) -> Void)?
+
+    public init(
+        navigation: DashboardNavigationModel,
+        model: WorkoutDashboardModel,
+        onSendFeedback: ((FeedbackBundle.Category, String) -> Void)? = nil
+    ) {
         self.navigation = navigation
         self.model = model
+        self.onSendFeedback = onSendFeedback
     }
 
     public var body: some View {
@@ -55,7 +66,7 @@ public struct RootDashboardView: View {
             .accessibilityIdentifier("tab.signals")
 
             NavigationStack {
-                ProfileView(model: model)
+                ProfileView(model: model, onSendFeedback: onSendFeedback)
             }
             .tabItem {
                 Label(DashboardTab.profile.title, systemImage: DashboardTab.profile.systemImage)
