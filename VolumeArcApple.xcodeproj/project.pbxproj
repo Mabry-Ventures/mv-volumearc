@@ -2394,7 +2394,7 @@
 			repositoryURL = "https://github.com/getsentry/sentry-cocoa.git";
 			requirement = {
 				kind = exactVersion;
-				version = 8.58.1;
+				version = 9.13.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
