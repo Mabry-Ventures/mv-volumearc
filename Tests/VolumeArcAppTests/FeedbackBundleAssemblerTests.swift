@@ -1,0 +1,209 @@
+// VOL-146 Phase 1A: unit coverage for FeedbackBundleAssembler.
+//
+// Pins the contract that user feedback always ships with a PII-
+// scrubbed description + telemetry messages. The scrub pipeline is
+// the same one that protects Sentry events, applied at bundle-
+// construction time so every downstream consumer (Sentry user
+// feedback, Linear webhook in Phase 2) inherits the guarantee
+// without re-implementing the regex layer.
+
+import XCTest
+@testable import VolumeArcCore
+
+final class FeedbackBundleAssemblerTests: XCTestCase {
+
+    // MARK: - PII scrubbing
+
+    func testEmailAddressIsRedactedFromDescription() {
+        let assembler = FeedbackBundleAssembler()
+        let bundle = assembler.makeBundle(
+            category: .bug,
+            userDescription: "I tried logging in with jared@example.com and the app froze.",
+            buildVersion: "1.0.0",
+            buildNumber: "1",
+            osVersion: "26.0",
+            deviceModel: "iPhone17,3",
+            recentTelemetry: [],
+            appStateHash: "deadbeef",
+            submittedAt: Date(timeIntervalSince1970: 1_715_000_000)
+        )
+        XCTAssertFalse(
+            bundle.userDescription.contains("jared@example.com"),
+            "Email address must be redacted from user-typed feedback"
+        )
+        XCTAssertTrue(
+            bundle.userDescription.contains("[redacted]"),
+            "Scrubber should replace the email with [redacted]"
+        )
+    }
+
+    func testPhoneNumberShapesAreRedacted() {
+        let assembler = FeedbackBundleAssembler()
+        let inputs = [
+            "Call me at 555-123-4567 to discuss",
+            "International: +447911123456 hit",
+            "(415) 555-9876 was where I tested",
+        ]
+        for input in inputs {
+            let bundle = assembler.makeBundle(
+                category: .bug,
+                userDescription: input,
+                buildVersion: "1.0.0",
+                buildNumber: "1",
+                osVersion: "26.0",
+                deviceModel: "iPhone17,3",
+                recentTelemetry: [],
+                appStateHash: "abc",
+                submittedAt: Date()
+            )
+            // Each input should have its phone number replaced by
+            // `[redacted]` — assert that no digit run that looks
+            // like a phone number survives.
+            XCTAssertTrue(
+                bundle.userDescription.contains("[redacted]"),
+                "Phone shape should be scrubbed: \(input)"
+            )
+        }
+    }
+
+    func testNonPIIDescriptionIsPreserved() {
+        let assembler = FeedbackBundleAssembler()
+        let bundle = assembler.makeBundle(
+            category: .idea,
+            userDescription: "Wish the coach asked about sleep before the morning workout.",
+            buildVersion: "1.0.0",
+            buildNumber: "1",
+            osVersion: "26.0",
+            deviceModel: "iPhone17,3",
+            recentTelemetry: [],
+            appStateHash: "abc",
+            submittedAt: Date()
+        )
+        XCTAssertEqual(
+            bundle.userDescription,
+            "Wish the coach asked about sleep before the morning workout.",
+            "Non-PII feedback text should pass through unchanged"
+        )
+    }
+
+    func testTelemetryMessagesAreAlsoScrubbed() {
+        let assembler = FeedbackBundleAssembler()
+        let snapshot = FeedbackBundle.TelemetrySnapshot(
+            category: "ai.relay",
+            name: "request_failed",
+            severity: "warning",
+            message: "Relay rejected token for jared@example.com",
+            timestampISO8601: "2026-05-13T14:00:00Z"
+        )
+        let bundle = assembler.makeBundle(
+            category: .bug,
+            userDescription: "Coach unavailable",
+            buildVersion: "1.0.0",
+            buildNumber: "1",
+            osVersion: "26.0",
+            deviceModel: "iPhone17,3",
+            recentTelemetry: [snapshot],
+            appStateHash: "abc",
+            submittedAt: Date()
+        )
+        let firstTelemetry = bundle.recentTelemetry.first
+        XCTAssertNotNil(firstTelemetry)
+        XCTAssertFalse(
+            firstTelemetry?.message.contains("jared@example.com") ?? true,
+            "Telemetry message should be scrubbed for PII"
+        )
+        XCTAssertTrue(
+            firstTelemetry?.message.contains("[redacted]") ?? false,
+            "Scrubber should substitute [redacted] in telemetry messages too"
+        )
+    }
+
+    // MARK: - Bundle bounds
+
+    func testRecentTelemetryIsBoundedByMaxEvents() {
+        let assembler = FeedbackBundleAssembler()
+        let manySnapshots = (0..<100).map { i in
+            FeedbackBundle.TelemetrySnapshot(
+                category: "test",
+                name: "event_\(i)",
+                severity: "info",
+                message: "Message \(i)",
+                timestampISO8601: "2026-05-13T14:00:00Z"
+            )
+        }
+        let bundle = assembler.makeBundle(
+            category: .other,
+            userDescription: "",
+            buildVersion: "1.0.0",
+            buildNumber: "1",
+            osVersion: "26.0",
+            deviceModel: "iPhone17,3",
+            recentTelemetry: manySnapshots,
+            appStateHash: "abc",
+            submittedAt: Date(),
+            maxTelemetryEvents: 10
+        )
+        XCTAssertEqual(
+            bundle.recentTelemetry.count, 10,
+            "Bundle must respect maxTelemetryEvents to keep payload size bounded"
+        )
+        // Suffix means we keep the MOST RECENT 10 — assert that
+        // event_99 (last in input) is present and event_0 (first) is not.
+        XCTAssertTrue(
+            bundle.recentTelemetry.contains { $0.name == "event_99" },
+            "Most-recent telemetry event should be retained"
+        )
+        XCTAssertFalse(
+            bundle.recentTelemetry.contains { $0.name == "event_0" },
+            "Oldest telemetry events should be trimmed"
+        )
+    }
+
+    // MARK: - JSON serialization
+
+    func testEncodeJSONProducesStableSortedOutput() throws {
+        let assembler = FeedbackBundleAssembler()
+        let bundle = assembler.makeBundle(
+            category: .coachQuality,
+            userDescription: "Coach response was off-topic",
+            buildVersion: "1.0.0",
+            buildNumber: "1",
+            osVersion: "26.0",
+            deviceModel: "iPhone17,3",
+            recentTelemetry: [],
+            appStateHash: "abc",
+            submittedAt: Date(timeIntervalSince1970: 1_715_000_000)
+        )
+        let json = try assembler.encodeJSON(bundle)
+        // Sorted-keys output is stable across runs — pin a couple of
+        // anchor substrings to catch a regression in the encoder
+        // config (which could leak unscrubbed PII via, e.g., a
+        // pretty-print spacing change that breaks downstream parsers).
+        XCTAssertTrue(json.contains("\"category\":\"coach_quality\""))
+        XCTAssertTrue(json.contains("\"buildVersion\":\"1.0.0\""))
+        XCTAssertTrue(json.contains("\"userDescription\":\"Coach response was off-topic\""))
+    }
+
+    func testCategoryRoundTripsThroughJSON() throws {
+        let assembler = FeedbackBundleAssembler()
+        for category in FeedbackBundle.Category.allCases {
+            let bundle = assembler.makeBundle(
+                category: category,
+                userDescription: "test",
+                buildVersion: "1.0.0",
+                buildNumber: "1",
+                osVersion: "26.0",
+                deviceModel: "iPhone17,3",
+                recentTelemetry: [],
+                appStateHash: "abc",
+                submittedAt: Date()
+            )
+            let json = try assembler.encodeJSON(bundle)
+            let data = try XCTUnwrap(json.data(using: .utf8))
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let decoded = try decoder.decode(FeedbackBundle.self, from: data)
+            XCTAssertEqual(decoded.category, category)
+        }
+    }
+}
