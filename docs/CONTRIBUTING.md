@@ -225,6 +225,7 @@ The runner needs occasional hands-on maintenance:
 - **Homebrew tools required by workflows.** Some workflow steps shell out to brew-installed binaries:
   - `trufflehog` (for `.github/workflows/trufflehog.yml`) — `brew install trufflehog`
   - `swiftlint` ≥ 0.62 (already documented in the dev-setup section above) — `brew install swiftlint`
+  - `jq` (VOL-173 Pre-flight iOS-runtime probe in `.github/workflows/ci.yml` lines ~176 + ~619; also used by various `gh api ... --jq` invocations across `codeql.yml` and the AI review gate) — `brew install jq`
   - `actionlint` (optional, used by some pre-commit setups) — `brew install actionlint`
 
 - **Concurrency.** With every workflow on the single runner, a typical PR queues ~5 jobs (`Build & Test` + 3 AI gate jobs + Trufflehog). The runner is configured for multiple concurrent jobs via the actions/runner service; verify after major macOS upgrades that the service is still running `--unattended --replace --labels self-hosted,mv-volumearc-runner` with parallel-job support enabled.
