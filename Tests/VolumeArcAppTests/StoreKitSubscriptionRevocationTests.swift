@@ -102,9 +102,18 @@ final class StoreKitSubscriptionRevocationTests: XCTestCase {
         // of non-function type 'SKTestTransaction?'" error). The
         // correct Swift form is `session.allTransactions()` —
         // parenthesized method call, no `await`.
+        // VOL-142 follow-up: Swift 6 trailing-closure ambiguity. Calling
+        // `allTxns.first { ... }` triggers Swift's strict trailing-closure
+        // resolution into the "function 'first' used as a property /
+        // cannot call value of non-function type 'SKTestTransaction?'"
+        // failure mode, because `Sequence` exposes both
+        // `var first: Element?` AND `func first(where:) -> Element?` —
+        // the trailing closure can't pick deterministically when the
+        // element type is bridged from ObjC. Calling `first(where:)`
+        // with explicit argument label sidesteps the inference loop.
         let allTxns = session.allTransactions()
         let transaction = try XCTUnwrap(
-            allTxns.first { $0.productID == Self.monthlyProductID },
+            allTxns.first(where: { $0.productID == Self.monthlyProductID }),
             "SKTestSession should have a transaction for the monthly product"
         )
         try await session.refundTransaction(identifier: UInt(transaction.identifier))
