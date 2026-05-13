@@ -276,13 +276,23 @@ public struct OnboardingView: View {
         }
     }
 
-    /// VOL-109: Apple Health permission step. Optional connect — the
-    /// Continue button advances to `.done` regardless of grant state.
-    /// The "Connect Apple Health" button triggers the system prompt via
-    /// `onRequestHealthAuthorization` (when wired by the host); after
-    /// HealthKit only when the model reports a successful authorization
-    /// request. Denial/failure leaves the button available so the user can
-    /// retry or continue without connecting.
+    /// VOL-109 + VOL-127: Apple Health permission step that doubles
+    /// as the custom rationale screen presented BEFORE the system
+    /// prompt fires. Optional connect — the Continue button advances
+    /// to `.done` regardless of grant state. The "Connect Apple
+    /// Health" button triggers the system prompt via
+    /// `onRequestHealthAuthorization` (when wired by the host);
+    /// after HealthKit reports a successful authorization request
+    /// the button shows "Connected" and is disabled. Denial /
+    /// failure leaves the button available so the user can retry or
+    /// continue without connecting.
+    ///
+    /// VOL-127 expanded the rationale body to break out the four
+    /// facts a user needs to make an informed decision: what is
+    /// read, why we read it, what stays on-device, and what syncs
+    /// to iCloud (Apple's private database — not our cloud). The
+    /// audit's UAT-readiness checklist required this content
+    /// surface before tester invitation.
     private var permissionsStep: some View {
         VStack(spacing: VA.Space.xl) {
             Image(systemName: "heart.text.square.fill")
@@ -299,17 +309,54 @@ public struct OnboardingView: View {
                 .foregroundStyle(VA.Colors.textPrimary)
                 .multilineTextAlignment(.center)
 
-                Text(String(
-                    localized: """
-                    VolumeArc reads your past workouts and writes new sessions back. You stay in control — \
-                    connect later from Profile if you'd rather decide now.
-                    """,
-                    comment: "Onboarding permissions step body explaining what HealthKit data is read/written and that the connection is optional"
-                ))
+                // VOL-127: structured rationale per the audit's UAT
+                // criteria. Four bullets cover: data read, why, on-
+                // device storage guarantee, iCloud sync destination.
+                VStack(alignment: .leading, spacing: VA.Space.sm) {
+                    healthRationaleBullet(
+                        symbol: "figure.strengthtraining.traditional",
+                        text: String(
+                            localized: """
+                            Reads completed workouts (and, on Apple Watch, heart rate + \
+                            active energy during a session) to chart your training history.
+                            """,
+                            comment: "Onboarding permissions step — what HealthKit data VolumeArc reads"
+                        )
+                    )
+                    healthRationaleBullet(
+                        symbol: "sparkles",
+                        text: String(
+                            localized: """
+                            Coach prescription uses your recent workout volume + readiness \
+                            signals to suggest the next session.
+                            """,
+                            comment: "Onboarding permissions step — why VolumeArc needs the HealthKit data"
+                        )
+                    )
+                    healthRationaleBullet(
+                        symbol: "iphone.gen3",
+                        text: String(
+                            localized: """
+                            Your Health data stays in Apple Health on this device. \
+                            VolumeArc does not upload it to our servers.
+                            """,
+                            comment: "Onboarding permissions step — on-device storage guarantee"
+                        )
+                    )
+                    healthRationaleBullet(
+                        symbol: "icloud",
+                        text: String(
+                            localized: """
+                            Workouts you save sync to your private iCloud database \
+                            (not ours). Revoke anytime in Settings → Privacy → Health.
+                            """,
+                            comment: "Onboarding permissions step — CloudKit private database + revocation guidance"
+                        )
+                    )
+                }
                 .font(VA.Typography.body)
                 .foregroundStyle(VA.Colors.textSecondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: VA.Space.onboardingMaxWidth)
+                .frame(maxWidth: VA.Space.onboardingMaxWidth, alignment: .leading)
             }
 
             if onRequestHealthAuthorization != nil {
@@ -344,6 +391,25 @@ public struct OnboardingView: View {
             .foregroundStyle(VA.Colors.textTertiary)
             .multilineTextAlignment(.center)
             .frame(maxWidth: VA.Space.onboardingMaxWidth)
+        }
+    }
+
+    /// VOL-127: SF Symbol + body row for the structured HealthKit
+    /// rationale bullets. Kept private to OnboardingView because it's
+    /// only used by `permissionsStep`; promoting it to a public VAUI
+    /// component would invite reuse outside the onboarding context
+    /// before we've decided whether bulleted-icon rows are part of the
+    /// design system proper.
+    private func healthRationaleBullet(symbol: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: VA.Space.sm) {
+            Image(systemName: symbol)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(VA.Colors.primary)
+                .frame(width: VA.Space.lg, alignment: .center)
+                .accessibilityHidden(true)
+            Text(text)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

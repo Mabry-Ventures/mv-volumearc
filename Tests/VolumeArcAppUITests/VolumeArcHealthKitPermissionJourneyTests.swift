@@ -80,6 +80,13 @@ final class VolumeArcHealthKitPermissionJourneyTests: XCTestCase {
             // verify the Connect button is rendered before we advance
             // past it. This pins the contract that the permissions step
             // surfaces a connect affordance, not just informational text.
+            //
+            // VOL-127: additionally pin the four rationale bullets that
+            // the audit's UAT-readiness checklist requires before the
+            // system prompt fires — what's read, why, on-device, iCloud.
+            // We match each bullet by a substring that's stable across
+            // copy edits (e.g. "heart rate" not the full sentence) so a
+            // wording polish doesn't trip the contract test.
             if stepIndex == 4 {
                 let connectButton = app.descendants(matching: .any)
                     .matching(identifier: "onboarding.permissions.connect-health")
@@ -88,6 +95,20 @@ final class VolumeArcHealthKitPermissionJourneyTests: XCTestCase {
                     connectButton.waitForExistence(timeout: 10),
                     "Permissions step should expose the Connect Apple Health button"
                 )
+
+                for rationaleNeedle in [
+                    "heart rate",            // VOL-127 bullet 1: what's read (watch HR)
+                    "Coach prescription",    // VOL-127 bullet 2: why we read it
+                    "Apple Health on this device",  // VOL-127 bullet 3: on-device guarantee
+                    "private iCloud database",      // VOL-127 bullet 4: CloudKit + revocation
+                ] {
+                    let predicate = NSPredicate(format: "label CONTAINS[c] %@", rationaleNeedle)
+                    let match = app.staticTexts.matching(predicate).firstMatch
+                    XCTAssertTrue(
+                        match.waitForExistence(timeout: 5),
+                        "VOL-127: permissions step rationale should surface '\(rationaleNeedle)' before the system prompt fires"
+                    )
+                }
             }
 
             continueButton.tap()
