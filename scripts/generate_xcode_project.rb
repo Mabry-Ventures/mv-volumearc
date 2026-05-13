@@ -159,7 +159,14 @@ configure_target(ui_target, extra: {
 })
 configure_target(app_target, bundle_id: 'com.mabryventures.VolumeArc', extra: {
   'PRODUCT_NAME' => 'VolumeArc',
-  'TARGETED_DEVICE_FAMILY' => '1,2',
+  # VOL-131: iPhone-only for v1.0 TestFlight. iPad support deferred
+  # until VOL-158 completes its UX-audit pass against the iPad form
+  # factor. The TestFlight-eligible matrix is the iPhone family (1);
+  # iPad lands as a separate explicit decision once the audit signs
+  # off on the experience. Snapfile + CI test matrix are already
+  # iPhone-only — this change brings the entitlement / device-family
+  # declaration in line with the shipped surface.
+  'TARGETED_DEVICE_FAMILY' => '1',
   'INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents' => 'YES',
   'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc reads your completed workouts from Apple Health to show your training history and calculate readiness.',
   'INFOPLIST_KEY_NSHealthUpdateUsageDescription' => 'VolumeArc writes completed workouts so your training history stays in sync with Apple Health.',
@@ -229,6 +236,11 @@ configure_target(watch_target, bundle_id: 'com.mabryventures.VolumeArc.watchkita
 })
 configure_target(widget_target, bundle_id: 'com.mabryventures.VolumeArc.widgets', extra: {
   'PRODUCT_NAME' => 'VolumeArcWidgets',
+  # VOL-131: match the iPhone-only host app. Widget extensions
+  # inherit the host's eligible-device set at install time, but
+  # being explicit avoids a future App Store reviewer flagging the
+  # widget for "claims iPad support but parent app doesn't."
+  'TARGETED_DEVICE_FAMILY' => '1',
   'APPLICATION_EXTENSION_API_ONLY' => 'YES',
   'OTHER_LDFLAGS' => ['$(inherited)', '-e', '_NSExtensionMain'],
   'SKIP_INSTALL' => 'YES',
