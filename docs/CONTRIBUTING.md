@@ -59,6 +59,19 @@ The repo declares its expected versions in three places so a Homebrew or RubyGem
 
 When updating a pin: bump the constraint, run the relevant tool locally, verify CI green on a small PR before bulk work depends on the change.
 
+### Pre-commit hooks (VOL-152)
+
+Optional but recommended — wires sub-second SwiftLint + "no TEMPFIX marker" checks against your staged Swift files before `git commit` proceeds. Catches the canonical "lint failed CI 20 minutes after I opened the PR" loop.
+
+```bash
+brew install lefthook              # one-time install
+lefthook install                   # one-time per clone; writes .git/hooks/pre-commit + pre-push
+```
+
+Hooks are defined in `lefthook.yml` at repo root. To bypass a single commit (e.g. WIP that won't go to PR): `LEFTHOOK=0 git commit`. To override a check locally without touching the committed file, create a gitignored `lefthook-local.yml`.
+
+The release-config validator (`scripts/validate_release_config.sh`) is intentionally NOT in the pre-commit set — it shells out to `xcodebuild` for entitlement assertions and each invocation adds 5–10 seconds. That gate runs in CI; pre-commit's job is the sub-second loop. A future `--no-build` mode could earn a slot here.
+
 ## Build commands
 
 ```bash
