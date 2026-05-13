@@ -83,6 +83,18 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 | VolumeArcCoreWatch | Static Library | watchOS 26.4 | -- (same `VolumeArcCore` module, built for watchOS from `VolumeArcNative/`) |
 | VolumeArcUI | Static Library | iOS 26.0 | -- (from `VolumeArcNative/`) |
 
+### Supported device families (VOL-131)
+
+| Family | v1.0 TestFlight + App Store | Rationale |
+|---|---|---|
+| **iPhone** (iOS 26.0+) | ✅ Supported (primary surface) | Full feature set: tab bar, onboarding, paywall, coach, Live Activity, widgets, watch pairing. `TARGETED_DEVICE_FAMILY = 1`. |
+| **Apple Watch** (watchOS 26.4+) | ✅ Supported (paired with iPhone) | Watch app + widgets ship in the same iPhone build per the iOS / watchOS pairing requirement. Documented in App Store description. |
+| **iPad** | ❌ Not supported in v1.0 | Layout has not been audited for the iPad form factor (multitasking, regular size class, sidebar nav). Deferred until [VOL-158](https://linear.app/mabry-ventures/issue/VOL-158) completes the UX-audit pass. `TARGETED_DEVICE_FAMILY` is `1` (iPhone only); the App Store listing will be set to "iPhone only" until the audit signs off. |
+| **visionOS** | ❌ Explicitly not supported | App Store metadata sets the platform compatibility flag to exclude visionOS. Revisit post-launch once we have iPhone telemetry to validate the form-factor strategy. |
+| **macOS Catalyst** | ❌ Explicitly not supported | The coaching surfaces depend on touch + haptics + a paired Apple Watch; Catalyst doesn't deliver that experience cleanly. Revisit per [VOL-159](https://linear.app/mabry-ventures/issue/VOL-159) (Apple Intelligence) and platform sales data. |
+
+**TestFlight + App Store screenshot matrix** (`fastlane/Snapfile`) is intentionally iPhone-only (`iPhone 17`, `iPhone 17 Pro Max`, `Apple Watch Series 11 (46mm)`) to match the supported-device declaration. Adding iPad later means: re-running VOL-158 audit, flipping `TARGETED_DEVICE_FAMILY` to `1,2`, adding iPad devices to Snapfile, regenerating screenshots, and updating the App Store description.
+
 **Dependency graph:** `VolumeArcUI -> VolumeArcCore`. iOS app, iOS widgets, and tests depend on the iOS `VolumeArcCore` target. The watch app and watch widgets depend on `VolumeArcCoreWatch`, which compiles the same sources as module `VolumeArcCore` for watchOS so archive builds do not cross-link the iOS static library. The iOS app and tests also depend on `VolumeArcUI`. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module breakdown and data flow.
 
 ## Key Components
