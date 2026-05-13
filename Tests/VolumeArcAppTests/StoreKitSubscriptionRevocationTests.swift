@@ -102,22 +102,20 @@ final class StoreKitSubscriptionRevocationTests: XCTestCase {
         // of non-function type 'SKTestTransaction?'" error). The
         // correct Swift form is `session.allTransactions()` —
         // parenthesized method call, no `await`.
-        // VOL-142: this block tries to call `XCTUnwrap` on
-        // `allTxns.first(where: { ... })` and Swift 6 + the
-        // XCTUnwrap autoclosure surface combine to produce a baffling
-        // "cannot call value of non-function type 'SKTestTransaction?'"
-        // error — Swift parses `allTxns.first` as the property (not
-        // the `first(where:)` method) and then chokes on the
-        // `(where: { ... })` it tries to apply to the unwrapped value.
-        //
-        // The robust workaround across all five fix attempts has been:
-        // do the match in a separate statement with an explicit
-        // `SKTestTransaction?` type annotation, so the call to
-        // `XCTUnwrap` sees a plain `Optional` and doesn't have to
-        // re-infer through the closure-in-autoclosure nesting.
+        // VOL-142: `SKTestTransaction` exposes `productIdentifier`
+        // (per `StoreKitTest.framework/Headers/SKTestTransaction.h:30`),
+        // NOT `productID`. Earlier fix attempts kept using `productID`
+        // — which belongs to StoreKit2's `Transaction` value type, a
+        // different type entirely — and Swift's type inference
+        // produced confusing cascade errors ("cannot call value of
+        // non-function type 'SKTestTransaction?'") because it couldn't
+        // resolve `$0.productID` and the failure surfaced on the
+        // surrounding closure / XCTUnwrap expressions instead of the
+        // member-access. Using the correct property name + an
+        // explicit-type for-loop fixes both at once.
         let allTxns: [SKTestTransaction] = session.allTransactions()
         var matchedTransaction: SKTestTransaction?
-        for candidate in allTxns where candidate.productID == Self.monthlyProductID {
+        for candidate in allTxns where candidate.productIdentifier == Self.monthlyProductID {
             matchedTransaction = candidate
             break
         }
