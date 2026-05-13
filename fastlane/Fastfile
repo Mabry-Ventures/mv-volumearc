@@ -287,7 +287,16 @@ platform :ios do
     # the latest processed build for this version. If the target equals
     # latest, the operator is rolling sideways, not back; abort with a
     # clear error rather than letting them paste a no-op walk-through.
-    UI.message("VOL-178: verifying target build state in App Store Connect...")
+    #
+    # NOTE (Codex P2 on PR #167): The `api_key_path:` parameter expects a
+    # fastlane API key JSON file, not the `.p8` key file path that
+    # `APP_STORE_CONNECT_API_KEY_PATH` points to per docs/RELEASE.md.
+    # That auth-shape mismatch means this validation call may fail with
+    # an auth error before the operator sees the walk-through, which
+    # would be unhelpful — fall through to the manual flow with a clear
+    # warning rather than hard-aborting. The walk-through itself is the
+    # canonical rollback mechanic; the validation is bonus.
+    UI.message("VOL-178: verifying target build state in App Store Connect (best-effort)...")
     bundle_id = ENV.fetch("VOLUMEARC_BUNDLE_ID", "com.mabryventures.VolumeArc")
 
     begin
@@ -309,9 +318,10 @@ platform :ios do
       raise
     rescue => e
       UI.important(
-        "VOL-178: could not confirm build state via fastlane API; " \
-          "continuing with operator walk-through. Underlying error: " \
-          "#{e.message.lines.first&.strip}"
+        "VOL-178: could not confirm build state via fastlane API " \
+          "(this is expected if APP_STORE_CONNECT_API_KEY_PATH is a .p8 " \
+          "rather than fastlane JSON). Continuing with operator walk-through. " \
+          "Underlying error: #{e.message.lines.first&.strip}"
       )
     end
 
@@ -357,6 +367,28 @@ platform :ios do
 
     STEPS
     UI.message(walk_through)
+
+    # ---- Operator confirmation (Codex P2 on PR #167) -----------------------
+    # Don't log a successful rollback unless the operator confirms they've
+    # actually completed the swap in ASC. Skipping this would let the lane
+    # silently record a "success" event when the operator stopped midway
+    # (e.g., target build wasn't available, network dropped, second
+    # thoughts about the rollback). Honor `VOLUMEARC_ROLLBACK_NONINTERACTIVE`
+    # for CI / drill runs where prompting isn't possible.
+    if ENV["VOLUMEARC_ROLLBACK_NONINTERACTIVE"].to_s == "1"
+      UI.important("VOL-178: VOLUMEARC_ROLLBACK_NONINTERACTIVE=1 — skipping confirmation prompt (CI/drill mode).")
+    else
+      confirmed = UI.confirm(
+        "VOL-178: did you finish the ASC swap to build #{target_build_number}? (y = log success / n = abort)"
+      )
+      unless confirmed
+        UI.user_error!(
+          "VOL-178: operator did not confirm the swap. Incident log NOT written, " \
+            "GITHUB_OUTPUT NOT emitted. Re-run the lane after completing the ASC " \
+            "swap, or coordinate with on-call."
+        )
+      end
+    end
 
     # ---- Incident log append -----------------------------------------------
     incident_log_path = File.expand_path("../docs/incident-log.md", __dir__)
