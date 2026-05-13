@@ -110,6 +110,10 @@ This is preferred over "did the dashboard tab appear" assertions for any flow th
 
 **Phase 2 (follow-up):** wire every journey in the suite to the canonical events listed in the VOL-149 acceptance criteria — onboarding, workout start/log/complete, coach session, paywall, watch sync, HealthKit permission.
 
+## Chaos / fault injection (VOL-168)
+
+[`docs/CHAOS.md`](CHAOS.md) is the source of truth. The short version: every chaos flag is a `-CHAOS_*` launch argument that the `ChaosController` (`App/Debug/`) reads, which causes `VolumeArcAppFactories` to wrap the matching subsystem in a fault-injecting decorator. Paired journeys in `VolumeArcChaosJourneyTests` exercise the fault and assert graceful degradation — including the diagnostic telemetry event via VOL-149's `assertTelemetryFired` helper. The wiring is `#if DEBUG`-gated everywhere so Release builds compile every chaos check down to `return false`. Phase 1 ships the HealthKit-auth-denied flag + journey; Phase 2 extends to WatchConnectivity / StoreKit / BGTaskScheduler / AIRelay.
+
 ## Performance tests (VOL-99)
 
 The perf suite (`Tests/VolumeArcAppPerfTests/VolumeArcPerfTests.swift`) enforces four budgets:

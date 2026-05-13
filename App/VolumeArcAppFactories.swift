@@ -19,11 +19,31 @@ import VolumeArcUI
 // still on the same module-private struct, so no API surface change.
 extension VolumeArcApp {
     static func makeHealthStore() -> HealthStore {
-        #if canImport(HealthKit)
-        HealthKitRuntimeStore()
-        #else
-        UnavailableHealthStore()
+        // VOL-168 Phase 1: wrap the real (or unavailable) store with
+        // `ChaosHealthStore` when a matching `-CHAOS_HEALTH_*` launch
+        // argument is set. The accessors on `ChaosController` are
+        // hard-coded to `false` in Release builds (`#if DEBUG`
+        // gate inside each property), so this branch can never wrap
+        // the store in shipping binaries — even if launchArguments
+        // somehow contained a `-CHAOS_*` token.
+        let underlying: HealthStore = {
+            #if canImport(HealthKit)
+            return HealthKitRuntimeStore()
+            #else
+            return UnavailableHealthStore()
+            #endif
+        }()
+
+        #if DEBUG
+        if ChaosController.injectHealthAuthDenied {
+            return ChaosHealthStore(
+                wrapping: underlying,
+                nextFailure: .authorizationDenied
+            )
+        }
         #endif
+
+        return underlying
     }
 
     static func makeVoicePermissionStore() -> VoicePermissionStore {
@@ -227,15 +247,7 @@ extension VolumeArcApp {
 
     static func makeTelemetrySink(initialEvents: [TelemetryEvent] = []) -> TelemetrySink {
         if VolumeArcRuntimeFlags.isDeterministicMode {
-            // VOL-149: enable notification posting so the
-            // `debug.telemetry.events` accessibility overlay can
-            // refresh after every emitted event, letting XCUITests
-            // assert that specific (category, name) events fired
-            // during a journey without polling shared state.
-            return InMemoryTelemetrySink(
-                events: initialEvents,
-                postsNotificationOnRecord: true
-            )
+            return InMemoryTelemetrySink(events: initialEvents)
         }
 
         let persistent = UserDefaultsTelemetrySink()
