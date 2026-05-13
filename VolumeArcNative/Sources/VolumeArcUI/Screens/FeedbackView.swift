@@ -86,10 +86,12 @@ public struct FeedbackView: View {
                 .font(VA.Typography.title2)
                 .foregroundStyle(VA.Colors.textPrimary)
             Text(String(
-                localized: "Your message helps us prioritize the next release. "
-                    + "We attach recent app activity to make bugs easier to "
-                    + "reproduce — emails and phone numbers are scrubbed before "
-                    + "the report leaves your device.",
+                localized: """
+                Your message helps us prioritize the next release. \
+                We attach recent app activity to make bugs easier to \
+                reproduce — emails and phone numbers are scrubbed before \
+                the report leaves your device.
+                """,
                 comment: "Feedback sheet sub-headline explaining what's attached"
             ))
                 .font(VA.Typography.footnote)
@@ -137,7 +139,7 @@ public struct FeedbackView: View {
 
     private var submitButton: some View {
         Button {
-            VAHaptics.success()
+            VAHaptics.setLogged()
             let trimmed = userDescription.trimmingCharacters(in: .whitespacesAndNewlines)
             onSubmit(category, trimmed)
             isPresented = false
@@ -159,8 +161,10 @@ public struct FeedbackView: View {
 
     private var disclaimer: some View {
         Text(String(
-            localized: "Submitting attaches your recent app events, build version, "
-                + "and device model. Nothing else leaves your device.",
+            localized: """
+            Submitting attaches your recent app events, build version, \
+            and device model. Nothing else leaves your device.
+            """,
             comment: "Feedback sheet privacy disclaimer"
         ))
             .font(VA.Typography.caption)
