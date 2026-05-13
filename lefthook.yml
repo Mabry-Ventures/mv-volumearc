@@ -44,14 +44,31 @@ pre-commit:
         - merge
         - rebase
 
-    # Release-config validator (`validate_release_config.sh`) is
-    # intentionally NOT wired here — it shells out to xcodebuild for
-    # the entitlement / build-setting checks and each invocation
-    # adds 5–10 seconds. The release-config gate already runs in CI;
-    # pre-commit's job is the sub-second feedback loop. A future
-    # `--no-build` mode that splits static-plist assertions from
-    # xcodebuild-driven ones could earn a slot here (tracked as
-    # VOL-152 Phase 2).
+    # Release-config validator in `--no-build` mode (VOL-177). The
+    # full validator shells to xcodebuild for ~45s — too slow for
+    # pre-commit. The `--no-build` flag runs only the static
+    # plist/entitlement/PrivacyInfo/source-grep assertions (no
+    # xcodebuild, no SPM resolve, no project regen) in <2s. The full
+    # check still runs on every PR via ci.yml's "Validate release
+    # configuration" step. We gate on the staged-file globs that the
+    # static subset actually depends on, so a trivial doc-only commit
+    # doesn't trigger it.
+    release-config-static:
+      tags: lint quick
+      glob:
+        - "App/**/*.entitlements"
+        - "Watch/**/*.entitlements"
+        - "Widgets/**/*.entitlements"
+        - "WatchWidgets/**/*.entitlements"
+        - "App/**/PrivacyInfo.xcprivacy"
+        - "Watch/**/PrivacyInfo.xcprivacy"
+        - "Widgets/**/PrivacyInfo.xcprivacy"
+        - "WatchWidgets/**/PrivacyInfo.xcprivacy"
+        - "App/VolumeArcCloudConfiguration.swift"
+      run: ./scripts/validate_release_config.sh --no-build
+      skip:
+        - merge
+        - rebase
 
     # Defensive: catch DEMOFIX / TEMPFIX / DELETEME markers that
     # devs leave in staged code. Lint won't catch these because
