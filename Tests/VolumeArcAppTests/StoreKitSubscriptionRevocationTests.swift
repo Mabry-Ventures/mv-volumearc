@@ -92,16 +92,18 @@ final class StoreKitSubscriptionRevocationTests: XCTestCase {
         // which the store's listener must catch and remove from the
         // purchased set.
         //
-        // `allTransactions` on SKTestSession is a *synchronous property*
-        // returning `[SKTestTransaction]` — NOT an async function. The
-        // first attempt called it as `allTransactions()` (treated as a
-        // function call returning a single optional), which tripped
-        // "cannot call value of non-function type 'SKTestTransaction?'"
-        // because the parser grouped the trailing `()` with the
-        // `.first { ... }` return value.
-        let transactions = session.allTransactions
+        // VOL-142 (Codex on PR #158): `SKTestSession.allTransactions()`
+        // is an `async` method in Xcode 26's StoreKitTest, NOT a
+        // synchronous property as an earlier version of this test
+        // assumed. The Build & Test failure on the fixup SHA bottomed
+        // out in:
+        //   error: function 'transactions' was used as a property; add () to call it
+        // — the compiler was inferring `allTransactions` (without `()`)
+        // as a function reference. The right form is to await the
+        // call, then `.first` on the returned `[SKTestTransaction]`.
+        let allTxns = await session.allTransactions()
         let transaction = try XCTUnwrap(
-            transactions.first { $0.productID == Self.monthlyProductID },
+            allTxns.first { $0.productID == Self.monthlyProductID },
             "SKTestSession should have a transaction for the monthly product"
         )
         try await session.refundTransaction(identifier: UInt(transaction.identifier))
