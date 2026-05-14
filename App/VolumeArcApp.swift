@@ -102,6 +102,11 @@ struct VolumeArcApp: App {
     // whole journey.
     @StateObject private var telemetryDebugProbe = VolumeArcTelemetryDebugProbe()
     private let dashboardModel: WorkoutDashboardModel
+    /// VOL-176: handler that turns the Profile feedback sheet's
+    /// (category, description) tuple into a Sentry user-feedback +
+    /// telemetry confirmation. Captured by the closure passed to
+    /// `RootDashboardView` below.
+    private let feedbackSubmitter: VolumeArcFeedbackSubmitter
     private let widgetController = VolumeArcWidgetController()
     #if canImport(ActivityKit)
     private let liveActivityController: VolumeArcLiveActivityController
@@ -394,6 +399,19 @@ struct VolumeArcApp: App {
             featureFlags: featureFlags
         )
         #endif
+
+        // VOL-176: feedback submitter wired with the same telemetry sink
+        // every other surface uses (Sentry + UserDefaults + OSLog +
+        // InMemory in deterministic builds). Recent telemetry is read
+        // from UserDefaults — release builds always populate it via the
+        // fanout sink, deterministic-mode tests start with an empty
+        // buffer (acceptable for the v1.0 feature; tests assert on the
+        // `feedback.submitted` confirmation, not the attached snapshots).
+        let feedbackTelemetryReader = UserDefaultsTelemetrySink()
+        self.feedbackSubmitter = VolumeArcFeedbackSubmitter(
+            telemetrySink: telemetrySink,
+            recentTelemetry: { feedbackTelemetryReader.loadEvents() }
+        )
     }
 
     var body: some Scene {
@@ -403,7 +421,13 @@ struct VolumeArcApp: App {
     }
 
     private var rootContent: some View {
-        RootDashboardView(navigation: navigation, model: dashboardModel)
+        RootDashboardView(
+            navigation: navigation,
+            model: dashboardModel,
+            onSendFeedback: { category, description in
+                feedbackSubmitter.submit(category: category, description: description)
+            }
+        )
             .task {
                 #if canImport(ActivityKit)
                 await liveActivityController.restoreStoredStateIfAvailable()
