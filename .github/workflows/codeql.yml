@@ -55,6 +55,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      # VOL-180: CodeQL helpers shipped by `github/codeql-action/init@v4`
+      # arrive on the self-hosted macOS runner with the
+      # `com.apple.quarantine` xattr set (Gatekeeper marks any binary
+      # extracted from a download tarball). The xattr blocks
+      # `child_process.spawn` from launching the helper, surfacing as
+      # the cryptic `Error: spawn Unknown system error -86`
+      # (`ENEEDAUTH`) in `Post Initialize CodeQL`. Strip the attribute
+      # recursively across the runner's tool / work caches before
+      # `Initialize CodeQL` so the helpers can launch.
+      #
+      # Conservative: only the directories CodeQL actually reads from
+      # are touched, and a missing directory is non-fatal so first-run
+      # workspaces don't fail this step.
+      - name: Strip quarantine xattr from runner caches (VOL-180)
+        run: |
+          set -uo pipefail
+          declare -a paths=(
+            "${RUNNER_TEMP:-}"
+            "${RUNNER_TOOL_CACHE:-}"
+            "${RUNNER_WORKSPACE:-}"
+            "$HOME/_work/_actions/github/codeql-action"
+            "$HOME/_work/_tool"
+          )
+          for path in "${paths[@]}"; do
+            [[ -n "$path" && -d "$path" ]] || continue
+            xattr -dr com.apple.quarantine "$path" 2>/dev/null || true
+          done
+          echo "VOL-180 quarantine strip complete"
+        shell: bash
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
