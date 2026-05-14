@@ -103,6 +103,7 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | `profile.open-paywall` | Free tier | Tap Upgrade | Paywall sheet opens | `paywall.opened` | `VolumeArcAppJourneyTests.testPaywallPresentationAndDismissal` |
 | `profile.complete-purchase` | Paywall open, sandbox tester | Tap plan → confirm | Premium entitlement granted; tier routes to Pro | `paywall.purchase_succeeded` | `VolumeArcAppJourneyTests.testPremiumPurchaseFlowWithStoreKitTest` |
 | `profile.manage-subscription` | Premium | Tap Manage | iOS Settings opens (no crash) | `subscription.manage_opened` | `[ ]` (deferred to VOL-142 Phase 2 deep-link smoke test) |
+| `profile.send-feedback` | Profile tab | Tap Send feedback → pick category → enter description → Submit | Sheet dismisses; bundle forwarded to Sentry; `feedback.submitted` telemetry recorded | `feedback.submitted` | `[ ]` (deferred to VOL-179 XCUITest journey, Phase 1C) |
 
 ## Watch
 

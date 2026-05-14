@@ -121,4 +121,23 @@ public extension PrivacyMode {
         }
     }
 }
+
+/// VOL-176: chip labels for the Feedback sheet's category picker. The
+/// `FeedbackBundle.Category` enum lives in `VolumeArcCore` (free of
+/// localization APIs by design); the UI maps each case to a `String(localized:)`
+/// here so translators see every enum-derived label in one file.
+public enum LocalizedLabels {
+    public static func feedbackCategoryDisplayName(_ category: FeedbackBundle.Category) -> String {
+        switch category {
+        case .bug:
+            return String(localized: "Bug", comment: "Feedback category — something is broken")
+        case .idea:
+            return String(localized: "Idea", comment: "Feedback category — feature request or suggestion")
+        case .coachQuality:
+            return String(localized: "Coach quality", comment: "Feedback category — AI coach response quality")
+        case .other:
+            return String(localized: "Other", comment: "Feedback category — anything that doesn't fit the named buckets")
+        }
+    }
+}
 #endif

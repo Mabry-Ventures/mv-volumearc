@@ -7,9 +7,25 @@ public struct ProfileView: View {
     @ObservedObject var model: WorkoutDashboardModel
     @State private var isEditingProfile = false
     @State private var isShowingPaywall = false
+    /// VOL-176: feedback sheet visibility. Only rendered when the
+    /// caller supplies a non-nil `onSendFeedback` closure (i.e., the
+    /// App layer wired Sentry + telemetry submission). The model
+    /// module + previews can omit the closure and the row hides.
+    @State private var isShowingFeedback = false
 
-    public init(model: WorkoutDashboardModel) {
+    /// VOL-176: optional App-layer hook. Called with the user-selected
+    /// category + free-text description when the sheet's submit button
+    /// is tapped. The App layer assembles a `FeedbackBundle`, encodes
+    /// it as JSON, forwards to `SentrySDK.captureUserFeedback(_:)`, and
+    /// records a `feedback.submitted` telemetry event.
+    private let onSendFeedback: ((FeedbackBundle.Category, String) -> Void)?
+
+    public init(
+        model: WorkoutDashboardModel,
+        onSendFeedback: ((FeedbackBundle.Category, String) -> Void)? = nil
+    ) {
         self.model = model
+        self.onSendFeedback = onSendFeedback
     }
 
     public var body: some View {
@@ -50,6 +66,11 @@ public struct ProfileView: View {
                         isPresented: $isShowingPaywall
                     )
                 }
+            }
+        }
+        .sheet(isPresented: $isShowingFeedback) {
+            FeedbackView(isPresented: $isShowingFeedback) { category, description in
+                onSendFeedback?(category, description)
             }
         }
     }
@@ -222,6 +243,25 @@ public struct ProfileView: View {
             .accessibilityIdentifier("profile.health.connect")
             .accessibilityLabel(healthAuthorizationAccessibilityLabel)
             .accessibilityValue(healthAuthorizationAccessibilityValue)
+
+            // VOL-176: feedback entry. Only rendered when the App layer
+            // wired a submission closure (Sentry + telemetry path).
+            // Test targets / previews that omit the closure see no row.
+            if onSendFeedback != nil {
+                profileRow(
+                    label: String(localized: "Send feedback", comment: "Profile feedback row label"),
+                    value: "",
+                    icon: "envelope.fill"
+                ) {
+                    VAHaptics.tap()
+                    isShowingFeedback = true
+                }
+                .accessibilityIdentifier("profile.feedback")
+                .accessibilityLabel(String(
+                    localized: "Send feedback to the VolumeArc team",
+                    comment: "VoiceOver label for the Send feedback row"
+                ))
+            }
 
             NavigationLink {
                 Text(String(localized: "About VolumeArc", comment: "About VolumeArc screen placeholder title"))
