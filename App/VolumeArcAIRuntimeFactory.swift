@@ -40,6 +40,28 @@ enum VolumeArcAIRuntimeFactory {
             )
         }
 
+        // VOL-162: `testCoachFirstTokenLatency` (perf suite) needs a
+        // deterministic, hermetic provider — `LocalHeuristicAICoachProvider`
+        // streams one word every 30ms with no network or model
+        // dependency. Without this short-circuit the factory would
+        // install `FoundationModelCoachProvider`, which on the
+        // simulator may not respond at all (the FoundationModels
+        // framework has limited simulator support on Xcode 26), so
+        // the streamed `coach.firstResponse` accessibility identifier
+        // never appears and the `measure` block records the 10s
+        // `waitForExistence` ceiling on every iteration (5
+        // iterations × ~10.3s observed in the failing CI run, mean
+        // 10312ms vs the 800ms budget).
+        //
+        // `-PerfTestMode 1` is the launch flag the perf tests already
+        // set, and `VolumeArcApp.init` mirrors it onto
+        // `VolumeArcRuntimeFlags.isPerformanceTestMode` so reading
+        // the runtime flag here keeps call sites free of perf-aware
+        // plumbing.
+        if VolumeArcRuntimeFlags.isPerformanceTestMode {
+            return LocalHeuristicAICoachProvider()
+        }
+
         #if canImport(FoundationModels) && !os(watchOS)
         if #available(iOS 26.0, visionOS 26.0, *) {
             // VOL-61: Gate the FM provider on the `.foundationModelCoach` flag.
