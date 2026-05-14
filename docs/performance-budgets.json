@@ -42,9 +42,8 @@
       "units": "milliseconds",
       "budget": 800,
       "failThreshold": 960,
-      "softFailReason": "VOL-162: testCoachFirstTokenLatency currently records the 10-second waitForExistence ceiling on every iteration because the `coach.firstResponse` accessibility identifier never appears in PerfTestMode. The test passes XCTest-side (no asserts) but the metric is meaningless. Budget is enforced as a soft warning until the test is debugged with local screenshot capture. See `softFailReason` handling in check_performance.sh.",
       "budgetSource": "VOL-99 Linear acceptance criteria.",
-      "description": "P50 wall-clock time from the Ask Coach tap to the first coach bubble reaching non-empty content. Computed by XCTClockMetric. Currently soft-failing pending VOL-162."
+      "description": "P50 wall-clock time from the Ask Coach tap to the first coach bubble reaching non-empty content. Computed by XCTClockMetric. VOL-162 root-caused the prior 10-second waitForExistence ceiling: in PerfTestMode the factory was installing FoundationModelCoachProvider, which has limited simulator support and never streamed. Fixed in `VolumeArcAIRuntimeFactory.makeCoachProvider` by short-circuiting to `LocalHeuristicAICoachProvider` whenever `VolumeArcRuntimeFlags.isPerformanceTestMode` is true."
     },
     {
       "id": "coach_first_token_p95",
@@ -54,9 +53,8 @@
       "units": "milliseconds",
       "budget": 2000,
       "failThreshold": 2400,
-      "softFailReason": "VOL-162: see coach_first_token_p50.",
       "budgetSource": "VOL-99 Linear acceptance criteria.",
-      "description": "P95 wall-clock time from the Ask Coach tap to the first coach bubble reaching non-empty content. Currently soft-failing pending VOL-162."
+      "description": "P95 wall-clock time from the Ask Coach tap to the first coach bubble reaching non-empty content. See coach_first_token_p50 for the VOL-162 root cause + fix."
     }
   ]
 }
