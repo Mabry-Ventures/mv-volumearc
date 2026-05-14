@@ -40,9 +40,11 @@ public final class StoreKitSubscriptionStore: ObservableObject, PremiumEntitleme
     }
 
     private var updateListenerTask: Task<Void, Never>?
+    private let telemetry: (any TelemetrySink)?
 
-    public init(productIDs: [String]) {
+    public init(productIDs: [String], telemetry: (any TelemetrySink)? = nil) {
         self.productIDs = productIDs
+        self.telemetry = telemetry
         updateListenerTask = listenForTransactions()
         Task { await loadProducts() }
     }
@@ -79,7 +81,7 @@ public final class StoreKitSubscriptionStore: ObservableObject, PremiumEntitleme
             switch result {
             case let .success(verification):
                 if case let .verified(transaction) = verification {
-                    purchasedProductIDs.insert(transaction.productID)
+                    applyTransactionUpdate(transaction)
                     await transaction.finish()
                     return true
                 } else {
@@ -90,6 +92,17 @@ public final class StoreKitSubscriptionStore: ObservableObject, PremiumEntitleme
                 return false
             case .pending:
                 lastPurchaseError = "Purchase pending approval."
+                // VOL-142: ask-to-buy / Strong Customer Authentication
+                // pending state. Emit a telemetry breadcrumb so support
+                // can correlate "user says they paid but they're not
+                // premium" reports against the actual pending state.
+                telemetry?.record(TelemetryEvent(
+                    category: "subscription.entitlement",
+                    name: "purchase_pending",
+                    severity: .info,
+                    message: "Purchase awaiting approval (ask-to-buy / SCA).",
+                    metadata: ["productID": product.id]
+                ))
                 return false
             @unknown default:
                 return false
@@ -105,10 +118,43 @@ public final class StoreKitSubscriptionStore: ObservableObject, PremiumEntitleme
         var active: Set<String> = []
         for await result in Transaction.currentEntitlements {
             if case let .verified(transaction) = result {
-                active.insert(transaction.productID)
+                // VOL-142: `Transaction.currentEntitlements` already
+                // omits revoked transactions, but be defensive in case
+                // a future StoreKit revision changes the contract — a
+                // verified transaction with a `revocationDate` is
+                // explicitly NOT a current entitlement.
+                if transaction.revocationDate == nil {
+                    active.insert(transaction.productID)
+                }
             }
         }
+
+        // VOL-142: compare before/after for telemetry transitions. The
+        // diff lets us emit a single event per state change instead of
+        // logging on every refresh.
+        let removed = purchasedProductIDs.subtracting(active)
+        let added = active.subtracting(purchasedProductIDs)
+
         purchasedProductIDs = active
+
+        for productID in added {
+            telemetry?.record(TelemetryEvent(
+                category: "subscription.entitlement",
+                name: "granted",
+                severity: .info,
+                message: "Entitlement granted via refreshEntitlements.",
+                metadata: ["productID": productID, "source": "refresh"]
+            ))
+        }
+        for productID in removed {
+            telemetry?.record(TelemetryEvent(
+                category: "subscription.entitlement",
+                name: "revoked",
+                severity: .warning,
+                message: "Entitlement revoked via refreshEntitlements (refund or expiration).",
+                metadata: ["productID": productID, "source": "refresh"]
+            ))
+        }
     }
 
     /// Restore purchases explicitly (calls AppStore.sync).
@@ -121,19 +167,57 @@ public final class StoreKitSubscriptionStore: ObservableObject, PremiumEntitleme
         }
     }
 
+    /// VOL-142: handle a verified transaction from any source (initial
+    /// purchase, `Transaction.updates` listener, restore). Splits the
+    /// previously-inlined "insert into purchasedProductIDs" so the
+    /// revocation case is enforced everywhere — `Transaction.updates`
+    /// is the primary delivery channel for refunds and family-share
+    /// revocations, and the prior code only INSERTED, leaving a
+    /// refunded user marked premium until the next refresh.
+    fileprivate func applyTransactionUpdate(_ transaction: Transaction) {
+        if transaction.revocationDate != nil {
+            let removed = purchasedProductIDs.remove(transaction.productID) != nil
+            if removed {
+                telemetry?.record(TelemetryEvent(
+                    category: "subscription.entitlement",
+                    name: "revoked",
+                    severity: .warning,
+                    message: "Entitlement revoked via Transaction.updates (refund or family-share removal).",
+                    metadata: [
+                        "productID": transaction.productID,
+                        "revocationReason": String(describing: transaction.revocationReason),
+                        "source": "updates",
+                    ]
+                ))
+            }
+        } else {
+            let inserted = purchasedProductIDs.insert(transaction.productID).inserted
+            if inserted {
+                telemetry?.record(TelemetryEvent(
+                    category: "subscription.entitlement",
+                    name: "granted",
+                    severity: .info,
+                    message: "Entitlement granted via Transaction.updates.",
+                    metadata: [
+                        "productID": transaction.productID,
+                        "ownershipType": String(describing: transaction.ownershipType),
+                        "source": "updates",
+                    ]
+                ))
+            }
+        }
+    }
+
     private func listenForTransactions() -> Task<Void, Never> {
         Task.detached { [weak self] in
             for await result in Transaction.updates {
                 if case let .verified(transaction) = result {
-                    await MainActor.run {
-                        // `Set.insert` returns `(inserted: Bool, memberAfterInsert: Element)`,
-                        // which `MainActor.run` then forwards. We don't care
-                        // whether the insert was novel — the set is the
-                        // authority and reinserting the same productID is a
-                        // no-op. Discard explicitly to silence the
-                        // unused-result warning.
-                        _ = self?.purchasedProductIDs.insert(transaction.productID)
-                    }
+                    // VOL-142: route through applyTransactionUpdate so
+                    // the revocation case is enforced. The prior code
+                    // only inserted, leaving a refunded user marked
+                    // premium until the next refreshEntitlements call —
+                    // Apple reviewers stress this path.
+                    await self?.applyTransactionUpdate(transaction)
                     await transaction.finish()
                 }
             }
@@ -146,8 +230,9 @@ public final class StoreKitSubscriptionStore: PremiumEntitlementProviding {
     public let productIDs: [String]
     public var isPremium: Bool { false }
 
-    public init(productIDs: [String]) {
+    public init(productIDs: [String], telemetry: (any TelemetrySink)? = nil) {
         self.productIDs = productIDs
+        _ = telemetry  // unused on non-StoreKit platforms; signature parity for callers
     }
 }
 #endif

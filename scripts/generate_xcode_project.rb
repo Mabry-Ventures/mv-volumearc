@@ -322,6 +322,11 @@ app_tests_target.add_system_framework('AuthenticationServices')
 app_tests_target.add_system_framework('Security')
 app_tests_target.add_system_framework('AppIntents')
 app_tests_target.add_system_framework('ActivityKit')
+# VOL-142: StoreKitTest powers `SKTestSession`-based unit tests
+# (`StoreKitSubscriptionRevocationTests`) for refund / family-share /
+# grace-period coverage at the model level. UITest target already has
+# this dependency for journey-level paywall tests.
+app_tests_target.add_system_framework('StoreKitTest')
 app_ui_tests_target.add_system_framework('XCTest')
 app_ui_tests_target.add_system_framework('StoreKitTest')
 app_perf_tests_target.add_system_framework('XCTest')
@@ -370,6 +375,12 @@ add_swift_sources(tests_group, app_tests_target, ROOT.join('Tests/VolumeArcAppTe
 add_swift_sources(ui_tests_group, app_ui_tests_target, ROOT.join('Tests/VolumeArcAppUITests'))
 add_swift_sources(perf_tests_group, app_perf_tests_target, ROOT.join('Tests/VolumeArcAppPerfTests'))
 add_resource(ui_tests_group, app_ui_tests_target, 'VolumeArcTests.storekit')
+# VOL-142: the same StoreKit configuration powers `SKTestSession`-based
+# unit tests under `Tests/VolumeArcAppTests/`. Reuse the existing
+# `PBXFileReference` rather than creating a second one — same file on
+# disk, just present in both test bundles at build time.
+storekit_resource_ref = ui_tests_group.find_file_by_path('VolumeArcTests.storekit')
+app_tests_target.resources_build_phase.add_file_reference(storekit_resource_ref, true)
 add_resource(app_group, app_target, 'PrivacyInfo.xcprivacy')
 add_resource(watch_group, watch_target, 'PrivacyInfo.xcprivacy')
 add_resource(watch_widgets_group, watch_widgets_target, 'PrivacyInfo.xcprivacy')
