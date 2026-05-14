@@ -175,17 +175,19 @@ These are the failure shapes most likely to fire alerts based on our current arc
 
 See [`docs/RELEASE.md`](RELEASE.md#rollback) for the canonical mechanic. The short version:
 
-- **TestFlight**: re-submit the prior build to the public group via `fastlane ios rollback` (Phase 2 — VOL-156 ticket). For now, manually re-submit via ASC's TestFlight tab.
-- **App Store**: there is no automated rollback. The fastest mitigation is to ship a hotfix (see RELEASE.md "Hotfix process"). For SEV1 only, the operator may walk through ASC's "Phased Release" pause flow to slow the bleed while a hotfix is in flight.
+- **TestFlight** (VOL-178): run `bundle exec fastlane ios rollback build:<N> reason:"<one sentence>" severity:SEV2`. The lane validates the target build, prints the operator walk-through for the App Store Connect UI swap, and auto-appends an entry to `docs/incident-log.md`.
+- **App Store**: there is no automated rollback. The fastest mitigation is to ship a hotfix (see RELEASE.md "Hotfix process"). For SEV1, file an "Expedited review request" at [developer.apple.com/contact/app-store/?topic=expedite](https://developer.apple.com/contact/app-store/?topic=expedite) and submit the hotfix via `fastlane ios release` pointing at the rollback target. The operator may also walk through ASC's "Phased Release" pause flow to slow the bleed while the hotfix is in review.
 
-After every rollback, append an entry to `docs/incident-log.md` (Phase 2) with the date, build that was rolled back, what triggered it, and the linked postmortem.
+After every rollback, the `fastlane ios rollback` lane auto-appends an entry to [`docs/incident-log.md`](incident-log.md). For manual rollbacks (App Store, or partial swaps outside the lane), append the entry by hand using the same heading shape.
 
-## VOL-156 Phase 2 (deferred)
+## VOL-156 Phase 2 progress
 
-This Phase 1 PR is documentation only. Phase 2 wires the operational pieces:
+Phase 1 (PR #162) shipped this document. Phase 2 lands the operational pieces; tracking ticket [VOL-178](https://linear.app/mabry-ventures/issue/VOL-178).
 
-- Sentry alert rules (the `crash-free-sessions < 99.5%` rule needs Sentry-admin access to configure).
-- `fastlane ios rollback` lane (re-submit prior TestFlight build).
-- `docs/incident-log.md` template + an entry for the May 10 self-hosted runner iOS-26.4 incident (retroactive).
-- PagerDuty / Slack webhook wiring for the alert rules.
-- A pre-release dry-run drill where the on-call walks through the runbook against a synthesized SEV2.
+| Piece | Status | Landed in |
+|---|---|---|
+| `fastlane ios rollback` lane | ✅ Shipped | PR #167 (VOL-178 Phase 2A) |
+| `docs/incident-log.md` template + retroactive entries | ✅ Shipped | PR #167 (VOL-178 Phase 2A) |
+| Sentry alert rules (crash-free-sessions, new-fingerprint, release-health) | ⏳ Blocked on Sentry-admin access | tracked in VOL-178 |
+| PagerDuty + Slack webhook wiring | ⏳ Blocked on PagerDuty/Slack admin setup | tracked in VOL-178 |
+| Pre-release dry-run drill | ⏳ Pending — runs after the above land | tracked in VOL-178 |
