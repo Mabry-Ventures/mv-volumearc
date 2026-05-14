@@ -113,8 +113,20 @@ The `Last template-run` and `Last response-run` columns are hand-updated when yo
 
 One directory feeds two consumers. The XCTest bundle reads them as a bundled folder reference (`Bundle(for:).url(forResource: "CoachEvalFixtures")`), and `scripts/run_coach_evals.sh` reads them directly from the repo. A top-level `Tests/Evals/` location keeps them out of the platform-specific test bundle path without orphaning them from the rest of the Tests tree. The Xcode project generator wires the folder in as a test-target resource so changes to the fixtures are always part of the build graph.
 
-## Future work
+## Nightly CI (VOL-147)
 
-- **Nightly CI** — wire `scripts/run_coach_evals.sh` into a scheduled workflow that uploads `summary.json` + per-fixture response bodies to the workflow artifacts. Open as a follow-up ticket after VOL-100 lands.
+The response-layer eval harness runs on a cron at **07:00 UTC daily** via [`.github/workflows/coach-evals-nightly.yml`](../.github/workflows/coach-evals-nightly.yml). The job:
+
+1. Pre-flights `curl` + `jq` + `openssl` on the self-hosted runner.
+2. Runs `scripts/run_coach_evals.sh` against the production relay with the `coach-eval-nightly` device principal (using the `VOLUMEARC_RELAY_SIGNING_KEY` repo secret).
+3. Parses the resulting `summary.json` and appends a `{timestamp, sha, run_id, total, passed, failed}` record to [`docs/coach-eval-trend.json`](coach-eval-trend.json) — the trend file is committed back to `main` only on cron runs (mirrors VOL-166's `docs/coverage-trend.json` pattern).
+4. Uploads the full per-fixture response bodies + `summary.json` as a workflow artifact (`coach-eval-results-<run_id>`), retained 30 days.
+5. Fails the job on any fixture-level regression so the cron-failure email surfaces it.
+
+Manual operator runs use `workflow_dispatch` with an optional `relay_url` input to point at staging. Manual dispatch runs **do not** commit to the trend file.
+
+### Future work
+
+- **Linear regression ticket on fixture failure** — currently the cron-failure email is the only signal. Once Slack notifications land (VOL-177 Phase 2B), wire a Slack webhook for the same regression channel, and open a `coach-eval-regression`-labeled Linear ticket on first failure of a given fixture so drift is owned.
 - **Response-quality golden replay** — record a reference response per fixture once the prompt is locked, run a semantic-similarity check against it on each nightly run, and flag drift above a threshold. Needs a cheap embedding pipeline that doesn't round-trip to Gemini.
 - **Multi-tier evals** — the current suite hits only the `flash-lite` tier. Add a flag to the shell script to run the same fixtures against `pro` so pricing-model-budget trade-offs are visible.
