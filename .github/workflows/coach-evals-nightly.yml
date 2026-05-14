@@ -1,0 +1,199 @@
+name: Coach Evals (nightly)
+
+# VOL-147: nightly response-layer coach eval CI.
+#
+# Runs `scripts/run_coach_evals.sh` against the live relay with HMAC
+# signing and the 20 fixtures under `Tests/Evals/CoachEvalFixtures/`.
+# The harness asserts response-quality properties (sentence cap,
+# numeric grounding, banned phrases, pain-signal flagging) that the
+# Apple-target unit tests cannot exercise — those would require an
+# in-process Gemini stub. This workflow exists so prompt drift,
+# upstream Gemini model changes, or relay regressions surface within
+# 24h instead of when a human notices a coach reply went off the
+# rails.
+#
+# Schedule + triggers:
+# - Daily cron at 07:00 UTC (one window per day; the relay's Gemini
+#   budget is small and burst-sensitive).
+# - Manual dispatch with optional `relay_url` override so an operator
+#   can re-run against staging before promoting a new prompt.
+#
+# Deliberately NOT triggered on PRs:
+# - Burns Gemini API budget on every PR push, with very little
+#   incremental signal (model behavior is mostly stable across the
+#   sub-hour windows of the PR life-cycle).
+# - The repo's PR gate is build + unit/UI tests + AI code review;
+#   adding a live-relay smoke would couple PR turnaround time to
+#   third-party API latency.
+#
+# Slack failure notifications (VOL-177 Phase 2B) will follow once
+# `SLACK_BOT_TOKEN` is configured at the repo level.
+
+on:
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+    inputs:
+      relay_url:
+        description: Optional override for VOLUMEARC_RELAY_BASE_URL (defaults to production relay)
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  issues: write  # so a future VOL-147 follow-up can open a regression Linear ticket via gh
+  pull-requests: read
+
+concurrency:
+  group: coach-evals-${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  coach-evals:
+    name: Coach evals (20 fixtures)
+    # Per repo policy (docs/CONTRIBUTING.md "Runner policy: zero
+    # GitHub-hosted jobs"): every workflow runs on the self-hosted
+    # mv-volumearc-runner. The eval harness is a bash + curl + jq +
+    # openssl pipeline; the self-hosted runner has all four in the
+    # Homebrew toolchain that VOL-180 / VOL-173 already document.
+    runs-on: [self-hosted, mv-volumearc-runner]
+    timeout-minutes: 30
+
+    env:
+      PATH: /opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Pre-flight
+        # Same shape as ci.yml Pre-flight — assert the binaries the
+        # harness shells to (curl + jq + openssl). The latter three
+        # are stable system binaries on macOS but `jq` is a Homebrew
+        # tool (VOL-180-era documentation), so probe explicitly.
+        run: |
+          set -euo pipefail
+          command -v curl >/dev/null || { echo "::error::curl missing"; exit 1; }
+          command -v jq >/dev/null || { echo "::error::jq missing (brew install jq)"; exit 1; }
+          command -v openssl >/dev/null || { echo "::error::openssl missing"; exit 1; }
+          echo "Pre-flight OK"
+        shell: bash
+
+      - name: Run coach evals
+        id: evals
+        env:
+          # The relay signing key is the only secret required — the
+          # eval device ID is hard-coded to a known principal so the
+          # relay's per-device rate limit doesn't dance.
+          VOLUMEARC_RELAY_SIGNING_KEY: ${{ secrets.VOLUMEARC_RELAY_SIGNING_KEY }}
+          VOLUMEARC_EVAL_DEVICE_ID: coach-eval-nightly
+          # Manual dispatch can override the relay (e.g. staging) via
+          # the workflow input; cron always hits production. Empty
+          # input falls back to the script's default URL.
+          VOLUMEARC_RELAY_BASE_URL: ${{ github.event.inputs.relay_url || '' }}
+          VOLUMEARC_EVAL_OUTPUT_DIR: ${{ runner.temp }}/coach-evals
+        run: |
+          set -uo pipefail
+          if [[ -z "${VOLUMEARC_RELAY_SIGNING_KEY:-}" ]]; then
+            echo "::error::VOLUMEARC_RELAY_SIGNING_KEY secret not configured in repo"
+            exit 78  # EX_CONFIG — surfaces as a clear "configuration" failure mode
+          fi
+          # `|| true` so a non-zero exit (= one or more fixtures failed
+          # assertions) doesn't kill the step before we publish the
+          # artifact. The subsequent step parses summary.json and
+          # re-fails the job with a structured message.
+          bash scripts/run_coach_evals.sh || true
+
+          # Surface the latest run dir as a step output for the next
+          # step's parsing logic. The script timestamps each run, so
+          # we resolve the newest entry under the parent dir.
+          latest="$(ls -dt "$VOLUMEARC_EVAL_OUTPUT_DIR"/*/ 2>/dev/null | head -1)"
+          if [[ -z "$latest" ]]; then
+            echo "::error::run_coach_evals.sh produced no output directory"
+            exit 1
+          fi
+          echo "run_dir=$latest" >> "$GITHUB_OUTPUT"
+          echo "Latest run dir: $latest"
+        shell: bash
+
+      - name: Parse summary + append trend
+        id: trend
+        run: |
+          set -euo pipefail
+          run_dir="${{ steps.evals.outputs.run_dir }}"
+          summary="$run_dir/summary.json"
+          if [[ ! -f "$summary" ]]; then
+            echo "::error::summary.json missing at $summary"
+            exit 1
+          fi
+
+          total=$(jq -r '.total' "$summary")
+          passed=$(jq -r '.passed' "$summary")
+          failed=$(jq -r '.failed' "$summary")
+          echo "Eval results: $passed/$total passed, $failed failed"
+
+          # Append to docs/coach-eval-trend.json (parallel to the
+          # docs/coverage-trend.json file VOL-166 wired up). The trend
+          # commit only fires when the job is invoked from `main`
+          # via cron — workflow_dispatch from a feature branch should
+          # not modify the trend file.
+          trend_file="docs/coach-eval-trend.json"
+          if [[ ! -f "$trend_file" ]]; then
+            echo '{"records":[]}' > "$trend_file"
+          fi
+          timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          record=$(jq -n \
+            --arg ts "$timestamp" \
+            --arg sha "${GITHUB_SHA}" \
+            --arg run_id "${GITHUB_RUN_ID}" \
+            --argjson total "$total" \
+            --argjson passed "$passed" \
+            --argjson failed "$failed" \
+            '{timestamp: $ts, sha: $sha, run_id: $run_id, total: $total, passed: $passed, failed: $failed}')
+
+          # Append while preserving prior records.
+          tmp=$(mktemp)
+          jq --argjson r "$record" '.records += [$r]' "$trend_file" > "$tmp"
+          mv "$tmp" "$trend_file"
+
+          # Re-fail the job if any fixture failed. The trend record
+          # captures the result regardless.
+          if [[ "$failed" -gt 0 ]]; then
+            echo "::warning::$failed of $total coach-eval fixtures failed assertions"
+            # Future: open a regression Linear ticket here (VOL-147
+            # AC #5). For v1 we just fail the workflow so the cron
+            # email and the GitHub Actions Security tab surface it.
+            exit 1
+          fi
+        shell: bash
+
+      - name: Upload eval results artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coach-eval-results-${{ github.run_id }}
+          path: ${{ runner.temp }}/coach-evals/
+          retention-days: 30
+
+      - name: Commit trend update on main cron
+        # Only the daily cron on main writes to the tracked trend file.
+        # workflow_dispatch on a feature branch (operator staging
+        # checks) doesn't commit. Mirrors VOL-166's coverage-trend
+        # commit pattern.
+        if: |
+          github.event_name == 'schedule' &&
+          github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet docs/coach-eval-trend.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add docs/coach-eval-trend.json
+            git commit -m "chore(coach-evals): append nightly trend record"
+            git push
+          else
+            echo "No trend changes to commit (no-op record)"
+          fi
+        shell: bash
