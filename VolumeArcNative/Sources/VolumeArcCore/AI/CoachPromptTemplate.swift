@@ -171,16 +171,27 @@ public enum CoachPromptTemplate {
     private static func intentEnvelope(_ intent: CoachIntent) -> String {
         switch intent {
         case .progression:
+            // VOL-145: when a "Recovery (Apple Health)" section is
+            // present, recovery signals should gate the push call
+            // even when bar-speed/RPE supports it.
             return """
-            The athlete is asking about pushing load or volume. Anchor the answer in
-            the most recent session's RPE and bar speed signals from the context.
-            Recommend a small, concrete jump only if the prior set moved cleanly;
-            otherwise hold and explain why.
+            The athlete is asking about pushing load or volume. Anchor the answer
+            in the most recent session's RPE and bar speed signals from the
+            context. If a "Recovery (Apple Health)" section is present and shows
+            HRV up vs baseline + sleep ahead of plan, that supports a push;
+            HRV down or sleep debt >2h is a reason to hold even when the
+            previous set moved cleanly. Recommend a small, concrete jump only
+            if the prior set moved cleanly AND recovery signals don't flag
+            otherwise; else hold and explain why.
             """
         case .deload:
+            // VOL-145: HK signals can independently justify a deload
+            // even when the training-history factors look benign.
             return """
             The athlete is considering a deload. Use readiness score + recent RPE
-            trend from the context to decide. If a deload is warranted, name the
+            trend from the context to decide. If a "Recovery (Apple Health)"
+            section shows HRV down >5% from baseline or sleep debt >3h, that's a
+            strong deload signal in itself. If a deload is warranted, name the
             specific intensity and volume cut. If not, propose a lighter top set
             and reassess tomorrow.
             """
@@ -191,10 +202,16 @@ public enum CoachPromptTemplate {
             anything that looks like a pain or injury signal.
             """
         case .recovery:
+            // VOL-145: HK section, when present, is the dominant signal
+            // because the question is itself about recovery.
             return """
             The athlete is asking about readiness or recovery. Read the readiness
-            score, recent session count, and average RPE from the context, then
-            give a short read on whether to push, hold, or back off today.
+            score, recent session count, and average RPE from the context. If a
+            "Recovery (Apple Health)" section is present, ground the read in the
+            specific signals there — HRV delta vs baseline, sleep debt, and
+            7-day strength load — before falling back to the training-history
+            signals. Give a short read on whether to push, hold, or back off
+            today. Name the dominant signal driving your call.
             """
         case .substitution:
             return """
@@ -247,6 +264,13 @@ public struct CoachContext: Sendable {
     public let lastSessionSummary: String?
     public let recentMemories: [String]
 
+    /// VOL-145 Phase 1A: HealthKit-derived recovery signals. Optional
+    /// so the prompt-block surface stays clean when the user hasn't
+    /// granted HealthKit access or the App-layer reader hasn't been
+    /// wired yet (Phase 1B). Numeric aggregates only — never PII —
+    /// so the strict-privacy-mode redaction path leaves these alone.
+    public let recovery: RecoveryContext?
+
     public init(
         athleteName: String,
         advancementLevel: String,
@@ -257,7 +281,8 @@ public struct CoachContext: Sendable {
         recentSessionCount: Int = 0,
         averageRPE: Double = 0,
         lastSessionSummary: String? = nil,
-        recentMemories: [String] = []
+        recentMemories: [String] = [],
+        recovery: RecoveryContext? = nil
     ) {
         self.athleteName = athleteName
         self.advancementLevel = advancementLevel
@@ -269,6 +294,7 @@ public struct CoachContext: Sendable {
         self.averageRPE = averageRPE
         self.lastSessionSummary = lastSessionSummary
         self.recentMemories = recentMemories
+        self.recovery = recovery
     }
 
     /// Format the context as a prompt block, redacting PII in strict privacy mode.
@@ -295,6 +321,18 @@ public struct CoachContext: Sendable {
             }
             if let lastSessionSummary {
                 lines.append("- Last session: \(lastSessionSummary)")
+            }
+        }
+
+        // VOL-145 Phase 1A: append the HK-derived recovery section
+        // when present. Numeric aggregates only — safe under strict
+        // privacy mode. `asPromptBullets()` returns empty when no
+        // fields are populated so we skip the orphan section header.
+        if let recovery, recovery.hasAnyData {
+            let bullets = recovery.asPromptBullets()
+            if !bullets.isEmpty {
+                lines.append("")
+                lines.append(bullets)
             }
         }
 
