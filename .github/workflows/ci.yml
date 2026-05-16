@@ -7,9 +7,21 @@ on:
   pull_request:
     branches: [main]
 
+# VOL-184: shared concurrency group with `trufflehog.yml` and
+# `ai-review-gate.yml`. All three workflows target the same
+# `[self-hosted, mv-volumearc-runner]` label, and when 3+ jobs
+# land within 30s they race on the runner's `_actions/` cache —
+# `actions/checkout@v6` and `actions/github-script@v9` exit
+# silently with a stale workspace, producing 3-6s "stale-SHA"
+# failures (observed 2026-05-16 03:51 UTC across PRs #175, #176,
+# #178: all three saw the same stale SHA b88ed2cd…). Shared group
+# + cancel-in-progress: false serializes the workflows so the
+# `_actions/` cache only has one writer at a time. Trade-off:
+# wall-clock goes from max(T) to sum(T), typically ~15% slower,
+# but eliminates the entire failure class.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: mv-volumearc-actions-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   # VOL-88: the current GitHub runner inventory exposes the dedicated

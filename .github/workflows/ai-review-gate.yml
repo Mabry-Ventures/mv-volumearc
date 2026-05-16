@@ -15,8 +15,16 @@ permissions:
   pull-requests: write
   issues: write
 
+# VOL-184: shared concurrency group with `ci.yml` and `trufflehog.yml`
+# to prevent `_actions/` cache races on the self-hosted runner. See
+# ci.yml's concurrency block for the full rationale. The group key
+# changed from PR-number-based to ref-based so the three workflows
+# can interlock on the same key. `cancel-in-progress: false` is
+# preserved — we want a stale-event re-trigger to queue, not cancel,
+# since the gate jobs are idempotent and the bots may have signaled
+# during the queue wait.
 concurrency:
-  group: ai-review-gate-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  group: mv-volumearc-actions-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
