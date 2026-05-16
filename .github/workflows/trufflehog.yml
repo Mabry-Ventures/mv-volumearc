@@ -41,9 +41,15 @@ permissions:
   contents: read
   security-events: write
 
+# VOL-184: shared concurrency group with `ci.yml` and
+# `ai-review-gate.yml` to prevent `_actions/` cache races on the
+# self-hosted runner. See ci.yml's concurrency block for the full
+# rationale. Switching from `cancel-in-progress: true` to `false`
+# means rapid retriggers now queue instead of cancel — minor wall-
+# clock cost, no more silent stale-SHA failures.
 concurrency:
-  group: trufflehog-${{ github.ref }}
-  cancel-in-progress: true
+  group: mv-volumearc-actions-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   scan:
@@ -65,6 +71,22 @@ jobs:
           # then `git fetch` the base ref so trufflehog's --since-commit
           # has both endpoints locally.
           fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 0 }}
+
+      - name: Verify checkout SHA matches GITHUB_SHA (cache-race detector)
+        # VOL-184 belt-and-suspenders: if the `_actions/` cache race
+        # ever slips through the workflow-level concurrency group
+        # (e.g. a runner with stale state across an upgrade), this
+        # converts the silent "wrong-SHA workspace" mode into a loud,
+        # immediate fail. ci.yml has the same check on its Build & Test
+        # job; this mirrors it for the secret-scan path.
+        run: |
+          set -euo pipefail
+          test -d .git || { echo "::error::.git directory missing after checkout"; exit 1; }
+          actual=$(git rev-parse HEAD)
+          if [ "$actual" != "$GITHUB_SHA" ]; then
+            echo "::error::Checkout SHA mismatch — actions cache race. actual=$actual expected=$GITHUB_SHA"
+            exit 1
+          fi
 
       - name: Verify trufflehog binary
         # The Homebrew formula `trufflehog` should be pre-installed on
