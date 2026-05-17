@@ -494,7 +494,7 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
 private struct FixedRecoveryReader: RecoveryReader {
     let value: RecoveryContext
 
-    func currentRecovery(now: Date) async throws -> RecoveryContext {
+    func currentRecovery(now: Date) async -> RecoveryContext {
         value
     }
 }

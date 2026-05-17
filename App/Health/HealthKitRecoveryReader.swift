@@ -45,19 +45,29 @@ public struct HealthKitRecoveryReader: RecoveryReader {
         self.strengthActivityType = strengthActivityType
     }
 
-    public func currentRecovery(now: Date = .now) async throws -> RecoveryContext {
+    public func currentRecovery(now: Date = .now) async -> RecoveryContext {
         guard HKHealthStore.isHealthDataAvailable() else {
             return RecoveryContext()
         }
 
-        async let hrv7 = meanHRV(overDays: 7, now: now)
-        async let hrv28 = meanHRV(overDays: 28, now: now)
-        async let sleep7 = totalSleepHours(overDays: 7, now: now)
-        async let load = strengthLoad(overDays: 7, now: now)
+        // Each underlying query is wrapped in `try?` so HK auth /
+        // sample-fetch errors degrade to nil for that specific field
+        // rather than throwing out of the reader and forcing the
+        // dashboard to handle a UI-level error. Empty context →
+        // `RecoveryContext.hasAnyData == false` → coach prompt omits
+        // the recovery section gracefully.
+        async let hrv7 = try? meanHRV(overDays: 7, now: now)
+        async let hrv28 = try? meanHRV(overDays: 28, now: now)
+        async let sleep7 = try? totalSleepHours(overDays: 7, now: now)
+        async let load = try? strengthLoad(overDays: 7, now: now)
 
-        let (mean7Day, baseline, sleepTotal, strengthSummary) = try await (
-            hrv7, hrv28, sleep7, load
-        )
+        // The nested optional comes from `try?` returning `Double??`;
+        // flatten via `.flatMap { $0 }` so the field comes out as a
+        // single-layer optional matching `RecoveryContext`'s schema.
+        let mean7Day = (await hrv7).flatMap { $0 }
+        let baseline = (await hrv28).flatMap { $0 }
+        let sleepTotal = (await sleep7).flatMap { $0 }
+        let strengthSummary = (await load).flatMap { $0 }
 
         let deltaPercent: Double? = {
             guard let mean7Day, let baseline, baseline > 0 else { return nil }

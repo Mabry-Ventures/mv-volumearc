@@ -11,12 +11,16 @@ import Foundation
 /// unavailable (macOS test host, unauthorized device, watchOS-only
 /// build) without any caller-side branching.
 public protocol RecoveryReader: Sendable {
-    /// Produce the current recovery snapshot. Implementations must be
-    /// non-throwing-on-no-data — return `RecoveryContext()` (or a
-    /// partial context with only some fields populated) when HK has
-    /// no samples in the relevant window. The only throw should be
-    /// HK availability/authorization errors.
-    func currentRecovery(now: Date) async throws -> RecoveryContext
+    /// Produce the current recovery snapshot. Implementations are
+    /// expected to absorb their own errors (HK availability, auth
+    /// failures, sample-fetch failures) and return `RecoveryContext()`
+    /// or a partial context — never throw. The dashboard treats an
+    /// empty context as "no recovery section" rather than surfacing
+    /// a UI failure. Dropping `throws` from the protocol surface
+    /// matches the practical behavior implementations already follow
+    /// and lets the Swift compiler reason about call-site
+    /// existentials without typed-throws inference quirks.
+    func currentRecovery(now: Date) async -> RecoveryContext
 }
 
 /// Default no-op reader. Returns an empty `RecoveryContext`, which
@@ -26,7 +30,7 @@ public protocol RecoveryReader: Sendable {
 public struct UnavailableRecoveryReader: RecoveryReader {
     public init() {}
 
-    public func currentRecovery(now: Date = .now) async throws -> RecoveryContext {
+    public func currentRecovery(now: Date = .now) async -> RecoveryContext {
         RecoveryContext()
     }
 }

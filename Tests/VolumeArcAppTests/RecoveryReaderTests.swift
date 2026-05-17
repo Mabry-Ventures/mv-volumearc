@@ -12,18 +12,18 @@ final class RecoveryReaderTests: XCTestCase {
 
     // MARK: - UnavailableRecoveryReader
 
-    func testUnavailableRecoveryReader_returnsEmptyContext() async throws {
+    func testUnavailableRecoveryReader_returnsEmptyContext() async {
         let reader = UnavailableRecoveryReader()
-        let context = try await reader.currentRecovery(now: .now)
+        let context = await reader.currentRecovery(now: .now)
         XCTAssertFalse(
             context.hasAnyData,
             "UnavailableRecoveryReader must return a context that gates the prompt's recovery section off"
         )
     }
 
-    func testUnavailableRecoveryReader_returnsContextWithAllNilFields() async throws {
+    func testUnavailableRecoveryReader_returnsContextWithAllNilFields() async {
         let reader = UnavailableRecoveryReader()
-        let context = try await reader.currentRecovery(now: .now)
+        let context = await reader.currentRecovery(now: .now)
 
         XCTAssertNil(context.hrvMean7Day)
         XCTAssertNil(context.hrvBaseline28Day)
@@ -36,21 +36,21 @@ final class RecoveryReaderTests: XCTestCase {
         XCTAssertNil(context.appleWatchVitalsScore)
     }
 
-    func testUnavailableRecoveryReader_isStableAcrossInvocations() async throws {
+    func testUnavailableRecoveryReader_isStableAcrossInvocations() async {
         // The empty contract is intentionally deterministic — the
         // dashboard's `refreshRecovery()` can call it repeatedly
         // without expecting any side effects or stateful drift.
         let reader = UnavailableRecoveryReader()
-        let first = try await reader.currentRecovery(now: .now)
-        let second = try await reader.currentRecovery(now: .now)
+        let first = await reader.currentRecovery(now: .now)
+        let second = await reader.currentRecovery(now: .now)
         XCTAssertEqual(first, second)
     }
 
     // MARK: - Protocol conformance via local fake
 
-    func testProtocolSeam_allowsCustomReaderToPropagateData() async throws {
+    func testProtocolSeam_allowsCustomReaderToPropagateData() async {
         struct PinnedReader: RecoveryReader {
-            func currentRecovery(now: Date) async throws -> RecoveryContext {
+            func currentRecovery(now: Date) async -> RecoveryContext {
                 RecoveryContext(
                     hrvMean7Day: 60,
                     hrvBaseline28Day: 55,
@@ -61,7 +61,7 @@ final class RecoveryReaderTests: XCTestCase {
                 )
             }
         }
-        let context = try await PinnedReader().currentRecovery(now: .now)
+        let context = await PinnedReader().currentRecovery(now: .now)
         XCTAssertTrue(context.hasAnyData)
         XCTAssertEqual(context.hrvMean7Day, 60)
         XCTAssertEqual(context.sleepDebtHours, 2)

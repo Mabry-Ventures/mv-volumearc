@@ -43,8 +43,11 @@ public final class WorkoutDashboardModel: ObservableObject {
     /// and surfaced as the Today-tab `VARecoveryChip`. Updated on
     /// `refresh()` via the injected `RecoveryReader`. Defaults to an
     /// empty context so views and the prompt block gracefully omit
-    /// the recovery surface when HK is unavailable.
-    @Published public private(set) var recovery: RecoveryContext = RecoveryContext()
+    /// the recovery surface when HK is unavailable. `internal(set)`
+    /// rather than `private(set)` so the extracted `+CoachContext`
+    /// extension can update it on refresh — still effectively
+    /// non-writeable from outside VolumeArcCore.
+    @Published public internal(set) var recovery: RecoveryContext = RecoveryContext()
 
     /// VOL-112: most-recent Watch payload kind, surfaced for the
     /// deterministic-mode debug overlay so XCUITests can assert the

@@ -10,24 +10,12 @@ import Foundation
 extension WorkoutDashboardModel {
 
     /// Pull the latest recovery snapshot from the injected
-    /// `RecoveryReader`. Errors are swallowed at the model level —
-    /// when HK is unavailable or unauthorized the reader is expected
-    /// to either return an empty context or throw an authorization
-    /// error which we degrade to "no recovery section" rather than
-    /// surface as a UI failure. The error gets recorded for
-    /// observability.
+    /// `RecoveryReader`. Per the protocol contract, implementations
+    /// absorb their own HK errors and return an empty / partial
+    /// `RecoveryContext` rather than throwing — the dashboard treats
+    /// the result as "no recovery section" when `hasAnyData == false`.
     func refreshRecovery() async {
-        do {
-            self.recovery = try await recoveryReader.currentRecovery(now: .now)
-        } catch {
-            self.recovery = RecoveryContext()
-            telemetrySink.record(TelemetryEvent(
-                category: "health",
-                name: "recovery_read_failed",
-                severity: .warning,
-                message: "RecoveryReader failed: \(error.localizedDescription)"
-            ))
-        }
+        self.recovery = await recoveryReader.currentRecovery(now: .now)
     }
 
     /// Build the grounded context block for coach prompts using real
