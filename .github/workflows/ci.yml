@@ -91,20 +91,16 @@ jobs:
       # test + coverage runs. The main checkout itself isn't risky to
       # tolerate failures on — if it fails, every subsequent build/test
       # step will fail loudly with missing source-tree errors.
+      #
+      # VOL-186: the post-2026-05-17 fleet `JOB_STARTED` hook does
+      # ghost-SHA workspace detection + auto-wipe at the host level
+      # before any step runs, so the prior "Verify checkout succeeded"
+      # step (which compared `git rev-parse HEAD` to GITHUB_SHA) is
+      # gone. Workspace SHA integrity is now a host invariant, not a
+      # per-workflow defense.
       - name: Checkout
         continue-on-error: true
         uses: actions/checkout@v6
-
-      - name: Verify checkout succeeded
-        run: |
-          set -euo pipefail
-          test -d .git || { echo "::error::.git directory missing after checkout"; exit 1; }
-          head_sha=$(git rev-parse HEAD)
-          if [ "$head_sha" != "$GITHUB_SHA" ]; then
-            echo "::error::Checkout HEAD $head_sha does not match GITHUB_SHA $GITHUB_SHA"
-            exit 1
-          fi
-        shell: bash
 
       - name: Prepare Ruby toolchain
         # VOL-109/VOL-110 PR unblock: runner images may have
