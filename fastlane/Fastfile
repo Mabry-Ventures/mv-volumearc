@@ -7,6 +7,63 @@ before_all do
   sh("ruby", "../scripts/generate_xcode_project.rb")
 end
 
+# VOL-150: tester-facing What-To-Test note for `upload_to_testflight`.
+# Returns a bulleted summary of commit subjects between the previous
+# `v*` tag and HEAD. Caps the body at 3800 chars (Apple's 4000 ceiling
+# minus headroom for any footer ASC adds) with a `...` truncation
+# suffix. Falls back to a generic message when no prior tag exists
+# (first TestFlight build of a fresh checkout) or when the git
+# command fails for any reason.
+#
+# Why per-commit (not per-merged-PR via gh API): squash-merged PRs
+# already land as one commit each, so `git log --pretty=format` gives
+# the same granularity as a `gh pr list --state merged` query without
+# the GitHub API round-trip + auth dependency. The trade-off: the
+# subject line is whatever was in the squash commit message rather
+# than the PR title, but the repo's PR-template convention keeps
+# those aligned in practice.
+def build_what_to_test_note(max_chars: 3800)
+  default_note = "Internal TestFlight build. See the PR list at " \
+    "https://github.com/Mabry-Ventures/mv-volumearc/pulls?q=is%3Apr+is%3Amerged+sort%3Aupdated-desc " \
+    "for change details."
+
+  previous_tag = begin
+    raw = sh("git", "describe", "--tags", "--abbrev=0", "--match", "v*", "HEAD^", log: false).strip
+    raw.empty? ? nil : raw
+  rescue StandardError
+    nil
+  end
+
+  range = previous_tag ? "#{previous_tag}..HEAD" : "HEAD"
+  commits_raw = begin
+    sh("git", "log", "--pretty=format:- %s", range, log: false).strip
+  rescue StandardError
+    ""
+  end
+
+  if commits_raw.empty?
+    return default_note
+  end
+
+  bullets = commits_raw.lines.map(&:rstrip).reject(&:empty?).uniq
+  if bullets.empty?
+    return default_note
+  end
+
+  header = previous_tag ? "What's new since #{previous_tag}:" : "What's new in this build:"
+  body = ([header] + bullets).join("\n")
+
+  if body.length > max_chars
+    # Truncate on a line boundary so the bullet that crosses the
+    # ceiling isn't left half-rendered in the tester UI.
+    trimmed = body[0, max_chars - 4]
+    last_newline = trimmed.rindex("\n") || trimmed.length
+    body = trimmed[0, last_newline] + "\n..."
+  end
+
+  body
+end
+
 platform :ios do
   desc "Run tests on iPhone 17 simulator"
   lane :test do
@@ -138,6 +195,18 @@ platform :ios do
       UI.success("VOL-133: dSYMs uploaded; manifest at #{manifest_path}")
     end
 
+    # VOL-150: build the What-To-Test note from the merged-PR titles
+    # since the previous tag. `pilot` accepts a `changelog:` parameter
+    # that surfaces verbatim in the TestFlight tester UI under "What
+    # to Test." Without this, testers see a generic build with no
+    # guidance on what changed or what to focus on. Source: every
+    # commit subject between the previous `v*` tag and HEAD, formatted
+    # as a bulleted list. Squash-merged PRs land as one commit each so
+    # the list is per-PR rather than per-fixup.
+    what_to_test = build_what_to_test_note
+    UI.message("VOL-150: What-To-Test note (#{what_to_test.length} chars):")
+    UI.message(what_to_test)
+
     # VOL-96: wait for App Store Connect build processing instead of
     # fire-and-forget. We previously returned success the moment the
     # upload completed, even if ASC rejected the build during processing
@@ -150,7 +219,13 @@ platform :ios do
         # 30 minute ceiling for App Store Connect processing. If processing
         # exceeds this window we fail loudly rather than silently succeed.
         wait_processing_timeout_duration: 1800,
-        api_key_path: ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+        api_key_path: ENV["APP_STORE_CONNECT_API_KEY_PATH"],
+        # VOL-150: tester-facing release notes for this TestFlight
+        # build. `changelog:` is the documented `pilot` parameter for
+        # the What-To-Test field. Apple caps the body at 4000 chars;
+        # `build_what_to_test_note` enforces a 3800-char ceiling with
+        # a `...` suffix so there's headroom for any footer ASC adds.
+        changelog: what_to_test
       )
     rescue => e
       message = e.message.to_s

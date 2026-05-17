@@ -102,6 +102,17 @@ The site hosts the legal pages that the iOS paywall links to via `App/LegalLinks
 
 Until those pages are live with legal-counsel-reviewed content (VOL-124), App Store submission is blocked under Guideline 3.1.2.
 
+### What-To-Test note (VOL-150)
+
+Every `fastlane ios beta` invocation now generates a tester-facing What-To-Test note from `git log --pretty=format:"- %s" <previous-v-tag>..HEAD` and passes it to `upload_to_testflight` via the `changelog:` parameter. Testers see the bulleted list in the TestFlight app under "What to Test" instead of a generic "internal build" placeholder.
+
+- **Source granularity**: per-commit. Squash-merged PRs land as one commit each, so the list is effectively per-PR. The subject is whatever the squash commit message reads — keep PR titles human-friendly so the auto-generated note doesn't leak `chore: ...` boilerplate to testers.
+- **Length cap**: 3800 characters with a `...` truncation suffix on a line boundary. Apple's documented ceiling is 4000; the 200-char headroom absorbs any footer ASC appends.
+- **No-previous-tag fallback**: a fresh checkout with no prior `v*` tag (or a `git describe` failure) falls back to a generic "see the PR list" message rather than blocking the upload. Same for any `git log` failure.
+- **Manual override**: not currently exposed as a lane flag. If you need to override for a hotfix, run `bundle exec fastlane ios beta` with `changelog:` passed via `--changelog "..."` on the CLI — fastlane's auto-lane-arg shadowing wins over the helper's return value.
+
+Slack notification on a successful TestFlight upload (`#testflight-builds @beta-testers` per VOL-150 AC #4) and the rejection variant (`#dev-alerts`) are deferred to VOL-177 Phase 2B which carries the `SLACK_BOT_TOKEN` repo-secret setup. Until then the workflow log + GitHub Actions email is the notification surface.
+
 ### Wait-for-processing behavior (VOL-96)
 
 `fastlane ios beta` no longer sets `skip_waiting_for_build_processing`. After the `.ipa` is uploaded, Fastlane polls App Store Connect every 30 seconds until the build finishes processing or the **30-minute timeout** elapses (`wait_processing_timeout_duration: 1800`).
