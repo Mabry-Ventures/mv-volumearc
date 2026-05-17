@@ -5,7 +5,7 @@ let package = Package(
     name: "VolumeArcNative",
     platforms: [
         .iOS(.v26),
-        .watchOS("26.4"),
+        .watchOS("26.0"),
     ],
     products: [
         .library(name: "VolumeArcCore", type: .static, targets: ["VolumeArcCore"]),

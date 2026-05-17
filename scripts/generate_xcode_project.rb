@@ -53,7 +53,7 @@ ROOT = Pathname.new(__dir__).join('..').expand_path
 PACKAGE_ROOT = ROOT.join('VolumeArcNative').expand_path
 PROJECT_PATH = ROOT.join('VolumeArcApple.xcodeproj')
 IOS_DEPLOYMENT_TARGET = '26.0'
-WATCHOS_DEPLOYMENT_TARGET = '26.4'
+WATCHOS_DEPLOYMENT_TARGET = '26.0'
 MARKETING_VERSION = File.read(ROOT.join('VERSION')).strip
 # VOL-106: the committed pbxproj must be a pure function of the source tree
 # and this script — no git-derived inputs. Before this, BUILD_NUMBER fell
