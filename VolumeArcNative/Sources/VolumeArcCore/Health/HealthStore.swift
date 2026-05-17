@@ -34,12 +34,17 @@ public enum HealthKitAuthorizationScope {
         "HKWorkoutTypeIdentifier"
     ]
 
-    /// Types the app asks permission to READ on iPhone. Intentionally small:
-    /// only completed workouts, which feed readiness + coach context +
-    /// training history UI. No heart rate, no active energy — no phone-side
-    /// consumer reads them.
+    /// Types the app asks permission to READ on iPhone. Workouts feed
+    /// readiness + coach context + training history UI; HRV (SDNN) and
+    /// sleep analysis feed the VOL-181 `HealthKitRecoveryReader` which
+    /// drives the "Recovery (Apple Health)" section of the coach
+    /// prompt and the Today-tab recovery chip. No heart rate, no
+    /// active energy at phone scope — those are only consumed by the
+    /// watchOS live-workout pipeline.
     public static let phoneReadIdentifiers: Set<String> = [
-        "HKWorkoutTypeIdentifier"
+        "HKWorkoutTypeIdentifier",
+        "HKQuantityTypeIdentifierHeartRateVariabilitySDNN",
+        "HKCategoryTypeIdentifierSleepAnalysis",
     ]
 
     /// Types the app asks permission to READ on Apple Watch. Adds heart rate
@@ -110,7 +115,17 @@ public final class HealthKitRuntimeStore: HealthStore, @unchecked Sendable {
 
     static func phoneReadTypes() -> Set<HKObjectType> {
         // Mirrors `HealthKitAuthorizationScope.phoneReadIdentifiers`.
-        [HKObjectType.workoutType()]
+        var types: Set<HKObjectType> = [HKObjectType.workoutType()]
+        // VOL-181: HRV (SDNN) + sleep analysis are read on iPhone by
+        // `HealthKitRecoveryReader` to populate the coach prompt's
+        // recovery section and the Today-tab recovery chip.
+        if let hrv = HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN) {
+            types.insert(hrv)
+        }
+        if let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) {
+            types.insert(sleep)
+        }
+        return types
     }
 
     static func watchReadTypes() -> Set<HKObjectType> {

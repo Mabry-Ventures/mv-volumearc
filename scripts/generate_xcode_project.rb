@@ -168,7 +168,7 @@ configure_target(app_target, bundle_id: 'com.mabryventures.VolumeArc', extra: {
   # declaration in line with the shipped surface.
   'TARGETED_DEVICE_FAMILY' => '1',
   'INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents' => 'YES',
-  'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc reads your completed workouts from Apple Health to show your training history and calculate readiness.',
+  'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc reads your completed workouts, heart-rate variability, and sleep from Apple Health to show your training history, calculate readiness, and let the AI coach reference your recovery trend (HRV vs baseline, sleep debt, weekly strength load).',
   'INFOPLIST_KEY_NSHealthUpdateUsageDescription' => 'VolumeArc writes completed workouts so your training history stays in sync with Apple Health.',
   'INFOPLIST_KEY_NSMicrophoneUsageDescription' => 'VolumeArc uses the microphone for voice coaching requests and voice workout logging.',
   'INFOPLIST_KEY_NSSpeechRecognitionUsageDescription' => 'VolumeArc uses speech recognition to understand live coaching requests and voice workout notes.',

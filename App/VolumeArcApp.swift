@@ -331,7 +331,11 @@ struct VolumeArcApp: App {
                 operationalSignals: startupSignals,
                 subscriptionStore: subscriptionStore,
                 voiceCoach: voiceCoach,
-                featureFlags: featureFlags
+                featureFlags: featureFlags,
+                // VOL-181 Phase 1B: HealthKit-backed recovery reader.
+                // Cached snapshot drives the Today-tab recovery chip
+                // and the coach prompt's recovery section.
+                recoveryReader: Self.makeRecoveryReader()
             )
         } else {
             let syncEngine = CloudSyncCoordinator(

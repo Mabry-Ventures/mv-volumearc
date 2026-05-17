@@ -41,14 +41,13 @@ permissions:
   contents: read
   security-events: write
 
-# VOL-184: shared concurrency group with `ci.yml` and
-# `ai-review-gate.yml` to prevent `_actions/` cache races on the
-# self-hosted runner. See ci.yml's concurrency block for the full
-# rationale. Switching from `cancel-in-progress: true` to `false`
-# means rapid retriggers now queue instead of cancel — minor wall-
-# clock cost, no more silent stale-SHA failures.
+# VOL-184/VOL-192: workflow-specific concurrency group. See ci.yml's
+# concurrency block for the full rationale — sharing the group across
+# ci/trufflehog/ai-review-gate caused gate-cascade cancellations of
+# in-flight CI runs (VOL-192). Each workflow now gets its own per-ref
+# group with `cancel-in-progress: false`.
 concurrency:
-  group: mv-volumearc-actions-${{ github.ref }}
+  group: trufflehog-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:

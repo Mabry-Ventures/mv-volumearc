@@ -1,0 +1,16 @@
+{
+  "id": "deload-with-low-recovery",
+  "intent": "deload",
+  "question": "I'm beat. Should I deload this week?",
+  "contextBlock": "## Training context\n- Athlete: Sam (intermediate)\n- Readiness: 55/100 — Recovery signals weak, RPE climbing.\n- Next up: Back Squat at 245lb x 5\n- Last 7 days: 5 sessions, avg RPE 8.6\n- Last session: 4 sets at 240lb, RPE 8.8 — bar speed slowing\n\n## Recovery (Apple Health)\n- HRV: 46ms 7-day vs 55ms baseline (-16.4%)\n- Sleep: 48.0h over 7d vs 56.0h target — -8.0h significant deficit\n- Training load (7d strength): 3400kJ across 340min",
+  "style": "motivational",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": true,
+    "mustMentionAny": ["deload", "back off", "cut", "lighter", "rest"],
+    "mustMentionAny2": ["HRV", "sleep", "Apple Health"],
+    "mustNotMention": ["push", "PR", "go heavier"],
+    "toneHint": "confirm-deload-name-the-call"
+  },
+  "notes": "VOL-181: Athlete asking for deload, recovery confirms (HRV down >5%, sleep debt >3h, high weekly load). VOL-145 deload envelope says HRV down >5% from baseline OR sleep debt >3h is a strong deload signal in itself. Coach should confirm the call and name the specific intensity/volume cut."
+}

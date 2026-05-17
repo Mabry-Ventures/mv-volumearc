@@ -383,7 +383,8 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
     }
 
     private func makeDashboardModel(
-        aiProvider: any AICoachProvider = LocalHeuristicAICoachProvider()
+        aiProvider: any AICoachProvider = LocalHeuristicAICoachProvider(),
+        recoveryReader: any RecoveryReader = UnavailableRecoveryReader()
     ) -> WorkoutDashboardModel {
         WorkoutDashboardModel(
             aiProvider: aiProvider,
@@ -406,8 +407,95 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
             subscriptionStore: StoreKitSubscriptionStore(productIDs: []),
             voiceCoach: LiveVoiceCoachOrchestrator(
                 transport: AIRelayVoiceTransport(provider: aiProvider)
-            )
+            ),
+            recoveryReader: recoveryReader
         )
+    }
+
+    // MARK: - VOL-181 recovery wiring
+
+    func testCoachContextIncludesInjectedRecoverySnapshot() async throws {
+        let captured = CapturedContextStore()
+        let provider = CapturingCoachProvider(store: captured)
+        let recovery = RecoveryContext(
+            hrvMean7Day: 58,
+            hrvBaseline28Day: 54,
+            hrvDeltaPercent: 7.4,
+            sleep7DayTotalHours: 53,
+            sleepDailyTargetHours: 8.0,
+            sleepDebtHours: -3.0,
+            strengthLoad7DayKJ: 2_100,
+            strengthLoad7DayMinutes: 210
+        )
+        let model = makeDashboardModel(
+            aiProvider: provider,
+            recoveryReader: FixedRecoveryReader(value: recovery)
+        )
+
+        // Seed minimal training data so the prompt block has the
+        // training-context section to anchor recovery against.
+        let workout = try workoutRepository.createWorkout(
+            title: "Squat Day",
+            startedAt: .now.addingTimeInterval(-(45 * 60))
+        )
+        try workoutRepository.appendSet(
+            WorkoutSetPerformance(weight: 235, reps: 5, rpe: 7.5, completedAt: .now.addingTimeInterval(-600)),
+            forExercise: "back-squat",
+            to: workout.identifier
+        )
+        try workoutRepository.completeWorkout(identifier: workout.identifier)
+
+        await model.refresh()
+        await model.askCoach("How am I looking?")
+
+        let capturedValue = await captured.get()
+        let context = try XCTUnwrap(capturedValue)
+        XCTAssertTrue(
+            context.contains("## Recovery (Apple Health)"),
+            "Coach prompt should include the recovery section when reader provides data; got:\n\(context)"
+        )
+        XCTAssertTrue(
+            context.contains("HRV: 58ms 7-day vs 54ms baseline"),
+            "Coach prompt should surface the HRV triple from the recovery reader"
+        )
+        XCTAssertTrue(
+            context.contains("behind target") || context.contains("significant deficit"),
+            "Coach prompt should classify the -3h sleep debt descriptor"
+        )
+        XCTAssertTrue(
+            context.contains("Training load (7d strength): 2100kJ across 210min"),
+            "Coach prompt should surface the strength-load summary"
+        )
+    }
+
+    func testCoachContextOmitsRecoverySectionWhenReaderEmpty() async throws {
+        let captured = CapturedContextStore()
+        let provider = CapturingCoachProvider(store: captured)
+        let model = makeDashboardModel(
+            aiProvider: provider,
+            recoveryReader: UnavailableRecoveryReader()
+        )
+
+        await model.refresh()
+        await model.askCoach("How am I doing?")
+
+        let capturedValue = await captured.get()
+        let context = try XCTUnwrap(capturedValue)
+        XCTAssertFalse(
+            context.contains("Recovery (Apple Health)"),
+            "Coach prompt should omit the recovery section when reader returns empty context"
+        )
+    }
+}
+
+/// VOL-181: deterministic fake reader for unit + integration tests.
+/// Lets a test pin a specific `RecoveryContext` and assert the model's
+/// coach-prompt build path threads it through correctly.
+private struct FixedRecoveryReader: RecoveryReader {
+    let value: RecoveryContext
+
+    func currentRecovery(now: Date) async -> RecoveryContext {
+        value
     }
 }
 

@@ -46,6 +46,21 @@ extension VolumeArcApp {
         return underlying
     }
 
+    /// VOL-181 Phase 1B: HealthKit-backed recovery reader. Returns
+    /// `HealthKitRecoveryReader` on iOS (which uses `HKHealthStore`
+    /// to derive HRV trend, sleep debt, and weekly strength load) and
+    /// `UnavailableRecoveryReader` everywhere else (macOS previews,
+    /// SwiftUI canvas, test hosts). The dashboard's `refresh()` calls
+    /// `currentRecovery()` and caches the result for the coach prompt
+    /// + Today-tab chip.
+    static func makeRecoveryReader() -> RecoveryReader {
+        #if canImport(HealthKit)
+        return HealthKitRecoveryReader()
+        #else
+        return UnavailableRecoveryReader()
+        #endif
+    }
+
     static func makeVoicePermissionStore() -> VoicePermissionStore {
         #if canImport(AVFoundation) && canImport(Speech)
         VolumeArcVoicePermissionStore()

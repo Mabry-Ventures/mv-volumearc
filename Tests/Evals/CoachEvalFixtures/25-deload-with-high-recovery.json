@@ -1,0 +1,15 @@
+{
+  "id": "deload-with-high-recovery",
+  "intent": "deload",
+  "question": "I'm thinking of deloading this week. What do you think?",
+  "contextBlock": "## Training context\n- Athlete: Sam (intermediate)\n- Readiness: 81/100 — Strong recovery signals, recent RPE moderate.\n- Next up: Back Squat at 245lb x 5\n- Last 7 days: 3 sessions, avg RPE 7.4\n- Last session: 4 sets at 235lb, RPE 7.6\n\n## Recovery (Apple Health)\n- HRV: 61ms 7-day vs 55ms baseline (+10.9%)\n- Sleep: 59.0h over 7d vs 56.0h target — 3.0h ahead of plan\n- Training load (7d strength): 2200kJ across 220min",
+  "style": "analytical",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": true,
+    "mustMentionAny": ["push", "maybe not", "looks strong", "HRV", "sleep", "lighter top set"],
+    "mustNotMention": ["definitely deload"],
+    "toneHint": "pushback-but-supportive"
+  },
+  "notes": "VOL-181: Athlete is asking for a deload but recovery looks strong (HRV up >5%, sleep ahead of plan, moderate RPE). VOL-145 deload envelope says if recovery is strong and RPE looks benign, propose a lighter top set and reassess tomorrow rather than committing to a full deload."
+}

@@ -1,0 +1,15 @@
+{
+  "id": "progression-with-high-recovery",
+  "intent": "progression",
+  "question": "Can I push the squat up today? Last set moved well.",
+  "contextBlock": "## Training context\n- Athlete: Sam (intermediate)\n- Readiness: 80/100 — Strong recovery, last set moved cleanly.\n- Next up: Back Squat at 245lb x 5\n- Last 7 days: 3 sessions, avg RPE 7.3\n- Last session: 4 sets at 235lb, RPE 7.5 — bar speed crisp\n\n## Recovery (Apple Health)\n- HRV: 60ms 7-day vs 55ms baseline (+9.1%)\n- Sleep: 58.0h over 7d vs 56.0h target — 2.0h ahead of plan\n- Training load (7d strength): 2100kJ across 210min",
+  "style": "motivational",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": true,
+    "mustMentionAny": ["push", "add", "up to", "heavier", "5lb", "10lb"],
+    "mustNotMention": ["hold", "back off", "stay at"],
+    "toneHint": "green-light-push"
+  },
+  "notes": "VOL-181: Progression ask + recovery supports it (HRV up, sleep ahead). VOL-145 intent envelope explicitly says HRV up + sleep ahead supports a push. Coach should recommend a small concrete jump (e.g., 5-10lb)."
+}
