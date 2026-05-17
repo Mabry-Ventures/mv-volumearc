@@ -448,7 +448,8 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         await model.refresh()
         await model.askCoach("How am I looking?")
 
-        let context = try XCTUnwrap(await captured.get())
+        let capturedValue = await captured.get()
+        let context = try XCTUnwrap(capturedValue)
         XCTAssertTrue(
             context.contains("## Recovery (Apple Health)"),
             "Coach prompt should include the recovery section when reader provides data; got:\n\(context)"
@@ -478,7 +479,8 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         await model.refresh()
         await model.askCoach("How am I doing?")
 
-        let context = try XCTUnwrap(await captured.get())
+        let capturedValue = await captured.get()
+        let context = try XCTUnwrap(capturedValue)
         XCTAssertFalse(
             context.contains("Recovery (Apple Health)"),
             "Coach prompt should omit the recovery section when reader returns empty context"
