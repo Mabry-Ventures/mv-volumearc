@@ -1,0 +1,15 @@
+{
+  "id": "progression-with-low-recovery",
+  "intent": "progression",
+  "question": "I want to push the bench today. Last set was easy.",
+  "contextBlock": "## Training context\n- Athlete: Sam (intermediate)\n- Readiness: 62/100 — Last session moved cleanly but recovery is low.\n- Next up: Bench Press at 185lb x 5\n- Last 7 days: 4 sessions, avg RPE 7.8\n- Last session: 3 sets at 180lb, RPE 7.2 — bar speed crisp\n\n## Recovery (Apple Health)\n- HRV: 47ms 7-day vs 55ms baseline (-14.5%)\n- Sleep: 50.0h over 7d vs 56.0h target — -6.0h significant deficit\n- Training load (7d strength): 2700kJ across 280min",
+  "style": "analytical",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": true,
+    "mustMentionAny": ["hold", "stay", "same weight", "not today", "HRV", "sleep"],
+    "mustNotMention": ["go heavier", "add weight today"],
+    "toneHint": "hold-explain-why"
+  },
+  "notes": "VOL-181: Progression ask BUT recovery argues against. VOL-145 intent envelope says HRV down OR sleep debt >2h is a reason to hold even when the previous set moved cleanly. Coach should hold and explain why, citing HRV or sleep debt."
+}

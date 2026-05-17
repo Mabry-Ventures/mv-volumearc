@@ -38,6 +38,13 @@ public final class WorkoutDashboardModel: ObservableObject {
     @Published public private(set) var isNetworkReachable: Bool = true
     @Published public private(set) var hasLoadedInitialData: Bool = false
     @Published public private(set) var isHealthAuthorized: Bool = false
+    /// VOL-181 Phase 1B: cached recovery snapshot (HRV, sleep debt,
+    /// strength load) fed into the coach prompt's recovery section
+    /// and surfaced as the Today-tab `VARecoveryChip`. Updated on
+    /// `refresh()` via the injected `RecoveryReader`. Defaults to an
+    /// empty context so views and the prompt block gracefully omit
+    /// the recovery surface when HK is unavailable.
+    @Published public private(set) var recovery: RecoveryContext = RecoveryContext()
 
     /// VOL-112: most-recent Watch payload kind, surfaced for the
     /// deterministic-mode debug overlay so XCUITests can assert the
@@ -56,6 +63,13 @@ public final class WorkoutDashboardModel: ObservableObject {
     /// through `requestHealthKitAuthorization()` rather than reaching
     /// into a global `HealthStore` singleton.
     private let healthStore: HealthStore
+    /// VOL-181 Phase 1B: platform-agnostic seam that produces a
+    /// `RecoveryContext` from HealthKit (App layer injects the real
+    /// `HealthKitRecoveryReader`; tests and macOS hosts get the
+    /// default `UnavailableRecoveryReader` which returns an empty
+    /// context). `refresh()` calls `currentRecovery()` and caches the
+    /// result so `buildCoachContext()` stays synchronous.
+    private let recoveryReader: RecoveryReader
 
     #if canImport(SwiftData)
     private let workoutRepository: SwiftDataWorkoutRepository?
@@ -97,13 +111,19 @@ public final class WorkoutDashboardModel: ObservableObject {
         // changes. App-level wiring now threads the same provider used by
         // the launch-scoped flag gate so the dashboard and the gating
         // surfaces read a consistent flag state.
-        featureFlags: FeatureFlagProvider? = nil
+        featureFlags: FeatureFlagProvider? = nil,
+        // VOL-181 Phase 1B: defaults to `UnavailableRecoveryReader()`
+        // so existing test sites (which don't care about recovery)
+        // keep compiling unchanged. App-level wiring injects the real
+        // `HealthKitRecoveryReader`.
+        recoveryReader: RecoveryReader = UnavailableRecoveryReader()
     ) {
         self.aiProvider = aiProvider
         self.voiceCoach = voiceCoach
         self.telemetrySink = telemetrySink
         self.featureFlags = featureFlags ?? LocalFeatureFlagProvider()
         self.healthStore = healthStore
+        self.recoveryReader = recoveryReader
         self.workoutRepository = repository
         self.coachMemoryRepository = coachMemoryRepository
         self.userProfileRepository = userProfileRepository
@@ -133,13 +153,15 @@ public final class WorkoutDashboardModel: ObservableObject {
         operationalSignals: [OperationalSignalSummary] = [],
         subscriptionStore: StoreKitSubscriptionStore,
         voiceCoach: LiveVoiceCoachOrchestrator,
-        featureFlags: FeatureFlagProvider? = nil
+        featureFlags: FeatureFlagProvider? = nil,
+        recoveryReader: RecoveryReader = UnavailableRecoveryReader()
     ) {
         self.aiProvider = aiProvider
         self.voiceCoach = voiceCoach
         self.telemetrySink = telemetrySink
         self.featureFlags = featureFlags ?? LocalFeatureFlagProvider()
         self.healthStore = healthStore
+        self.recoveryReader = recoveryReader
         #if canImport(SwiftData)
         self.workoutRepository = nil
         self.coachMemoryRepository = nil
@@ -165,13 +187,15 @@ public final class WorkoutDashboardModel: ObservableObject {
         telemetrySink: TelemetrySink,
         surfaceStore: PlatformSurfaceStateStore,
         voiceCoach: LiveVoiceCoachOrchestrator,
-        featureFlags: FeatureFlagProvider? = nil
+        featureFlags: FeatureFlagProvider? = nil,
+        recoveryReader: RecoveryReader = UnavailableRecoveryReader()
     ) {
         self.aiProvider = aiProvider
         self.voiceCoach = voiceCoach
         self.telemetrySink = telemetrySink
         self.featureFlags = featureFlags ?? LocalFeatureFlagProvider()
         self.healthStore = healthStore
+        self.recoveryReader = recoveryReader
         #if canImport(SwiftData)
         self.workoutRepository = nil
         self.coachMemoryRepository = nil
@@ -192,6 +216,7 @@ public final class WorkoutDashboardModel: ObservableObject {
     @discardableResult
     public func refresh() async -> Bool {
         self.isHealthAuthorized = await healthStore.isAuthorized
+        await refreshRecovery()
 
         #if canImport(SwiftData)
         guard let refreshLoader else {
@@ -509,6 +534,27 @@ public final class WorkoutDashboardModel: ObservableObject {
         }
     }
 
+    /// VOL-181 Phase 1B: pull the latest recovery snapshot from the
+    /// injected `RecoveryReader`. Errors are swallowed at the model
+    /// level — when HK is unavailable or unauthorized the reader is
+    /// expected to either return an empty context or throw an
+    /// authorization error which we then degrade to "no recovery
+    /// section" rather than surface as a UI failure. The error gets
+    /// recorded for observability.
+    private func refreshRecovery() async {
+        do {
+            self.recovery = try await recoveryReader.currentRecovery(now: .now)
+        } catch {
+            self.recovery = RecoveryContext()
+            telemetrySink.record(TelemetryEvent(
+                category: "health",
+                name: "recovery_read_failed",
+                severity: .warning,
+                message: "RecoveryReader failed: \(error.localizedDescription)"
+            ))
+        }
+    }
+
     /// Build the grounded context block for coach prompts using real dashboard state and
     /// recent coach memories for continuity across conversations.
     private func buildCoachContext() -> String {
@@ -549,7 +595,11 @@ public final class WorkoutDashboardModel: ObservableObject {
             recentSessionCount: recentSessions.count,
             averageRPE: avgRPE,
             lastSessionSummary: lastSessionSummary,
-            recentMemories: memories
+            recentMemories: memories,
+            // VOL-181 Phase 1B: cached recovery snapshot fed into the
+            // coach prompt. `RecoveryContext.hasAnyData` gates the
+            // section so empty contexts render as no-op.
+            recovery: recovery
         )
 
         return context.asPromptBlock(privacyMode: athlete.privacyMode)

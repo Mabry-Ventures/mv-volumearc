@@ -18,6 +18,12 @@ public struct TodayView: View {
             LazyVStack(alignment: .leading, spacing: VA.Space.xl) {
                 greeting
                 if model.hasLoadedInitialData {
+                    // VOL-181 Phase 1B: "What Apple gave us" recovery
+                    // insight chip. Self-suppresses when HK has no
+                    // data — caller doesn't need to gate on auth or
+                    // platform. Tap opens a detail sheet with the
+                    // full breakdown.
+                    VARecoveryChip(recovery: model.recovery)
                     nextWorkoutCard
                     quickActionsRow
                     planTomorrowCard

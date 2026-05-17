@@ -1,0 +1,16 @@
+{
+  "id": "recovery-low-hrv-down-sleep-debt",
+  "intent": "recovery",
+  "question": "How am I looking for today's session?",
+  "contextBlock": "## Training context\n- Athlete: Sam (intermediate)\n- Readiness: 58/100 — Recovery signals mixed, leaning low.\n- Next up: Back Squat at 245lb x 5\n- Last 7 days: 4 sessions, avg RPE 8.4\n- Last session: 4 sets at 235lb, RPE 8.5\n\n## Recovery (Apple Health)\n- HRV: 48ms 7-day vs 55ms baseline (-12.7%)\n- Sleep: 49.0h over 7d vs 56.0h target — -7.0h significant deficit\n- Training load (7d strength): 3200kJ across 320min",
+  "style": "analytical",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": true,
+    "mustMentionAny": ["HRV", "sleep debt", "sleep", "Apple Health"],
+    "mustMentionReadinessOrRPE": true,
+    "mustNotMention": ["push hard", "PR attempt"],
+    "toneHint": "data-driven-conservative"
+  },
+  "notes": "VOL-181: HRV down >5% AND significant sleep deficit (>3h). Coach should clearly signal back-off / lighter session, citing HRV trend or sleep debt as the dominant signal. The 7-day load (3200kJ/320min) is also high — supports the case."
+}
