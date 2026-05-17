@@ -209,10 +209,18 @@ for fixture_path in "${fixture_files[@]}"; do
     expected=$(jq -c '.expectedAssertions' "$fixture_path")
 
     # Pull the next-exercise hint out of the contextBlock for the anchor check.
+    # VOL-183: the original `([^ ]+( [^ ]+)*?) at .*$` regex used `*?`
+    # (lazy quantifier), which isn't valid POSIX ERE — BSD sed on macOS
+    # errors with `RE error: repetition-operator operand invalid` even
+    # with `-E`. The lazy form was needed when `at` could appear inside
+    # exercise names, but our exercise catalog doesn't have that shape;
+    # a greedy `(.+) at [^ ]+$` capture works because `[^ ]+$` anchors
+    # the trailing token (e.g., `225x5`) so the `at` consumed by the
+    # match has to be the last one on the line.
     FIXTURE_NEXT_EXERCISE=""
     if grep -q '^- Next up:' <<<"$context_block"; then
         FIXTURE_NEXT_EXERCISE=$(grep '^- Next up:' <<<"$context_block" \
-            | sed -E 's/^- Next up: ([^ ]+( [^ ]+)*?) at .*$/\1/' \
+            | sed -E 's/^- Next up: (.+) at [^ ]+$/\1/' \
             | head -n 1)
     fi
     export FIXTURE_NEXT_EXERCISE
