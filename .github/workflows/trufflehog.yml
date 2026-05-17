@@ -63,6 +63,12 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      # VOL-186: the SHA-mismatch detector step (added in VOL-184 as a
+      # belt-and-suspenders defense against the `_actions/` cache race)
+      # was removed once the post-2026-05-17 fleet `JOB_STARTED` hook
+      # took over ghost-SHA workspace detection + auto-wipe at the host
+      # level. Workspace SHA integrity is now a host invariant, not a
+      # per-workflow defense.
       - name: Checkout
         uses: actions/checkout@v6
         with:
@@ -71,22 +77,6 @@ jobs:
           # then `git fetch` the base ref so trufflehog's --since-commit
           # has both endpoints locally.
           fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 0 }}
-
-      - name: Verify checkout SHA matches GITHUB_SHA (cache-race detector)
-        # VOL-184 belt-and-suspenders: if the `_actions/` cache race
-        # ever slips through the workflow-level concurrency group
-        # (e.g. a runner with stale state across an upgrade), this
-        # converts the silent "wrong-SHA workspace" mode into a loud,
-        # immediate fail. ci.yml has the same check on its Build & Test
-        # job; this mirrors it for the secret-scan path.
-        run: |
-          set -euo pipefail
-          test -d .git || { echo "::error::.git directory missing after checkout"; exit 1; }
-          actual=$(git rev-parse HEAD)
-          if [ "$actual" != "$GITHUB_SHA" ]; then
-            echo "::error::Checkout SHA mismatch — actions cache race. actual=$actual expected=$GITHUB_SHA"
-            exit 1
-          fi
 
       - name: Verify trufflehog binary
         # The Homebrew formula `trufflehog` should be pre-installed on
