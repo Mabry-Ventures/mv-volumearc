@@ -55,7 +55,11 @@ public final class WorkoutDashboardModel: ObservableObject {
 
     private let aiProvider: AICoachProvider
     private let voiceCoach: LiveVoiceCoachOrchestrator
-    private let telemetrySink: TelemetrySink
+    // VOL-181: relaxed from `private` to internal so the extracted
+    // coach-context extension (in WorkoutDashboardModel+CoachContext.swift)
+    // can record recovery-read failures. Still effectively internal to
+    // VolumeArcCore — no public API surface change.
+    let telemetrySink: TelemetrySink
     private let progressionEngine = ProgressionEngine()
     public let featureFlags: FeatureFlagProvider
     /// VOL-109: HealthKit authorization gateway. Stored so onboarding +
@@ -67,13 +71,15 @@ public final class WorkoutDashboardModel: ObservableObject {
     /// `RecoveryContext` from HealthKit (App layer injects the real
     /// `HealthKitRecoveryReader`; tests and macOS hosts get the
     /// default `UnavailableRecoveryReader` which returns an empty
-    /// context). `refresh()` calls `currentRecovery()` and caches the
-    /// result so `buildCoachContext()` stays synchronous.
-    private let recoveryReader: RecoveryReader
+    /// context). Internal so the extracted coach-context extension
+    /// can call `currentRecovery()`.
+    let recoveryReader: RecoveryReader
 
     #if canImport(SwiftData)
     private let workoutRepository: SwiftDataWorkoutRepository?
-    private let coachMemoryRepository: SwiftDataCoachMemoryRepository?
+    // VOL-181: relaxed to internal so the extracted coach-context
+    // extension can pull memory.mostRecent into the prompt block.
+    let coachMemoryRepository: SwiftDataCoachMemoryRepository?
     private let userProfileRepository: SwiftDataUserProfileRepository?
     private let trainingPlanRepository: SwiftDataTrainingPlanRepository?
     private let refreshLoader: DashboardRefreshLoader?
@@ -532,77 +538,6 @@ public final class WorkoutDashboardModel: ObservableObject {
                 message: error.localizedDescription
             ))
         }
-    }
-
-    /// VOL-181 Phase 1B: pull the latest recovery snapshot from the
-    /// injected `RecoveryReader`. Errors are swallowed at the model
-    /// level — when HK is unavailable or unauthorized the reader is
-    /// expected to either return an empty context or throw an
-    /// authorization error which we then degrade to "no recovery
-    /// section" rather than surface as a UI failure. The error gets
-    /// recorded for observability.
-    private func refreshRecovery() async {
-        do {
-            self.recovery = try await recoveryReader.currentRecovery(now: .now)
-        } catch {
-            self.recovery = RecoveryContext()
-            telemetrySink.record(TelemetryEvent(
-                category: "health",
-                name: "recovery_read_failed",
-                severity: .warning,
-                message: "RecoveryReader failed: \(error.localizedDescription)"
-            ))
-        }
-    }
-
-    /// Build the grounded context block for coach prompts using real dashboard state and
-    /// recent coach memories for continuity across conversations.
-    private func buildCoachContext() -> String {
-        let athleteName = athlete.name.isEmpty ? "the athlete" : athlete.name
-        let avgRPE = recentSessions.isEmpty
-            ? 0
-            : recentSessions.map(\.averageRPE).reduce(0, +) / Double(recentSessions.count)
-
-        let lastSessionSummary: String? = recentSessions
-            .max(by: { $0.date < $1.date })
-            .map { session in
-                let volume = Int(session.totalVolumeLoad)
-                let rpe = String(format: "%.1f", session.averageRPE)
-                return "\(session.completedSetCount) sets, \(volume)lb total, RPE \(rpe)"
-            }
-
-        var memories: [String] = []
-        #if canImport(SwiftData)
-        if let coachMemoryRepository, let memory = try? coachMemoryRepository.coachMemory() {
-            memories = memory.mostRecent.map(\.summary)
-        }
-        #endif
-
-        let nextExercise = autopilot?.nextExerciseName
-        let nextTarget: String? = autopilot.map { state in
-            let weight = Int(state.nextTarget.weight)
-            let reps = state.nextTarget.repRange
-            return "\(weight)lb × \(reps.lowerBound)-\(reps.upperBound)"
-        }
-
-        let context = CoachContext(
-            athleteName: athleteName,
-            advancementLevel: athlete.advancementLevel.rawValue,
-            readinessScore: readiness.score,
-            readinessBrief: readiness.brief,
-            nextExercise: nextExercise,
-            nextTarget: nextTarget,
-            recentSessionCount: recentSessions.count,
-            averageRPE: avgRPE,
-            lastSessionSummary: lastSessionSummary,
-            recentMemories: memories,
-            // VOL-181 Phase 1B: cached recovery snapshot fed into the
-            // coach prompt. `RecoveryContext.hasAnyData` gates the
-            // section so empty contexts render as no-op.
-            recovery: recovery
-        )
-
-        return context.asPromptBlock(privacyMode: athlete.privacyMode)
     }
 
     /// Pattern-match the user's prompt to infer a memory theme for organization.
