@@ -24,6 +24,10 @@ struct WorkoutDetailView: View {
             .padding(VA.Space.lg)
         }
         .background(VA.Colors.surfaceGrouped)
+        // VOL-200 P3: stable identifier so the `today.next-workout-tap`
+        // journey test can assert this view appeared after tapping the
+        // next workout card.
+        .accessibilityIdentifier("workout.detail.root")
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.large)
     }

@@ -471,6 +471,14 @@ public struct TodayView: View {
             localized: "Opens this session's details",
             comment: "Accessibility hint for tapping a recent session row"
         ))
+        // VOL-200 P3: stable identifier so `today.recent-session-tap`
+        // journey test can resolve the first recent-session row.
+        // The identifier is intentionally non-indexed — XCUITest
+        // `firstMatch` reliably picks the topmost row, and adding an
+        // index would require threading the enumeration offset
+        // through this view builder without a meaningful test-value
+        // gain.
+        .accessibilityIdentifier("today.recentSession")
     }
 
     // MARK: - Derived display values

@@ -21,7 +21,7 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | Surface | Total | Covered | Coverage |
 |---|---|---|---|
 | Onboarding | 5 | 2 | 40% |
-| Today | 5 | 1 | 20% |
+| Today | 5 | 4 | 80% |
 | Workouts | 7 | 3 | 43% |
 | Coach | 6 | 3 | 50% |
 | Signals | 3 | 0 | 0% |
@@ -32,7 +32,7 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | App Intents | 6 | 0 | 0% |
 | Background | 4 | 0 | 0% |
 | Failure paths | 6 | 0 | 0% |
-| **Total** | **62** | **11** | **18%** |
+| **Total** | **63** | **18** | **29%** |
 
 > Goal: 100% by end of Wave 2 (cycle 7, 2026-05-31). Burn down via [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141).
 >
@@ -55,10 +55,10 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | ID | Pre-conditions | Steps | Success | Telemetry | Test |
 |---|---|---|---|---|---|
 | `today.dashboard-view` | Onboarded, seeded data | Open app → Today tab | Readiness hero + next workout + recent sessions visible | `today.viewed` | `VolumeArcAppUITests.testRootDashboardIdentifierExists` (loose match — asserts the root identifier renders; full hero/cards check pending) |
-| `today.readiness-tap` | Today visible | Tap readiness hero | Signals tab opens to readiness breakdown | `signals.readiness.opened` | `[ ]` |
-| `today.next-workout-tap` | Next workout card present | Tap card | Workout detail opens with hero transition | `workout.detail.opened` | `[ ]` |
-| `today.recent-session-tap` | Recent sessions present | Tap a session | Session detail opens | `workout.history.opened` | `[ ]` |
-| `today.quick-action-launch` | Today visible | Tap quick action (Ask Coach / Start workout / Sync) | Correct destination opens | per-action event | `[ ]` |
+| `today.readiness-tap` | Today visible | Tap readiness hero | Signals tab opens to readiness breakdown | `signals.readiness.opened` | `[ ]` (product gap — Today does not currently surface a readiness hero that opens Signals. `VARecoveryChip` from VOL-181 opens a detail sheet, not the Signals tab. Re-spec the journey or build the Today→Signals link before this row can land) |
+| `today.next-workout-tap` | Next workout card present | Tap card | Workout detail opens with hero transition | `workout.detail.opened` | `VolumeArcTodayJourneyTests.testTodayNextWorkoutTapOpensDetail` |
+| `today.recent-session-tap` | Recent sessions present | Tap a session | Session detail opens | `workout.history.opened` | `VolumeArcTodayJourneyTests.testTodayRecentSessionTapOpensDetail` |
+| `today.quick-action-launch` | Today visible | Tap quick action (Ask Coach / Start workout / Sync) | Correct destination opens | per-action event | `VolumeArcTodayJourneyTests.testTodayAskCoachQuickActionOpensCoach` (covers Ask Coach branch; Start Workout + Sync branches follow in subsequent PRs) |
 
 ## Workouts
 
