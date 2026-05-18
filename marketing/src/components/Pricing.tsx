@@ -19,7 +19,10 @@ const plans = [
       'Track every set, every workout. Get the coach on Gemini Flash Lite + on-device Foundation Models. Cloud sync across all your Apple devices.',
     button: {
       label: 'Download for iPhone',
-      href: 'https://apps.apple.com/app/volumearc',
+      // VOL-208 / VOL-198: route through the `/download` redirect rather
+      // than hard-coding the App Store URL, so once the listing is live
+      // a single Vercel redirect update flips every link in the site.
+      href: '/download',
     },
     features: [
       'Full workout tracker',
@@ -32,6 +35,13 @@ const plans = [
     ],
     logomarkClassName: 'fill-gray-300',
   },
+  // VOL-198: Pro features list MUST describe only what Premium actually
+  // unlocks today, per `docs/PLATFORM.md`'s Premium definition (VOL-91):
+  // Gemini Pro coach tier + live voice coaching. Items previously
+  // listed here as Pro (curated programs library, Apple Watch
+  // Vitals/Training Load, priority eval-trend) are still backlog
+  // (VOL-144 / VOL-154) and were paid-feature misrepresentation under
+  // App Review Guideline 3.1.2.
   {
     name: 'Pro',
     featured: true,
@@ -40,15 +50,12 @@ const plans = [
       'The full AI coach experience — Gemini Pro tier and live voice coaching. For lifters who want the deepest prescription their data can give them.',
     button: {
       label: 'Start with Pro',
-      href: 'https://apps.apple.com/app/volumearc',
+      href: '/download',
     },
     features: [
       'Everything in Free',
       'AI coach — Gemini Pro tier',
-      'Single-turn voice coaching',
-      'Curated programs library (5/3/1, PPL, SS)',
-      'Priority eval-trend updates',
-      'Apple Watch Vitals + Training Load integration',
+      'Live voice coaching (hands-free between sets)',
     ],
     logomarkClassName: 'fill-sunrise-500',
   },
