@@ -17,7 +17,7 @@
 // Phase 1 check above is the smallest fix that closes the highest-
 // signal half of F-M-008.
 
-import { readdir, readFile, stat } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
@@ -123,6 +123,23 @@ for (const file of htmlFiles) {
     }
     if (href.startsWith('/')) {
       const path = normalizePath(href)
+      // Skip Next.js-internal asset paths and auto-generated icons
+      // — these aren't page routes, they're build artifacts emitted by
+      // Next/Vercel into the static HTML (script tags, link tags,
+      // favicon, OG image). The route-resolution check is about
+      // user-clickable anchors, not framework plumbing.
+      if (
+        path.startsWith('/_next/') ||
+        path === '/icon.png' ||
+        path === '/apple-icon.png' ||
+        path === '/favicon.ico' ||
+        path === '/manifest.webmanifest' ||
+        path === '/robots.txt' ||
+        path === '/sitemap.xml' ||
+        path.startsWith('/og-image')
+      ) {
+        continue
+      }
       if (!KNOWN_ROUTES.has(path)) {
         console.error(
           `check-links: FAIL — ${file.replace(marketingRoot + '/', '')}: ` +
