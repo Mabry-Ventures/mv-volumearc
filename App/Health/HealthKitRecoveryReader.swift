@@ -34,40 +34,90 @@ public struct HealthKitRecoveryReader: RecoveryReader {
     private let healthStore: HKHealthStore
     private let sleepTargetHours: Double
     private let strengthActivityType: HKWorkoutActivityType
+    /// VOL-203: optional telemetry sink. When set, the reader emits
+    /// typed events so operators can distinguish "user has no data"
+    /// from "permission revoked" from "query failed" — three states
+    /// previously indistinguishable because every error was swallowed
+    /// by `try?`. The protocol surface stays non-throwing (callers
+    /// still get a `RecoveryContext` and don't have to handle errors)
+    /// but the typed telemetry stream now carries the diagnostic info
+    /// the operator needs to act on.
+    private let telemetrySink: (any TelemetrySink)?
 
     public init(
         healthStore: HKHealthStore = HKHealthStore(),
         sleepTargetHours: Double = 8.0,
-        strengthActivityType: HKWorkoutActivityType = .traditionalStrengthTraining
+        strengthActivityType: HKWorkoutActivityType = .traditionalStrengthTraining,
+        telemetrySink: (any TelemetrySink)? = nil
     ) {
         self.healthStore = healthStore
         self.sleepTargetHours = sleepTargetHours
         self.strengthActivityType = strengthActivityType
+        self.telemetrySink = telemetrySink
     }
 
     public func currentRecovery(now: Date = .now) async -> RecoveryContext {
         guard HKHealthStore.isHealthDataAvailable() else {
+            // VOL-203: simulator / unsupported-device path. Operator
+            // shouldn't see this as a real "user data missing" event,
+            // so route it to its own category for filtering.
+            telemetrySink?.record(TelemetryEvent(
+                category: "healthkit",
+                name: "recovery_unavailable",
+                severity: .info,
+                message: "HKHealthStore not available on this device — recovery context omitted.",
+                metadata: ["reason": "HKHealthStore.isHealthDataAvailable() == false"]
+            ))
             return RecoveryContext()
         }
 
-        // Each underlying query is wrapped in `try?` so HK auth /
-        // sample-fetch errors degrade to nil for that specific field
-        // rather than throwing out of the reader and forcing the
-        // dashboard to handle a UI-level error. Empty context →
-        // `RecoveryContext.hasAnyData == false` → coach prompt omits
-        // the recovery section gracefully.
-        async let hrv7 = try? meanHRV(overDays: 7, now: now)
-        async let hrv28 = try? meanHRV(overDays: 28, now: now)
-        async let sleep7 = try? totalSleepHours(overDays: 7, now: now)
-        async let load = try? strengthLoad(overDays: 7, now: now)
+        // VOL-203: each query now goes through `runQuery` which emits
+        // a `healthkit.recovery_query_failed` event on throw and a
+        // `healthkit.recovery_query_empty` event on "no data" so an
+        // operator can distinguish missing data from missing
+        // permissions from query failures. The reader still returns
+        // `RecoveryContext` (the protocol contract); the caller path
+        // doesn't change, but the telemetry stream carries the signal.
+        async let hrv7 = runQuery(field: "hrv7") { try await self.meanHRV(overDays: 7, now: now) }
+        async let hrv28 = runQuery(field: "hrv28") { try await self.meanHRV(overDays: 28, now: now) }
+        async let sleep7 = runQuery(field: "sleep7") { try await self.totalSleepHours(overDays: 7, now: now) }
+        async let load = runQuery(field: "strength_load") { try await self.strengthLoad(overDays: 7, now: now) }
 
-        // The nested optional comes from `try?` returning `Double??`;
-        // flatten via `.flatMap { $0 }` so the field comes out as a
-        // single-layer optional matching `RecoveryContext`'s schema.
-        let mean7Day = (await hrv7).flatMap { $0 }
-        let baseline = (await hrv28).flatMap { $0 }
-        let sleepTotal = (await sleep7).flatMap { $0 }
-        let strengthSummary = (await load).flatMap { $0 }
+        let mean7Day = await hrv7
+        let baseline = await hrv28
+        let sleepTotal = await sleep7
+        let strengthSummary = await load
+
+        // VOL-203: if EVERY field is nil after we exited the
+        // availability gate above, that's diagnostic information —
+        // either the user denied authorization for every type, or all
+        // four queries failed simultaneously. Emit a partial-result
+        // summary so the operator dashboard can show "N% of recovery
+        // reads are returning empty" without us logging the user's
+        // actual values.
+        let emptyFieldCount = [
+            mean7Day == nil,
+            baseline == nil,
+            sleepTotal == nil,
+            strengthSummary == nil
+        ].filter { $0 }.count
+        if emptyFieldCount == 4 {
+            telemetrySink?.record(TelemetryEvent(
+                category: "healthkit",
+                name: "recovery_all_empty",
+                severity: .warning,
+                message: "All four HK recovery fields returned no data — likely permission denied or fresh install.",
+                metadata: [:]
+            ))
+        } else if emptyFieldCount > 0 {
+            telemetrySink?.record(TelemetryEvent(
+                category: "healthkit",
+                name: "recovery_partial",
+                severity: .info,
+                message: "HK recovery context populated partially.",
+                metadata: ["empty_field_count": String(emptyFieldCount)]
+            ))
+        }
 
         let deltaPercent: Double? = {
             guard let mean7Day, let baseline, baseline > 0 else { return nil }
@@ -89,6 +139,47 @@ public struct HealthKitRecoveryReader: RecoveryReader {
             strengthLoad7DayMinutes: strengthSummary?.minutes,
             appleWatchVitalsScore: nil
         )
+    }
+
+    // MARK: - Query telemetry wrapper (VOL-203)
+
+    /// Wraps a single HK-backed query so a throw becomes a typed
+    /// `healthkit.recovery_query_failed` telemetry event (with the
+    /// field name and the underlying error code, but never the user
+    /// values) and a successful empty result becomes a
+    /// `healthkit.recovery_query_empty` event. The caller still gets
+    /// a flat `Double?` / typed-optional back, so the per-field
+    /// degradation behavior matches the prior `try?` pattern exactly.
+    /// `T` is the per-field optional shape (Double? for HRV/sleep,
+    /// (kj, minutes)? for strength load).
+    private func runQuery<T>(field: String, work: @Sendable () async throws -> T?) async -> T? {
+        do {
+            let value = try await work()
+            if value == nil {
+                telemetrySink?.record(TelemetryEvent(
+                    category: "healthkit",
+                    name: "recovery_query_empty",
+                    severity: .info,
+                    message: "HK recovery query returned no samples for field \(field).",
+                    metadata: ["field": field]
+                ))
+            }
+            return value
+        } catch {
+            telemetrySink?.record(TelemetryEvent(
+                category: "healthkit",
+                name: "recovery_query_failed",
+                severity: .error,
+                message: "HK recovery query failed for field \(field).",
+                metadata: [
+                    "field": field,
+                    "error_code": String((error as NSError).code),
+                    "error_domain": (error as NSError).domain,
+                    "error_description": (error as NSError).localizedDescription
+                ]
+            ))
+            return nil
+        }
     }
 
     // MARK: - HRV

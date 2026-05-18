@@ -350,7 +350,10 @@ struct VolumeArcApp: App {
                 // VOL-181 Phase 1B: HealthKit-backed recovery reader.
                 // Cached snapshot drives the Today-tab recovery chip
                 // and the coach prompt's recovery section.
-                recoveryReader: Self.makeRecoveryReader()
+                // VOL-203: thread the telemetrySink so HK auth /
+                // query failures emit typed events instead of silently
+                // degrading to empty context.
+                recoveryReader: Self.makeRecoveryReader(telemetrySink: telemetrySink)
             )
         } else {
             let syncEngine = CloudSyncCoordinator(

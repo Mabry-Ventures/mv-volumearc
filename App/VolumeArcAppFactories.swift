@@ -53,9 +53,15 @@ extension VolumeArcApp {
     /// SwiftUI canvas, test hosts). The dashboard's `refresh()` calls
     /// `currentRecovery()` and caches the result for the coach prompt
     /// + Today-tab chip.
-    static func makeRecoveryReader() -> RecoveryReader {
+    static func makeRecoveryReader(telemetrySink: (any TelemetrySink)? = nil) -> RecoveryReader {
         #if canImport(HealthKit)
-        return HealthKitRecoveryReader()
+        // VOL-203: pass the telemetry sink so the reader emits
+        // `healthkit.recovery_query_failed` / `recovery_query_empty` /
+        // `recovery_unavailable` / `recovery_partial` events instead of
+        // silently swallowing every error. Backward-compatible —
+        // existing callers that don't pass the sink keep the
+        // no-telemetry shape; the dashboard wires it in `init`.
+        return HealthKitRecoveryReader(telemetrySink: telemetrySink)
         #else
         return UnavailableRecoveryReader()
         #endif
