@@ -55,6 +55,46 @@
       "failThreshold": 2400,
       "budgetSource": "VOL-99 Linear acceptance criteria.",
       "description": "P95 wall-clock time from the Ask Coach tap to the first coach bubble reaching non-empty content. See coach_first_token_p50 for the VOL-162 root cause + fix."
+    },
+    {
+      "id": "ipa_size_total_mb",
+      "test": "scripts/check_ipa_size.sh",
+      "metric": "ipa_archive_size",
+      "units": "megabytes",
+      "budget": 80,
+      "failThreshold": 100,
+      "budgetSource": "VOL-215 Phase 1 starter floor (2026-05-18). Conservative pre-first-archive value; the first tag build will capture the real baseline and a follow-up PR will ratchet these numbers down. The 80/100 budget assumes a typical mid-size iOS app with Sentry + Gemini SDKs and an embedded watch app + watch widget extension. Reference: Apple's TestFlight over-the-air download cap is ~150MB (apps larger than that require Wi-Fi). Same ratchet contract as VOL-205 coverage gates.",
+      "description": "Total IPA archive size on disk after `xcodebuild -exportArchive`. Measured by `scripts/check_ipa_size.sh`; intended to run tag-gated alongside the existing perf-budget gate."
+    },
+    {
+      "id": "app_size_iphone_mb",
+      "test": "scripts/check_ipa_size.sh",
+      "metric": "iphone_app_bundle_size",
+      "units": "megabytes",
+      "budget": 60,
+      "failThreshold": 80,
+      "budgetSource": "VOL-215 Phase 1 starter floor (2026-05-18). The iPhone .app bundle inside the IPA's Payload directory, excluding the embedded watch app and extensions. Pre-first-archive estimate; ratchet down once we have a real measurement.",
+      "description": "Size on disk of `Payload/VolumeArc.app` (top-level iPhone app, excluding the embedded watch app and extensions)."
+    },
+    {
+      "id": "app_size_watch_mb",
+      "test": "scripts/check_ipa_size.sh",
+      "metric": "watch_app_bundle_size",
+      "units": "megabytes",
+      "budget": 20,
+      "failThreshold": 30,
+      "budgetSource": "VOL-215 Phase 1 starter floor (2026-05-18). Embedded watchOS app under `VolumeArc.app/Watch/VolumeArcWatch.app`. Pre-first-archive estimate; ratchet down once measured.",
+      "description": "Size on disk of the embedded `VolumeArcWatch.app` (watchOS payload). Independent of the widget extension."
+    },
+    {
+      "id": "app_size_watch_widget_mb",
+      "test": "scripts/check_ipa_size.sh",
+      "metric": "watch_widget_bundle_size",
+      "units": "megabytes",
+      "budget": 5,
+      "failThreshold": 8,
+      "budgetSource": "VOL-215 Phase 1 starter floor (2026-05-18). The watch widget extension (`VolumeArcWatchWidgets.appex`) is a small WidgetKit extension; 5MB is generous for the current size. Ratchet down once measured.",
+      "description": "Size on disk of the `VolumeArcWatchWidgets.appex` extension inside the watch app's `PlugIns/` directory."
     }
   ]
 }
