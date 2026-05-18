@@ -79,23 +79,54 @@ final class VolumeArcAppUITests: XCTestCase {
     /// If this fails, the bug is in the probe / overlay plumbing, not
     /// in any one journey.
     func testDashboardRefreshTelemetryReachesTheProbe() throws {
-        // VOL-175: this test passes on main's CI in ~4s but fails
-        // deterministically when additional UITest classes are
-        // present in the test bundle (e.g.,
-        // `VolumeArcChaosJourneyTests` from PR #154). The probe
-        // overlay is found but the buffer label stays empty even
-        // after 30s — suggesting either the probe's NotificationCenter
-        // observer isn't installed under the new bundle layout, or
-        // events fire before the observer is wired up. The probe
-        // itself is healthy on main; this is a bundle-context
-        // interaction.
+        // VOL-149 contract: the deterministic-mode telemetry sink
+        // posts each recorded `TelemetryEvent` as a
+        // `.volumeArcTelemetryDidRecord` notification; the in-app
+        // `VolumeArcTelemetryDebugProbe` listens on `.main` and
+        // mirrors the most-recent N events into a SwiftUI
+        // accessibility-label JSON payload addressable by
+        // `debug.telemetry.events`. XCUITests can then assert on
+        // `(category, name)` pairs without needing cross-process
+        // UserDefaults access. If this passes, every other journey
+        // can adopt the same pattern.
         //
-        // Skipping until VOL-175 closes. The probe's unit tests
-        // (`VolumeArcTelemetryProbeMatcherTests`,
-        // `InMemoryTelemetrySinkNotificationTests`) still gate the
-        // matcher + notification contract.
-        try XCTSkipIf(true, "VOL-175: probe flakes when test bundle includes chaos journey class.")
-        _ = makeSeededApp()
+        // VOL-175 (2026-05-18): re-enabled after replacing the
+        // observer's `Task { @MainActor in ... }` hop with
+        // `MainActor.assumeIsolated` — under simulator load the
+        // Task scheduling was being deprioritized past the 10s
+        // poll window, dropping events on the floor. The
+        // `assumeIsolated` path runs synchronously on the .main
+        // queue (which `addObserver(... queue: .main)` already
+        // guarantees), so events append the moment the notification
+        // fires regardless of how many parallel tests are in the
+        // bundle.
+        let app = makeSeededApp()
+        app.launch()
+
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: 20),
+            "App should reach foreground for the telemetry probe to install"
+        )
+
+        let dashboard = app.otherElements["root.dashboard"]
+        XCTAssertTrue(
+            dashboard.waitForExistence(timeout: 15),
+            "Dashboard should render so the initial refresh telemetry fires"
+        )
+
+        // `WorkoutDashboardModel.refresh()` is called from each
+        // init via `Task { await refresh() }`. The refresh records
+        // a `dashboard.refresh` telemetry event on completion, which
+        // the deterministic-mode sink republishes via NotificationCenter
+        // — the probe's observer catches it and appends to the
+        // accessibility-label JSON.
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "dashboard",
+            name: "refresh",
+            within: 15,
+            test: self
+        )
     }
 
     func testOnboardingAppearsWhenLaunchDoesNotSkipIt() throws {

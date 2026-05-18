@@ -106,6 +106,12 @@ func testOnboardingFiresCompletedEvent() throws {
 
 This is preferred over "did the dashboard tab appear" assertions for any flow that has a canonical completion event. The probe buffer holds the last 50 events; bursty flows are fine, but if your journey emits more events than that you'll need to clear the buffer mid-run (currently not exposed — file a follow-up if you hit it).
 
+#### Observer-bounce hazard (VOL-175)
+
+The probe's `NotificationCenter` observer fires its callback on `.main` already (`addObserver(... queue: .main)`), but the closure is typed `@Sendable` under Swift 6 strict concurrency. To call MainActor-isolated `self.append` from inside, **use `MainActor.assumeIsolated`, not `Task { @MainActor in ... }`**. The Task variant adds an asynchronous scheduling hop; under simulator load (e.g., when the test bundle grows from adding a new test class), that hop can be deprioritized past the test's poll window, dropping events on the floor — even though the event itself fired and the probe is healthy. `assumeIsolated` runs synchronously on the current thread and trusts the `queue: .main` guarantee, so the append lands the moment the notification fires.
+
+This was the root cause behind VOL-175's "probe flakes when chaos journey is in the bundle" symptom. The fix is one line and lives in `App/VolumeArcTelemetryDebugProbe.swift`. Future contributors adding probes or notification observers should reach for `MainActor.assumeIsolated` whenever the notification queue is already `.main`.
+
 **Parser unit test:** `Tests/VolumeArcAppUITests/VolumeArcTelemetryProbeMatcherTests.swift` exercises the JSON parser in isolation so a regression in the matcher surfaces there instead of as a confusing XCUITest timeout downstream.
 
 **Phase 2 (follow-up):** wire every journey in the suite to the canonical events listed in the VOL-149 acceptance criteria — onboarding, workout start/log/complete, coach session, paywall, watch sync, HealthKit permission.

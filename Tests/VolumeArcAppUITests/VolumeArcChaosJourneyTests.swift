@@ -97,12 +97,19 @@ final class VolumeArcChaosJourneyTests: XCTestCase {
         // `false` and records `health.auth_failed`.
         healthRow.tap()
 
-        // VOL-175 follow-up: re-add `assertTelemetryFired(in: app,
-        // category: "health", name: "auth_failed", test: self)`
-        // once the probe-flake-with-chaos-bundle issue is fixed.
-        // The chaos plumbing is fully covered by the UI-state
-        // assertion below; the telemetry assertion is gravy that
-        // we re-introduce after VOL-175 closes.
+        // VOL-175 (resolved 2026-05-18): re-added after replacing
+        // the probe observer's `Task { @MainActor in ... }` hop
+        // with `MainActor.assumeIsolated`. Events now append
+        // synchronously the moment the notification fires, so the
+        // chaos-bundle load no longer deprioritizes the append past
+        // the test's poll window.
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "health",
+            name: "auth_failed",
+            within: 15,
+            test: self
+        )
 
         // Row should remain in "Connect" state — the model's
         // failure path must NOT claim authorization succeeded.

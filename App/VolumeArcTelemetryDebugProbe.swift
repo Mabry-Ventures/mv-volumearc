@@ -59,9 +59,20 @@ final class VolumeArcTelemetryDebugProbe: ObservableObject {
         // Swift 6 strict concurrency: the closure passed to
         // `addObserver(forName:object:queue:using:)` is `@Sendable`
         // and not MainActor-isolated by type, even though it runs on
-        // `.main`. Bouncing through `Task { @MainActor in ... }` makes
-        // the isolation explicit so the compiler accepts the `self.append`
-        // call on this MainActor-isolated object.
+        // `.main`. We need an explicit entry into MainActor isolation
+        // to call `self.append`.
+        //
+        // VOL-175: the original implementation bounced through
+        // `Task { @MainActor in ... }`. Under simulator load (e.g.,
+        // when the test bundle includes the chaos journey class
+        // alongside the standard journey suites), that Task hop's
+        // scheduling deprioritized the append past the test's 10s
+        // poll window, dropping events that fired during the poll.
+        // `MainActor.assumeIsolated` runs synchronously on the
+        // current thread — and because `queue: .main` above already
+        // guarantees we're on the main thread, the assumption is
+        // safe. No scheduling hop; the event appends the moment the
+        // notification fires.
         observer = NotificationCenter.default.addObserver(
             forName: .volumeArcTelemetryDidRecord,
             object: nil,
@@ -77,7 +88,7 @@ final class VolumeArcTelemetryDebugProbe: ObservableObject {
             guard
                 let event = notification.userInfo?[TelemetryNotificationKey.event] as? TelemetryEvent
             else { return }
-            Task { @MainActor [weak self] in
+            MainActor.assumeIsolated {
                 self?.append(event)
             }
         }
