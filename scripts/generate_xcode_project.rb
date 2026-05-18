@@ -449,7 +449,7 @@ sentry_url = 'https://github.com/getsentry/sentry-cocoa.git'
 # it raises "no implicit conversion of Symbol into String" deep inside
 # the gem's `tree_hash_to_path`. Stick to strings so deterministic UUID
 # rewriting can traverse this attribute.
-sentry_requirement = { 'kind' => 'exactVersion', 'version' => '8.58.1' }
+sentry_requirement = { 'kind' => 'exactVersion', 'version' => '9.13.0' }
 sentry_ref = project.root_object.package_references.find { |r| r.repositoryURL == sentry_url }
 unless sentry_ref
   sentry_ref = project.new(Xcodeproj::Project::Object::XCRemoteSwiftPackageReference)

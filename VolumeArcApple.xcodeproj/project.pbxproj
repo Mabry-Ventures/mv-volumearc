@@ -1033,7 +1033,7 @@
 			);
 			name = VolumeArcAppTests;
 			packageProductDependencies = (
-				0C7AC33C18CA369999CD57DA /* Sentry */,
+				6382F8E36EA6D3C7FD9B4E60 /* Sentry */,
 				84B203A6194EB99DCA22BDA4 /* SnapshotTesting */,
 			);
 			productName = VolumeArcAppTests;
@@ -1059,7 +1059,7 @@
 			);
 			name = VolumeArcApp;
 			packageProductDependencies = (
-				E09AB1C4F53CA80E293AA774 /* Sentry */,
+				C1489721173F1D37F39C7B96 /* Sentry */,
 			);
 			productName = VolumeArc;
 			productReference = CACE01473A6CDDF1D970B2FB /* VolumeArc.app */;
@@ -1262,7 +1262,7 @@
 			mainGroup = E3EC730A0FAD809E6B599F78;
 			minimizedProjectReferenceProxies = 0;
 			packageReferences = (
-				5E6A63B5A56EF15B38581F5A /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
+				2D4C6CADEF1F3DCA94C80284 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
 				729327BFA54AD71D7BF180ED /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -2447,12 +2447,12 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		5E6A63B5A56EF15B38581F5A /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
+		2D4C6CADEF1F3DCA94C80284 /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/getsentry/sentry-cocoa.git";
 			requirement = {
 				kind = exactVersion;
-				version = 8.58.1;
+				version = 9.13.0;
 			};
 		};
 		729327BFA54AD71D7BF180ED /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */ = {
@@ -2466,9 +2466,9 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		0C7AC33C18CA369999CD57DA /* Sentry */ = {
+		6382F8E36EA6D3C7FD9B4E60 /* Sentry */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 5E6A63B5A56EF15B38581F5A /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			package = 2D4C6CADEF1F3DCA94C80284 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
 			productName = Sentry;
 		};
 		84B203A6194EB99DCA22BDA4 /* SnapshotTesting */ = {
@@ -2476,9 +2476,9 @@
 			package = 729327BFA54AD71D7BF180ED /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */;
 			productName = SnapshotTesting;
 		};
-		E09AB1C4F53CA80E293AA774 /* Sentry */ = {
+		C1489721173F1D37F39C7B96 /* Sentry */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 5E6A63B5A56EF15B38581F5A /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			package = 2D4C6CADEF1F3DCA94C80284 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
 			productName = Sentry;
 		};
 /* End XCSwiftPackageProductDependency section */
