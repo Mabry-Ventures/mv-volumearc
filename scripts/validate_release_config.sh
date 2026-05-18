@@ -693,4 +693,32 @@ if git describe --tags --abbrev=0 >/dev/null 2>&1; then
   fi
 fi
 
+# VOL-216: ASC metadata readiness gate. Soft-warns by default so a
+# regen / smoke run during everyday development doesn't trip on
+# in-progress metadata drafts. When `VOLUMEARC_RELEASE_READY=1` is
+# set (release readiness check, `fastlane ios release` precondition,
+# or operator manually proving "we're submission-ready"), any file
+# under `fastlane/metadata/en-US/` that still contains the literal
+# token `TBD` becomes a hard fail with the file list. This is the
+# in-repo source-of-truth gate the audit (F-M-007) asked for so a
+# fresh clone can tell submission-ready from never-started.
+metadata_dir="fastlane/metadata/en-US"
+if [[ -d "$metadata_dir" ]]; then
+  tbd_files=$(/usr/bin/grep -rl "TBD" "$metadata_dir" 2>/dev/null || true)
+  if [[ -n "$tbd_files" ]]; then
+    if [[ "${VOLUMEARC_RELEASE_READY:-0}" == "1" ]]; then
+      echo "FAIL: App Store Connect metadata still contains TBD placeholders (VOLUMEARC_RELEASE_READY=1 active):" >&2
+      while IFS= read -r tbd_file; do
+        echo "  - $tbd_file" >&2
+      done <<<"$tbd_files"
+      echo "Resolve every TBD before running 'fastlane ios release' or marking the submission as ready." >&2
+      exit 1
+    else
+      echo "INFO: $metadata_dir has $(echo "$tbd_files" | wc -l | tr -d ' ') file(s) with TBD placeholders. Set VOLUMEARC_RELEASE_READY=1 to enforce."
+    fi
+  else
+    echo "App Store Connect metadata: no TBD placeholders remaining in $metadata_dir."
+  fi
+fi
+
 echo "Release configuration validation passed."

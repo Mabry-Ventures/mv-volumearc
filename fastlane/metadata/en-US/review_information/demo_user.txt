@@ -1,0 +1,1 @@
+TBD — Apple ID for App Review (Sandbox demo account). Use a dedicated Sandbox Apple ID, NOT a real user account.
