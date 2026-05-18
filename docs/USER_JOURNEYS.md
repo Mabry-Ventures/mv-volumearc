@@ -23,7 +23,7 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | Onboarding | 5 | 2 | 40% |
 | Today | 5 | 1 | 20% |
 | Workouts | 7 | 3 | 43% |
-| Coach | 6 | 0 | 0% |
+| Coach | 6 | 3 | 50% |
 | Signals | 3 | 0 | 0% |
 | Profile | 8 | 3 | 38% |
 | Watch | 6 | 2 | 33% |
@@ -76,12 +76,12 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 
 | ID | Pre-conditions | Steps | Success | Telemetry | Test |
 |---|---|---|---|---|---|
-| `coach.ask-question` | Coach tab | Type question → tap Send | Response stream starts within 2s | `coach.question_sent` + `coach.first_token_received` | `[ ]` (test method does not yet exist; integration coverage via `VolumeArcDashboardIntegrationTests`. Phase 2 wires the journey-level XCUITest using VOL-149's `assertTelemetryFired`) |
-| `coach.scroll-memory` | Memory present | Scroll Coach tab | Memory loads paginated | (perf-only) | `[ ]` |
+| `coach.ask-question` | Coach tab | Type question → tap Send | Response stream starts within 2s | `coach.question_sent` + `coach.first_token_received` | `VolumeArcCoachJourneyTests.testCoachAskQuestionStreamsResponse` |
+| `coach.scroll-memory` | Memory present | Scroll Coach tab | Memory loads paginated | (perf-only) | `VolumeArcCoachJourneyTests.testCoachScrollMemory` |
 | `coach.voice-prompt` | Premium + voice flag on | Tap mic → speak → release | Question transcribed → response spoken | `voice.session_started` | `[ ]` |
 | `coach.follow-up-turn` | Question answered | Type follow-up → Send | Memory context referenced in response | `coach.session_continued` | `[ ]` |
 | `coach.relay-fallback` | Force relay 5xx | Ask question | Fallback to local heuristic; UI shows degraded notice | `coach.fallback_used` | `[ ]` |
-| `coach.privacy-mode-strict` | Privacy mode = strict | Ask question | PII redacted from prompt | `coach.privacy_redaction_applied` | `[ ]` |
+| `coach.privacy-mode-strict` | Privacy mode = strict | Ask question | PII redacted from prompt | `coach.privacy_redaction_applied` | `VolumeArcCoachJourneyTests.testCoachPrivacyModeStrictRedactsEmail` (asserts `coach.question_sent` today; the `coach.privacy_redaction_applied` event wiring follows-up at the `CoachPromptTemplate` call site — `PromptPrivacyRedactor` from VOL-197 currently has unit-test coverage only) |
 
 ## Signals
 

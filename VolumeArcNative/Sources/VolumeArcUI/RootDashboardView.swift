@@ -81,8 +81,12 @@ public struct RootDashboardView: View {
         .vaToastOverlay(toastPresenter)
         .task {
             let shouldOpenProfileOnLaunch = Self.shouldOpenProfileOnLaunch
+            let shouldOpenCoachOnLaunch = Self.shouldOpenCoachOnLaunch
             if shouldOpenProfileOnLaunch {
                 navigation.openProfile()
+            }
+            if shouldOpenCoachOnLaunch {
+                navigation.openCoach(prompt: "")
             }
 
             await model.refresh()
@@ -92,6 +96,10 @@ public struct RootDashboardView: View {
             // simulator-specific TabView hit testing.
             if shouldOpenProfileOnLaunch, navigation.showOnboarding == false {
                 navigation.openProfile()
+            }
+            // VOL-200 P2: same affordance for Coach-tab journeys.
+            if shouldOpenCoachOnLaunch, navigation.showOnboarding == false {
+                navigation.openCoach(prompt: "")
             }
             // VOL-93: `-ShowPaywallOnLaunch 1` asks the dashboard to
             // present the paywall as soon as the app boots. This is an
@@ -188,6 +196,23 @@ public struct RootDashboardView: View {
     private static var shouldOpenProfileOnLaunch: Bool {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: "-OpenProfileOnLaunch") else {
+            return false
+        }
+        let nextIndex = arguments.index(after: index)
+        guard nextIndex < arguments.endIndex else { return true }
+        let rawValue = arguments[nextIndex]
+        guard rawValue.hasPrefix("-") == false else { return true }
+        return rawValue != "0"
+    }
+
+    /// VOL-200 Phase 2: XCUITest helper that opens the Coach tab on
+    /// launch so coach-journey tests don't depend on simulator-specific
+    /// TabView hit testing. Same shape as `shouldOpenProfileOnLaunch`;
+    /// add similar helpers for Signals / Workouts as Phase 2+ journey
+    /// PRs need stable tab entry points.
+    fileprivate static var shouldOpenCoachOnLaunch: Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "-OpenCoachOnLaunch") else {
             return false
         }
         let nextIndex = arguments.index(after: index)
