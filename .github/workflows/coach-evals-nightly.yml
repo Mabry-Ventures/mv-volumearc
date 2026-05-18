@@ -40,7 +40,16 @@ on:
         default: ''
 
 permissions:
-  contents: read
+  # VOL-207: bumped from `contents: read` to `contents: write` so the
+  # nightly cron's final step (`Commit trend update on main cron`) can
+  # actually push `docs/coach-eval-trend.json` back to main. Before
+  # this, the trend file was being mutated locally inside the job but
+  # the push step failed silently every night, leaving the public
+  # quality page rendering a stale trend forever. The write scope is
+  # used by exactly one step in this workflow and only on the cron
+  # branch (`schedule` event + `refs/heads/main`); the workflow_dispatch
+  # path still skips the commit per the existing `if:` guard.
+  contents: write
   issues: write  # so a future VOL-147 follow-up can open a regression Linear ticket via gh
   pull-requests: read
 

@@ -112,7 +112,10 @@ export default function QualityPage() {
                 grounding (RPE / weight / reps), reference to readiness state,
                 no banned phrases (&ldquo;I don&rsquo;t know&rdquo;,
                 &ldquo;ChatGPT&rdquo;, etc.), and pain-signal flagging where
-                expected. Regressions open a Linear issue and notify the team.
+                expected. A failed nightly run fails the GitHub Actions
+                workflow — the cron-failure email and the Actions summary
+                tab are the operator signals today. Automated Slack /
+                Linear regression filing is a planned follow-up.
               </p>
             </div>
           </section>
