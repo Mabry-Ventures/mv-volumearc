@@ -304,9 +304,66 @@ Coverage target: **100%** of journeys covered by an XCUITest paired with telemet
 
 ## Snapshot / visual regression
 
-**Pending** — [VOL-135](https://linear.app/mabry-ventures/issue/VOL-135) introduces pointfreeco SnapshotTesting on:
+**Phase 1 infrastructure landed (VOL-201).** pointfreeco SnapshotTesting is linked into `VolumeArcAppTests`, and `scripts/record_snapshots.sh` is the canonical helper for regenerating baselines locally. Phase 2+ (the actual baselines per surface family) is filed under [VOL-201](https://linear.app/mabry-ventures/issue/VOL-201) and rolls out one PR per family. Audit target:
+
 - Every VAUI design-system component (`VAButton`, `VACard`, `VACoachBubble`, `VAToast`, metric displays, `VAReadinessHero`)
 - Critical screens: `OnboardingView`, `PaywallView`, `RootDashboardView` (each tab), `ActiveWorkoutLiveActivity` lock-screen + Dynamic Island
-- Variants per surface: light + dark × `.medium` + `.accessibility5` Dynamic Type × reduce-transparency on/off
+- Widgets (3 sizes × 2 themes)
+- Variants per surface: light + dark × default + `.accessibility5` Dynamic Type × reduce-transparency on/off
 
-Snapshot artifacts live under `Tests/VolumeArcAppTests/Snapshots/__Snapshots__/`. CI failures from snapshot diffs block merge on the same gate as unit tests; recording new snapshots is a deliberate `--record` local run reviewed in PR.
+### Per-trait `assertSnapshot` pattern
+
+For every surface, snapshot it under the full trait matrix in one test method so the captured PNG filenames carry the trait combination:
+
+```swift
+func testPaywallSnapshots() {
+    let view = PaywallView(...)
+    let traits: [(String, UITraitCollection)] = [
+        ("light", UITraitCollection(traitsFrom: [
+            .init(userInterfaceStyle: .light),
+            .init(preferredContentSizeCategory: .medium),
+        ])),
+        ("light_xxl", UITraitCollection(traitsFrom: [
+            .init(userInterfaceStyle: .light),
+            .init(preferredContentSizeCategory: .accessibilityExtraExtraLarge),
+        ])),
+        ("dark", UITraitCollection(traitsFrom: [
+            .init(userInterfaceStyle: .dark),
+            .init(preferredContentSizeCategory: .medium),
+        ])),
+        ("dark_xxl", UITraitCollection(traitsFrom: [
+            .init(userInterfaceStyle: .dark),
+            .init(preferredContentSizeCategory: .accessibilityExtraExtraLarge),
+        ])),
+    ]
+    for (suffix, traits) in traits {
+        assertSnapshot(
+            of: view,
+            as: .image(on: .iPhone17, traits: traits),
+            named: suffix
+        )
+    }
+}
+```
+
+Each iteration writes `__Snapshots__/<TestClass>/testPaywallSnapshots.<suffix>.png`. CI compares against the committed PNG and fails on any pixel-level drift.
+
+### Simulator-OS pinning (important)
+
+pointfreeco SnapshotTesting captures pixel-identical baselines that **drift between simulator OS minor versions** (a baseline captured on iOS 26.5 will mismatch CI's 26.4 sim). The mitigation:
+
+- `scripts/record_snapshots.sh` defaults to `SNAPSHOT_SIMULATOR_OS=26.5` and `SNAPSHOT_SIMULATOR_NAME="iPhone 17"`.
+- `.github/workflows/ci.yml`'s test job uses the same destination (already pinned via the existing `xcodebuild -destination` argument).
+- If CI's runner image bumps to a newer minor, regenerate baselines via `./scripts/record_snapshots.sh` on the new image in a dedicated maintenance PR, and pin both env vars to the new value.
+
+### Local workflow
+
+1. Author the snapshot test in `Tests/VolumeArcAppTests/Snapshots/<TestClass>.swift`.
+2. Run `./scripts/record_snapshots.sh` (or `SNAPSHOT_TEST_FILTER=<TestClass> ./scripts/record_snapshots.sh` for a single family).
+3. Review the generated PNGs under `Tests/VolumeArcAppTests/Snapshots/__Snapshots__/<TestClass>/`.
+4. Commit the PNGs in the same PR as the surface change.
+5. CI runs with default (non-recording) mode and asserts.
+
+Recording new baselines without committing them silently breaks the gate (CI re-records each run, never compares), so always commit the PNG in the same PR.
+
+CI failures from snapshot diffs block merge on the same gate as unit tests.
