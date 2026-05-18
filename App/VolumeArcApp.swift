@@ -236,7 +236,10 @@ struct VolumeArcApp: App {
         let aiProvider = VolumeArcAIRuntimeFactory.makeCoachProvider(
             flagGate: flagGate,
             subscriptionStore: subscriptionStore,
-            premiumGate: premiumGate
+            premiumGate: premiumGate,
+            // VOL-199: pass the sink so `FallbackCoachProvider` can
+            // emit `coach.fallback_used` events on relay degradation.
+            telemetrySink: telemetrySink
         )
         let voiceCoach = VolumeArcAIRuntimeFactory.makeVoiceCoach(
             flagGate: flagGate,
