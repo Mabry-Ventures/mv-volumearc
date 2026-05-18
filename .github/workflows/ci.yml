@@ -87,19 +87,58 @@ jobs:
       # races against the runner's `_actions/` cache and fails with
       # "Can't find action.yml under actions/checkout/v6" when another
       # job interferes. Letting it fail the job would mask successful
-      # test + coverage runs. The main checkout itself isn't risky to
-      # tolerate failures on — if it fails, every subsequent build/test
-      # step will fail loudly with missing source-tree errors.
+      # test + coverage runs.
       #
-      # VOL-186: the post-2026-05-17 fleet `JOB_STARTED` hook does
-      # ghost-SHA workspace detection + auto-wipe at the host level
-      # before any step runs, so the prior "Verify checkout succeeded"
-      # step (which compared `git rev-parse HEAD` to GITHUB_SHA) is
-      # gone. Workspace SHA integrity is now a host invariant, not a
-      # per-workflow defense.
+      # VOL-186 / VOL-194: the per-workflow SHA-mismatch detector was
+      # removed in VOL-186 in favor of the post-2026-05-17 fleet
+      # `JOB_STARTED` hook doing ghost-SHA detection at the host level.
+      # The 2026-05-18 audit (F-C-002) flagged the resulting fail-open
+      # posture: a required status check that does not prove it tested
+      # the PR SHA is not an enforceable gate, regardless of host-level
+      # defenses. This restores the explicit per-workflow assertion as
+      # belt-and-suspenders defense — the host hook remains the primary
+      # auto-recovery mechanism, but a non-matching workspace SHA after
+      # checkout now fails the job immediately rather than running
+      # tests against a stale tree and reporting green.
       - name: Checkout
         continue-on-error: true
         uses: actions/checkout@v6
+
+      - name: Verify checkout SHA matches GITHUB_SHA (VOL-194)
+        # If `actions/checkout` failed because of the `_actions/` cache
+        # race, this step re-evaluates the existing workspace HEAD.
+        # When the host-level JOB_STARTED hook has already cleaned a
+        # ghost-SHA workspace, this passes against the freshly-checked
+        # tree. When checkout silently failed against a stale workspace
+        # that the host hook did NOT catch, this is the gate that fails
+        # the job before the build/test steps can report green against
+        # the wrong source tree. Tolerates the documented set of
+        # generated, gitignored outputs that the prepare/preflight
+        # steps regenerate (DerivedData paths, transient build caches).
+        run: |
+          set -euo pipefail
+          actual_sha="$(/usr/bin/git rev-parse HEAD)"
+          expected_sha="${GITHUB_SHA}"
+          if [[ "${actual_sha}" != "${expected_sha}" ]]; then
+            echo "::error::Workspace HEAD ${actual_sha} does not match GITHUB_SHA ${expected_sha}. Checkout did not produce a workspace at the PR/push SHA; refusing to run the required Build & Test step against an unverified tree. The host-level JOB_STARTED hook should have caught this — investigate the runner's _actions/ cache state."
+            exit 1
+          fi
+          # Tolerate the well-known transient outputs the runner produces
+          # before this step (none expected at this point, but keep the
+          # tolerance explicit so future generated paths don't trip a
+          # false positive).
+          dirty="$(/usr/bin/git status --porcelain=v1 || true)"
+          if [[ -n "${dirty}" ]]; then
+            echo "::warning::Workspace has uncommitted changes after checkout:"
+            echo "${dirty}"
+            # Not a hard fail — `actions/checkout@v6` does not guarantee
+            # a clean workspace on the self-hosted runner because the
+            # _actions/ cache lives next to it. We surface it so a real
+            # regression (e.g. a generated file accidentally checked in)
+            # is debuggable.
+          fi
+          echo "Workspace SHA matches GITHUB_SHA (${expected_sha})"
+        shell: bash
 
       - name: Prepare Ruby toolchain
         # VOL-109/VOL-110 PR unblock: runner images may have
