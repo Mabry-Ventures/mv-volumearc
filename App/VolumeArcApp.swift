@@ -570,6 +570,26 @@ struct VolumeArcApp: App {
     private func handle(url: URL) {
         guard let destination = VolumeArcDeepLink.destination(for: url) else { return }
 
+        // VOL-212: when the deep link carries `?source=intent&intent=<name>`,
+        // emit a typed `intent.<name>.invoked` telemetry event so we can
+        // see App Intent / Shortcut usage in the operator dashboard
+        // alongside in-app navigation. The `intents` parameter is stripped
+        // by `VolumeArcDeepLink.destination(for:)`'s URL-component parser
+        // (it only reads scheme/host/path/query for the canonical
+        // destination), so this read of `URLComponents` is non-destructive.
+        if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+           let queryItems = components.queryItems,
+           queryItems.first(where: { $0.name == "source" })?.value == "intent",
+           let intentName = queryItems.first(where: { $0.name == "intent" })?.value {
+            telemetrySink.record(TelemetryEvent(
+                category: "intent",
+                name: "\(intentName).invoked",
+                severity: .info,
+                message: "App Intent \(intentName) invoked via deep link.",
+                metadata: ["intent": intentName]
+            ))
+        }
+
         switch destination {
         case .today, .nextWorkout:
             navigation.openToday()
