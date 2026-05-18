@@ -98,6 +98,23 @@ if [[ -f "$INFO_PLIST" ]]; then
   else
     echo "VOLUMEARC_AI_RELAY_URL env var unset; leaving Info.plist placeholder"
   fi
+  # VOL-196: relay signing key release-time injection. Without this,
+  # release builds carry a relay URL but no auth material, and the
+  # `AIRelayCoachProvider` factory installs the relay path while the
+  # provider throws `relayUnavailable` on every request — cloud AI
+  # and live voice silently degrade in TestFlight/App Store builds.
+  # The companion validator at `scripts/validate_exported_ipa_contract.sh`
+  # fails the archive if the URL is present but the signing key is
+  # missing, so a release build can't ship with this configuration
+  # error undetected. The medium-term plan (VOL-206) is App Attest —
+  # see this PR's `App/VolumeArcAppAttestSessionProvider.swift` for the
+  # Phase A scaffolding that runs alongside the HMAC path during rollout.
+  if [[ -n "${VOLUMEARC_RELAY_SIGNING_KEY:-}" ]]; then
+    plutil -replace VolumeArcRelaySigningKey -string "$VOLUMEARC_RELAY_SIGNING_KEY" "$INFO_PLIST"
+    echo "Patched VolumeArcRelaySigningKey into Info.plist (len=${#VOLUMEARC_RELAY_SIGNING_KEY})"
+  else
+    echo "VOLUMEARC_RELAY_SIGNING_KEY env var unset; leaving Info.plist placeholder. Release builds without this set will fail validate_exported_ipa_contract.sh."
+  fi
 else
   echo "WARNING: Info.plist not found at $INFO_PLIST — runtime config not patched"
 fi
