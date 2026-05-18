@@ -143,6 +143,10 @@ public struct ProfileView: View {
                 VAHaptics.tap()
                 isEditingProfile = true
             }
+            // VOL-200 P4: stable identifier so the `profile.edit-profile`
+            // and `profile.coaching-style` journey tests can tap this
+            // row reliably to open the Edit Profile sheet.
+            .accessibilityIdentifier("profile.coachingStyleRow")
             profileRow(
                 label: String(localized: "Advancement", comment: "Profile row label"),
                 value: model.athlete.advancementLevel.displayName,
@@ -225,6 +229,10 @@ public struct ProfileView: View {
                 )
             }
             .buttonStyle(.plain)
+            // VOL-200 P4: stable identifier so the `profile.diagnostics`
+            // journey test can resolve this row without depending on
+            // the localized "Diagnostics" string.
+            .accessibilityIdentifier("profile.diagnostics")
 
             profileRow(
                 label: model.isHealthAuthorized
