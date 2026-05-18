@@ -456,6 +456,12 @@ struct VolumeArcApp: App {
                 // Publish the model to the BG task handler holder and
                 // schedule the next refresh/processing opportunity.
                 VolumeArcBackgroundTasks.sharedModel = dashboardModel
+                // VOL-204: also publish the telemetry sink so the
+                // schedule paths can report submit success/failure.
+                // Without this, `BGTaskScheduler.submit` failures are
+                // visible only in `os.Logger` (Console.app), not in
+                // the typed telemetry stream that operations watches.
+                VolumeArcBackgroundTasks.telemetrySink = telemetrySink
                 VolumeArcBackgroundTasks.scheduleAll()
                 #endif
 

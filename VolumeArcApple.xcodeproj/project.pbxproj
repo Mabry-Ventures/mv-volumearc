@@ -8,65 +8,64 @@
 
 /* Begin PBXBuildFile section */
 		005F34E0C670596A6414D123 /* TelemetrySink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98EAA6F54E0255DFF4C29C77 /* TelemetrySink.swift */; };
-		01CBEF5A8D02536ECC70E7B9 /* VolumeArcPersistenceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15B3FB7523424FCB6B7CCBAB /* VolumeArcPersistenceController.swift */; };
-		01EC1AE9E9ABB5435CF6ABEA /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 479EB5A5F6C20DD9F6DC9CE7 /* Security.framework */; };
 		02F59C8EA189EA45B2EFDAA5 /* TodayOverviewComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E5C26A2B7A826226E5E11A2 /* TodayOverviewComponents.swift */; };
+		03E20736296B13F341A85F5D /* VolumeArcAIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA33FA2FE5D837499A348547 /* VolumeArcAIConfiguration.swift */; };
+		04455EB2323EFF5D63E39841 /* VolumeArcAppConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49D4F0162455D3BAD65D349B /* VolumeArcAppConfigurationTests.swift */; };
+		04DCFE4D9A4C3A1505A67C91 /* RecoveryContextTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A942E800409941F077282F3F /* RecoveryContextTests.swift */; };
+		0880C515447EC5C82FE1CDB8 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 64BEE80D7DFF1D59DD066695 /* Foundation.framework */; };
+		0B305A312D1E5FF36E30F72E /* VolumeArcDashboardIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47E1CE67331380DE44A971E9 /* VolumeArcDashboardIntegrationTests.swift */; };
 		0BA80B9E8F4399DAF0E72245 /* CloudSyncTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92B3EB85C16E2FAF483BCF18 /* CloudSyncTypes.swift */; };
 		0C1B7122C6E2E161D115AD6E /* VAHaptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = D60FA91C8E8BCF56E80B30EA /* VAHaptics.swift */; };
 		0C2BCCCF5533C0DC3FBC3ED5 /* VolumeArcPersistenceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15B3FB7523424FCB6B7CCBAB /* VolumeArcPersistenceController.swift */; };
-		0D05FBA02649D767F45D74D7 /* VolumeArcCoachPromptTemplateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06B65CCBCE84E273958A0A7C /* VolumeArcCoachPromptTemplateTests.swift */; };
+		0CA6A569F590F07F45025BDA /* VolumeArcSentryConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80260DA2A653F8A8B4FF65A0 /* VolumeArcSentryConfiguration.swift */; };
 		0EC456ED520F3B372580C5B4 /* VoiceCoach.swift in Sources */ = {isa = PBXBuildFile; fileRef = E26292BCC6DAAA667C161A2C /* VoiceCoach.swift */; };
-		0FD5BAEFBD169BE909859190 /* VolumeArcSentryConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 250F8C8036D16B5F1C37A935 /* VolumeArcSentryConfigurationTests.swift */; };
 		10E283B5A62EC928B715E57C /* PremiumGateTelemetry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30791E09BFB299ADA1568E3D /* PremiumGateTelemetry.swift */; };
 		11A2958B7556F95B28A96724 /* Tokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52E3E1D70B656024A2C479AA /* Tokens.swift */; };
-		11FF6E0554B05C3478D9F640 /* VolumeArcSecureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAB7C5436B2D5BADFBE9C269 /* VolumeArcSecureStore.swift */; };
 		13A2B690E0742CD6754EFB61 /* VARecoveryChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62550203A8334F108107CB27 /* VARecoveryChip.swift */; };
 		13A6C4905E371FB6A5994692 /* VolumeArcLiveActivityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C3D2E397F5E1A883D20378E /* VolumeArcLiveActivityController.swift */; };
+		167DE0E23A0A61F9852AA327 /* VolumeArcSecureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAB7C5436B2D5BADFBE9C269 /* VolumeArcSecureStore.swift */; };
+		169AE1AA26D4D6706F4735EA /* VolumeArcCloudConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72F3A320DA5B391D1014EC32 /* VolumeArcCloudConfiguration.swift */; };
 		16BD41B7D833D0A28A889123 /* VolumeArcBackgroundTasks.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDBEFA36A4C8D980C8795150 /* VolumeArcBackgroundTasks.swift */; };
 		1A1D066DBC7EF51420A00A9B /* WatchWorkoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D3C667D1793BC16DC29FA2D /* WatchWorkoutView.swift */; };
 		1B931807A95FEBA08DCAF606 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9733972F295ED22E08D1A19A /* Foundation.framework */; };
 		1C0C5DC7EDB49E991AC56FF7 /* ReadinessModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A4B1384F7B9F7468C06AA12 /* ReadinessModel.swift */; };
-		1C65A0AA5E66A54DA57810D8 /* VolumeArcProgressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA4B5D899C480F3DFE11FEBE /* VolumeArcProgressionTests.swift */; };
-		1D21EE103039785B0974E4AB /* VolumeArcPremiumGatingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FC19C40B870DEA24CCB3E8B /* VolumeArcPremiumGatingTests.swift */; };
 		1D635B02266CF726C35377E7 /* AICoachProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F95B8C9459FEC005DCA6F0 /* AICoachProvider.swift */; };
-		2055EE239842B262698EDA94 /* Fixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F32FBF7601691999E6B0FA3 /* Fixtures.swift */; };
-		20E98B8DF1720CDC9820E66C /* VolumeArcAppConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90A277502F0F00710093AF2C /* VolumeArcAppConfigurationTests.swift */; };
+		1FEE3A1CDC300FF26C4AE9B6 /* VolumeArcRelayURLValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEEC4E1D13204C675196F04D /* VolumeArcRelayURLValidationTests.swift */; };
+		20FEED79D7D9D0009C5F1A8E /* ExerciseCatalogScaleupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17BAA79165EA8793F412E3AE /* ExerciseCatalogScaleupTests.swift */; };
 		21BF4CB1D9681A85A28C4189 /* VolumeArcCloudConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72F3A320DA5B391D1014EC32 /* VolumeArcCloudConfiguration.swift */; };
-		21C22B731D160D4DBD46FC18 /* VolumeArcAppUITestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CDA28B548D05311B5EF41FA /* VolumeArcAppUITestSupport.swift */; };
-		2545450C8242EE950109C675 /* VolumeArcChaosJourneyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 467D3C87D3FA2A8B9438DDD5 /* VolumeArcChaosJourneyTests.swift */; };
+		21C22B731D160D4DBD46FC18 /* VolumeArcAppUITestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C7D70B14D10EBD05B82742C /* VolumeArcAppUITestSupport.swift */; };
+		253C7F17DD98816E21BA5E7D /* libVolumeArcCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 81B9F78DA06222A205FA5B4F /* libVolumeArcCore.a */; };
+		2545450C8242EE950109C675 /* VolumeArcChaosJourneyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6838AD62B02B504E55409142 /* VolumeArcChaosJourneyTests.swift */; };
 		26415685DF0C1C1E7E6C36C8 /* SessionSummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CD90BB1736F43C95F7F0DC9 /* SessionSummaryView.swift */; };
-		299363B9BAE26600773687D8 /* VolumeArcRelayURLValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD5DC07A66ABBEA198E31181 /* VolumeArcRelayURLValidationTests.swift */; };
+		2AAEB7D7D25F270CF5F748BF /* Fixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC283EA1032549D4A59BCB87 /* Fixtures.swift */; };
 		2B4C01CC23E75A32E4218D61 /* NotificationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCFCA2F22B2E57733A372150 /* NotificationStore.swift */; };
 		2B7205540720C998F76C0FE2 /* OutboundSyncQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A427C2B56596401DBCF532C /* OutboundSyncQueue.swift */; };
 		2CAFE33E3580CB288B7C7494 /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 673B89058A6513F2A18B8985 /* TodayView.swift */; };
 		2D9549ED49A60A782457630C /* WorkoutDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91D49FCA76FCAD2117DF76E1 /* WorkoutDetailView.swift */; };
 		2DBA10E79AAB7E7436C1BD3E /* libVolumeArcUI.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 296658B9BBE4EDCA6CF98D6E /* libVolumeArcUI.a */; };
 		2ED7DAEEF6A5D2A122F942C0 /* AppIntents.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F916D8D7D8DC7CD61DB6C8E3 /* AppIntents.framework */; };
-		302BF19BE810564DC5F0E069 /* HealthKitAuthorizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3E14439955280347E3B0A93 /* HealthKitAuthorizationTests.swift */; };
+		2FCB71C17DAD54550E573809 /* InMemoryTelemetrySinkNotificationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A995365AB3FCD6071DC290D8 /* InMemoryTelemetrySinkNotificationTests.swift */; };
 		314C9E06343E8D97060B81B6 /* CoachPlanningComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71076BFB8EDA7486D1EC4FCC /* CoachPlanningComponents.swift */; };
-		320DEB4F4D8937D2EC1F91A5 /* Mocks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 434D37DD31F5FE114293CFDB /* Mocks.swift */; };
-		32FE1468A76FFA28CC400CB8 /* VolumeArcCoreCoverageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E72B8EF97365CE5DF2DA482 /* VolumeArcCoreCoverageTests.swift */; };
+		3168592640C0AEDF49CA734C /* InMemoryCloudSyncTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8449B5BF28129EDA592D949B /* InMemoryCloudSyncTransport.swift */; };
 		3484BEC8FBCA3409BEF8B7F7 /* VolumeArcAIRuntimeFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11A862BFEDB3B62B1DF689CA /* VolumeArcAIRuntimeFactory.swift */; };
-		36CEB69DE8877C8CA73CC1A8 /* VolumeArcAIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA33FA2FE5D837499A348547 /* VolumeArcAIConfiguration.swift */; };
-		37C2741FC8BBAFC9A695E5E4 /* VolumeArcLiveActivityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C3D2E397F5E1A883D20378E /* VolumeArcLiveActivityController.swift */; };
 		390FE1149EED7157731EA9C9 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DDD0FDD0FC380C0BC0A4EB4D /* SwiftUI.framework */; };
 		39A74FE4454DC69FD7A11B45 /* VolumeArcSecureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAB7C5436B2D5BADFBE9C269 /* VolumeArcSecureStore.swift */; };
-		3AB225CA0E5E9324624E69FC /* RecoveryContextTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE39A8FD226E89EFEDCF6B8F /* RecoveryContextTests.swift */; };
 		3B09CD84B8AC12A858787879 /* VADesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9454F82B5F3A481311ABDB4 /* VADesignTokens.swift */; };
+		3BD55A98B868D304C6540B04 /* VolumeArcBackgroundTasksTelemetryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5D51B76348753056F6FAD53 /* VolumeArcBackgroundTasksTelemetryTests.swift */; };
 		3C3669554C3482E3A1630499 /* VolumeArcLaunchBootstrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B41D5EFBD9A316225D3C8DA /* VolumeArcLaunchBootstrapper.swift */; };
 		3C54AFA28F87408EC84E13C7 /* ProgressionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B83B6FEE3E587DA388A0E476 /* ProgressionEngine.swift */; };
 		3E89A62D7FE64EF2D0C24B2D /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EA98AEB159C91461F2AE4473 /* XCTest.framework */; };
-		3F3C00FB6F76E280DFB658AC /* StoreKitTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F55428D8187A547585F89E5D /* StoreKitTest.framework */; };
 		3F9776B58662C0625BB7810C /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 798F7BD7655FA14BAC295FB4 /* WidgetKit.framework */; };
 		418CDA3C17743C5ED5384A8E /* RecoveryContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CA9C7CD6BC0CB13621A5181 /* RecoveryContext.swift */; };
 		45F4F0E83CD7C08869DB1C26 /* SyncPayloadApplier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 065DD74FCAC1536ECC010CFD /* SyncPayloadApplier.swift */; };
+		46B0D6C22C137123170098FD /* VolumeArcRelaySessionProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBBA3AB2DE0EECD27E39B78A /* VolumeArcRelaySessionProvider.swift */; };
 		4864C54650296F8E1EEB2823 /* WorkoutTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A945A093EC480DE4E49C8EE /* WorkoutTypes.swift */; };
 		48BC34CAF6FF2D334B336263 /* SyncPayloadCodec+LegacySynthesis.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3CB0D5C808A408DBB14D8FD /* SyncPayloadCodec+LegacySynthesis.swift */; };
-		492F62175E9C6F73A955CEF6 /* VolumeArcPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5A9CDB2E6BB36C71415E762 /* VolumeArcPersistenceTests.swift */; };
 		4934EBDAEAF7FDA760044379 /* SyncPayloadApplier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 065DD74FCAC1536ECC010CFD /* SyncPayloadApplier.swift */; };
 		4B1E536ED67A2B73691F5BD6 /* VoicePermission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F57AECB9DC5E96CB9D5C680 /* VoicePermission.swift */; };
-		4B2E3443217B7A9CFA42B416 /* VolumeArcSentryPIIScrubber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0679C8CC41D9F12656571EFD /* VolumeArcSentryPIIScrubber.swift */; };
+		4B81553DE6BF544C27BC1868 /* VolumeArcSentryPIIScrubber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0679C8CC41D9F12656571EFD /* VolumeArcSentryPIIScrubber.swift */; };
 		4FDCE2C1B6F522990437678F /* WorkoutsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7231A1D4CC6CAF8D33C77353 /* WorkoutsView.swift */; };
+		50A8187D2261B1EB1D97F56A /* VolumeArcSnapshotInfrastructureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9DD9CD13C52C31DC662928F /* VolumeArcSnapshotInfrastructureTests.swift */; };
 		51D175D392D1E8C09B4D59C5 /* SyncPayloadApplier+PerKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26F0FBDD52D53E9F5D3A6561 /* SyncPayloadApplier+PerKind.swift */; };
 		525797F268B60B4E106D51FA /* ExerciseCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAD9A56C2518CBD1ECCA41CD /* ExerciseCatalog.swift */; };
 		530F4687DC8872B1D58EDC35 /* WorkoutDashboardModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A6EB6013EC9152E559B700C /* WorkoutDashboardModel.swift */; };
@@ -75,62 +74,69 @@
 		538572AB8E6F73DDD47C2CBC /* ReadinessModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A4B1384F7B9F7468C06AA12 /* ReadinessModel.swift */; };
 		545AD36240E0450BC212FE35 /* SwiftDataWorkoutRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8943F0E10914CEFF95EF7A97 /* SwiftDataWorkoutRepository.swift */; };
 		558EEB03A072E69BFDE34F00 /* DashboardRefreshLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8F406F871CD1ED89F8B8AE1 /* DashboardRefreshLoader.swift */; };
+		55918851D7F750026F122279 /* CoachEvalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 820E66548C54ADF916000C74 /* CoachEvalTests.swift */; };
 		55E256A7F77118CCB5421B98 /* NetworkReachability.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DBE93D5C88F327A5305D8AB /* NetworkReachability.swift */; };
-		571FE3BE1DA095AC072722D6 /* VolumeArcAIRuntimeFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11A862BFEDB3B62B1DF689CA /* VolumeArcAIRuntimeFactory.swift */; };
 		575817EA3F1BD9631632770F /* PremiumGateTelemetry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30791E09BFB299ADA1568E3D /* PremiumGateTelemetry.swift */; };
 		576D56E3D191BD191C05833B /* StoreKitTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F55428D8187A547585F89E5D /* StoreKitTest.framework */; };
 		586CEA3A22D3C30A11B4AB79 /* VolumeArcWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BD90E031F6A7963245086BC /* VolumeArcWatchApp.swift */; };
 		58B51EC4A54B3B3A38BB2B20 /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EAB9D8DF54C6133F72B70AA /* FeatureFlags.swift */; };
+		5A4E9D32F282F7E0B4946E99 /* VolumeArcPersistenceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15B3FB7523424FCB6B7CCBAB /* VolumeArcPersistenceController.swift */; };
 		5AF91C92614A4BB4D430DE8E /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B040EB6A920B9EDA187A808D /* ProfileView.swift */; };
 		5B8FD2C3CEFB30A376BEA93A /* CloudSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 986956F0D4DB4774FD0C1A11 /* CloudSyncCoordinator.swift */; };
+		5BE78D3C99982F541699CF76 /* VolumeArcPremiumCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 696216D243548C520A5DBFCD /* VolumeArcPremiumCatalog.swift */; };
 		5C6A36D9989D360AACAAB66C /* SubscriptionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F6964F48B8C296A3E27A886 /* SubscriptionStore.swift */; };
-		5E7B1869CC9ED021D4513864 /* SnapshotHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23D695D223D13F1DE634B8EA /* SnapshotHelper.swift */; };
-		628B8DB3B2FADE41F44A99DF /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 64BEE80D7DFF1D59DD066695 /* Foundation.framework */; };
+		5E7B1869CC9ED021D4513864 /* SnapshotHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A6B6105B4C255F18F6F670C /* SnapshotHelper.swift */; };
+		5E96F507B506827956767AF0 /* VolumeArcMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93EA40702DC62E28DC565ED3 /* VolumeArcMigrationTests.swift */; };
+		5EDB020ED0C481910F165C05 /* VolumeArcTests.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 40C25E3043E83EA7BCA4B8EF /* VolumeArcTests.storekit */; };
 		63A5453E4DB38956CE96B7CA /* DataModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30016C8FA6B120FFB26B90B0 /* DataModels.swift */; };
-		65017D76B6850A07B96A172C /* VolumeArcMaterialsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8083DC7542A417CBC997E21 /* VolumeArcMaterialsTests.swift */; };
 		677D1F05D4A8279ADDC420FB /* WorkoutTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A945A093EC480DE4E49C8EE /* WorkoutTypes.swift */; };
+		678F1F46EC0AFF9A2428F1A8 /* Mocks.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC66B7177177E1CC344CB962 /* Mocks.swift */; };
+		695AB8111D1D916C841B856F /* VolumeArcWidgetController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95746C474A3C5A7F1236881B /* VolumeArcWidgetController.swift */; };
 		69E829AE06E8FABFD1F205BC /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 194BF60949751CE6E552065A /* Components.swift */; };
 		6AE750FE298CDBCA9A93F7DC /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AE0E85F10352240E54DE4F2D /* ActivityKit.framework */; };
 		6BD77067E5FD1E52EA4C489F /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 479EB5A5F6C20DD9F6DC9CE7 /* Security.framework */; };
-		6CA41F7ED904FCFEFFCA0D5D /* AppIntents.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F916D8D7D8DC7CD61DB6C8E3 /* AppIntents.framework */; };
 		6CB7781E25A2B2D3B305E50D /* EditProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65C6FC3ECDA634264836C2E3 /* EditProfileView.swift */; };
 		6DDDB01BC882A25DF598EC82 /* WatchConnectivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = D69FF6895F9C6CFDEAC15016 /* WatchConnectivity.swift */; };
 		6EC748D92E54220CBB70BD73 /* PlatformSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE6385A20668EE634BC9003 /* PlatformSurface.swift */; };
 		6FE56F273B3B1FDABAABA608 /* RecoveryContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CA9C7CD6BC0CB13621A5181 /* RecoveryContext.swift */; };
+		7063A7711524075463E37545 /* VolumeArcPaywallFeatureContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50995D21DDA69EAE48FF3411 /* VolumeArcPaywallFeatureContractTests.swift */; };
 		71B6D0F351FD202801756A7B /* Navigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE597255FC36C5E59517CDB9 /* Navigation.swift */; };
 		72E78BFBF6C0ECC15586CE13 /* DiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC65D1C80DC8989855D86D68 /* DiagnosticsView.swift */; };
-		75800D24AB0694D8A19547EC /* AppIconAssetContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37AD132616EB50E47456C5D9 /* AppIconAssetContractTests.swift */; };
+		76216972712FA32C8B866CF4 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EA98AEB159C91461F2AE4473 /* XCTest.framework */; };
 		78C3DE7626363CB374DB8C7A /* HealthKitRecoveryReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2501E781144614F2FB0A6D3A /* HealthKitRecoveryReader.swift */; };
 		7967B871D082553DC93FA5B8 /* FeedbackBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 997C5733301E62BD5EA6489B /* FeedbackBundle.swift */; };
 		7ADB0D5050C1AED7617588AD /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D55303D6AEBDA2594B32EAC3 /* Assets.xcassets */; };
-		7BF272705A1BD2E6A54C6DBB /* VolumeArcAppJourneyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E8F747DD520E340E3B04008 /* VolumeArcAppJourneyTests.swift */; };
+		7BF272705A1BD2E6A54C6DBB /* VolumeArcAppJourneyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91546C56CFDAEAEA9B7B2E92 /* VolumeArcAppJourneyTests.swift */; };
 		7C1B4CAA53A35BE53E5D4C25 /* AppIntents.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F916D8D7D8DC7CD61DB6C8E3 /* AppIntents.framework */; };
 		7CF5C9712FEF7E1725B22F94 /* ProductDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 829A7A8277767620F8F94B18 /* ProductDefaults.swift */; };
 		7D77FF769B06A49A6888AF99 /* ExerciseCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAD9A56C2518CBD1ECCA41CD /* ExerciseCatalog.swift */; };
 		7D99E9435179E5037E1317C3 /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EAB9D8DF54C6133F72B70AA /* FeatureFlags.swift */; };
 		80F70E858F57FA2082CAE6D0 /* SyncPayloadApplier+PerKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26F0FBDD52D53E9F5D3A6561 /* SyncPayloadApplier+PerKind.swift */; };
-		8154B8D6FD2672653DC48041 /* VolumeArcHealthKitPermissionJourneyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E50AF20045D3D468C0F4F0B /* VolumeArcHealthKitPermissionJourneyTests.swift */; };
+		813E9982B8664AA21D533A3E /* CoachEvalFixtures in Resources */ = {isa = PBXBuildFile; fileRef = A6E72FDA0D0D4DE5CA4BD725 /* CoachEvalFixtures */; };
+		8154B8D6FD2672653DC48041 /* VolumeArcHealthKitPermissionJourneyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFB8B1B9E7C2FDA526C006BF /* VolumeArcHealthKitPermissionJourneyTests.swift */; };
+		81B01CA34E8DF189397FB8B8 /* StoreKitTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F55428D8187A547585F89E5D /* StoreKitTest.framework */; };
 		81B362443A4504D78C201FD5 /* VolumeArcSentryConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80260DA2A653F8A8B4FF65A0 /* VolumeArcSentryConfiguration.swift */; };
 		826CB3F19A44D8F738CFD7F0 /* ProductDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 829A7A8277767620F8F94B18 /* ProductDefaults.swift */; };
-		82A34CE6A48FA17F32526E1F /* VolumeArcBackgroundTasksTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 676DB993050602305B9B4BB3 /* VolumeArcBackgroundTasksTests.swift */; };
-		8302C9B51ECDFE9E30F15DF6 /* VolumeArcReadinessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D906E0E0C99BBCAD1D71C2 /* VolumeArcReadinessTests.swift */; };
-		83FBAD4B0E1BDA8847D250E0 /* VolumeArcIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D524D311E5DD11764646C5B /* VolumeArcIntents.swift */; };
 		850254FD5FA5F214406995A9 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EA98AEB159C91461F2AE4473 /* XCTest.framework */; };
 		862AB3ED1C23314A020F13AD /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7F324EB262AE3E7FE7EBAA2 /* PaywallView.swift */; };
 		872FA2D4C8DD575607078CBB /* CloudKitSyncTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C81DB15515BE5990FCFB417 /* CloudKitSyncTransport.swift */; };
 		8748D7750D9B3A5146C7E03A /* CloudSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 986956F0D4DB4774FD0C1A11 /* CloudSyncCoordinator.swift */; };
+		8772F15E08289D67B2A2184E /* ExerciseIllustrationCoverageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAFDA83C1958107A57C977FA /* ExerciseIllustrationCoverageTests.swift */; };
+		880D8CB6357457032A3EFF8F /* VolumeArcProgressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AB1903066A1E5771ED996DC /* VolumeArcProgressionTests.swift */; };
+		89ADCE307DCF8F5F1D7519B3 /* AuthenticationServices.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 08EC1241DF2CE6E246308E9B /* AuthenticationServices.framework */; };
 		8BBA23BEF47CC98069CC0816 /* RetryingCloudSyncTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A52A2758E1A97B1663113AF /* RetryingCloudSyncTransport.swift */; };
 		8BF7F514164AD5D5F0CC6246 /* VolumeArcNotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07BC785EC436B48A04E0458B /* VolumeArcNotificationScheduler.swift */; };
-		8C8C2987C4E1D1496F7AE011 /* FeatureFlagProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E3AF89FD3E1FAB0F600DF5 /* FeatureFlagProviderTests.swift */; };
 		8CBC927B9D2B8C35A46693F5 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 64BEE80D7DFF1D59DD066695 /* Foundation.framework */; };
+		8CD78D444C3E96F21CF82CC8 /* VolumeArcSentryPIIScrubberTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6929D7D58932A08AFFCC17C /* VolumeArcSentryPIIScrubberTests.swift */; };
 		8CFE9CDF9E1E5D423C4E3378 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C6485553AE678261C9E4E7C6 /* PrivacyInfo.xcprivacy */; };
-		8DAF7192CC08EB9C9957D0A9 /* VolumeArcTests.storekit in Resources */ = {isa = PBXBuildFile; fileRef = C43151B76D984E1FFB318DC1 /* VolumeArcTests.storekit */; };
+		90DC9431E7D17AD6D348AD9E /* VolumeArcReadinessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7996E16A4A538F7AC152F0C1 /* VolumeArcReadinessTests.swift */; };
 		9274A21ECDABD461EEABCCE5 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AA16C942934027D98C71604 /* OnboardingView.swift */; };
+		9458818C145A53264CBAC434 /* ExerciseCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5B4D5DEB6CAAD2D3170E538 /* ExerciseCatalogTests.swift */; };
 		94A6D5B77C26EE560110049A /* SyncPayloadCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADEFB191F07540792C19196A /* SyncPayloadCodec.swift */; };
-		94DA3A3A7C8D291CBE929958 /* VolumeArcDashboardIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CECE474AC45844019482633 /* VolumeArcDashboardIntegrationTests.swift */; };
 		95DDADCE8014BF0FA7F21D1A /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AE0E85F10352240E54DE4F2D /* ActivityKit.framework */; };
 		96EA6AC52C64FB9E0B54D5E3 /* SwiftDataProfileRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 413C8489A95CFC69B79B21FB /* SwiftDataProfileRepository.swift */; };
-		96EC0E9CFED6BAE0EA75A557 /* VolumeArcSecureStoreFallbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CB2409441AD9FA6D4FAE3B5 /* VolumeArcSecureStoreFallbackTests.swift */; };
+		9744EC95FA5581F588217BBA /* MocksUsageSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F95C3BBF5C87A0027A4A912 /* MocksUsageSmokeTests.swift */; };
+		975016EEDBBB98DFE13C198C /* FeatureFlagProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C9387C6A21CF4E0C60EA9E0 /* FeatureFlagProviderTests.swift */; };
 		9768B7BDF56AC4A5514F15AB /* SubscriptionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F6964F48B8C296A3E27A886 /* SubscriptionStore.swift */; };
 		99DAA80C8BDB40186E7A4FBE /* SessionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE69481312FB2E4FE85A73C8 /* SessionDetailView.swift */; };
 		99FEBF1AE650B34913E2027E /* libVolumeArcUI.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 296658B9BBE4EDCA6CF98D6E /* libVolumeArcUI.a */; };
@@ -140,121 +146,116 @@
 		9BEA46DE98C9DCB21ECE1095 /* NotificationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCFCA2F22B2E57733A372150 /* NotificationStore.swift */; };
 		9CDA46268A5ED94311458ECA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0340BA1F64B17DAEC7C41678 /* Assets.xcassets */; };
 		9D4AE29CE2710EF0C8E2B2EF /* VoicePermission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F57AECB9DC5E96CB9D5C680 /* VoicePermission.swift */; };
+		9D7E30A5DF692DAD89A9F426 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 479EB5A5F6C20DD9F6DC9CE7 /* Security.framework */; };
 		9DA440ADF9BBCC76E76A50F7 /* VolumeArcApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20545801246ED268828D719C /* VolumeArcApp.swift */; };
 		9F99094F79BA03CCF49F8B0D /* FeedbackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E416A84172256ECE3F1BAD9 /* FeedbackView.swift */; };
 		A03F2DDEE1CAE8BC0CD0302D /* LegalLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = E73BE1470DDBE77F2E4FE0B8 /* LegalLinks.swift */; };
 		A08865F0A89FFD162B8AE556 /* ExerciseCatalog+Entries.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99EF9977369E7B9651412188 /* ExerciseCatalog+Entries.swift */; };
 		A1B1A87C0884452FD0D93F77 /* VolumeArcRelaySessionProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBBA3AB2DE0EECD27E39B78A /* VolumeArcRelaySessionProvider.swift */; };
 		A48446B4A139425670446342 /* CoachPromptTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8AD8CC7AFB6E80AE280578B /* CoachPromptTemplate.swift */; };
+		A5B5E51202E239FD5E722CBB /* VolumeArcRelaySessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FDEC185ED7E0EE6DC39D0CC /* VolumeArcRelaySessionTests.swift */; };
 		A60FFFF21CD76A7992D61369 /* libVolumeArcCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 81B9F78DA06222A205FA5B4F /* libVolumeArcCore.a */; };
 		A6CDACB300DAB73ED5E9D226 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 438B78534AA04C923F833230 /* AVFoundation.framework */; };
 		A7023D1EECC4D88B2E830BC6 /* VAAnimations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 996DE8BD659696331BF29B11 /* VAAnimations.swift */; };
-		A797EA3077BE600041B82BBF /* VolumeArcSnapshotInfrastructureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53B8F401B7937287F424DC35 /* VolumeArcSnapshotInfrastructureTests.swift */; };
 		A7FDF79310D6D5DB4ABA8D63 /* OutboundSyncQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A427C2B56596401DBCF532C /* OutboundSyncQueue.swift */; };
-		A9401E66DC51E99F568BD8ED /* VolumeArcRelaySessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEC06D42731A375A32708E91 /* VolumeArcRelaySessionTests.swift */; };
 		A97C035AF454CC11AD8989CA /* SyncPayloadCodec+LegacySynthesis.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3CB0D5C808A408DBB14D8FD /* SyncPayloadCodec+LegacySynthesis.swift */; };
-		A9BF6A3D7B7F5A72078EB5B9 /* VolumeArcScreenshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 507BAE0DB8363AA21FB5D735 /* VolumeArcScreenshotTests.swift */; };
-		AA946D81DC72E51A6AF16C0B /* VolumeArcMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BB655AD21D8B80AA8B3EC80 /* VolumeArcMigrationTests.swift */; };
+		A9BF6A3D7B7F5A72078EB5B9 /* VolumeArcScreenshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC53E1A0741DAD269C45A9D3 /* VolumeArcScreenshotTests.swift */; };
 		AC04E912C610B653431B0726 /* WorkoutDashboardModel+CoachContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 209D63DB0E614A45891EAFEC /* WorkoutDashboardModel+CoachContext.swift */; };
-		AC98D2860F6E83FEBD2C2F1F /* ExerciseCatalogScaleupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 693B18453FB8AF69DD3BA6B1 /* ExerciseCatalogScaleupTests.swift */; };
+		AC4ABCC63979C72790BC6E06 /* VolumeArcBackgroundTasksTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7325BABE5074F5488526A937 /* VolumeArcBackgroundTasksTests.swift */; };
 		AD0DAEA0F375FBA880ED0696 /* libVolumeArcCoreWatch.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 04E37DCCF04D222B528FC289 /* libVolumeArcCoreWatch.a */; };
 		AD421D955139F2460CD3A375 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 64BEE80D7DFF1D59DD066695 /* Foundation.framework */; };
+		AD8B753E899B8BCA5A217449 /* VolumeArcCloudSyncTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCFB509116F56DE5A9A0B412 /* VolumeArcCloudSyncTests.swift */; };
 		AFED5811DFD7D10EA7585EB9 /* libVolumeArcCoreWatch.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 04E37DCCF04D222B528FC289 /* libVolumeArcCoreWatch.a */; };
 		AFF4B9FADC0A5E0706B0082B /* SwiftDataWorkoutRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8943F0E10914CEFF95EF7A97 /* SwiftDataWorkoutRepository.swift */; };
 		B06085DCCE6A703373C2757A /* HealthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B3147C0721C22F72E1A430 /* HealthStore.swift */; };
 		B090B8DD2E9B741A98DA7EC8 /* VoiceCoach.swift in Sources */ = {isa = PBXBuildFile; fileRef = E26292BCC6DAAA667C161A2C /* VoiceCoach.swift */; };
-		B1A167285F089BEF492FCA81 /* VolumeArcCoachMemoryRetentionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01CB2933ADB5C6747FC7BFE3 /* VolumeArcCoachMemoryRetentionTests.swift */; };
-		B2B6E301ADCA96DFC54BEADE /* RecoveryReaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81280FD1AF44799B8B49B53A /* RecoveryReaderTests.swift */; };
+		B1486A19F980B7095B4E7B7A /* VolumeArcCoachMemoryRetentionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67CDD28EFC6C38FFE33C2D21 /* VolumeArcCoachMemoryRetentionTests.swift */; };
 		B30089597898BF31A38752BE /* AICoachProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F95B8C9459FEC005DCA6F0 /* AICoachProvider.swift */; };
+		B56C09B391BFF1204387F5AE /* VolumeArcSentryConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ECEC8838905671A1F10548A /* VolumeArcSentryConfigurationTests.swift */; };
 		B68C9B711DA6A631C7B938CB /* VolumeArcRuntimeFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3FD93D77F2332BB4BADB9EA /* VolumeArcRuntimeFlags.swift */; };
 		B6C8DA898D8AEF0D1030F74F /* DataModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30016C8FA6B120FFB26B90B0 /* DataModels.swift */; };
-		B732669FB4409D043F67A771 /* libVolumeArcCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 81B9F78DA06222A205FA5B4F /* libVolumeArcCore.a */; };
 		B7E9D773FB95EEDCF3AE7C80 /* Speech.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9239A60CE289F69448CA2219 /* Speech.framework */; };
-		B84C0D3DD1B4DBE4C5EBFACA /* VolumeArcSentryConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80260DA2A653F8A8B4FF65A0 /* VolumeArcSentryConfiguration.swift */; };
 		B8F81423E6C5124A9E60D040 /* CoachView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69A1D009559628AC48ED38A1 /* CoachView.swift */; };
-		B91F618100AAD50F6FED50B1 /* VolumeArcPaywallFeatureContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CC67BA3D64629DA4441C4A4 /* VolumeArcPaywallFeatureContractTests.swift */; };
 		B9673EDC78815DCE56C19592 /* PlatformSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE6385A20668EE634BC9003 /* PlatformSurface.swift */; };
-		BB84C789C003F0B8A446862D /* VolumeArcSentryPIIScrubberTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 511EB042A6C589D299888072 /* VolumeArcSentryPIIScrubberTests.swift */; };
+		BB1494DE8F55A99DB9C19EF8 /* VolumeArcPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2697FB7B4CBFD033A3C10E94 /* VolumeArcPersistenceTests.swift */; };
+		BB2703B4AE3DCB5976FCB493 /* VolumeArcCoachPromptTemplateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF57FDA55536EF0B5D50A1A7 /* VolumeArcCoachPromptTemplateTests.swift */; };
 		BD4BB99710917DE4B1E78174 /* DashboardRefreshLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8F406F871CD1ED89F8B8AE1 /* DashboardRefreshLoader.swift */; };
 		BDA26252EFF97B19F9F9E830 /* VolumeArcWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35BBB15B9395DAAB41A80ED3 /* VolumeArcWidgets.swift */; };
-		BFC828FE8F2B8AEFEDD85AD0 /* MocksUsageSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4291E7B64E0103ED7ED10BD /* MocksUsageSmokeTests.swift */; };
 		C06A37F18CE3754E62A12383 /* ChaosHealthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD3F5639B96140F968F18B89 /* ChaosHealthStore.swift */; };
 		C0F6ED0229F4059961A10D0E /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 64BEE80D7DFF1D59DD066695 /* Foundation.framework */; };
-		C15139B2910E33CB1EB4A9A1 /* VolumeArcRelaySessionProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBBA3AB2DE0EECD27E39B78A /* VolumeArcRelaySessionProvider.swift */; };
+		C1B783EA494F0E3F74AF6DD9 /* VolumeArcCoreCoverageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A1E0878C73FABBF915239F2 /* VolumeArcCoreCoverageTests.swift */; };
 		C22BF1B13ED4B65A50B2DF2F /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 64BEE80D7DFF1D59DD066695 /* Foundation.framework */; };
 		C23DF3CB4770FCC09376D416 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 000A901B05650C83F466B9C0 /* WidgetKit.framework */; };
 		C26E82352FAB24B747111D80 /* VolumeArcWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 20DC052DE169E488FC4783E4 /* VolumeArcWatch.app */; platformFilter = iphoneos; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		C4007286E0D9F3C7CF22C2EF /* VolumeArcWatchSimulationJourneyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F481165A6296D0587FCA8ED7 /* VolumeArcWatchSimulationJourneyTests.swift */; };
-		C5AD87726FDAAD24A5A62CBD /* FeedbackBundleAssemblerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EABD4C366B3B6EBB9F610505 /* FeedbackBundleAssemblerTests.swift */; };
-		C67B042F77D9A959571EAA81 /* VolumeArcCloudConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72F3A320DA5B391D1014EC32 /* VolumeArcCloudConfiguration.swift */; };
-		C7218947A5933F4E171B4216 /* VolumeArcPremiumCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 696216D243548C520A5DBFCD /* VolumeArcPremiumCatalog.swift */; };
+		C4007286E0D9F3C7CF22C2EF /* VolumeArcWatchSimulationJourneyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2689DFDF7E820D846FC4AE49 /* VolumeArcWatchSimulationJourneyTests.swift */; };
 		C79477DD790C5F1894FD316B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 5F112585967FE407CE6AE2EE /* PrivacyInfo.xcprivacy */; };
 		C7BE306F9822F40DCDCDA414 /* RootDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 458403A44CF97A90B7CEF20D /* RootDashboardView.swift */; };
-		C7DA3E63ADE9C928FBB43CAB /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EA98AEB159C91461F2AE4473 /* XCTest.framework */; };
-		C80DCBAA2C954ED203BF9B3D /* InMemoryCloudSyncTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 866C9FC4656B644EB1B2D2CE /* InMemoryCloudSyncTransport.swift */; };
 		C8CE55FE7C0126EF78C932BB /* LocalizedLabels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A289B5B349FAEE8F292F3B24 /* LocalizedLabels.swift */; };
-		C9856F5E5C3E2334465A2FAD /* ExerciseCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3448F125CAF36CDE47ABCD /* ExerciseCatalogTests.swift */; };
-		CB50CAB3E602BF23A37FD913 /* AuthenticationServices.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 08EC1241DF2CE6E246308E9B /* AuthenticationServices.framework */; };
+		C8D3C92BAA6F583794C79974 /* VolumeArcPremiumGatingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E652D43DD6432BC0DC46B3F /* VolumeArcPremiumGatingTests.swift */; };
+		C9EA2BB4CEEB67A8758ADB5B /* VolumeArcMaterialsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77C777AF8D50C970AB52D328 /* VolumeArcMaterialsTests.swift */; };
 		CC95F327B38418CB0A618FA2 /* HealthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B3147C0721C22F72E1A430 /* HealthStore.swift */; };
-		CDBD34904C9676CC1A96F984 /* CoachEvalFixtures in Resources */ = {isa = PBXBuildFile; fileRef = 3FE922430F62ECF380DD1E91 /* CoachEvalFixtures */; };
 		CE7F1A7FE4854F1696FF6422 /* CloudSyncTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92B3EB85C16E2FAF483BCF18 /* CloudSyncTypes.swift */; };
 		CED91C2388B78C07805C7606 /* VolumeArcSentryPIIScrubber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0679C8CC41D9F12656571EFD /* VolumeArcSentryPIIScrubber.swift */; };
 		CFF5D0CBE9666068555AF2F7 /* WorkoutSurfaceComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = C265E8DBFC6EC445ADF642AB /* WorkoutSurfaceComponents.swift */; };
-		CFF659C2A68509ABCCB116ED /* CoachEvalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCAF5F5E2CC75191319B49B8 /* CoachEvalTests.swift */; };
+		D0253C8E9CAC35D73E62A332 /* FeedbackBundleAssemblerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2663F9CF00FE0F49BF76B970 /* FeedbackBundleAssemblerTests.swift */; };
 		D0CCFF2AD727EC0FFE17AF59 /* VolumeArcFeedbackSubmitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 869BF4BE1A28736D5064FB14 /* VolumeArcFeedbackSubmitter.swift */; };
 		D2A1381E840BAF08DD453D44 /* VolumeArcTelemetryDebugProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAA6469BC696DE28F2FF4B91 /* VolumeArcTelemetryDebugProbe.swift */; };
 		D32A9E967A8AE90E1423C5DC /* OutboundQueueBackfill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E80EAE5419BE3002DB8A2A4 /* OutboundQueueBackfill.swift */; };
 		D34C36286ED39AD0FB1A595E /* Materials.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAC13350FDB110B1FBA9DA71 /* Materials.swift */; };
-		D51F49C59DB7BA86FD850B4F /* InMemoryTelemetrySinkNotificationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FD76AE04B202020EC6934C5 /* InMemoryTelemetrySinkNotificationTests.swift */; };
 		D527A51DB5BAFE71A8849756 /* WatchConnectivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = D69FF6895F9C6CFDEAC15016 /* WatchConnectivity.swift */; };
 		D582BADFE8501AFBFCF2B410 /* AuthenticationServices.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 08EC1241DF2CE6E246308E9B /* AuthenticationServices.framework */; };
 		D5B69FEC16B538E0F611A56D /* OutboundQueueBackfill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E80EAE5419BE3002DB8A2A4 /* OutboundQueueBackfill.swift */; };
 		D5C5CB3C2239E6ECB522D7AA /* WorkoutDashboardModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A6EB6013EC9152E559B700C /* WorkoutDashboardModel.swift */; };
 		D67D46364E56464B27710B8B /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DDD0FDD0FC380C0BC0A4EB4D /* SwiftUI.framework */; };
+		D67DF3F9613F2071BD569226 /* AppIntents.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F916D8D7D8DC7CD61DB6C8E3 /* AppIntents.framework */; };
 		D680A2E09E84F0037EE80A8E /* NetworkReachability.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DBE93D5C88F327A5305D8AB /* NetworkReachability.swift */; };
 		D6872AFF46964882D96FC68F /* VolumeArcWatchComplications.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8126AD2720FEC698179C6ED /* VolumeArcWatchComplications.swift */; };
 		D72C43608C3DC9E66167DBFF /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = CAAAE52654D75F1AC3987B7F /* PrivacyInfo.xcprivacy */; };
+		D78553FDA3A9211D82F44AB4 /* RecoveryReaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 991364795909905BAE848992 /* RecoveryReaderTests.swift */; };
 		D88C363CA19AFAFF0E25DDC4 /* ProgressionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B83B6FEE3E587DA388A0E476 /* ProgressionEngine.swift */; };
 		DA2C807D4A60BAA91BD26571 /* VolumeArcPremiumCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 696216D243548C520A5DBFCD /* VolumeArcPremiumCatalog.swift */; };
 		DA60AC66B8D9220F563E0312 /* VolumeArcVoicePermissionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8D6443A48529C6BFC92E2FF /* VolumeArcVoicePermissionStore.swift */; };
 		DB75CF08B08531611D5CA407 /* VolumeArcWatchWidgets.appex in Embed Watch Extensions */ = {isa = PBXBuildFile; fileRef = E409060565785E85789F1A24 /* VolumeArcWatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		DFF819B864995D06CA3E0911 /* ExerciseIllustrationCoverageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3FBA6C78DAB764187B789BB /* ExerciseIllustrationCoverageTests.swift */; };
+		DCE824E148074B5053E1DFB6 /* libVolumeArcUI.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 296658B9BBE4EDCA6CF98D6E /* libVolumeArcUI.a */; };
+		DFDDBC6B0F15ECAB419B1A57 /* VolumeArcAIRuntimeFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11A862BFEDB3B62B1DF689CA /* VolumeArcAIRuntimeFactory.swift */; };
 		E2AB081F2CBED12D7F507CDA /* VolumeArcIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D524D311E5DD11764646C5B /* VolumeArcIntents.swift */; };
-		E2BF9459B365175FAB48A281 /* VolumeArcAppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C97DCE2355C9E2CF7BCE3CF /* VolumeArcAppUITests.swift */; };
-		E34ADBB69B23EF2918728929 /* VolumeArcFeedbackJourneyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F85A6AC01F479D714CDFE49D /* VolumeArcFeedbackJourneyTests.swift */; };
+		E2BF9459B365175FAB48A281 /* VolumeArcAppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3418C932249A423A476498CA /* VolumeArcAppUITests.swift */; };
+		E2FEB5168D612B17263E817B /* CloudSyncRetryAndTimestampTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E0AE4C6D48876CBCA1C9848 /* CloudSyncRetryAndTimestampTests.swift */; };
+		E34ADBB69B23EF2918728929 /* VolumeArcFeedbackJourneyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CDAF73484DF3D51CC4E9CB2 /* VolumeArcFeedbackJourneyTests.swift */; };
 		E37C901F53CF16456054BE59 /* TelemetrySink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98EAA6F54E0255DFF4C29C77 /* TelemetrySink.swift */; };
+		E48086558FE035958E470B4C /* StoreKitSubscriptionRevocationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7569FEB778F28B77503F44C1 /* StoreKitSubscriptionRevocationTests.swift */; };
 		E49088F02508DCC874A23A43 /* CoachPromptTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8AD8CC7AFB6E80AE280578B /* CoachPromptTemplate.swift */; };
 		E5CC5464D3BDD835A38D7831 /* VolumeArcAppFactories.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AC02417CA636715105A8A49 /* VolumeArcAppFactories.swift */; };
 		E73E7B0D65087846FABEBF57 /* Toast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4615FF709C67E64356C129CD /* Toast.swift */; };
 		E7BBB50FFCDC983D02EEA613 /* RetryingCloudSyncTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A52A2758E1A97B1663113AF /* RetryingCloudSyncTransport.swift */; };
-		E8B503062162D2113D67364C /* VolumeArcTests.storekit in Resources */ = {isa = PBXBuildFile; fileRef = C43151B76D984E1FFB318DC1 /* VolumeArcTests.storekit */; };
-		E9B1709D9704320D5A7FFD32 /* StoreKitSubscriptionRevocationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6B587C17C786814CA861694 /* StoreKitSubscriptionRevocationTests.swift */; };
+		E8B503062162D2113D67364C /* VolumeArcTests.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 40C25E3043E83EA7BCA4B8EF /* VolumeArcTests.storekit */; };
 		EA3061F15161A0B4025E3E5A /* VolumeArcAIConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA33FA2FE5D837499A348547 /* VolumeArcAIConfiguration.swift */; };
-		EB197AABE33775F0E68422C3 /* VolumeArcWidgetController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95746C474A3C5A7F1236881B /* VolumeArcWidgetController.swift */; };
-		EB6386CACF628A651E91CA2E /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AE0E85F10352240E54DE4F2D /* ActivityKit.framework */; };
-		EB6FB48EDD4CC13CB367899B /* libVolumeArcUI.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 296658B9BBE4EDCA6CF98D6E /* libVolumeArcUI.a */; };
-		ED2FB2BB2DDA96A21B71F9F1 /* VolumeArcCloudSyncTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECE0123E3DD4B408406604C5 /* VolumeArcCloudSyncTests.swift */; };
 		ED55636D3972F9C3E2C43C0D /* libVolumeArcCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 81B9F78DA06222A205FA5B4F /* libVolumeArcCore.a */; };
+		EFC78094D9F1E0DC66D00785 /* VolumeArcSecureStoreFallbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21FA6C2C10EBCCAC1E674C88 /* VolumeArcSecureStoreFallbackTests.swift */; };
 		F027EDF2BEF66C0DDF5FDDBB /* VolumeArcWatchWidgetsBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1935726484E01E9955095EE5 /* VolumeArcWatchWidgetsBundle.swift */; };
+		F08DB5F9D74DF27D6895A021 /* VolumeArcLiveActivityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C3D2E397F5E1A883D20378E /* VolumeArcLiveActivityController.swift */; };
 		F0DE7957C8E727F53064703D /* ChaosHealthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD3F5639B96140F968F18B89 /* ChaosHealthStore.swift */; };
 		F12ED1FA509650BF9E474F15 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 232D90FCF29722CADC380E8E /* PrivacyInfo.xcprivacy */; };
-		F21F665DA6EE69148172A495 /* VolumeArcAccessibilityJourneyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7CCD460616A7466C7A29796 /* VolumeArcAccessibilityJourneyTests.swift */; };
+		F218AB9FEF947E6142BF897C /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AE0E85F10352240E54DE4F2D /* ActivityKit.framework */; };
+		F21F665DA6EE69148172A495 /* VolumeArcAccessibilityJourneyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8FCD5F1C270B78F215D8421 /* VolumeArcAccessibilityJourneyTests.swift */; };
+		F3B0A997412D97BA15A9CFDE /* HealthKitAuthorizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31CFC396C1442CF999E9B65 /* HealthKitAuthorizationTests.swift */; };
 		F52B6D1F7DD0A8D7B010C646 /* SwiftDataProfileRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 413C8489A95CFC69B79B21FB /* SwiftDataProfileRepository.swift */; };
 		F549F3C9E82961C10308B350 /* VADesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEE0B4725F9D6B64AA810B0E /* VADesignTokens.swift */; };
 		F5B67CD7BE3651B3D63A6108 /* WatchKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 09D41B51725A633465CACEF9 /* WatchKit.framework */; };
 		F5D63535F116DBA05D562129 /* libVolumeArcCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 81B9F78DA06222A205FA5B4F /* libVolumeArcCore.a */; };
 		F6568B34CA3EF721DBE15A61 /* VolumeArcRuntimeFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3FD93D77F2332BB4BADB9EA /* VolumeArcRuntimeFlags.swift */; };
-		F917AC45583E11FCC363DBA9 /* CloudSyncRetryAndTimestampTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D2D47A81E2F1F50E5E2A1A /* CloudSyncRetryAndTimestampTests.swift */; };
 		F959FBF66A6496134332BEA3 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9733972F295ED22E08D1A19A /* Foundation.framework */; };
+		F9AF7863EEE30570660489DC /* AppIconAssetContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DFD2B109F64673D48B6BDD /* AppIconAssetContractTests.swift */; };
 		FA42D913A5158ACACFDB6A9A /* WorkoutDashboardModel+CoachContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 209D63DB0E614A45891EAFEC /* WorkoutDashboardModel+CoachContext.swift */; };
 		FAC6ED8B788F65282B6CBFC5 /* CloudKitSyncTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C81DB15515BE5990FCFB417 /* CloudKitSyncTransport.swift */; };
-		FB16F1D48403C4BD7151AAFE /* VolumeArcPerfTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B86054560BAD34C3108D4B19 /* VolumeArcPerfTests.swift */; };
+		FB16F1D48403C4BD7151AAFE /* VolumeArcPerfTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E52DC2FF0258D7FD3126C534 /* VolumeArcPerfTests.swift */; };
 		FBB20AB7BB884C38D9C06F30 /* Navigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE597255FC36C5E59517CDB9 /* Navigation.swift */; };
 		FC476DAFE8278513645E30B7 /* RecoveryReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B38A5816F9E4AE6D2F20BB5 /* RecoveryReader.swift */; };
-		FE43B123AB238D6DA7755F06 /* VolumeArcTelemetryProbeMatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FCC2078FA1E52BC220AE466 /* VolumeArcTelemetryProbeMatcherTests.swift */; };
+		FE43B123AB238D6DA7755F06 /* VolumeArcTelemetryProbeMatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBE9BDC3850B1131422A6642 /* VolumeArcTelemetryProbeMatcherTests.swift */; };
 		FED90BC0D705E79B33AC8C85 /* ChaosController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74EB211BD47878BDA9A3F371 /* ChaosController.swift */; };
 		FF0F4A99ACAD05F8783201FA /* SyncPayloadCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADEFB191F07540792C19196A /* SyncPayloadCodec.swift */; };
 		FF54374E0044C2E22CF18D45 /* RecoveryReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B38A5816F9E4AE6D2F20BB5 /* RecoveryReader.swift */; };
+		FF80FB1FE2963112F343C0B1 /* VolumeArcIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D524D311E5DD11764646C5B /* VolumeArcIntents.swift */; };
 		FFE06BD87908E52934AEFEC1 /* LegalLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = E73BE1470DDBE77F2E4FE0B8 /* LegalLinks.swift */; };
 /* End PBXBuildFile section */
 
@@ -265,6 +266,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = BF2E1CD368C7783F67504E0C;
 			remoteInfo = VolumeArcWatch;
+		};
+		377F484077647F1704B38EB1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F8493584A9042E13605CEF3C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9EB1B7892FE2DA1BE8D6CAAE;
+			remoteInfo = VolumeArcUI;
 		};
 		5520A60A6568380D14AB46FA /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -301,20 +309,6 @@
 			remoteGlobalIDString = 90B1D9B509B5F0FA28773E81;
 			remoteInfo = VolumeArcApp;
 		};
-		77C0EB394B5C1D106BBF751C /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = F8493584A9042E13605CEF3C /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = BAEA1B4454CCE95E5D5673F4;
-			remoteInfo = VolumeArcCore;
-		};
-		7ABFC9E30F4431C0404082FB /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = F8493584A9042E13605CEF3C /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 9EB1B7892FE2DA1BE8D6CAAE;
-			remoteInfo = VolumeArcUI;
-		};
 		83BFC2BBEBE80A1BB7CC8377 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F8493584A9042E13605CEF3C /* Project object */;
@@ -350,6 +344,13 @@
 			remoteGlobalIDString = FE2AE12B8147AD279B2F088E;
 			remoteInfo = VolumeArcCoreWatch;
 		};
+		DA56AA36C896FCDB76947D68 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F8493584A9042E13605CEF3C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BAEA1B4454CCE95E5D5673F4;
+			remoteInfo = VolumeArcCore;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -379,19 +380,17 @@
 
 /* Begin PBXFileReference section */
 		000A901B05650C83F466B9C0 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/WidgetKit.framework; sourceTree = DEVELOPER_DIR; };
-		01CB2933ADB5C6747FC7BFE3 /* VolumeArcCoachMemoryRetentionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcCoachMemoryRetentionTests.swift; sourceTree = "<group>"; };
 		0340BA1F64B17DAEC7C41678 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		04E37DCCF04D222B528FC289 /* libVolumeArcCoreWatch.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libVolumeArcCoreWatch.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		065DD74FCAC1536ECC010CFD /* SyncPayloadApplier.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SyncPayloadApplier.swift; path = CloudSync/SyncPayloadApplier.swift; sourceTree = "<group>"; };
 		0679C8CC41D9F12656571EFD /* VolumeArcSentryPIIScrubber.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcSentryPIIScrubber.swift; sourceTree = "<group>"; };
-		06B65CCBCE84E273958A0A7C /* VolumeArcCoachPromptTemplateTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcCoachPromptTemplateTests.swift; sourceTree = "<group>"; };
 		07BC785EC436B48A04E0458B /* VolumeArcNotificationScheduler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcNotificationScheduler.swift; sourceTree = "<group>"; };
 		08EC1241DF2CE6E246308E9B /* AuthenticationServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AuthenticationServices.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/AuthenticationServices.framework; sourceTree = DEVELOPER_DIR; };
 		09D41B51725A633465CACEF9 /* WatchKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WatchKit.framework; path = Platforms/WatchOS.platform/Developer/SDKs/WatchOS11.0.sdk/System/Library/Frameworks/WatchKit.framework; sourceTree = DEVELOPER_DIR; };
 		0A945A093EC480DE4E49C8EE /* WorkoutTypes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WorkoutTypes.swift; path = Workout/WorkoutTypes.swift; sourceTree = "<group>"; };
-		0E72B8EF97365CE5DF2DA482 /* VolumeArcCoreCoverageTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcCoreCoverageTests.swift; sourceTree = "<group>"; };
 		11A862BFEDB3B62B1DF689CA /* VolumeArcAIRuntimeFactory.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcAIRuntimeFactory.swift; sourceTree = "<group>"; };
 		15B3FB7523424FCB6B7CCBAB /* VolumeArcPersistenceController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcPersistenceController.swift; sourceTree = "<group>"; };
+		17BAA79165EA8793F412E3AE /* ExerciseCatalogScaleupTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExerciseCatalogScaleupTests.swift; path = Exercise/ExerciseCatalogScaleupTests.swift; sourceTree = "<group>"; };
 		1935726484E01E9955095EE5 /* VolumeArcWatchWidgetsBundle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcWatchWidgetsBundle.swift; sourceTree = "<group>"; };
 		194BF60949751CE6E552065A /* Components.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Components.swift; path = DesignSystem/Components.swift; sourceTree = "<group>"; };
 		1C6E580A4803BCEF504F3E72 /* Skeletons.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Skeletons.swift; path = DesignSystem/Skeletons.swift; sourceTree = "<group>"; };
@@ -399,41 +398,42 @@
 		20545801246ED268828D719C /* VolumeArcApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcApp.swift; sourceTree = "<group>"; };
 		209D63DB0E614A45891EAFEC /* WorkoutDashboardModel+CoachContext.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "WorkoutDashboardModel+CoachContext.swift"; path = "Navigation/WorkoutDashboardModel+CoachContext.swift"; sourceTree = "<group>"; };
 		20DC052DE169E488FC4783E4 /* VolumeArcWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VolumeArcWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		21FA6C2C10EBCCAC1E674C88 /* VolumeArcSecureStoreFallbackTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcSecureStoreFallbackTests.swift; sourceTree = "<group>"; };
 		232D90FCF29722CADC380E8E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		23D695D223D13F1DE634B8EA /* SnapshotHelper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SnapshotHelper.swift; sourceTree = "<group>"; };
 		2501E781144614F2FB0A6D3A /* HealthKitRecoveryReader.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = HealthKitRecoveryReader.swift; path = Health/HealthKitRecoveryReader.swift; sourceTree = "<group>"; };
-		250F8C8036D16B5F1C37A935 /* VolumeArcSentryConfigurationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcSentryConfigurationTests.swift; sourceTree = "<group>"; };
+		2663F9CF00FE0F49BF76B970 /* FeedbackBundleAssemblerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FeedbackBundleAssemblerTests.swift; sourceTree = "<group>"; };
+		2689DFDF7E820D846FC4AE49 /* VolumeArcWatchSimulationJourneyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcWatchSimulationJourneyTests.swift; sourceTree = "<group>"; };
+		2697FB7B4CBFD033A3C10E94 /* VolumeArcPersistenceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcPersistenceTests.swift; sourceTree = "<group>"; };
 		26F0FBDD52D53E9F5D3A6561 /* SyncPayloadApplier+PerKind.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "SyncPayloadApplier+PerKind.swift"; path = "CloudSync/SyncPayloadApplier+PerKind.swift"; sourceTree = "<group>"; };
 		296658B9BBE4EDCA6CF98D6E /* libVolumeArcUI.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libVolumeArcUI.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		2AA16C942934027D98C71604 /* OnboardingView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = OnboardingView.swift; path = Screens/OnboardingView.swift; sourceTree = "<group>"; };
 		2B38A5816F9E4AE6D2F20BB5 /* RecoveryReader.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RecoveryReader.swift; path = Health/RecoveryReader.swift; sourceTree = "<group>"; };
 		2B41D5EFBD9A316225D3C8DA /* VolumeArcLaunchBootstrapper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcLaunchBootstrapper.swift; sourceTree = "<group>"; };
 		2CAB865BFAE8EB1860E0891C /* VolumeArcAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VolumeArcAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		2E0AE4C6D48876CBCA1C9848 /* CloudSyncRetryAndTimestampTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CloudSyncRetryAndTimestampTests.swift; sourceTree = "<group>"; };
 		30016C8FA6B120FFB26B90B0 /* DataModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DataModels.swift; path = Persistence/DataModels.swift; sourceTree = "<group>"; };
 		30791E09BFB299ADA1568E3D /* PremiumGateTelemetry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PremiumGateTelemetry.swift; path = Subscriptions/PremiumGateTelemetry.swift; sourceTree = "<group>"; };
+		3418C932249A423A476498CA /* VolumeArcAppUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcAppUITests.swift; sourceTree = "<group>"; };
 		35BBB15B9395DAAB41A80ED3 /* VolumeArcWidgets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcWidgets.swift; sourceTree = "<group>"; };
-		37AD132616EB50E47456C5D9 /* AppIconAssetContractTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppIconAssetContractTests.swift; sourceTree = "<group>"; };
-		3CDA28B548D05311B5EF41FA /* VolumeArcAppUITestSupport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcAppUITestSupport.swift; sourceTree = "<group>"; };
 		3D524D311E5DD11764646C5B /* VolumeArcIntents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VolumeArcIntents.swift; path = Intents/VolumeArcIntents.swift; sourceTree = "<group>"; };
+		3E652D43DD6432BC0DC46B3F /* VolumeArcPremiumGatingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VolumeArcPremiumGatingTests.swift; path = Premium/VolumeArcPremiumGatingTests.swift; sourceTree = "<group>"; };
 		3F57AECB9DC5E96CB9D5C680 /* VoicePermission.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VoicePermission.swift; path = Voice/VoicePermission.swift; sourceTree = "<group>"; };
 		3F6964F48B8C296A3E27A886 /* SubscriptionStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SubscriptionStore.swift; path = Subscriptions/SubscriptionStore.swift; sourceTree = "<group>"; };
-		3FE922430F62ECF380DD1E91 /* CoachEvalFixtures */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder; path = CoachEvalFixtures; sourceTree = "<group>"; };
+		40C25E3043E83EA7BCA4B8EF /* VolumeArcTests.storekit */ = {isa = PBXFileReference; includeInIndex = 1; path = VolumeArcTests.storekit; sourceTree = "<group>"; };
 		413C8489A95CFC69B79B21FB /* SwiftDataProfileRepository.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SwiftDataProfileRepository.swift; path = Persistence/SwiftDataProfileRepository.swift; sourceTree = "<group>"; };
-		434D37DD31F5FE114293CFDB /* Mocks.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Mocks.swift; path = TestSupport/Mocks.swift; sourceTree = "<group>"; };
 		438B78534AA04C923F833230 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/AVFoundation.framework; sourceTree = DEVELOPER_DIR; };
 		458403A44CF97A90B7CEF20D /* RootDashboardView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RootDashboardView.swift; sourceTree = "<group>"; };
 		4615FF709C67E64356C129CD /* Toast.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Toast.swift; path = DesignSystem/Toast.swift; sourceTree = "<group>"; };
-		467D3C87D3FA2A8B9438DDD5 /* VolumeArcChaosJourneyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcChaosJourneyTests.swift; sourceTree = "<group>"; };
 		479EB5A5F6C20DD9F6DC9CE7 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Security.framework; sourceTree = DEVELOPER_DIR; };
+		47E1CE67331380DE44A971E9 /* VolumeArcDashboardIntegrationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcDashboardIntegrationTests.swift; sourceTree = "<group>"; };
+		49D4F0162455D3BAD65D349B /* VolumeArcAppConfigurationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcAppConfigurationTests.swift; sourceTree = "<group>"; };
 		4DBE93D5C88F327A5305D8AB /* NetworkReachability.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = NetworkReachability.swift; path = Health/NetworkReachability.swift; sourceTree = "<group>"; };
 		4E80EAE5419BE3002DB8A2A4 /* OutboundQueueBackfill.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = OutboundQueueBackfill.swift; path = Persistence/OutboundQueueBackfill.swift; sourceTree = "<group>"; };
-		4E8F747DD520E340E3B04008 /* VolumeArcAppJourneyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcAppJourneyTests.swift; sourceTree = "<group>"; };
-		507BAE0DB8363AA21FB5D735 /* VolumeArcScreenshotTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcScreenshotTests.swift; sourceTree = "<group>"; };
-		511EB042A6C589D299888072 /* VolumeArcSentryPIIScrubberTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcSentryPIIScrubberTests.swift; sourceTree = "<group>"; };
+		4F95C3BBF5C87A0027A4A912 /* MocksUsageSmokeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MocksUsageSmokeTests.swift; path = TestSupport/MocksUsageSmokeTests.swift; sourceTree = "<group>"; };
+		50995D21DDA69EAE48FF3411 /* VolumeArcPaywallFeatureContractTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcPaywallFeatureContractTests.swift; sourceTree = "<group>"; };
 		52E3E1D70B656024A2C479AA /* Tokens.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Tokens.swift; path = DesignSystem/Tokens.swift; sourceTree = "<group>"; };
-		53B8F401B7937287F424DC35 /* VolumeArcSnapshotInfrastructureTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VolumeArcSnapshotInfrastructureTests.swift; path = Snapshots/VolumeArcSnapshotInfrastructureTests.swift; sourceTree = "<group>"; };
-		58D906E0E0C99BBCAD1D71C2 /* VolumeArcReadinessTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcReadinessTests.swift; sourceTree = "<group>"; };
 		5C3D2E397F5E1A883D20378E /* VolumeArcLiveActivityController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcLiveActivityController.swift; sourceTree = "<group>"; };
+		5CDAF73484DF3D51CC4E9CB2 /* VolumeArcFeedbackJourneyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcFeedbackJourneyTests.swift; sourceTree = "<group>"; };
 		5E5C26A2B7A826226E5E11A2 /* TodayOverviewComponents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodayOverviewComponents.swift; path = Screens/TodayOverviewComponents.swift; sourceTree = "<group>"; };
 		5F112585967FE407CE6AE2EE /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		62550203A8334F108107CB27 /* VARecoveryChip.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VARecoveryChip.swift; path = DesignSystem/VARecoveryChip.swift; sourceTree = "<group>"; };
@@ -441,79 +441,82 @@
 		64BEE80D7DFF1D59DD066695 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		65C6FC3ECDA634264836C2E3 /* EditProfileView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EditProfileView.swift; path = Screens/EditProfileView.swift; sourceTree = "<group>"; };
 		673B89058A6513F2A18B8985 /* TodayView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TodayView.swift; path = Screens/TodayView.swift; sourceTree = "<group>"; };
-		676DB993050602305B9B4BB3 /* VolumeArcBackgroundTasksTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcBackgroundTasksTests.swift; sourceTree = "<group>"; };
-		693B18453FB8AF69DD3BA6B1 /* ExerciseCatalogScaleupTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExerciseCatalogScaleupTests.swift; path = Exercise/ExerciseCatalogScaleupTests.swift; sourceTree = "<group>"; };
+		67CDD28EFC6C38FFE33C2D21 /* VolumeArcCoachMemoryRetentionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcCoachMemoryRetentionTests.swift; sourceTree = "<group>"; };
+		6838AD62B02B504E55409142 /* VolumeArcChaosJourneyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcChaosJourneyTests.swift; sourceTree = "<group>"; };
 		696216D243548C520A5DBFCD /* VolumeArcPremiumCatalog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcPremiumCatalog.swift; sourceTree = "<group>"; };
 		69A1D009559628AC48ED38A1 /* CoachView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CoachView.swift; path = Screens/CoachView.swift; sourceTree = "<group>"; };
 		6A427C2B56596401DBCF532C /* OutboundSyncQueue.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = OutboundSyncQueue.swift; path = Persistence/OutboundSyncQueue.swift; sourceTree = "<group>"; };
-		6C97DCE2355C9E2CF7BCE3CF /* VolumeArcAppUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcAppUITests.swift; sourceTree = "<group>"; };
 		6CA9C7CD6BC0CB13621A5181 /* RecoveryContext.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RecoveryContext.swift; path = AI/RecoveryContext.swift; sourceTree = "<group>"; };
 		6CD90BB1736F43C95F7F0DC9 /* SessionSummaryView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SessionSummaryView.swift; path = Screens/SessionSummaryView.swift; sourceTree = "<group>"; };
 		6EAB9D8DF54C6133F72B70AA /* FeatureFlags.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FeatureFlags.swift; path = FeatureFlags/FeatureFlags.swift; sourceTree = "<group>"; };
-		6F32FBF7601691999E6B0FA3 /* Fixtures.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Fixtures.swift; path = TestSupport/Fixtures.swift; sourceTree = "<group>"; };
-		6FCC2078FA1E52BC220AE466 /* VolumeArcTelemetryProbeMatcherTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcTelemetryProbeMatcherTests.swift; sourceTree = "<group>"; };
+		6ECEC8838905671A1F10548A /* VolumeArcSentryConfigurationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcSentryConfigurationTests.swift; sourceTree = "<group>"; };
 		71076BFB8EDA7486D1EC4FCC /* CoachPlanningComponents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CoachPlanningComponents.swift; path = Screens/CoachPlanningComponents.swift; sourceTree = "<group>"; };
 		7231A1D4CC6CAF8D33C77353 /* WorkoutsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WorkoutsView.swift; path = Screens/WorkoutsView.swift; sourceTree = "<group>"; };
 		72F3A320DA5B391D1014EC32 /* VolumeArcCloudConfiguration.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcCloudConfiguration.swift; sourceTree = "<group>"; };
+		7325BABE5074F5488526A937 /* VolumeArcBackgroundTasksTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcBackgroundTasksTests.swift; sourceTree = "<group>"; };
 		74B0759F2466B3976B4A1152 /* SignalsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SignalsView.swift; path = Screens/SignalsView.swift; sourceTree = "<group>"; };
 		74EB211BD47878BDA9A3F371 /* ChaosController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ChaosController.swift; path = Debug/ChaosController.swift; sourceTree = "<group>"; };
+		7569FEB778F28B77503F44C1 /* StoreKitSubscriptionRevocationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StoreKitSubscriptionRevocationTests.swift; sourceTree = "<group>"; };
+		77C777AF8D50C970AB52D328 /* VolumeArcMaterialsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcMaterialsTests.swift; sourceTree = "<group>"; };
 		798F7BD7655FA14BAC295FB4 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = Platforms/WatchOS.platform/Developer/SDKs/WatchOS11.0.sdk/System/Library/Frameworks/WidgetKit.framework; sourceTree = DEVELOPER_DIR; };
+		7996E16A4A538F7AC152F0C1 /* VolumeArcReadinessTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcReadinessTests.swift; sourceTree = "<group>"; };
 		7A4B1384F7B9F7468C06AA12 /* ReadinessModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ReadinessModel.swift; path = Workout/ReadinessModel.swift; sourceTree = "<group>"; };
+		7A6B6105B4C255F18F6F670C /* SnapshotHelper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SnapshotHelper.swift; sourceTree = "<group>"; };
 		7BD90E031F6A7963245086BC /* VolumeArcWatchApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcWatchApp.swift; sourceTree = "<group>"; };
-		7CC67BA3D64629DA4441C4A4 /* VolumeArcPaywallFeatureContractTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcPaywallFeatureContractTests.swift; sourceTree = "<group>"; };
 		7D3C667D1793BC16DC29FA2D /* WatchWorkoutView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchWorkoutView.swift; sourceTree = "<group>"; };
+		7FDEC185ED7E0EE6DC39D0CC /* VolumeArcRelaySessionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcRelaySessionTests.swift; sourceTree = "<group>"; };
 		80260DA2A653F8A8B4FF65A0 /* VolumeArcSentryConfiguration.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcSentryConfiguration.swift; sourceTree = "<group>"; };
-		81280FD1AF44799B8B49B53A /* RecoveryReaderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RecoveryReaderTests.swift; sourceTree = "<group>"; };
 		81B9F78DA06222A205FA5B4F /* libVolumeArcCore.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libVolumeArcCore.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		820E66548C54ADF916000C74 /* CoachEvalTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CoachEvalTests.swift; path = Evals/CoachEvalTests.swift; sourceTree = "<group>"; };
 		829A7A8277767620F8F94B18 /* ProductDefaults.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ProductDefaults.swift; path = Persistence/ProductDefaults.swift; sourceTree = "<group>"; };
-		866C9FC4656B644EB1B2D2CE /* InMemoryCloudSyncTransport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = InMemoryCloudSyncTransport.swift; path = TestSupport/InMemoryCloudSyncTransport.swift; sourceTree = "<group>"; };
+		8449B5BF28129EDA592D949B /* InMemoryCloudSyncTransport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = InMemoryCloudSyncTransport.swift; path = TestSupport/InMemoryCloudSyncTransport.swift; sourceTree = "<group>"; };
 		869BF4BE1A28736D5064FB14 /* VolumeArcFeedbackSubmitter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcFeedbackSubmitter.swift; sourceTree = "<group>"; };
 		8922A6F3C560C4194343BBFC /* VolumeArcAppPerfTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VolumeArcAppPerfTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8943F0E10914CEFF95EF7A97 /* SwiftDataWorkoutRepository.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SwiftDataWorkoutRepository.swift; path = Persistence/SwiftDataWorkoutRepository.swift; sourceTree = "<group>"; };
 		8A6EB6013EC9152E559B700C /* WorkoutDashboardModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WorkoutDashboardModel.swift; path = Navigation/WorkoutDashboardModel.swift; sourceTree = "<group>"; };
+		8AB1903066A1E5771ED996DC /* VolumeArcProgressionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcProgressionTests.swift; sourceTree = "<group>"; };
 		8AC02417CA636715105A8A49 /* VolumeArcAppFactories.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcAppFactories.swift; sourceTree = "<group>"; };
 		8BE6385A20668EE634BC9003 /* PlatformSurface.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PlatformSurface.swift; path = PlatformSurface/PlatformSurface.swift; sourceTree = "<group>"; };
-		8CECE474AC45844019482633 /* VolumeArcDashboardIntegrationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcDashboardIntegrationTests.swift; sourceTree = "<group>"; };
-		8E50AF20045D3D468C0F4F0B /* VolumeArcHealthKitPermissionJourneyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcHealthKitPermissionJourneyTests.swift; sourceTree = "<group>"; };
-		8FC19C40B870DEA24CCB3E8B /* VolumeArcPremiumGatingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VolumeArcPremiumGatingTests.swift; path = Premium/VolumeArcPremiumGatingTests.swift; sourceTree = "<group>"; };
-		90A277502F0F00710093AF2C /* VolumeArcAppConfigurationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcAppConfigurationTests.swift; sourceTree = "<group>"; };
+		8C7D70B14D10EBD05B82742C /* VolumeArcAppUITestSupport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcAppUITestSupport.swift; sourceTree = "<group>"; };
+		91546C56CFDAEAEA9B7B2E92 /* VolumeArcAppJourneyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcAppJourneyTests.swift; sourceTree = "<group>"; };
 		91D49FCA76FCAD2117DF76E1 /* WorkoutDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WorkoutDetailView.swift; path = Screens/WorkoutDetailView.swift; sourceTree = "<group>"; };
 		9239A60CE289F69448CA2219 /* Speech.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Speech.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Speech.framework; sourceTree = DEVELOPER_DIR; };
 		92B3EB85C16E2FAF483BCF18 /* CloudSyncTypes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CloudSyncTypes.swift; path = CloudSync/CloudSyncTypes.swift; sourceTree = "<group>"; };
+		93EA40702DC62E28DC565ED3 /* VolumeArcMigrationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcMigrationTests.swift; sourceTree = "<group>"; };
 		95746C474A3C5A7F1236881B /* VolumeArcWidgetController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcWidgetController.swift; sourceTree = "<group>"; };
 		9733972F295ED22E08D1A19A /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/WatchOS.platform/Developer/SDKs/WatchOS11.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		986956F0D4DB4774FD0C1A11 /* CloudSyncCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CloudSyncCoordinator.swift; path = CloudSync/CloudSyncCoordinator.swift; sourceTree = "<group>"; };
 		98EAA6F54E0255DFF4C29C77 /* TelemetrySink.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TelemetrySink.swift; path = Telemetry/TelemetrySink.swift; sourceTree = "<group>"; };
+		991364795909905BAE848992 /* RecoveryReaderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RecoveryReaderTests.swift; sourceTree = "<group>"; };
 		996DE8BD659696331BF29B11 /* VAAnimations.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VAAnimations.swift; path = Motion/VAAnimations.swift; sourceTree = "<group>"; };
 		997C5733301E62BD5EA6489B /* FeedbackBundle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FeedbackBundle.swift; path = Diagnostics/FeedbackBundle.swift; sourceTree = "<group>"; };
 		99EF9977369E7B9651412188 /* ExerciseCatalog+Entries.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "ExerciseCatalog+Entries.swift"; path = "Workout/ExerciseCatalog+Entries.swift"; sourceTree = "<group>"; };
+		9A1E0878C73FABBF915239F2 /* VolumeArcCoreCoverageTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcCoreCoverageTests.swift; sourceTree = "<group>"; };
 		9A52A2758E1A97B1663113AF /* RetryingCloudSyncTransport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RetryingCloudSyncTransport.swift; path = CloudSync/RetryingCloudSyncTransport.swift; sourceTree = "<group>"; };
-		9BB655AD21D8B80AA8B3EC80 /* VolumeArcMigrationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcMigrationTests.swift; sourceTree = "<group>"; };
 		9C81DB15515BE5990FCFB417 /* CloudKitSyncTransport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CloudKitSyncTransport.swift; path = CloudSync/CloudKitSyncTransport.swift; sourceTree = "<group>"; };
-		9CB2409441AD9FA6D4FAE3B5 /* VolumeArcSecureStoreFallbackTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcSecureStoreFallbackTests.swift; sourceTree = "<group>"; };
-		9FD76AE04B202020EC6934C5 /* InMemoryTelemetrySinkNotificationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InMemoryTelemetrySinkNotificationTests.swift; sourceTree = "<group>"; };
+		9C9387C6A21CF4E0C60EA9E0 /* FeatureFlagProviderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FeatureFlagProviderTests.swift; sourceTree = "<group>"; };
 		A1F95B8C9459FEC005DCA6F0 /* AICoachProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AICoachProvider.swift; path = AI/AICoachProvider.swift; sourceTree = "<group>"; };
 		A289B5B349FAEE8F292F3B24 /* LocalizedLabels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocalizedLabels.swift; sourceTree = "<group>"; };
 		A2B3147C0721C22F72E1A430 /* HealthStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = HealthStore.swift; path = Health/HealthStore.swift; sourceTree = "<group>"; };
-		A6B587C17C786814CA861694 /* StoreKitSubscriptionRevocationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StoreKitSubscriptionRevocationTests.swift; sourceTree = "<group>"; };
+		A5B4D5DEB6CAAD2D3170E538 /* ExerciseCatalogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExerciseCatalogTests.swift; path = Exercise/ExerciseCatalogTests.swift; sourceTree = "<group>"; };
+		A6E72FDA0D0D4DE5CA4BD725 /* CoachEvalFixtures */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder; path = CoachEvalFixtures; sourceTree = "<group>"; };
+		A942E800409941F077282F3F /* RecoveryContextTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RecoveryContextTests.swift; sourceTree = "<group>"; };
+		A995365AB3FCD6071DC290D8 /* InMemoryTelemetrySinkNotificationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InMemoryTelemetrySinkNotificationTests.swift; sourceTree = "<group>"; };
 		AAB7C5436B2D5BADFBE9C269 /* VolumeArcSecureStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcSecureStore.swift; sourceTree = "<group>"; };
-		AD5DC07A66ABBEA198E31181 /* VolumeArcRelayURLValidationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcRelayURLValidationTests.swift; sourceTree = "<group>"; };
+		AC66B7177177E1CC344CB962 /* Mocks.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Mocks.swift; path = TestSupport/Mocks.swift; sourceTree = "<group>"; };
 		ADEFB191F07540792C19196A /* SyncPayloadCodec.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SyncPayloadCodec.swift; path = CloudSync/SyncPayloadCodec.swift; sourceTree = "<group>"; };
 		AE0E85F10352240E54DE4F2D /* ActivityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/ActivityKit.framework; sourceTree = DEVELOPER_DIR; };
 		AE69481312FB2E4FE85A73C8 /* SessionDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SessionDetailView.swift; path = Screens/SessionDetailView.swift; sourceTree = "<group>"; };
+		AEEC4E1D13204C675196F04D /* VolumeArcRelayURLValidationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcRelayURLValidationTests.swift; sourceTree = "<group>"; };
 		B040EB6A920B9EDA187A808D /* ProfileView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ProfileView.swift; path = Screens/ProfileView.swift; sourceTree = "<group>"; };
 		B3FD93D77F2332BB4BADB9EA /* VolumeArcRuntimeFlags.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VolumeArcRuntimeFlags.swift; path = Runtime/VolumeArcRuntimeFlags.swift; sourceTree = "<group>"; };
-		B4291E7B64E0103ED7ED10BD /* MocksUsageSmokeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MocksUsageSmokeTests.swift; path = TestSupport/MocksUsageSmokeTests.swift; sourceTree = "<group>"; };
-		B5A9CDB2E6BB36C71415E762 /* VolumeArcPersistenceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcPersistenceTests.swift; sourceTree = "<group>"; };
 		B83B6FEE3E587DA388A0E476 /* ProgressionEngine.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ProgressionEngine.swift; path = Workout/ProgressionEngine.swift; sourceTree = "<group>"; };
-		B86054560BAD34C3108D4B19 /* VolumeArcPerfTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcPerfTests.swift; sourceTree = "<group>"; };
 		B932EA0694E93F7B9652385B /* VolumeArcWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = VolumeArcWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B9DD9CD13C52C31DC662928F /* VolumeArcSnapshotInfrastructureTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VolumeArcSnapshotInfrastructureTests.swift; path = Snapshots/VolumeArcSnapshotInfrastructureTests.swift; sourceTree = "<group>"; };
 		BAC13350FDB110B1FBA9DA71 /* Materials.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Materials.swift; path = DesignSystem/Materials.swift; sourceTree = "<group>"; };
+		BCFB509116F56DE5A9A0B412 /* VolumeArcCloudSyncTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcCloudSyncTests.swift; sourceTree = "<group>"; };
 		BDBEFA36A4C8D980C8795150 /* VolumeArcBackgroundTasks.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcBackgroundTasks.swift; sourceTree = "<group>"; };
 		C265E8DBFC6EC445ADF642AB /* WorkoutSurfaceComponents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WorkoutSurfaceComponents.swift; path = Screens/WorkoutSurfaceComponents.swift; sourceTree = "<group>"; };
-		C2D2D47A81E2F1F50E5E2A1A /* CloudSyncRetryAndTimestampTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CloudSyncRetryAndTimestampTests.swift; sourceTree = "<group>"; };
-		C3FBA6C78DAB764187B789BB /* ExerciseIllustrationCoverageTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExerciseIllustrationCoverageTests.swift; path = Exercise/ExerciseIllustrationCoverageTests.swift; sourceTree = "<group>"; };
-		C43151B76D984E1FFB318DC1 /* VolumeArcTests.storekit */ = {isa = PBXFileReference; includeInIndex = 1; path = VolumeArcTests.storekit; sourceTree = "<group>"; };
 		C6485553AE678261C9E4E7C6 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		C8AD8CC7AFB6E80AE280578B /* CoachPromptTemplate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CoachPromptTemplate.swift; path = AI/CoachPromptTemplate.swift; sourceTree = "<group>"; };
 		C8D6443A48529C6BFC92E2FF /* VolumeArcVoicePermissionStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcVoicePermissionStore.swift; sourceTree = "<group>"; };
@@ -521,44 +524,59 @@
 		CAAAE52654D75F1AC3987B7F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		CACE01473A6CDDF1D970B2FB /* VolumeArc.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VolumeArc.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CBBA3AB2DE0EECD27E39B78A /* VolumeArcRelaySessionProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcRelaySessionProvider.swift; sourceTree = "<group>"; };
+		CC283EA1032549D4A59BCB87 /* Fixtures.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Fixtures.swift; path = TestSupport/Fixtures.swift; sourceTree = "<group>"; };
 		CCFCA2F22B2E57733A372150 /* NotificationStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = NotificationStore.swift; path = Notifications/NotificationStore.swift; sourceTree = "<group>"; };
 		CD3F5639B96140F968F18B89 /* ChaosHealthStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ChaosHealthStore.swift; path = Health/ChaosHealthStore.swift; sourceTree = "<group>"; };
-		CEC06D42731A375A32708E91 /* VolumeArcRelaySessionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcRelaySessionTests.swift; sourceTree = "<group>"; };
+		D31CFC396C1442CF999E9B65 /* HealthKitAuthorizationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HealthKitAuthorizationTests.swift; sourceTree = "<group>"; };
 		D3CB0D5C808A408DBB14D8FD /* SyncPayloadCodec+LegacySynthesis.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "SyncPayloadCodec+LegacySynthesis.swift"; path = "CloudSync/SyncPayloadCodec+LegacySynthesis.swift"; sourceTree = "<group>"; };
 		D55303D6AEBDA2594B32EAC3 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		D5D51B76348753056F6FAD53 /* VolumeArcBackgroundTasksTelemetryTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcBackgroundTasksTelemetryTests.swift; sourceTree = "<group>"; };
 		D60FA91C8E8BCF56E80B30EA /* VAHaptics.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VAHaptics.swift; path = Haptics/VAHaptics.swift; sourceTree = "<group>"; };
+		D6929D7D58932A08AFFCC17C /* VolumeArcSentryPIIScrubberTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcSentryPIIScrubberTests.swift; sourceTree = "<group>"; };
 		D69FF6895F9C6CFDEAC15016 /* WatchConnectivity.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchConnectivity.swift; path = Watch/WatchConnectivity.swift; sourceTree = "<group>"; };
 		D7F324EB262AE3E7FE7EBAA2 /* PaywallView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PaywallView.swift; path = Screens/PaywallView.swift; sourceTree = "<group>"; };
 		D8126AD2720FEC698179C6ED /* VolumeArcWatchComplications.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcWatchComplications.swift; sourceTree = "<group>"; };
 		D9454F82B5F3A481311ABDB4 /* VADesignTokens.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VADesignTokens.swift; sourceTree = "<group>"; };
 		DA33FA2FE5D837499A348547 /* VolumeArcAIConfiguration.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcAIConfiguration.swift; sourceTree = "<group>"; };
-		DA3448F125CAF36CDE47ABCD /* ExerciseCatalogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExerciseCatalogTests.swift; path = Exercise/ExerciseCatalogTests.swift; sourceTree = "<group>"; };
+		DAFDA83C1958107A57C977FA /* ExerciseIllustrationCoverageTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExerciseIllustrationCoverageTests.swift; path = Exercise/ExerciseIllustrationCoverageTests.swift; sourceTree = "<group>"; };
 		DC65D1C80DC8989855D86D68 /* DiagnosticsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DiagnosticsView.swift; path = Screens/DiagnosticsView.swift; sourceTree = "<group>"; };
 		DDD0FDD0FC380C0BC0A4EB4D /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = Platforms/WatchOS.platform/Developer/SDKs/WatchOS11.0.sdk/System/Library/Frameworks/SwiftUI.framework; sourceTree = DEVELOPER_DIR; };
 		DE597255FC36C5E59517CDB9 /* Navigation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Navigation.swift; path = Navigation/Navigation.swift; sourceTree = "<group>"; };
 		DEE0B4725F9D6B64AA810B0E /* VADesignTokens.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VADesignTokens.swift; sourceTree = "<group>"; };
+		DF57FDA55536EF0B5D50A1A7 /* VolumeArcCoachPromptTemplateTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcCoachPromptTemplateTests.swift; sourceTree = "<group>"; };
 		E26292BCC6DAAA667C161A2C /* VoiceCoach.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VoiceCoach.swift; path = AI/VoiceCoach.swift; sourceTree = "<group>"; };
-		E3E14439955280347E3B0A93 /* HealthKitAuthorizationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HealthKitAuthorizationTests.swift; sourceTree = "<group>"; };
 		E409060565785E85789F1A24 /* VolumeArcWatchWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = VolumeArcWatchWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		E5E3AF89FD3E1FAB0F600DF5 /* FeatureFlagProviderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FeatureFlagProviderTests.swift; sourceTree = "<group>"; };
+		E52DC2FF0258D7FD3126C534 /* VolumeArcPerfTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcPerfTests.swift; sourceTree = "<group>"; };
+		E5DFD2B109F64673D48B6BDD /* AppIconAssetContractTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppIconAssetContractTests.swift; sourceTree = "<group>"; };
 		E73BE1470DDBE77F2E4FE0B8 /* LegalLinks.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LegalLinks.swift; path = Legal/LegalLinks.swift; sourceTree = "<group>"; };
-		E8083DC7542A417CBC997E21 /* VolumeArcMaterialsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcMaterialsTests.swift; sourceTree = "<group>"; };
 		E8F406F871CD1ED89F8B8AE1 /* DashboardRefreshLoader.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DashboardRefreshLoader.swift; path = Navigation/DashboardRefreshLoader.swift; sourceTree = "<group>"; };
+		E8FCD5F1C270B78F215D8421 /* VolumeArcAccessibilityJourneyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcAccessibilityJourneyTests.swift; sourceTree = "<group>"; };
 		EA98AEB159C91461F2AE4473 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/XCTest.framework; sourceTree = DEVELOPER_DIR; };
-		EABD4C366B3B6EBB9F610505 /* FeedbackBundleAssemblerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FeedbackBundleAssemblerTests.swift; sourceTree = "<group>"; };
-		ECE0123E3DD4B408406604C5 /* VolumeArcCloudSyncTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcCloudSyncTests.swift; sourceTree = "<group>"; };
-		EE39A8FD226E89EFEDCF6B8F /* RecoveryContextTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RecoveryContextTests.swift; sourceTree = "<group>"; };
-		F481165A6296D0587FCA8ED7 /* VolumeArcWatchSimulationJourneyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcWatchSimulationJourneyTests.swift; sourceTree = "<group>"; };
+		EC53E1A0741DAD269C45A9D3 /* VolumeArcScreenshotTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcScreenshotTests.swift; sourceTree = "<group>"; };
 		F55428D8187A547585F89E5D /* StoreKitTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKitTest.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/StoreKitTest.framework; sourceTree = DEVELOPER_DIR; };
-		F7CCD460616A7466C7A29796 /* VolumeArcAccessibilityJourneyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcAccessibilityJourneyTests.swift; sourceTree = "<group>"; };
-		F85A6AC01F479D714CDFE49D /* VolumeArcFeedbackJourneyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcFeedbackJourneyTests.swift; sourceTree = "<group>"; };
 		F916D8D7D8DC7CD61DB6C8E3 /* AppIntents.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppIntents.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/AppIntents.framework; sourceTree = DEVELOPER_DIR; };
-		FA4B5D899C480F3DFE11FEBE /* VolumeArcProgressionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcProgressionTests.swift; sourceTree = "<group>"; };
 		FAD9A56C2518CBD1ECCA41CD /* ExerciseCatalog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExerciseCatalog.swift; path = Workout/ExerciseCatalog.swift; sourceTree = "<group>"; };
-		FCAF5F5E2CC75191319B49B8 /* CoachEvalTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CoachEvalTests.swift; path = Evals/CoachEvalTests.swift; sourceTree = "<group>"; };
+		FBE9BDC3850B1131422A6642 /* VolumeArcTelemetryProbeMatcherTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcTelemetryProbeMatcherTests.swift; sourceTree = "<group>"; };
+		FFB8B1B9E7C2FDA526C006BF /* VolumeArcHealthKitPermissionJourneyTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VolumeArcHealthKitPermissionJourneyTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		25E605EE5B134D3A258B839B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0880C515447EC5C82FE1CDB8 /* Foundation.framework in Frameworks */,
+				253C7F17DD98816E21BA5E7D /* libVolumeArcCore.a in Frameworks */,
+				DCE824E148074B5053E1DFB6 /* libVolumeArcUI.a in Frameworks */,
+				76216972712FA32C8B866CF4 /* XCTest.framework in Frameworks */,
+				89ADCE307DCF8F5F1D7519B3 /* AuthenticationServices.framework in Frameworks */,
+				9D7E30A5DF692DAD89A9F426 /* Security.framework in Frameworks */,
+				D67DF3F9613F2071BD569226 /* AppIntents.framework in Frameworks */,
+				F218AB9FEF947E6142BF897C /* ActivityKit.framework in Frameworks */,
+				81B01CA34E8DF189397FB8B8 /* StoreKitTest.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		33729039D888E5697411F009 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -611,22 +629,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		B434D014174B9FF544A5DF0B /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				628B8DB3B2FADE41F44A99DF /* Foundation.framework in Frameworks */,
-				B732669FB4409D043F67A771 /* libVolumeArcCore.a in Frameworks */,
-				EB6FB48EDD4CC13CB367899B /* libVolumeArcUI.a in Frameworks */,
-				C7DA3E63ADE9C928FBB43CAB /* XCTest.framework in Frameworks */,
-				CB50CAB3E602BF23A37FD913 /* AuthenticationServices.framework in Frameworks */,
-				01EC1AE9E9ABB5435CF6ABEA /* Security.framework in Frameworks */,
-				6CA41F7ED904FCFEFFCA0D5D /* AppIntents.framework in Frameworks */,
-				EB6386CACF628A651E91CA2E /* ActivityKit.framework in Frameworks */,
-				3F3C00FB6F76E280DFB658AC /* StoreKitTest.framework in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		BA392A899DE8E3E8DBB35699 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -670,6 +672,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		06017B6723EFA6151E23FA7C /* Evals */ = {
+			isa = PBXGroup;
+			children = (
+				A6E72FDA0D0D4DE5CA4BD725 /* CoachEvalFixtures */,
+			);
+			name = Evals;
+			path = Evals;
+			sourceTree = "<group>";
+		};
 		555A42A451171330DC95DF23 /* watchOS */ = {
 			isa = PBXGroup;
 			children = (
@@ -681,51 +692,6 @@
 			name = watchOS;
 			sourceTree = "<group>";
 		};
-		560A8B50CB365198BAC870AC /* VolumeArcAppTests */ = {
-			isa = PBXGroup;
-			children = (
-				37AD132616EB50E47456C5D9 /* AppIconAssetContractTests.swift */,
-				C2D2D47A81E2F1F50E5E2A1A /* CloudSyncRetryAndTimestampTests.swift */,
-				FCAF5F5E2CC75191319B49B8 /* CoachEvalTests.swift */,
-				693B18453FB8AF69DD3BA6B1 /* ExerciseCatalogScaleupTests.swift */,
-				DA3448F125CAF36CDE47ABCD /* ExerciseCatalogTests.swift */,
-				C3FBA6C78DAB764187B789BB /* ExerciseIllustrationCoverageTests.swift */,
-				E5E3AF89FD3E1FAB0F600DF5 /* FeatureFlagProviderTests.swift */,
-				EABD4C366B3B6EBB9F610505 /* FeedbackBundleAssemblerTests.swift */,
-				E3E14439955280347E3B0A93 /* HealthKitAuthorizationTests.swift */,
-				9FD76AE04B202020EC6934C5 /* InMemoryTelemetrySinkNotificationTests.swift */,
-				8FC19C40B870DEA24CCB3E8B /* VolumeArcPremiumGatingTests.swift */,
-				EE39A8FD226E89EFEDCF6B8F /* RecoveryContextTests.swift */,
-				81280FD1AF44799B8B49B53A /* RecoveryReaderTests.swift */,
-				53B8F401B7937287F424DC35 /* VolumeArcSnapshotInfrastructureTests.swift */,
-				A6B587C17C786814CA861694 /* StoreKitSubscriptionRevocationTests.swift */,
-				6F32FBF7601691999E6B0FA3 /* Fixtures.swift */,
-				866C9FC4656B644EB1B2D2CE /* InMemoryCloudSyncTransport.swift */,
-				434D37DD31F5FE114293CFDB /* Mocks.swift */,
-				B4291E7B64E0103ED7ED10BD /* MocksUsageSmokeTests.swift */,
-				90A277502F0F00710093AF2C /* VolumeArcAppConfigurationTests.swift */,
-				676DB993050602305B9B4BB3 /* VolumeArcBackgroundTasksTests.swift */,
-				ECE0123E3DD4B408406604C5 /* VolumeArcCloudSyncTests.swift */,
-				01CB2933ADB5C6747FC7BFE3 /* VolumeArcCoachMemoryRetentionTests.swift */,
-				06B65CCBCE84E273958A0A7C /* VolumeArcCoachPromptTemplateTests.swift */,
-				0E72B8EF97365CE5DF2DA482 /* VolumeArcCoreCoverageTests.swift */,
-				8CECE474AC45844019482633 /* VolumeArcDashboardIntegrationTests.swift */,
-				E8083DC7542A417CBC997E21 /* VolumeArcMaterialsTests.swift */,
-				9BB655AD21D8B80AA8B3EC80 /* VolumeArcMigrationTests.swift */,
-				7CC67BA3D64629DA4441C4A4 /* VolumeArcPaywallFeatureContractTests.swift */,
-				B5A9CDB2E6BB36C71415E762 /* VolumeArcPersistenceTests.swift */,
-				FA4B5D899C480F3DFE11FEBE /* VolumeArcProgressionTests.swift */,
-				58D906E0E0C99BBCAD1D71C2 /* VolumeArcReadinessTests.swift */,
-				CEC06D42731A375A32708E91 /* VolumeArcRelaySessionTests.swift */,
-				AD5DC07A66ABBEA198E31181 /* VolumeArcRelayURLValidationTests.swift */,
-				9CB2409441AD9FA6D4FAE3B5 /* VolumeArcSecureStoreFallbackTests.swift */,
-				250F8C8036D16B5F1C37A935 /* VolumeArcSentryConfigurationTests.swift */,
-				511EB042A6C589D299888072 /* VolumeArcSentryPIIScrubberTests.swift */,
-			);
-			name = VolumeArcAppTests;
-			path = VolumeArcAppTests;
-			sourceTree = "<group>";
-		};
 		5BA1F76E37C5FE9BDD28BB0E /* Shared Native Package Sources */ = {
 			isa = PBXGroup;
 			children = (
@@ -733,6 +699,27 @@
 				EF2BE4C5D7AEDE095AB57575 /* VolumeArcUI */,
 			);
 			name = "Shared Native Package Sources";
+			sourceTree = "<group>";
+		};
+		6769BF8853B6EAFCFD8D53B0 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				A19CE1CC6EA98FFB03FB4ACA /* VolumeArcAppTests */,
+				EBDECE5ECF99D2A08603E671 /* VolumeArcAppUITests */,
+				67896F13A77B3B584B06663E /* VolumeArcAppPerfTests */,
+				06017B6723EFA6151E23FA7C /* Evals */,
+			);
+			name = Tests;
+			path = Tests;
+			sourceTree = "<group>";
+		};
+		67896F13A77B3B584B06663E /* VolumeArcAppPerfTests */ = {
+			isa = PBXGroup;
+			children = (
+				E52DC2FF0258D7FD3126C534 /* VolumeArcPerfTests.swift */,
+			);
+			name = VolumeArcAppPerfTests;
+			path = VolumeArcAppPerfTests;
 			sourceTree = "<group>";
 		};
 		75CD7DACA14A4D6CC24B2882 /* iOS */ = {
@@ -761,42 +748,50 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		9127B2DFEB47EB01C61A26F8 /* VolumeArcAppPerfTests */ = {
+		A19CE1CC6EA98FFB03FB4ACA /* VolumeArcAppTests */ = {
 			isa = PBXGroup;
 			children = (
-				B86054560BAD34C3108D4B19 /* VolumeArcPerfTests.swift */,
+				E5DFD2B109F64673D48B6BDD /* AppIconAssetContractTests.swift */,
+				2E0AE4C6D48876CBCA1C9848 /* CloudSyncRetryAndTimestampTests.swift */,
+				820E66548C54ADF916000C74 /* CoachEvalTests.swift */,
+				17BAA79165EA8793F412E3AE /* ExerciseCatalogScaleupTests.swift */,
+				A5B4D5DEB6CAAD2D3170E538 /* ExerciseCatalogTests.swift */,
+				DAFDA83C1958107A57C977FA /* ExerciseIllustrationCoverageTests.swift */,
+				9C9387C6A21CF4E0C60EA9E0 /* FeatureFlagProviderTests.swift */,
+				2663F9CF00FE0F49BF76B970 /* FeedbackBundleAssemblerTests.swift */,
+				D31CFC396C1442CF999E9B65 /* HealthKitAuthorizationTests.swift */,
+				A995365AB3FCD6071DC290D8 /* InMemoryTelemetrySinkNotificationTests.swift */,
+				3E652D43DD6432BC0DC46B3F /* VolumeArcPremiumGatingTests.swift */,
+				A942E800409941F077282F3F /* RecoveryContextTests.swift */,
+				991364795909905BAE848992 /* RecoveryReaderTests.swift */,
+				B9DD9CD13C52C31DC662928F /* VolumeArcSnapshotInfrastructureTests.swift */,
+				7569FEB778F28B77503F44C1 /* StoreKitSubscriptionRevocationTests.swift */,
+				CC283EA1032549D4A59BCB87 /* Fixtures.swift */,
+				8449B5BF28129EDA592D949B /* InMemoryCloudSyncTransport.swift */,
+				AC66B7177177E1CC344CB962 /* Mocks.swift */,
+				4F95C3BBF5C87A0027A4A912 /* MocksUsageSmokeTests.swift */,
+				49D4F0162455D3BAD65D349B /* VolumeArcAppConfigurationTests.swift */,
+				D5D51B76348753056F6FAD53 /* VolumeArcBackgroundTasksTelemetryTests.swift */,
+				7325BABE5074F5488526A937 /* VolumeArcBackgroundTasksTests.swift */,
+				BCFB509116F56DE5A9A0B412 /* VolumeArcCloudSyncTests.swift */,
+				67CDD28EFC6C38FFE33C2D21 /* VolumeArcCoachMemoryRetentionTests.swift */,
+				DF57FDA55536EF0B5D50A1A7 /* VolumeArcCoachPromptTemplateTests.swift */,
+				9A1E0878C73FABBF915239F2 /* VolumeArcCoreCoverageTests.swift */,
+				47E1CE67331380DE44A971E9 /* VolumeArcDashboardIntegrationTests.swift */,
+				77C777AF8D50C970AB52D328 /* VolumeArcMaterialsTests.swift */,
+				93EA40702DC62E28DC565ED3 /* VolumeArcMigrationTests.swift */,
+				50995D21DDA69EAE48FF3411 /* VolumeArcPaywallFeatureContractTests.swift */,
+				2697FB7B4CBFD033A3C10E94 /* VolumeArcPersistenceTests.swift */,
+				8AB1903066A1E5771ED996DC /* VolumeArcProgressionTests.swift */,
+				7996E16A4A538F7AC152F0C1 /* VolumeArcReadinessTests.swift */,
+				7FDEC185ED7E0EE6DC39D0CC /* VolumeArcRelaySessionTests.swift */,
+				AEEC4E1D13204C675196F04D /* VolumeArcRelayURLValidationTests.swift */,
+				21FA6C2C10EBCCAC1E674C88 /* VolumeArcSecureStoreFallbackTests.swift */,
+				6ECEC8838905671A1F10548A /* VolumeArcSentryConfigurationTests.swift */,
+				D6929D7D58932A08AFFCC17C /* VolumeArcSentryPIIScrubberTests.swift */,
 			);
-			name = VolumeArcAppPerfTests;
-			path = VolumeArcAppPerfTests;
-			sourceTree = "<group>";
-		};
-		9C9EC431063602D5D092FEB4 /* Evals */ = {
-			isa = PBXGroup;
-			children = (
-				3FE922430F62ECF380DD1E91 /* CoachEvalFixtures */,
-			);
-			name = Evals;
-			path = Evals;
-			sourceTree = "<group>";
-		};
-		AB964D253404108BBC4F644D /* VolumeArcAppUITests */ = {
-			isa = PBXGroup;
-			children = (
-				23D695D223D13F1DE634B8EA /* SnapshotHelper.swift */,
-				F7CCD460616A7466C7A29796 /* VolumeArcAccessibilityJourneyTests.swift */,
-				4E8F747DD520E340E3B04008 /* VolumeArcAppJourneyTests.swift */,
-				3CDA28B548D05311B5EF41FA /* VolumeArcAppUITestSupport.swift */,
-				6C97DCE2355C9E2CF7BCE3CF /* VolumeArcAppUITests.swift */,
-				467D3C87D3FA2A8B9438DDD5 /* VolumeArcChaosJourneyTests.swift */,
-				F85A6AC01F479D714CDFE49D /* VolumeArcFeedbackJourneyTests.swift */,
-				8E50AF20045D3D468C0F4F0B /* VolumeArcHealthKitPermissionJourneyTests.swift */,
-				507BAE0DB8363AA21FB5D735 /* VolumeArcScreenshotTests.swift */,
-				6FCC2078FA1E52BC220AE466 /* VolumeArcTelemetryProbeMatcherTests.swift */,
-				F481165A6296D0587FCA8ED7 /* VolumeArcWatchSimulationJourneyTests.swift */,
-				C43151B76D984E1FFB318DC1 /* VolumeArcTests.storekit */,
-			);
-			name = VolumeArcAppUITests;
-			path = VolumeArcAppUITests;
+			name = VolumeArcAppTests;
+			path = VolumeArcAppTests;
 			sourceTree = "<group>";
 		};
 		BC1C334388AD1099924A0414 /* WatchWidgets */ = {
@@ -932,7 +927,7 @@
 				E0517AC25B79A40FC89858A7 /* Watch */,
 				BC1C334388AD1099924A0414 /* WatchWidgets */,
 				E98733E7CCF70038887DDC56 /* Widgets */,
-				FB7848489D22D6B809B37A5F /* Tests */,
+				6769BF8853B6EAFCFD8D53B0 /* Tests */,
 				5BA1F76E37C5FE9BDD28BB0E /* Shared Native Package Sources */,
 			);
 			sourceTree = "<group>";
@@ -945,6 +940,26 @@
 			);
 			name = Widgets;
 			path = Widgets;
+			sourceTree = "<group>";
+		};
+		EBDECE5ECF99D2A08603E671 /* VolumeArcAppUITests */ = {
+			isa = PBXGroup;
+			children = (
+				7A6B6105B4C255F18F6F670C /* SnapshotHelper.swift */,
+				E8FCD5F1C270B78F215D8421 /* VolumeArcAccessibilityJourneyTests.swift */,
+				91546C56CFDAEAEA9B7B2E92 /* VolumeArcAppJourneyTests.swift */,
+				8C7D70B14D10EBD05B82742C /* VolumeArcAppUITestSupport.swift */,
+				3418C932249A423A476498CA /* VolumeArcAppUITests.swift */,
+				6838AD62B02B504E55409142 /* VolumeArcChaosJourneyTests.swift */,
+				5CDAF73484DF3D51CC4E9CB2 /* VolumeArcFeedbackJourneyTests.swift */,
+				FFB8B1B9E7C2FDA526C006BF /* VolumeArcHealthKitPermissionJourneyTests.swift */,
+				EC53E1A0741DAD269C45A9D3 /* VolumeArcScreenshotTests.swift */,
+				FBE9BDC3850B1131422A6642 /* VolumeArcTelemetryProbeMatcherTests.swift */,
+				2689DFDF7E820D846FC4AE49 /* VolumeArcWatchSimulationJourneyTests.swift */,
+				40C25E3043E83EA7BCA4B8EF /* VolumeArcTests.storekit */,
+			);
+			name = VolumeArcAppUITests;
+			path = VolumeArcAppUITests;
 			sourceTree = "<group>";
 		};
 		EF2BE4C5D7AEDE095AB57575 /* VolumeArcUI */ = {
@@ -981,18 +996,6 @@
 			path = VolumeArcNative/Sources/VolumeArcUI;
 			sourceTree = "<group>";
 		};
-		FB7848489D22D6B809B37A5F /* Tests */ = {
-			isa = PBXGroup;
-			children = (
-				560A8B50CB365198BAC870AC /* VolumeArcAppTests */,
-				AB964D253404108BBC4F644D /* VolumeArcAppUITests */,
-				9127B2DFEB47EB01C61A26F8 /* VolumeArcAppPerfTests */,
-				9C9EC431063602D5D092FEB4 /* Evals */,
-			);
-			name = Tests;
-			path = Tests;
-			sourceTree = "<group>";
-		};
 /* End PBXGroup section */
 
 /* Begin PBXHeadersBuildPhase section */
@@ -1020,24 +1023,24 @@
 /* End PBXHeadersBuildPhase section */
 
 /* Begin PBXNativeTarget section */
-		06F5341361E729042606398D /* VolumeArcAppTests */ = {
+		43C87A22395CB67A178833EB /* VolumeArcAppTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 0517E6649737106FA01AE7D4 /* Build configuration list for PBXNativeTarget "VolumeArcAppTests" */;
+			buildConfigurationList = 033ECEBE758C6CFFF8A5B708 /* Build configuration list for PBXNativeTarget "VolumeArcAppTests" */;
 			buildPhases = (
-				28C29EC04E06FED959BCB101 /* Sources */,
-				B434D014174B9FF544A5DF0B /* Frameworks */,
-				6515A8F9A22646EE546A2119 /* Resources */,
+				0325E34541EFC8E481DD680D /* Sources */,
+				25E605EE5B134D3A258B839B /* Frameworks */,
+				9E15DD25889614814DAAB89A /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				A796787AA0518BC74C4E8B13 /* PBXTargetDependency */,
-				676A4A62DBD446B2960DB2A0 /* PBXTargetDependency */,
+				D82BE3531EE4DCDE396DB137 /* PBXTargetDependency */,
+				3DB84683926C0D0F11A6FCD8 /* PBXTargetDependency */,
 			);
 			name = VolumeArcAppTests;
 			packageProductDependencies = (
-				27AD8AE4B97DD7EFD5E8442B /* Sentry */,
-				0A1A357023824546BD83038B /* SnapshotTesting */,
+				0BCECE2A23C44F7073BD1B96 /* Sentry */,
+				45249FA7CB79852D42E6183B /* SnapshotTesting */,
 			);
 			productName = VolumeArcAppTests;
 			productReference = 2CAB865BFAE8EB1860E0891C /* VolumeArcAppTests.xctest */;
@@ -1222,7 +1225,7 @@
 				LastSwiftUpdateCheck = 1600;
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
-					06F5341361E729042606398D = {
+					43C87A22395CB67A178833EB = {
 						CreatedOnToolsVersion = 26.4;
 					};
 					90B1D9B509B5F0FA28773E81 = {
@@ -1266,7 +1269,7 @@
 			minimizedProjectReferenceProxies = 0;
 			packageReferences = (
 				2D4C6CADEF1F3DCA94C80284 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
-				CD7972E7D1C88B1E775001BF /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */,
+				C3E458F9CBABA2BD84CDF2FA /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DD71B8D198654F67234F4BB8 /* Products */;
@@ -1280,7 +1283,7 @@
 				BF2E1CD368C7783F67504E0C /* VolumeArcWatch */,
 				F45D9C10EAD81326473981A3 /* VolumeArcWatchWidgets */,
 				C0302F520D4BEB64A423AE1D /* VolumeArcWidgets */,
-				06F5341361E729042606398D /* VolumeArcAppTests */,
+				43C87A22395CB67A178833EB /* VolumeArcAppTests */,
 				CEF33F1B05593934B8531941 /* VolumeArcAppUITests */,
 				F336988BE494648CAF5B5D8A /* VolumeArcAppPerfTests */,
 			);
@@ -1300,15 +1303,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		6515A8F9A22646EE546A2119 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				8DAF7192CC08EB9C9957D0A9 /* VolumeArcTests.storekit in Resources */,
-				CDBD34904C9676CC1A96F984 /* CoachEvalFixtures in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1334,6 +1328,15 @@
 			files = (
 				F12ED1FA509650BF9E474F15 /* PrivacyInfo.xcprivacy in Resources */,
 				9CDA46268A5ED94311458ECA /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9E15DD25889614814DAAB89A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5EDB020ED0C481910F165C05 /* VolumeArcTests.storekit in Resources */,
+				813E9982B8664AA21D533A3E /* CoachEvalFixtures in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1371,6 +1374,63 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		0325E34541EFC8E481DD680D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F9AF7863EEE30570660489DC /* AppIconAssetContractTests.swift in Sources */,
+				E2FEB5168D612B17263E817B /* CloudSyncRetryAndTimestampTests.swift in Sources */,
+				55918851D7F750026F122279 /* CoachEvalTests.swift in Sources */,
+				20FEED79D7D9D0009C5F1A8E /* ExerciseCatalogScaleupTests.swift in Sources */,
+				9458818C145A53264CBAC434 /* ExerciseCatalogTests.swift in Sources */,
+				8772F15E08289D67B2A2184E /* ExerciseIllustrationCoverageTests.swift in Sources */,
+				975016EEDBBB98DFE13C198C /* FeatureFlagProviderTests.swift in Sources */,
+				D0253C8E9CAC35D73E62A332 /* FeedbackBundleAssemblerTests.swift in Sources */,
+				F3B0A997412D97BA15A9CFDE /* HealthKitAuthorizationTests.swift in Sources */,
+				2FCB71C17DAD54550E573809 /* InMemoryTelemetrySinkNotificationTests.swift in Sources */,
+				C8D3C92BAA6F583794C79974 /* VolumeArcPremiumGatingTests.swift in Sources */,
+				04DCFE4D9A4C3A1505A67C91 /* RecoveryContextTests.swift in Sources */,
+				D78553FDA3A9211D82F44AB4 /* RecoveryReaderTests.swift in Sources */,
+				50A8187D2261B1EB1D97F56A /* VolumeArcSnapshotInfrastructureTests.swift in Sources */,
+				E48086558FE035958E470B4C /* StoreKitSubscriptionRevocationTests.swift in Sources */,
+				2AAEB7D7D25F270CF5F748BF /* Fixtures.swift in Sources */,
+				3168592640C0AEDF49CA734C /* InMemoryCloudSyncTransport.swift in Sources */,
+				678F1F46EC0AFF9A2428F1A8 /* Mocks.swift in Sources */,
+				9744EC95FA5581F588217BBA /* MocksUsageSmokeTests.swift in Sources */,
+				04455EB2323EFF5D63E39841 /* VolumeArcAppConfigurationTests.swift in Sources */,
+				3BD55A98B868D304C6540B04 /* VolumeArcBackgroundTasksTelemetryTests.swift in Sources */,
+				AC4ABCC63979C72790BC6E06 /* VolumeArcBackgroundTasksTests.swift in Sources */,
+				AD8B753E899B8BCA5A217449 /* VolumeArcCloudSyncTests.swift in Sources */,
+				B1486A19F980B7095B4E7B7A /* VolumeArcCoachMemoryRetentionTests.swift in Sources */,
+				BB2703B4AE3DCB5976FCB493 /* VolumeArcCoachPromptTemplateTests.swift in Sources */,
+				C1B783EA494F0E3F74AF6DD9 /* VolumeArcCoreCoverageTests.swift in Sources */,
+				0B305A312D1E5FF36E30F72E /* VolumeArcDashboardIntegrationTests.swift in Sources */,
+				C9EA2BB4CEEB67A8758ADB5B /* VolumeArcMaterialsTests.swift in Sources */,
+				5E96F507B506827956767AF0 /* VolumeArcMigrationTests.swift in Sources */,
+				7063A7711524075463E37545 /* VolumeArcPaywallFeatureContractTests.swift in Sources */,
+				BB1494DE8F55A99DB9C19EF8 /* VolumeArcPersistenceTests.swift in Sources */,
+				880D8CB6357457032A3EFF8F /* VolumeArcProgressionTests.swift in Sources */,
+				90DC9431E7D17AD6D348AD9E /* VolumeArcReadinessTests.swift in Sources */,
+				A5B5E51202E239FD5E722CBB /* VolumeArcRelaySessionTests.swift in Sources */,
+				1FEE3A1CDC300FF26C4AE9B6 /* VolumeArcRelayURLValidationTests.swift in Sources */,
+				EFC78094D9F1E0DC66D00785 /* VolumeArcSecureStoreFallbackTests.swift in Sources */,
+				B56C09B391BFF1204387F5AE /* VolumeArcSentryConfigurationTests.swift in Sources */,
+				8CD78D444C3E96F21CF82CC8 /* VolumeArcSentryPIIScrubberTests.swift in Sources */,
+				FF80FB1FE2963112F343C0B1 /* VolumeArcIntents.swift in Sources */,
+				03E20736296B13F341A85F5D /* VolumeArcAIConfiguration.swift in Sources */,
+				DFDDBC6B0F15ECAB419B1A57 /* VolumeArcAIRuntimeFactory.swift in Sources */,
+				169AE1AA26D4D6706F4735EA /* VolumeArcCloudConfiguration.swift in Sources */,
+				F08DB5F9D74DF27D6895A021 /* VolumeArcLiveActivityController.swift in Sources */,
+				5A4E9D32F282F7E0B4946E99 /* VolumeArcPersistenceController.swift in Sources */,
+				5BE78D3C99982F541699CF76 /* VolumeArcPremiumCatalog.swift in Sources */,
+				46B0D6C22C137123170098FD /* VolumeArcRelaySessionProvider.swift in Sources */,
+				167DE0E23A0A61F9852AA327 /* VolumeArcSecureStore.swift in Sources */,
+				4B81553DE6BF544C27BC1868 /* VolumeArcSentryPIIScrubber.swift in Sources */,
+				0CA6A569F590F07F45025BDA /* VolumeArcSentryConfiguration.swift in Sources */,
+				695AB8111D1D916C841B856F /* VolumeArcWidgetController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		0572730E0D4A5FD0AE181BD3 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -1425,62 +1485,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				BDA26252EFF97B19F9F9E830 /* VolumeArcWidgets.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		28C29EC04E06FED959BCB101 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				75800D24AB0694D8A19547EC /* AppIconAssetContractTests.swift in Sources */,
-				F917AC45583E11FCC363DBA9 /* CloudSyncRetryAndTimestampTests.swift in Sources */,
-				CFF659C2A68509ABCCB116ED /* CoachEvalTests.swift in Sources */,
-				AC98D2860F6E83FEBD2C2F1F /* ExerciseCatalogScaleupTests.swift in Sources */,
-				C9856F5E5C3E2334465A2FAD /* ExerciseCatalogTests.swift in Sources */,
-				DFF819B864995D06CA3E0911 /* ExerciseIllustrationCoverageTests.swift in Sources */,
-				8C8C2987C4E1D1496F7AE011 /* FeatureFlagProviderTests.swift in Sources */,
-				C5AD87726FDAAD24A5A62CBD /* FeedbackBundleAssemblerTests.swift in Sources */,
-				302BF19BE810564DC5F0E069 /* HealthKitAuthorizationTests.swift in Sources */,
-				D51F49C59DB7BA86FD850B4F /* InMemoryTelemetrySinkNotificationTests.swift in Sources */,
-				1D21EE103039785B0974E4AB /* VolumeArcPremiumGatingTests.swift in Sources */,
-				3AB225CA0E5E9324624E69FC /* RecoveryContextTests.swift in Sources */,
-				B2B6E301ADCA96DFC54BEADE /* RecoveryReaderTests.swift in Sources */,
-				A797EA3077BE600041B82BBF /* VolumeArcSnapshotInfrastructureTests.swift in Sources */,
-				E9B1709D9704320D5A7FFD32 /* StoreKitSubscriptionRevocationTests.swift in Sources */,
-				2055EE239842B262698EDA94 /* Fixtures.swift in Sources */,
-				C80DCBAA2C954ED203BF9B3D /* InMemoryCloudSyncTransport.swift in Sources */,
-				320DEB4F4D8937D2EC1F91A5 /* Mocks.swift in Sources */,
-				BFC828FE8F2B8AEFEDD85AD0 /* MocksUsageSmokeTests.swift in Sources */,
-				20E98B8DF1720CDC9820E66C /* VolumeArcAppConfigurationTests.swift in Sources */,
-				82A34CE6A48FA17F32526E1F /* VolumeArcBackgroundTasksTests.swift in Sources */,
-				ED2FB2BB2DDA96A21B71F9F1 /* VolumeArcCloudSyncTests.swift in Sources */,
-				B1A167285F089BEF492FCA81 /* VolumeArcCoachMemoryRetentionTests.swift in Sources */,
-				0D05FBA02649D767F45D74D7 /* VolumeArcCoachPromptTemplateTests.swift in Sources */,
-				32FE1468A76FFA28CC400CB8 /* VolumeArcCoreCoverageTests.swift in Sources */,
-				94DA3A3A7C8D291CBE929958 /* VolumeArcDashboardIntegrationTests.swift in Sources */,
-				65017D76B6850A07B96A172C /* VolumeArcMaterialsTests.swift in Sources */,
-				AA946D81DC72E51A6AF16C0B /* VolumeArcMigrationTests.swift in Sources */,
-				B91F618100AAD50F6FED50B1 /* VolumeArcPaywallFeatureContractTests.swift in Sources */,
-				492F62175E9C6F73A955CEF6 /* VolumeArcPersistenceTests.swift in Sources */,
-				1C65A0AA5E66A54DA57810D8 /* VolumeArcProgressionTests.swift in Sources */,
-				8302C9B51ECDFE9E30F15DF6 /* VolumeArcReadinessTests.swift in Sources */,
-				A9401E66DC51E99F568BD8ED /* VolumeArcRelaySessionTests.swift in Sources */,
-				299363B9BAE26600773687D8 /* VolumeArcRelayURLValidationTests.swift in Sources */,
-				96EC0E9CFED6BAE0EA75A557 /* VolumeArcSecureStoreFallbackTests.swift in Sources */,
-				0FD5BAEFBD169BE909859190 /* VolumeArcSentryConfigurationTests.swift in Sources */,
-				BB84C789C003F0B8A446862D /* VolumeArcSentryPIIScrubberTests.swift in Sources */,
-				83FBAD4B0E1BDA8847D250E0 /* VolumeArcIntents.swift in Sources */,
-				36CEB69DE8877C8CA73CC1A8 /* VolumeArcAIConfiguration.swift in Sources */,
-				571FE3BE1DA095AC072722D6 /* VolumeArcAIRuntimeFactory.swift in Sources */,
-				C67B042F77D9A959571EAA81 /* VolumeArcCloudConfiguration.swift in Sources */,
-				37C2741FC8BBAFC9A695E5E4 /* VolumeArcLiveActivityController.swift in Sources */,
-				01CBEF5A8D02536ECC70E7B9 /* VolumeArcPersistenceController.swift in Sources */,
-				C7218947A5933F4E171B4216 /* VolumeArcPremiumCatalog.swift in Sources */,
-				C15139B2910E33CB1EB4A9A1 /* VolumeArcRelaySessionProvider.swift in Sources */,
-				11FF6E0554B05C3478D9F640 /* VolumeArcSecureStore.swift in Sources */,
-				4B2E3443217B7A9CFA42B416 /* VolumeArcSentryPIIScrubber.swift in Sources */,
-				B84C0D3DD1B4DBE4C5EBFACA /* VolumeArcSentryConfiguration.swift in Sources */,
-				EB197AABE33775F0E68422C3 /* VolumeArcWidgetController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1662,6 +1666,12 @@
 			target = BAEA1B4454CCE95E5D5673F4 /* VolumeArcCore */;
 			targetProxy = CB4C3496C9C4C45CAC91095E /* PBXContainerItemProxy */;
 		};
+		3DB84683926C0D0F11A6FCD8 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = VolumeArcUI;
+			target = 9EB1B7892FE2DA1BE8D6CAAE /* VolumeArcUI */;
+			targetProxy = 377F484077647F1704B38EB1 /* PBXContainerItemProxy */;
+		};
 		47B35EE28B8DD358D3B833F7 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = VolumeArcUI;
@@ -1679,12 +1689,6 @@
 			name = VolumeArcCore;
 			target = BAEA1B4454CCE95E5D5673F4 /* VolumeArcCore */;
 			targetProxy = 8EFBDDF6DEED484CC1C654CD /* PBXContainerItemProxy */;
-		};
-		676A4A62DBD446B2960DB2A0 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = VolumeArcUI;
-			target = 9EB1B7892FE2DA1BE8D6CAAE /* VolumeArcUI */;
-			targetProxy = 7ABFC9E30F4431C0404082FB /* PBXContainerItemProxy */;
 		};
 		6B5A36A6028A2856B968D002 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -1704,12 +1708,6 @@
 			target = 9EB1B7892FE2DA1BE8D6CAAE /* VolumeArcUI */;
 			targetProxy = 56B8B68AD3187EB5B52F2756 /* PBXContainerItemProxy */;
 		};
-		A796787AA0518BC74C4E8B13 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = VolumeArcCore;
-			target = BAEA1B4454CCE95E5D5673F4 /* VolumeArcCore */;
-			targetProxy = 77C0EB394B5C1D106BBF751C /* PBXContainerItemProxy */;
-		};
 		AB1F25E292A84DC38800BF17 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = VolumeArcApp;
@@ -1721,6 +1719,12 @@
 			name = VolumeArcWatch;
 			target = BF2E1CD368C7783F67504E0C /* VolumeArcWatch */;
 			targetProxy = 0C3F0296EC7DFE4AC2F1F37F /* PBXContainerItemProxy */;
+		};
+		D82BE3531EE4DCDE396DB137 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = VolumeArcCore;
+			target = BAEA1B4454CCE95E5D5673F4 /* VolumeArcCore */;
+			targetProxy = DA56AA36C896FCDB76947D68 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1879,27 +1883,6 @@
 			};
 			name = Release;
 		};
-		28084610AFEEA09D7A36CDD5 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = A886EMZZW6;
-				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.0.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.tests;
-				PRODUCT_NAME = VolumeArcAppTests;
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				SWIFT_VERSION = 6.3;
-			};
-			name = Debug;
-		};
 		2A1A3FBE36E0BA09887BB500 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1991,28 +1974,6 @@
 			};
 			name = Release;
 		};
-		4510DEDC4BFEDCD12995E098 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = A886EMZZW6;
-				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.0.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.tests;
-				PRODUCT_NAME = VolumeArcAppTests;
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				SWIFT_VERSION = 6.3;
-				VALIDATE_PRODUCT = YES;
-			};
-			name = Release;
-		};
 		46729011F4CD7422258730FF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -2033,6 +1994,28 @@
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
+		};
+		58DE1F18C5D90CF757DA597B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = A886EMZZW6;
+				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.tests;
+				PRODUCT_NAME = VolumeArcAppTests;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.3;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
 		};
 		6886BB56A687E1BEC5961205 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -2083,6 +2066,27 @@
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 6.3;
 				TEST_TARGET_NAME = VolumeArcApp;
+			};
+			name = Debug;
+		};
+		AD36F35333C7A08E87E7FB30 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = A886EMZZW6;
+				DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc.tests;
+				PRODUCT_NAME = VolumeArcAppTests;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.3;
 			};
 			name = Debug;
 		};
@@ -2349,20 +2353,20 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		033ECEBE758C6CFFF8A5B708 /* Build configuration list for PBXNativeTarget "VolumeArcAppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				58DE1F18C5D90CF757DA597B /* Release */,
+				AD36F35333C7A08E87E7FB30 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		04616D2A0955E94D02391321 /* Build configuration list for PBXNativeTarget "VolumeArcUI" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				C8039874D1D274671E4D56A2 /* Release */,
 				46729011F4CD7422258730FF /* Debug */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		0517E6649737106FA01AE7D4 /* Build configuration list for PBXNativeTarget "VolumeArcAppTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				4510DEDC4BFEDCD12995E098 /* Release */,
-				28084610AFEEA09D7A36CDD5 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -2459,7 +2463,7 @@
 				version = 9.13.0;
 			};
 		};
-		CD7972E7D1C88B1E775001BF /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */ = {
+		C3E458F9CBABA2BD84CDF2FA /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/pointfreeco/swift-snapshot-testing.git";
 			requirement = {
@@ -2470,15 +2474,15 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		0A1A357023824546BD83038B /* SnapshotTesting */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = CD7972E7D1C88B1E775001BF /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */;
-			productName = SnapshotTesting;
-		};
-		27AD8AE4B97DD7EFD5E8442B /* Sentry */ = {
+		0BCECE2A23C44F7073BD1B96 /* Sentry */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 2D4C6CADEF1F3DCA94C80284 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
 			productName = Sentry;
+		};
+		45249FA7CB79852D42E6183B /* SnapshotTesting */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C3E458F9CBABA2BD84CDF2FA /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */;
+			productName = SnapshotTesting;
 		};
 		C1489721173F1D37F39C7B96 /* Sentry */ = {
 			isa = XCSwiftPackageProductDependency;

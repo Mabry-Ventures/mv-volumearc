@@ -1,6 +1,7 @@
 #if canImport(BackgroundTasks) && !os(watchOS)
 import BackgroundTasks
 import Foundation
+import os
 import VolumeArcCore
 
 /// Schedules and handles background tasks for VolumeArc:
@@ -17,6 +18,21 @@ enum VolumeArcBackgroundTasks {
     /// must register BG task handlers before the model is constructed,
     /// so the handlers capture this holder and dereference it at task time.
     @MainActor static var sharedModel: WorkoutDashboardModel?
+
+    /// VOL-204: late-bound telemetry sink for `BGTaskScheduler.submit`
+    /// failure reporting. `VolumeArcApp.init` sets this alongside
+    /// `sharedModel` so the schedule paths can emit typed telemetry
+    /// without depending on a fully-constructed dashboard model. Stays
+    /// optional because BGTask registration runs before the App body
+    /// resolves, and the schedule calls must not crash if the slot is
+    /// somehow unset (defensive — every shipping configuration sets it).
+    static var telemetrySink: (any TelemetrySink)?
+
+    /// Internal `os.Logger` for BG-task scheduling. Always available
+    /// even when `telemetrySink` is nil, so a scheduling failure is
+    /// visible in `Console.app` regardless of whether the Sentry /
+    /// telemetry sink wiring is healthy.
+    private static let logger = Logger(subsystem: "com.mabryventures.VolumeArc", category: "background-tasks")
 
     /// Register handlers for both task identifiers. Must be called before
     /// `UIApplication` finishes launching (from `VolumeArcApp.init`).
@@ -52,18 +68,73 @@ enum VolumeArcBackgroundTasks {
         scheduleAppProcessing()
     }
 
-    static func scheduleAppRefresh() {
+    // VOL-204: `BGTaskScheduler.submit` failures used to be silently
+    // swallowed via `try?`. Operators could not distinguish "user has
+    // background-refresh disabled" from "request entitlements missing"
+    // from "system rate-limited the submission" from "everything is
+    // fine, just no wake yet." Now we wrap submits in do/catch, emit
+    // typed telemetry on both success and failure (so operations can
+    // see scheduling health in Sentry / UserDefaults sink), and log
+    // to `os.Logger` so a deployment without a configured telemetry
+    // sink still surfaces the failure in Console.app.
+    @discardableResult
+    static func scheduleAppRefresh() -> Bool {
         let request = BGAppRefreshTaskRequest(identifier: appRefreshIdentifier)
         request.earliestBeginDate = Date(timeIntervalSinceNow: 30 * 60)
-        try? BGTaskScheduler.shared.submit(request)
+        return submit(request, identifier: appRefreshIdentifier, kind: "app_refresh")
     }
 
-    static func scheduleAppProcessing() {
+    @discardableResult
+    static func scheduleAppProcessing() -> Bool {
         let request = BGProcessingTaskRequest(identifier: appProcessingIdentifier)
         request.requiresNetworkConnectivity = true
         request.requiresExternalPower = false
         request.earliestBeginDate = Date(timeIntervalSinceNow: 2 * 60 * 60)
-        try? BGTaskScheduler.shared.submit(request)
+        return submit(request, identifier: appProcessingIdentifier, kind: "app_processing")
+    }
+
+    /// Shared submission seam — visible to tests via a fake
+    /// `BGTaskScheduler` (the test seam is the function-level
+    /// indirection here, not a protocol over `BGTaskScheduler` itself
+    /// which is a system singleton). Returns true on success, false on
+    /// `BGTaskScheduler.submit` throw. Either way emits one telemetry
+    /// event so operators can see scheduling health.
+    @discardableResult
+    static func submit(
+        _ request: BGTaskRequest,
+        identifier: String,
+        kind: String
+    ) -> Bool {
+        do {
+            try BGTaskScheduler.shared.submit(request)
+            logger.info("BGTaskScheduler.submit ok: \(identifier, privacy: .public)")
+            telemetrySink?.record(TelemetryEvent(
+                category: "background",
+                name: "schedule_submitted",
+                severity: .info,
+                message: "BGTaskScheduler.submit accepted \(identifier).",
+                metadata: ["kind": kind, "identifier": identifier]
+            ))
+            return true
+        } catch {
+            let bgError = (error as? BGTaskScheduler.Error)
+            let errorCode = bgError.map { String(describing: $0.code) } ?? "unknown"
+            let errorDescription = (error as NSError).localizedDescription
+            logger.error("BGTaskScheduler.submit failed for \(identifier, privacy: .public): \(errorCode, privacy: .public) — \(errorDescription, privacy: .public)")
+            telemetrySink?.record(TelemetryEvent(
+                category: "background",
+                name: "schedule_failed",
+                severity: .error,
+                message: "BGTaskScheduler.submit failed for \(identifier): \(errorCode).",
+                metadata: [
+                    "kind": kind,
+                    "identifier": identifier,
+                    "error_code": errorCode,
+                    "error_description": errorDescription
+                ]
+            ))
+            return false
+        }
     }
 
     // MARK: - Handlers
