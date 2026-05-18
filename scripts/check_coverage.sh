@@ -6,6 +6,25 @@
 # below the threshold. Override the threshold or target name via
 # `COVERAGE_THRESHOLD` and `COVERAGE_TARGET` for diagnostic runs.
 #
+# VOL-205 (2026-05-18): per-target gates are configured by calling
+# this script multiple times in `.github/workflows/ci.yml` with
+# different `COVERAGE_TARGET` + `COVERAGE_THRESHOLD` + `COVERAGE_SUMMARY_JSON`
+# env vars. Current floors:
+#   - VolumeArcCore: 80% (production gate, VOL-52 baseline)
+#   - VolumeArcUI:    2% (guard-rail; baseline measured at 2.59% on
+#                    first run because the SwiftUI layer is mostly
+#                    exercised via XCUITest journey tests rather than
+#                    unit-level line coverage. Real lift comes from
+#                    VOL-141 / VOL-200 — journey coverage gate — plus
+#                    VOL-201 snapshot baselines. Bump the floor in
+#                    the same PR that adds the testable view-model
+#                    extraction.)
+#   - VolumeArcWatch: pending VOL-138 (no dedicated test target yet)
+#   - Widgets:       pending VOL-139 (no dedicated test target yet)
+# The 90%+ commitment in `docs/PLATFORM.md` is the target end-state;
+# per VOL-140 / VOL-205 the ratchet path is one PR per bump so the
+# main merge train doesn't stall on a single coverage cliff.
+#
 # VOL-97: when `GITHUB_STEP_SUMMARY` is set (GitHub Actions runs), the
 # script also writes a Markdown summary — headline coverage, gate
 # result, and a top-10 uncovered-files table — to the step summary file

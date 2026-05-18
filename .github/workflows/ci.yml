@@ -315,6 +315,29 @@ jobs:
       - name: Coverage gate (VolumeArcCore >= 80%)
         run: ./scripts/check_coverage.sh
 
+      # VOL-205: per-target coverage gates. The platform commitment in
+      # `docs/PLATFORM.md` is 90%+ across appropriate surfaces
+      # (VOL-140 uplift target). This PR introduces the second per-
+      # target gate — VolumeArcUI — at a deliberately conservative
+      # **2% floor**. First run showed actual VolumeArcUI line
+      # coverage at 2.59%; the SwiftUI layer is exercised mostly via
+      # XCUITest journey tests (which don't accrue line coverage on
+      # the static library targets), so the line-coverage figure is
+      # structurally low and will only meaningfully rise once VOL-141
+      # / VOL-200 land real coverage in the form of unit-testable
+      # extracted view-model logic. The 2% floor is a guard-rail
+      # ("don't regress past current") not a target — the real lift
+      # mechanism is VOL-200 (journey coverage gate) + VOL-201
+      # (snapshot baselines) + VOL-138/139 (Watch / Widget test
+      # targets). Each of those, when it lands, ratchets the floor
+      # upward in the same PR.
+      - name: Coverage gate (VolumeArcUI >= 2% — staged ratchet)
+        env:
+          COVERAGE_TARGET: VolumeArcUI
+          COVERAGE_THRESHOLD: '2'
+          COVERAGE_SUMMARY_JSON: .build/coverage-summary-volumearcui.json
+        run: ./scripts/check_coverage.sh
+
       # VOL-97: publish the xcresult bundle so reviewers can open it in
       # Xcode without re-running CI. Runs on success and failure so a
       # broken run still yields a downloadable artifact.
