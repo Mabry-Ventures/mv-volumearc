@@ -188,6 +188,14 @@ configure_target(app_target, bundle_id: 'com.mabryventures.VolumeArc', extra: {
   # archived builds carry the production values.
   'SENTRY_DSN' => '',
   'VOLUMEARC_AI_RELAY_URL' => '',
+  # VOL-196: relay signing key, same pattern as the two above. Empty
+  # in local/dev builds (`AIRelayCoachProvider` factory falls back to
+  # the local heuristic provider when both URL and key are empty); set
+  # by `ci_scripts/ci_post_clone.sh` from VOLUMEARC_RELAY_SIGNING_KEY
+  # env var at Xcode Cloud archive time. Required for release builds
+  # — `scripts/validate_exported_ipa_contract.sh` fails the archive
+  # if URL is present but key is missing.
+  'VOLUMEARC_RELAY_SIGNING_KEY' => '',
   # VOL-55: `VolumeArcCloudKitContainer` used to live in the Info.plist
   # for runtime lookup. `INFOPLIST_KEY_*` silently drops custom
   # (non-Apple-recognized) keys, so the bundle never had it. It now
