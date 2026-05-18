@@ -226,7 +226,7 @@ The runner needs occasional hands-on maintenance:
 - **Homebrew tools required by workflows.** Some workflow steps shell out to brew-installed binaries:
   - `trufflehog` (for `.github/workflows/trufflehog.yml`) — `brew install trufflehog`
   - `swiftlint` ≥ 0.62 (already documented in the dev-setup section above) — `brew install swiftlint`
-  - `jq` (VOL-173 Pre-flight iOS-runtime probe in `.github/workflows/ci.yml` lines ~176 + ~619; also used by various `gh api ... --jq` invocations across `codeql.yml` and the AI review gate) — `brew install jq`
+  - `jq` (VOL-173 Pre-flight iOS-runtime probe in `.github/workflows/ci.yml` lines ~176 + ~619; also used by various `gh api ... --jq` invocations across workflows and the AI review gate) — `brew install jq`
   - `actionlint` (optional, used by some pre-commit setups) — `brew install actionlint`
 
 - **Concurrency.** With every workflow on the single runner, a typical PR queues ~5 jobs (`Build & Test` + 3 AI gate jobs + Trufflehog). The runner is configured for multiple concurrent jobs via the actions/runner service; verify after major macOS upgrades that the service is still running `--unattended --replace --labels self-hosted,mv-volumearc-runner` with parallel-job support enabled.
@@ -257,14 +257,15 @@ A `Tests/.swiftlint.yml` override disables `implicitly_unwrapped_optional`, `for
 
 ## Security tooling (VOL-143)
 
-Two automated security workflows run on the self-hosted runner per the "zero GitHub-hosted jobs" policy:
+The active security workflow runs on the self-hosted runner per the "zero GitHub-hosted jobs" policy:
 
 | Workflow | What | Triggers |
 |---|---|---|
-| `codeql.yml` | SAST. CodeQL `security-extended` query suite against Swift + JS/TS. Findings → repo Security tab. | push to main · weekly cron · manual dispatch |
 | `trufflehog.yml` | Secret-leak detection. Scans diffs on PRs and full history on main. Catches committed `.env`s, API keys, JWTs. | PRs against main · push to main · weekly cron · manual dispatch |
 
-Findings surface via GitHub's Security tab (CodeQL → Code Scanning, Trufflehog → Secret Scanning when configured to upload SARIF). PR-time Trufflehog failures should block merge — credentials in a PR diff is a near-certain leak even if the commit is "private".
+CodeQL static analysis is **not** wired into the repo: GitHub Code Scanning requires GitHub Advanced Security (GHAS) on private repos, and the cost/benefit doesn't pencil out for this codebase right now. SAST coverage is provided by **CodeRabbit Pro + Codex on every PR** via the AI Review Gate, plus PR-time review by the operator. If GHAS is enabled later, restore `.github/workflows/codeql.yml` from git history (it existed through commit `bcdf079`).
+
+Findings surface via GitHub's Security tab (Trufflehog → Secret Scanning when configured to upload SARIF). PR-time Trufflehog failures should block merge — credentials in a PR diff is a near-certain leak even if the commit is "private".
 
 The trufflehog workflow shells out to the Homebrew-installed binary rather than the upstream `trufflesecurity/trufflehog@v3` action because the action runs inside a Docker container and the self-hosted Apple Silicon runner doesn't ship Docker. Update path: `brew upgrade trufflehog`.
 
