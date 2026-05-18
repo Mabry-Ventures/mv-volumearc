@@ -62,12 +62,13 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      # VOL-186: the SHA-mismatch detector step (added in VOL-184 as a
-      # belt-and-suspenders defense against the `_actions/` cache race)
-      # was removed once the post-2026-05-17 fleet `JOB_STARTED` hook
-      # took over ghost-SHA workspace detection + auto-wipe at the host
-      # level. Workspace SHA integrity is now a host invariant, not a
-      # per-workflow defense.
+      # VOL-186 / VOL-194: the per-workflow SHA-mismatch detector was
+      # removed in VOL-186 in favor of the post-2026-05-17 fleet
+      # `JOB_STARTED` hook doing ghost-SHA detection at the host level.
+      # The 2026-05-18 audit (F-C-002) restored the per-workflow
+      # assertion as belt-and-suspenders defense — a required secret-
+      # scan check that cannot prove it scanned the PR SHA is not an
+      # enforceable gate, regardless of host-level recovery.
       - name: Checkout
         uses: actions/checkout@v6
         with:
@@ -76,6 +77,23 @@ jobs:
           # then `git fetch` the base ref so trufflehog's --since-commit
           # has both endpoints locally.
           fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 0 }}
+
+      - name: Verify checkout SHA matches GITHUB_SHA (VOL-194)
+        # Same defense as `ci.yml`. A required status check that cannot
+        # prove it scanned the PR SHA is not enforceable. This fails the
+        # job immediately if the workspace HEAD does not match the
+        # expected commit, preventing a green secret-scan signal against
+        # a stale tree.
+        run: |
+          set -euo pipefail
+          actual_sha="$(/usr/bin/git rev-parse HEAD)"
+          expected_sha="${GITHUB_SHA}"
+          if [[ "${actual_sha}" != "${expected_sha}" ]]; then
+            echo "::error::Workspace HEAD ${actual_sha} does not match GITHUB_SHA ${expected_sha}. Refusing to publish a passing secret-scan against an unverified tree."
+            exit 1
+          fi
+          echo "Workspace SHA matches GITHUB_SHA (${expected_sha})"
+        shell: bash
 
       - name: Verify trufflehog binary
         # The Homebrew formula `trufflehog` should be pre-installed on
