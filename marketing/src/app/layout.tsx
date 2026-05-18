@@ -53,6 +53,66 @@ export const metadata: Metadata = {
   },
 }
 
+// VOL-210: schema.org JSON-LD structured data. SoftwareApplication +
+// Organization + WebSite give Google's rich-results pipeline a clean
+// shape for the App Store badge, the publisher, and site search. We
+// don't include `offers` yet because final App Store pricing isn't
+// locked in production (Pro is $9.99/mo / $79.99/yr per VOL-91 today
+// but copy-team may revise pre-launch — VOL-216 ASC metadata is the
+// SOT for what we publish). Once pricing is final, add `offers` /
+// `Offer` here and the App Store search snippet will get the price.
+const structuredData = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'VolumeArc',
+    description:
+      'AI-powered strength training app that runs on-device, drives prescription from your real recovery data, and lives natively on your Apple Watch.',
+    applicationCategory: 'HealthApplication',
+    operatingSystem: 'iOS 26, watchOS 26',
+    url: 'https://volumearc.app',
+    image: 'https://volumearc.app/og-image.png',
+    publisher: {
+      '@type': 'Organization',
+      name: 'Mabry Ventures, LLC',
+      url: 'https://mabryventures.com',
+      address: {
+        '@type': 'PostalAddress',
+        addressLocality: 'Nashville',
+        addressRegion: 'TN',
+        addressCountry: 'US',
+      },
+    },
+    softwareHelp: {
+      '@type': 'CreativeWork',
+      url: 'https://volumearc.app/support',
+    },
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'Mabry Ventures, LLC',
+    url: 'https://mabryventures.com',
+    sameAs: ['https://volumearc.app'],
+    address: {
+      '@type': 'PostalAddress',
+      addressLocality: 'Nashville',
+      addressRegion: 'TN',
+      addressCountry: 'US',
+    },
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'VolumeArc',
+    url: 'https://volumearc.app',
+    publisher: {
+      '@type': 'Organization',
+      name: 'Mabry Ventures, LLC',
+    },
+  },
+]
+
 export default function RootLayout({
   children,
 }: {
@@ -60,6 +120,21 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={clsx('bg-gray-50 antialiased', inter.variable)}>
+      <head>
+        {/*
+          VOL-210: schema.org JSON-LD. Emitted as a script tag in head
+          (not a Next/Script) so it's part of the static HTML payload
+          and crawlable on the first GET — script tags loaded with
+          `strategy="afterInteractive"` arrive after Google's crawler
+          snapshots the page.
+        */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(structuredData),
+          }}
+        />
+      </head>
       <body>{children}</body>
       {/*
         VOL-189: Plausible analytics (privacy-friendly, cookie-less,
