@@ -93,7 +93,7 @@ Coordinated disclosure preferred. We commit to **not** pursuing legal action aga
 
 ## Vulnerability surface monitored continuously
 
-- **CodeQL** (`.github/workflows/codeql.yml`) — Swift + JS/TS SAST; `security-extended` query suite; runs on push to main + weekly cron.
+- **CodeQL** — _intentionally not running._ GitHub Code Scanning requires GitHub Advanced Security (GHAS) on private repos; the cost/benefit doesn't pencil out for this codebase right now. SAST coverage is provided by CodeRabbit Pro + Codex on every PR (the AI Review Gate), plus the Trufflehog secret-leak scan. If GHAS is enabled later, restore `.github/workflows/codeql.yml` from git history (it existed through commit `bcdf079`).
 - **TruffleHog** (`.github/workflows/trufflehog.yml`) — secret-leak scan on every PR diff + full-history on main push.
 - **Dependabot** — Swift / GitHub Actions / Bundler updates open as explicit PRs; minor + patch grouped per ecosystem; major lands as individual PRs we explicitly review.
 - **Sentry release health** — `VolumeArcSentryConfiguration` and `docs/INCIDENTS.md` alert routing.
@@ -104,4 +104,4 @@ Coordinated disclosure preferred. We commit to **not** pursuing legal action aga
 - [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) — module structure + dependency graph
 - [`docs/INCIDENTS.md`](INCIDENTS.md) — incident response runbook (VOL-156)
 - [`docs/RELAY.md`](RELAY.md) — Cloudflare Worker architecture
-- [`docs/CONTRIBUTING.md`](CONTRIBUTING.md) — dev setup; security tooling section documents the CodeQL + TruffleHog wiring
+- [`docs/CONTRIBUTING.md`](CONTRIBUTING.md) — dev setup; security tooling section documents the TruffleHog + AI review wiring
