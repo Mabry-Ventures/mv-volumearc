@@ -26,7 +26,15 @@ enum VolumeArcBackgroundTasks {
     /// optional because BGTask registration runs before the App body
     /// resolves, and the schedule calls must not crash if the slot is
     /// somehow unset (defensive — every shipping configuration sets it).
-    static var telemetrySink: (any TelemetrySink)?
+    ///
+    /// `@MainActor` matches `sharedModel` and satisfies Swift 6 strict-
+    /// concurrency. The schedule call sites (`scheduleAll`, the two
+    /// schedule funcs, and the shared `submit` seam) are also
+    /// `@MainActor` below; `VolumeArcApp.init` and the
+    /// `Task { @MainActor in … }` blocks inside the BGTask handlers
+    /// already operate on the main actor, so no caller is forced to
+    /// hop.
+    @MainActor static var telemetrySink: (any TelemetrySink)?
 
     /// Internal `os.Logger` for BG-task scheduling. Always available
     /// even when `telemetrySink` is nil, so a scheduling failure is
@@ -63,6 +71,12 @@ enum VolumeArcBackgroundTasks {
     }
 
     /// Schedule both tasks to run when the system decides it's appropriate.
+    /// `@MainActor` so the call chain that touches `telemetrySink`
+    /// (VOL-204) stays main-actor isolated under Swift 6 strict-
+    /// concurrency. Call sites (`VolumeArcApp.onAppear` + the
+    /// `Task { @MainActor in … }` inside each BGTask handler) already
+    /// run on the main actor; no caller is forced to hop.
+    @MainActor
     static func scheduleAll() {
         scheduleAppRefresh()
         scheduleAppProcessing()
@@ -77,6 +91,7 @@ enum VolumeArcBackgroundTasks {
     // see scheduling health in Sentry / UserDefaults sink), and log
     // to `os.Logger` so a deployment without a configured telemetry
     // sink still surfaces the failure in Console.app.
+    @MainActor
     @discardableResult
     static func scheduleAppRefresh() -> Bool {
         let request = BGAppRefreshTaskRequest(identifier: appRefreshIdentifier)
@@ -84,6 +99,7 @@ enum VolumeArcBackgroundTasks {
         return submit(request, identifier: appRefreshIdentifier, kind: "app_refresh")
     }
 
+    @MainActor
     @discardableResult
     static func scheduleAppProcessing() -> Bool {
         let request = BGProcessingTaskRequest(identifier: appProcessingIdentifier)
@@ -99,6 +115,11 @@ enum VolumeArcBackgroundTasks {
     /// which is a system singleton). Returns true on success, false on
     /// `BGTaskScheduler.submit` throw. Either way emits one telemetry
     /// event so operators can see scheduling health.
+    ///
+    /// `@MainActor` so it can read the `telemetrySink` static (VOL-204)
+    /// under Swift 6 strict concurrency. `BGTaskScheduler.shared.submit`
+    /// is documented as thread-safe, so running on main is fine.
+    @MainActor
     @discardableResult
     static func submit(
         _ request: BGTaskRequest,
@@ -140,7 +161,6 @@ enum VolumeArcBackgroundTasks {
     // MARK: - Handlers
 
     private static func handleAppRefresh(_ task: BGAppRefreshTask) {
-        scheduleAppRefresh()
         let completion = TaskCompletion(task: task)
 
         task.expirationHandler = {
@@ -148,6 +168,12 @@ enum VolumeArcBackgroundTasks {
         }
 
         Task { @MainActor in
+            // VOL-204: reschedule on the main actor since
+            // `scheduleAppRefresh` is now `@MainActor`-isolated (it
+            // touches the `telemetrySink` static). The handler closure
+            // itself is dispatched on a system queue by BGTaskScheduler,
+            // so the hop into main has to happen here.
+            scheduleAppRefresh()
             if let model = sharedModel {
                 // VOL-110: route through `performBackgroundRefresh` rather
                 // than `refresh` directly so the BGTask handler emits
@@ -164,7 +190,6 @@ enum VolumeArcBackgroundTasks {
     }
 
     private static func handleAppProcessing(_ task: BGProcessingTask) {
-        scheduleAppProcessing()
         let completion = TaskCompletion(task: task)
 
         task.expirationHandler = {
@@ -172,6 +197,8 @@ enum VolumeArcBackgroundTasks {
         }
 
         Task { @MainActor in
+            // VOL-204: same main-actor hop reason as `handleAppRefresh`.
+            scheduleAppProcessing()
             if let model = sharedModel {
                 await model.syncNow()
                 completion.complete(success: true)
