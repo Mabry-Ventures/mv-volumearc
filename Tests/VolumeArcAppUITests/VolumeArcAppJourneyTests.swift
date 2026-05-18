@@ -291,9 +291,22 @@ final class VolumeArcAppJourneyTests: XCTestCase {
         }
         wait(for: [preflight], timeout: 10)
         guard preflightResult.productCount > 0 else {
-            throw XCTSkip(
-                "StoreKit Test daemon did not expose local products for this simulator; purchase flow skipped."
+            // VOL-202: do not let CI green-light a paid-conversion test
+            // that didn't actually exercise the purchase. XCTSkip is now
+            // reserved for local developer machines that have opted in
+            // via `ALLOW_STOREKIT_SKIP=1`. Everywhere else (CI, release
+            // validation), missing StoreKit Test products is a hard
+            // failure with a clear message — fix the StoreKit Test
+            // daemon / .storekit config rather than skip past it.
+            if ProcessInfo.processInfo.environment["ALLOW_STOREKIT_SKIP"] == "1" {
+                throw XCTSkip(
+                    "StoreKit Test daemon did not expose local products for this simulator; purchase flow skipped (ALLOW_STOREKIT_SKIP=1)."
+                )
+            }
+            XCTFail(
+                "StoreKit Test daemon did not expose local products for this simulator. CI must validate the paid-conversion path; set ALLOW_STOREKIT_SKIP=1 in your local env to bypass on a dev machine."
             )
+            return
         }
 
         let paywallRoot = app.descendants(matching: .any)
