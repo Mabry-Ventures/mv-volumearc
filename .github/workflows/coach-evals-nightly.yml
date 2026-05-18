@@ -89,10 +89,12 @@ jobs:
           # relay's per-device rate limit doesn't dance.
           VOLUMEARC_RELAY_SIGNING_KEY: ${{ secrets.VOLUMEARC_RELAY_SIGNING_KEY }}
           VOLUMEARC_EVAL_DEVICE_ID: coach-eval-nightly
-          # Manual dispatch can override the relay (e.g. staging) via
-          # the workflow input; cron always hits production. Empty
-          # input falls back to the script's default URL.
-          VOLUMEARC_RELAY_BASE_URL: ${{ github.event.inputs.relay_url || '' }}
+          # Manual dispatch can override the relay (e.g. staging) via the
+          # workflow input; cron defaults to the production custom domain.
+          # VOL-223: the production relay moved to `relay.volumearc.app`,
+          # so set it explicitly here rather than relying on an opaque
+          # script default. Empty input falls through to that default.
+          VOLUMEARC_RELAY_BASE_URL: ${{ github.event.inputs.relay_url || 'https://relay.volumearc.app' }}
           VOLUMEARC_EVAL_OUTPUT_DIR: ${{ runner.temp }}/coach-evals
         run: |
           set -uo pipefail
@@ -100,6 +102,23 @@ jobs:
             echo "::error::VOLUMEARC_RELAY_SIGNING_KEY secret not configured in repo"
             exit 78  # EX_CONFIG — surfaces as a clear "configuration" failure mode
           fi
+          # VOL-223 preflight: probe the relay base URL before running the
+          # 26-fixture suite. If the host is unreachable (404, DNS fail,
+          # TLS fail), fail fast with a clear message rather than reporting
+          # 26 fake assertion failures and a meaningless trend point.
+          # We probe `/v1/coach` with HEAD so we don't burn a real coach
+          # invocation; a 401 is expected (no auth header on a probe) and
+          # is treated as "route exists, relay is up."
+          probe_code=$(curl -sS -o /dev/null -w "%{http_code}" -I "${VOLUMEARC_RELAY_BASE_URL%/}/v1/coach" || echo "000")
+          case "$probe_code" in
+            200|401|405)
+              echo "Relay preflight OK (HTTP $probe_code from ${VOLUMEARC_RELAY_BASE_URL%/}/v1/coach)"
+              ;;
+            *)
+              echo "::error::Relay preflight failed: HTTP $probe_code from ${VOLUMEARC_RELAY_BASE_URL%/}/v1/coach. Check VOLUMEARC_RELAY_BASE_URL and the Cloudflare Worker deploy."
+              exit 75  # EX_TEMPFAIL — clear "transient infra" signal
+              ;;
+          esac
           # `|| true` so a non-zero exit (= one or more fixtures failed
           # assertions) doesn't kill the step before we publish the
           # artifact. The subsequent step parses summary.json and

@@ -18,7 +18,9 @@
 #                                    device-ID → principal mapping stays
 #                                    consistent across runs.
 #   - `VOLUMEARC_RELAY_BASE_URL`     override the relay endpoint (default:
-#                                    `https://volumearc-ai-relay.jared-b6b.workers.dev`).
+#                                    `https://relay.volumearc.app`). VOL-223:
+#                                    legacy `workers.dev` default was dead and
+#                                    made the nightly eval a silent canary.
 #   - `curl`, `jq`, `openssl`        standard on macOS and Linux runners.
 #
 # Exit codes:
@@ -30,7 +32,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FIXTURES_DIR="$ROOT/Tests/Evals/CoachEvalFixtures"
-RELAY_BASE_URL="${VOLUMEARC_RELAY_BASE_URL:-https://volumearc-ai-relay.jared-b6b.workers.dev}"
+RELAY_BASE_URL="${VOLUMEARC_RELAY_BASE_URL:-https://relay.volumearc.app}"
 DEVICE_ID="${VOLUMEARC_EVAL_DEVICE_ID:-coach-eval-harness}"
 OUTPUT_DIR="${VOLUMEARC_EVAL_OUTPUT_DIR:-$ROOT/.build/coach-evals/$(date -u +%Y%m%dT%H%M%SZ)}"
 
