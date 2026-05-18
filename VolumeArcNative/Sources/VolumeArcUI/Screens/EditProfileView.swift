@@ -41,6 +41,9 @@ public struct EditProfileView: View {
 
     public var body: some View {
         NavigationStack {
+            // VOL-200 P4: stable identifier so `profile.edit-profile`
+            // journey test can confirm the edit sheet appeared after
+            // tapping a row in `ProfileView`.
             Form {
                 Section(String(localized: "About You", comment: "Edit profile section header — personal info")) {
                     TextField(
@@ -119,6 +122,7 @@ public struct EditProfileView: View {
                         .font(.caption)
                 }
             }
+            .accessibilityIdentifier("editProfile.root")
             .navigationTitle(String(localized: "Edit Profile", comment: "Edit profile screen navigation title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -127,6 +131,7 @@ public struct EditProfileView: View {
                         VAHaptics.tap()
                         isPresented = false
                     }
+                    .accessibilityIdentifier("editProfile.cancel")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(String(localized: "Save", comment: "Edit profile save button")) {
@@ -134,6 +139,10 @@ public struct EditProfileView: View {
                         save()
                     }
                     .fontWeight(.semibold)
+                    // VOL-200 P4: stable identifier so the
+                    // `profile.edit-profile` journey test can tap
+                    // Save and assert the sheet dismisses.
+                    .accessibilityIdentifier("editProfile.save")
                 }
             }
         }

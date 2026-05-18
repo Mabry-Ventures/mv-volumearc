@@ -34,6 +34,10 @@ public struct DiagnosticsView: View {
                 .listStyle(.plain)
             }
         }
+        // VOL-200 P4: stable identifier so `profile.diagnostics`
+        // journey test can confirm the view appeared after tapping
+        // the Profile row.
+        .accessibilityIdentifier("diagnostics.root")
         .navigationTitle(String(localized: "Diagnostics", comment: "Diagnostics screen navigation title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
