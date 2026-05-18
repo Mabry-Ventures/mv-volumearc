@@ -74,7 +74,20 @@ final class VolumeArcScreenshotTests: XCTestCase {
         if requiresStoreKitProducts {
             XCTAssertTrue(planLoaded, "Premium screenshot should wait for StoreKit products before capture")
         } else if !planLoaded {
-            throw XCTSkip("StoreKit products unavailable on this simulator; skipping premium screenshot capture.")
+            // VOL-202: same skip→fail policy as the purchase test —
+            // release screenshot capture is not allowed to silently
+            // skip the premium screen when products fail to load. CI
+            // must produce a complete screenshot matrix. Local dev can
+            // opt in to the skip via ALLOW_STOREKIT_SKIP=1.
+            if ProcessInfo.processInfo.environment["ALLOW_STOREKIT_SKIP"] == "1" {
+                throw XCTSkip(
+                    "StoreKit products unavailable on this simulator; premium screenshot capture skipped (ALLOW_STOREKIT_SKIP=1)."
+                )
+            }
+            XCTFail(
+                "StoreKit products did not load before premium screenshot capture. The release screenshot matrix would be incomplete; fix the StoreKit Test daemon / .storekit config, or set ALLOW_STOREKIT_SKIP=1 locally."
+            )
+            return
         }
         snapshot("06_premium")
     }
