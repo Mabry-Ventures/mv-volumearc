@@ -53,8 +53,13 @@ enum VolumeArcSentryConfiguration {
             // render PII in images today; revisit if/when we add user
             // photo uploads.
             //
-            // Requires sentry-cocoa 8.36.0+. We are pinned to 8.58.1 in
-            // `scripts/generate_xcode_project.rb` + `Package.resolved`.
+            // Requires sentry-cocoa 8.36.0+. VOL-188 bumped the pin to
+            // 9.13.0 (sentry-cocoa 9.x major). The 4-arg replay initializer
+            // is unchanged across the major; the migration was clean because
+            // the pre-9 codebase already used `configureProfiling` (not the
+            // deprecated `profilesSampleRate`) and `SentrySDK.capture(feedback:)`
+            // (not the removed `captureUserFeedback(_:)`).
+            // Pinned in `scripts/generate_xcode_project.rb` + `Package.resolved`.
             let replay = SentryReplayOptions(
                 sessionSampleRate: 0.0,
                 onErrorSampleRate: 1.0,

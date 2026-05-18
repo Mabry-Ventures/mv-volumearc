@@ -76,10 +76,12 @@ struct VolumeArcFeedbackSubmitter {
         }
 
         #if canImport(Sentry)
-        // VOL-176 fix on PR #169 second CI run: `SentryFeedback` in the
-        // pinned sentry-cocoa 8.58.1 surface has no public `contactEmail`
-        // setter — the previous line was redundant with `email: nil`
-        // already passed to the initializer. Dropped.
+        // VOL-176 fix on PR #169 second CI run: `SentryFeedback` has no
+        // public `contactEmail` setter — the previous line was redundant
+        // with `email: nil` already passed to the initializer. Dropped.
+        // VOL-188: pin bumped to sentry-cocoa 9.13.0; initializer signature
+        // (message, name, email, source) is unchanged across the 8→9 major,
+        // so this call site needed no migration.
         let feedback = SentryFeedback(
             message: encoded,
             name: nil,
