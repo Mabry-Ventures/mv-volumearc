@@ -1,0 +1,28 @@
+PROPRIETARY — ALL RIGHTS RESERVED
+
+Copyright © 2026 Mabry Ventures, LLC (Nashville, Tennessee, USA).
+All rights reserved.
+
+The VolumeArc app, source code, eval fixtures, marketing site, relay
+worker, and all associated content in this repository are the
+proprietary work of Mabry Ventures, LLC. No license is granted, express
+or implied, to copy, modify, distribute, sublicense, or otherwise use
+any part of this codebase outside the contribution and review workflow
+documented in `docs/CONTRIBUTING.md`.
+
+Contributions accepted into this repository are licensed back to
+Mabry Ventures, LLC under the same terms via the contribution flow
+(see `docs/CONTRIBUTING.md`'s sign-off requirement). Contributors retain
+their authorship credit; copyright in the integrated work vests in
+Mabry Ventures, LLC.
+
+The compiled VolumeArc iOS / watchOS application is distributed
+exclusively through the Apple App Store under the Terms of Service
+published at https://volumearc.app/terms and the Privacy Policy at
+https://volumearc.app/privacy.
+
+For licensing inquiries, partnerships, or commercial use, contact:
+legal@volumearc.app
+
+For security disclosures, contact:
+security@volumearc.app
