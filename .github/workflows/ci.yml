@@ -341,14 +341,16 @@ jobs:
       # VOL-200 Phase 1: user-journey coverage gate. Parses
       # `docs/USER_JOURNEYS.md`, counts rows with paired XCUITests vs.
       # `[ ]` (uncovered), and fails the build below the threshold.
-      # 18% is the audited 2026-05-18 baseline (11/62 covered); the
-      # platform commits to 100% by end of Wave 2 (VOL-141/VOL-200).
+      # Phase 1 baseline was 18% (11/62 covered, 2026-05-18). VOL-200
+      # Phase 2 (coach surface) bumped coverage to 23% (15/63 covered:
+      # +1 row total in the catalog, +3 newly-covered coach rows).
+      # The platform commits to 100% by end of Wave 2 (VOL-141/VOL-200).
       # Same ratchet contract as the per-target coverage gate above:
       # any PR that adds a journey test bumps `JOURNEY_COVERAGE_THRESHOLD`
       # in lockstep so the gate is always at-or-above current coverage.
-      - name: Journey coverage gate (>= 18% staged ratchet)
+      - name: Journey coverage gate (>= 23% staged ratchet)
         env:
-          JOURNEY_COVERAGE_THRESHOLD: '18'
+          JOURNEY_COVERAGE_THRESHOLD: '23'
         run: ./scripts/check_journey_coverage.sh
 
       # VOL-97: publish the xcresult bundle so reviewers can open it in
