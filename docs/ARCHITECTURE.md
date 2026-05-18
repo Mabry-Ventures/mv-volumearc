@@ -46,7 +46,7 @@ VolumeArcCore/
 └── Workout/                 # ProgressionEngine, ReadinessModel, ExerciseCatalog
 ```
 
-The three-tier AI provider chain lives under `AI/` and is assembled by `Runtime/VolumeArcAIRuntimeFactory`: `FoundationModelCoachProvider` (on-device, iOS 26+) → `AIRelayCoachProvider` (cloud relay via `volumearc-ai-relay.jared-b6b.workers.dev`, SSE streaming) → `LocalHeuristicAICoachProvider` (offline fallback). `FlagGateTelemetry` in `FeatureFlags/` gates voice coaching, cloud sync, Live Activities, and the Foundation Models provider choice at runtime (VOL-61).
+The three-tier AI provider chain lives under `AI/` and is assembled by `Runtime/VolumeArcAIRuntimeFactory`: `FoundationModelCoachProvider` (on-device, iOS 26+) → `AIRelayCoachProvider` (cloud relay via `relay.volumearc.app`, SSE streaming; the legacy `volumearc-ai-relay.jared-b6b.workers.dev` workers.dev host is deprecated and no longer routed — see `docs/RELAY.md`) → `LocalHeuristicAICoachProvider` (offline fallback). `FlagGateTelemetry` in `FeatureFlags/` gates voice coaching, cloud sync, Live Activities, and the Foundation Models provider choice at runtime (VOL-61).
 
 ## VolumeArcUI modules
 

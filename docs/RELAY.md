@@ -3,8 +3,8 @@
 A Cloudflare Worker that proxies iOS coach requests to Google's Gemini API with SSE streaming, HMAC-signed bearer auth, and per-device rate limiting.
 
 - **Worker name:** `volumearc-ai-relay`
-- **Live endpoint:** `https://volumearc-ai-relay.jared-b6b.workers.dev`
-- **Future custom domain:** `relay.volumearc.app` (queued — needs `volumearc.app` zone on this Cloudflare account)
+- **Live endpoint (production):** `https://relay.volumearc.app` — custom domain configured via the `relay/wrangler.toml` route binding. Live since VOL-110.
+- **Legacy endpoint (workers.dev fallback, deprecated):** `https://volumearc-ai-relay.jared-b6b.workers.dev` is **no longer routed**. Requests to this hostname return 404; do not point any new client, script, or workflow at it. Tracked here only so anyone reading old logs can identify the origin.
 - **Source:** [`relay/`](../relay/)
 
 ## Models
