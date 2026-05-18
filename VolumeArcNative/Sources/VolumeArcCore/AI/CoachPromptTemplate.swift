@@ -53,12 +53,16 @@ public enum CoachPromptTemplate {
         privacyMode: PrivacyMode = .standard
     ) -> String {
         let contextBlock = context.asPromptBlock(privacyMode: privacyMode)
+        // VOL-197: redact the free-text question in strict mode before it
+        // gets composed into the prompt body. In `.standard` mode this
+        // returns the input unchanged.
+        let redactedQuestion = PromptPrivacyRedactor.redactQuestion(question, privacyMode: privacyMode)
         return """
         \(contextBlock)
 
         ---
 
-        Athlete question: \(question)
+        Athlete question: \(redactedQuestion)
         """
     }
 
@@ -79,10 +83,13 @@ public enum CoachPromptTemplate {
         style: CoachingStyle = .motivational,
         privacyMode: PrivacyMode = .standard
     ) -> String {
-        render(
+        // VOL-197: in strict mode, redact the free-text question
+        // before composing the envelope. Standard mode passes through.
+        let redactedQuestion = PromptPrivacyRedactor.redactQuestion(question, privacyMode: privacyMode)
+        return render(
             intent: intent,
             contextBlock: context.asPromptBlock(privacyMode: privacyMode),
-            question: question,
+            question: redactedQuestion,
             style: style
         )
     }
