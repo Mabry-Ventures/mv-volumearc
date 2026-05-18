@@ -78,3 +78,12 @@ jobs:
         # generates `next-env.d.ts`). Run typecheck locally via
         # `npm run typecheck` once you've built once.
         run: npm run build
+
+      - name: Check links (VOL-217 Phase 1)
+        # Static link guard: walks `.next/server/app/**/*.html` from the
+        # build above and fails on any `href="#"` (dead CTA — App Store
+        # badge regression class, see VOL-208) or any internal `href`
+        # that doesn't resolve to a known route. Pure Node, no browser,
+        # ~1s. Phase 2 (Playwright + axe + Lighthouse) will follow in
+        # a separate ticket.
+        run: npm run check:links
