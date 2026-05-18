@@ -1,0 +1,11 @@
+TBD — App Store full description (max 4000 chars). Should cover:
+
+* What the app does (strength training, AI coach, Apple Watch integration)
+* Who it's for (lifters who want personalized prescriptions, not generic templates)
+* The Pro upgrade (Gemini Pro tier coach + live voice coaching; everything else is free)
+* Privacy posture (raw HealthKit stays on-device; computed aggregates flow to AI relay when user asks coach)
+* Apple integrations (HealthKit, CloudKit private DB, Live Activities, widgets, App Intents)
+
+Reference the marketing landing-page hero + features section once finalized so the two surfaces stay in sync (see VOL-198 paywall/Pricing contract). Do NOT promise features still in backlog (curated programs library, Apple Watch Vitals/Training Load).
+
+Tone reference: marketing/src/components/Hero.tsx + marketing/src/components/Features.tsx as of 2026-05-18.
