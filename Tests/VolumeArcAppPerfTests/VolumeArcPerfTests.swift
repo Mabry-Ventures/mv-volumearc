@@ -3,18 +3,26 @@ import XCTest
 /// VOL-99: performance regression suite.
 ///
 /// Ships the four budget-bearing metrics called out in the VOL-99 Linear
-/// ticket:
+/// ticket. **Numeric budgets are NOT duplicated in these comments —
+/// they live in `docs/performance-budgets.json` keyed by the IDs below.
+/// Read the budget file for the current pass/fail thresholds, never
+/// these comments.** (VOL-221 audit follow-up: prior comments listed
+/// 1.2s cold-launch + fps/hitch scroll budgets that no longer match
+/// the actual budget file, which now enforces duration-based gates.)
 ///
 /// * `testColdLaunchTime` — `XCTApplicationLaunchMetric` against the
-///   seeded `-PerfTestMode 1` build (cold launch, 1.2s budget).
+///   seeded `-PerfTestMode 1` build. Budget ID: `cold_launch`.
 /// * `testTodayScrollPerformance` — `XCTOSSignpostMetric.scrollingAndDecelerationMetric`
 ///   while scrolling the Today tab's recent-sessions list with 50 seeded rows.
+///   Budget ID: `today_scroll_duration` (per-iteration duration in seconds,
+///   not a hitch ratio — see the budget file's `description` for why).
 /// * `testMemoryFootprintDuringWorkout` — `XCTMemoryMetric` over a short
 ///   synthetic "active workout" exercising the Workouts tab's rest
-///   timer + session header.
+///   timer + session header. Budget ID: `workout_memory_peak`.
 /// * `testCoachFirstTokenLatency` — a custom `XCTClockMetric`
 ///   measurement from the "Ask Coach" tap to the first streaming coach
-///   bubble appearing with non-empty content.
+///   bubble appearing with non-empty content. Budget ID:
+///   `coach_first_token_latency`.
 ///
 /// Each test calls `measure(metrics:options:block:)`. The XCTest runner
 /// serializes the per-iteration metrics into the `.xcresult` bundle;
@@ -40,8 +48,7 @@ final class VolumeArcPerfTests: XCTestCase {
 
     // MARK: - Cold launch
 
-    /// Cold-launch budget: 1.2s on iPhone 17 simulator; fail at +20%
-    /// (1.44s) via `scripts/check_performance.sh`.
+    /// Budget ID: `cold_launch` in `docs/performance-budgets.json`.
     ///
     /// `XCTApplicationLaunchMetric` tears down and re-launches the
     /// hosted app on each iteration so the measurement captures real
@@ -62,14 +69,17 @@ final class VolumeArcPerfTests: XCTestCase {
 
     /// Scroll performance across 50 seeded workout rows.
     ///
-    /// Budget: >= 58 fps mean, < 2 hitches per second. We use
+    /// Budget ID: `today_scroll_duration` in
+    /// `docs/performance-budgets.json`. The gate compares a
+    /// per-iteration **duration** in seconds (NOT a hitches-per-second
+    /// or fps-mean derivation — those were prior assumptions; see the
+    /// budget file's `description` for the rationale). We use
     /// `XCTOSSignpostMetric.scrollingAndDecelerationMetric` (which
     /// instruments the scroll interaction itself) plus
     /// `XCTMemoryMetric` as a secondary guard against UI-side leaks
-    /// during long scroll runs. The `check_performance.sh` gate
-    /// compares the measured signpost metric against the hitches /
-    /// fps budget by deriving per-iteration hitch rate and mean
-    /// frame-rate from the measured samples.
+    /// during long scroll runs. The future-improvement candidate is
+    /// `XCTOSSignpostMetric.scrollDecelerationHitchTimeRatioMetric`
+    /// for direct hitch-ratio signal (also noted in the budget file).
     func testTodayScrollPerformance() throws {
         let app = makePerfApp()
         app.launch()
