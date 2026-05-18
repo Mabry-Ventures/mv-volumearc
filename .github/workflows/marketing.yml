@@ -64,6 +64,13 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Check legal pages (VOL-195)
+        # Fails the marketing build if `/terms` or `/privacy` regresses
+        # to a placeholder state — Apple Guideline 3.1.2 requires final
+        # legal copy at submission, and a future PR could accidentally
+        # revert. Scoped to those two routes only.
+        run: npm run check:legal
+
       - name: Build
         # `next build` runs the TypeScript compiler as part of the production
         # build step, so a separate `tsc --noEmit` job would be redundant
