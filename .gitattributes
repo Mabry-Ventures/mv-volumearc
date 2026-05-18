@@ -1,0 +1,54 @@
+# VOL-218: gitattributes — line-ending + diff normalization.
+# Keeps the committed tree byte-stable across macOS / Linux / Windows
+# contributors and across CI runners, complementing `.editorconfig`.
+# The Xcode project generator (`scripts/generate_xcode_project.rb`)
+# emits LF-only and the determinism gate compares byte-for-byte, so
+# any contributor with a CRLF-converting editor would otherwise produce
+# false project drift on every regen.
+
+# Default: detect text vs binary, normalize text to LF in the working
+# tree and the repo. Binary files pass through untouched.
+* text=auto eol=lf
+
+# Source code — always LF.
+*.swift text eol=lf
+*.h text eol=lf
+*.m text eol=lf
+*.mm text eol=lf
+*.c text eol=lf
+*.cpp text eol=lf
+*.rb text eol=lf
+*.py text eol=lf
+*.sh text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.md text eol=lf
+*.lock text eol=lf
+
+# Xcode project file — LF, explicit text. Generator emits LF.
+*.pbxproj text eol=lf
+*.xcscheme text eol=lf
+*.plist text eol=lf
+*.xcprivacy text eol=lf
+*.entitlements text eol=lf
+*.storekit text eol=lf
+
+# Binary assets — pass through untouched.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.icns binary
+*.car binary
+*.ipa binary
+*.zip binary
+*.tar.gz binary
+*.pdf binary

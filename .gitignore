@@ -92,3 +92,11 @@ marketing/node_modules/
 marketing/coverage/
 marketing/.turbo/
 marketing/next-env.d.ts
+
+# VOL-219: Cloudflare Wrangler state directory at the repo root.
+# `relay/.gitignore` already ignores `.wrangler/` inside `relay/`, but
+# a stray `wrangler` invocation from the repo root (or a tool that
+# uses Wrangler's library mode) drops `.wrangler/` here too. The
+# 2026-05-18 audit caught `?? .wrangler/` in `git status` against a
+# clean working tree.
+.wrangler/
