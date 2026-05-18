@@ -87,3 +87,17 @@ jobs:
         # ~1s. Phase 2 (Playwright + axe + Lighthouse) will follow in
         # a separate ticket.
         run: npm run check:links
+
+      - name: Run Playwright smoke
+        timeout-minutes: 10
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+
+      - name: Run accessibility scan
+        timeout-minutes: 10
+        run: npm run test:a11y
+
+      - name: Run Lighthouse CI
+        timeout-minutes: 10
+        run: npm run test:lighthouse
