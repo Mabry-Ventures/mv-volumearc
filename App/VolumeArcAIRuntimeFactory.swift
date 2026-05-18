@@ -22,21 +22,36 @@ enum VolumeArcAIRuntimeFactory {
     static func makeCoachProvider(
         flagGate: FlagGateTelemetry? = nil,
         subscriptionStore: (any PremiumEntitlementProviding)? = nil,
-        premiumGate: PremiumGateTelemetry? = nil
+        premiumGate: PremiumGateTelemetry? = nil,
+        telemetrySink: (any TelemetrySink)? = nil
     ) -> AICoachProvider {
         let isPremium = subscriptionStore?.isPremium ?? false
         premiumGate?.recordIfFirst("coach_tier", isPremium: isPremium)
         let tier: CoachTier = isPremium ? .pro : .flashLite
 
-        let relayProvider = VolumeArcAIConfiguration.relayConfiguration.map { configuration in
+        // VOL-199: when the relay is configured, wrap the
+        // `AIRelayCoachProvider` in a `FallbackCoachProvider` that
+        // routes through to a `LocalHeuristicAICoachProvider` on
+        // transient relay failures (5xx, 401, network drop). Before
+        // this change, a relay outage produced a hard user-visible
+        // error; the docs and journey catalog promised local fallback
+        // but the implementation didn't run it. `telemetrySink` is
+        // threaded through so each fallback emits the
+        // `coach.fallback_used` event for operator visibility.
+        let relayProvider: AICoachProvider? = VolumeArcAIConfiguration.relayConfiguration.map { configuration in
             let sessionProvider = VolumeArcRelaySessionProvider(
                 baseURL: configuration.baseURL,
                 applicationID: configuration.applicationID
             )
-            return AIRelayCoachProvider(
+            let direct = AIRelayCoachProvider(
                 configuration: configuration,
                 credentialsProvider: sessionProvider,
                 tier: tier
+            )
+            return FallbackCoachProvider(
+                primary: direct,
+                fallback: LocalHeuristicAICoachProvider(),
+                telemetrySink: telemetrySink
             )
         }
 
