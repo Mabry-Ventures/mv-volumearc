@@ -69,7 +69,13 @@ Removed from the Pocket template:
 4. **Push to `main`** → Vercel builds and deploys to production within ~1 minute.
 5. **Open a PR** → Vercel posts a preview URL to the PR.
 
-The CI gate at [`.github/workflows/marketing.yml`](../.github/workflows/marketing.yml) runs `npm ci && npm run lint && npm run typecheck && npm run build` on every PR touching `marketing/**`. It runs on `ubuntu-latest` (no self-hosted dependency) and is fork-safe (uses `pull_request`, not `pull_request_target`, so fork code never sees secrets).
+The CI gate at [`.github/workflows/marketing.yml`](../.github/workflows/marketing.yml) runs `npm ci && npm run lint && npm run check:legal && npm run build` on every PR touching `marketing/**`.
+
+**Where it runs (VOL-213 — updated 2026-05-18):** the workflow targets the privileged `mv-volumearc-runner` self-hosted macOS host alongside the Apple toolchain, not `ubuntu-latest`. The previous docs claim of "ubuntu-latest, fork-safe via `pull_request` semantics" was wrong — secret theft isn't the only attack surface, and `npm` postinstall scripts on the self-hosted runner have access to the same Keychain, signing identity, and DerivedData as the Apple builds. VOL-193 (closed 2026-05-18) added the explicit fork-PR guard: same-repo PRs and pushes to `main` run as normal, fork PRs are skipped. Fork contributors should ask a maintainer to push their branch into the upstream so CI can execute against trusted code. `SHADCNBLOCKS_API_KEY` was also removed from the PR job env in VOL-193 — it's only needed at install-time, not for `next build`.
+
+**Typecheck (VOL-213 — updated 2026-05-18):** `next build` runs the TypeScript compiler as part of the production build step, so a separate `tsc --noEmit` step would be redundant (and fails on a fresh checkout because `next build` is what generates `next-env.d.ts`). Local contributors run `npm run typecheck` after one initial build. The previous docs claim that CI ran `npm run typecheck` separately was wrong.
+
+**Legal-page check (VOL-195 — added 2026-05-18):** `npm run check:legal` runs `marketing/scripts/check-legal-pages.mjs` against `/terms` and `/privacy` to fail the build if either page regresses to a placeholder state (`TBD`, `pending legal review`, `placeholder structure`, `lorem ipsum`, `<strong>Draft</strong>` banner). App Review Guideline 3.1.2 requires final legal copy at submission.
 
 ## Pulling Shadcnblocks blocks
 
