@@ -102,6 +102,15 @@ struct VolumeArcApp: App {
     // whole journey.
     @StateObject private var telemetryDebugProbe = VolumeArcTelemetryDebugProbe()
     private let dashboardModel: WorkoutDashboardModel
+    /// VOL-204: the telemetry sink used by `VolumeArcBackgroundTasks`
+    /// for BGTaskScheduler.submit success/failure reporting. Set in
+    /// `init` to the same sink the dashboard model + flag/premium
+    /// gates use, then published to `VolumeArcBackgroundTasks.telemetrySink`
+    /// in `.onAppear` alongside the existing `sharedModel` handoff.
+    /// Captured here as an instance property because the local
+    /// `telemetrySink` defined in `init`'s scope is not reachable
+    /// from `.onAppear`'s body-scope closure.
+    private let telemetrySink: any TelemetrySink
     /// VOL-176: handler that turns the Profile feedback sheet's
     /// (category, description) tuple into a Sentry user-feedback +
     /// telemetry confirmation. Captured by the closure passed to
@@ -180,6 +189,12 @@ struct VolumeArcApp: App {
         #else
         let telemetrySink = Self.makeTelemetrySink()
         #endif
+        // VOL-204: capture the telemetry sink as an instance property so
+        // `.onAppear` can publish it to `VolumeArcBackgroundTasks.telemetrySink`
+        // alongside the existing `sharedModel` handoff. The local
+        // `telemetrySink` above lives in init's scope only; the body
+        // closure that runs `scheduleAll()` lives at a different scope.
+        self.telemetrySink = telemetrySink
         // VOL-61: single `FeatureFlagProvider` + `FlagGateTelemetry`
         // constructed once and threaded by explicit DI into every gating
         // surface — the runtime factory (voice + Foundation Models), the
@@ -456,6 +471,12 @@ struct VolumeArcApp: App {
                 // Publish the model to the BG task handler holder and
                 // schedule the next refresh/processing opportunity.
                 VolumeArcBackgroundTasks.sharedModel = dashboardModel
+                // VOL-204: also publish the telemetry sink so the
+                // schedule paths can report submit success/failure.
+                // Without this, `BGTaskScheduler.submit` failures are
+                // visible only in `os.Logger` (Console.app), not in
+                // the typed telemetry stream that operations watches.
+                VolumeArcBackgroundTasks.telemetrySink = self.telemetrySink
                 VolumeArcBackgroundTasks.scheduleAll()
                 #endif
 
