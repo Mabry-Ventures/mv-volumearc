@@ -344,13 +344,16 @@ jobs:
       # Phase 1 baseline was 18% (11/62 covered, 2026-05-18). VOL-200
       # Phase 2 (coach surface) bumped coverage to 23% (15/63 covered:
       # +1 row total in the catalog, +3 newly-covered coach rows).
+      # VOL-200 Phase 3 (Today tab) bumped to 28% (18/63: +3 newly-
+      # covered today rows — next-workout-tap, recent-session-tap,
+      # quick-action-launch).
       # The platform commits to 100% by end of Wave 2 (VOL-141/VOL-200).
       # Same ratchet contract as the per-target coverage gate above:
       # any PR that adds a journey test bumps `JOURNEY_COVERAGE_THRESHOLD`
       # in lockstep so the gate is always at-or-above current coverage.
-      - name: Journey coverage gate (>= 23% staged ratchet)
+      - name: Journey coverage gate (>= 28% staged ratchet)
         env:
-          JOURNEY_COVERAGE_THRESHOLD: '23'
+          JOURNEY_COVERAGE_THRESHOLD: '28'
         run: ./scripts/check_journey_coverage.sh
 
       # VOL-97: publish the xcresult bundle so reviewers can open it in

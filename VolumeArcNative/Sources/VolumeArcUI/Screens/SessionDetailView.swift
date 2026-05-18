@@ -23,6 +23,10 @@ public struct SessionDetailView: View {
             .padding(VA.Space.lg)
         }
         .background(VA.Colors.surfaceGrouped)
+        // VOL-200 P3: stable identifier so the `today.recent-session-tap`
+        // journey test can assert this view appeared after tapping a
+        // row.
+        .accessibilityIdentifier("session.detail.root")
         .navigationTitle(
             session.date.formatted(.dateTime.weekday(.wide).month().day())
         )
