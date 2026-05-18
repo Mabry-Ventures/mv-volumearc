@@ -141,8 +141,17 @@ enum VolumeArcBackgroundTasks {
             let bgError = (error as? BGTaskScheduler.Error)
             let errorCode = bgError.map { String(describing: $0.code) } ?? "unknown"
             let errorDescription = (error as NSError).localizedDescription
+            // Wrapped across lines so the resulting source line fits
+            // SwiftLint's 150-char rule. The `\` line-continuations
+            // suppress the newlines in the rendered string at runtime,
+            // so the os.Logger output is still a single line.
             logger.error(
-                "BGTaskScheduler.submit failed for \(identifier, privacy: .public): \(errorCode, privacy: .public) — \(errorDescription, privacy: .public)"
+                """
+                BGTaskScheduler.submit failed for \
+                \(identifier, privacy: .public): \
+                \(errorCode, privacy: .public) — \
+                \(errorDescription, privacy: .public)
+                """
             )
             telemetrySink?.record(TelemetryEvent(
                 category: "background",
