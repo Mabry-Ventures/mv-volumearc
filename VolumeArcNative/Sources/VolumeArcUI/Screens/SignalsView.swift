@@ -27,6 +27,12 @@ public struct SignalsView: View {
         .navigationTitle(DashboardTab.signals.title)
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await model.refresh() }
+        // VOL-200 P5: emit the journey-catalog telemetry events
+        // (`signals.readiness.opened`, `signals.volume.opened`,
+        // `signals.frequency.opened`) on view appearance. See
+        // `WorkoutDashboardModel.recordSignalsViewed()` for the
+        // rationale on emitting together vs. per-section.
+        .task { model.recordSignalsViewed() }
     }
 
     private var signalsHeader: some View {
