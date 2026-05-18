@@ -298,9 +298,9 @@ Be specific. A test name should describe both the condition and the expected beh
 
 1. Update the journey row in `USER_JOURNEYS.md`.
 2. Update or add the paired XCUITest.
-3. The `scripts/check_journey_coverage.sh` CI gate (pending [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141)) parses the table and fails any PR introducing a `[ ]` row.
+3. **In the same PR, bump `JOURNEY_COVERAGE_THRESHOLD`** in `.github/workflows/ci.yml`'s "Journey coverage gate" step to match the new percentage. Same ratchet contract as the per-target coverage gate (VOL-205) — the threshold tracks current coverage at-or-above, never drops.
 
-Coverage target: **100%** of journeys covered by an XCUITest paired with telemetry assertions ([VOL-149](https://linear.app/mabry-ventures/issue/VOL-149) telemetry-as-UAT helper). Current coverage: ~15%.
+The gate (`scripts/check_journey_coverage.sh`, VOL-200 Phase 1) runs in CI after the per-target coverage gates. It parses the table, counts rows with paired XCUITests vs. `[ ]` (uncovered), and fails the build below the threshold. Default threshold is **18%** (the audited 2026-05-18 baseline: 11/62 covered). Coverage target: **100%** of journeys covered by an XCUITest paired with telemetry assertions ([VOL-149](https://linear.app/mabry-ventures/issue/VOL-149) telemetry-as-UAT helper); burn-down tracked under [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141) and [VOL-200](https://linear.app/mabry-ventures/issue/VOL-200).
 
 ## Snapshot / visual regression
 
