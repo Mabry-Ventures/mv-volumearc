@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "check:legal": "node scripts/check-legal-pages.mjs",
+    "check:links": "node scripts/check-links.mjs",
     "vercel-build": "next build"
   },
   "browserslist": "defaults, not ie <= 11",
