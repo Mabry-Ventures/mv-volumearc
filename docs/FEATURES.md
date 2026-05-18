@@ -15,7 +15,7 @@ This is the granular per-feature checklist. For high-level system status, see [`
 | Feature | Status | Notes |
 |---------|--------|-------|
 | iPad UX parity (iPad 11" + iPad Pro 13") | 📋 | Positioning-critical per [`PRODUCT_POSITIONING.md`](PRODUCT_POSITIONING.md). Full audit pass + iPad-specific layouts where Compact split-view breaks. Tracked in [VOL-158](https://linear.app/mabry-ventures/issue/VOL-158). |
-| In-app feedback channel (Sentry user-feedback widget) | 📋 | Profile → Help → Send feedback. Captures recent telemetry events + build context, redacts PII via `VolumeArcSentryPIIScrubber`. Optional shake-to-report. Tracked in [VOL-146](https://linear.app/mabry-ventures/issue/VOL-146). |
+| In-app feedback channel (Sentry user-feedback widget) | ✅ | Profile → Help → Send feedback. Captures recent telemetry events + build context, redacts PII via `VolumeArcSentryPIIScrubber`, forwards to Sentry via `SentrySDK.capture(feedback:)`. `VolumeArcFeedbackSubmitter` + `FeedbackView` + `VolumeArcFeedbackJourneyTests` live since VOL-176. Tracked completion in [VOL-146](https://linear.app/mabry-ventures/issue/VOL-146). |
 | Apple Watch Vitals + Training Load (watchOS 26.4+) | 📋 | Read Apple's Training Load + Vitals score; surface "Vitals say" insight chip; pass into `RecoveryContext`. Tracked in [VOL-154](https://linear.app/mabry-ventures/issue/VOL-154). |
 | Public coach-quality page (volumearc.app/quality) | 📋 | Visible eval-trend results — converts the eval harness from engineering tool to marketing moat. Tracked in [VOL-148](https://linear.app/mabry-ventures/issue/VOL-148). |
 | iOS navigation shell (5 tabs) | ✅ | Full tab bar with Today, Workouts, Coach, Signals, and Profile, routed by `DashboardNavigationModel`. |

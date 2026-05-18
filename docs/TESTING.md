@@ -2,12 +2,12 @@
 
 ## Test architecture
 
-VolumeArc currently ships with **356 test functions** across unit + integration + XCUITest journey + performance suites (audited 2026-05-01). The headline shapes:
+VolumeArc currently ships with **429 test functions** across unit + integration + XCUITest journey + performance suites (audited 2026-05-18; count: `find Tests -name '*.swift' -exec grep -h 'func test' {} \; | wc -l`). The headline shapes:
 
-- 80% line-coverage gate enforced on `VolumeArcCore` (VOL-52), targeted to rise to **90%** under [VOL-140](https://linear.app/mabry-ventures/issue/VOL-140) with new gates for `VolumeArcUI` (≥85%), `VolumeArcWatch` (≥85% — pending [VOL-138](https://linear.app/mabry-ventures/issue/VOL-138)), Widgets (≥75% — pending [VOL-139](https://linear.app/mabry-ventures/issue/VOL-139)).
+- 80% line-coverage gate enforced on `VolumeArcCore` (VOL-52), targeted to rise to **90%** under [VOL-140](https://linear.app/mabry-ventures/issue/VOL-140) (sharpened by [VOL-205](https://linear.app/mabry-ventures/issue/VOL-205)) with new gates for `VolumeArcUI` (≥85%), `VolumeArcWatch` (≥85% — pending [VOL-138](https://linear.app/mabry-ventures/issue/VOL-138)), Widgets (≥75% — pending [VOL-139](https://linear.app/mabry-ventures/issue/VOL-139)).
 - 6-metric performance budget (cold launch, scroll fps, scroll hitches, memory, coach P50, coach P95) tag-gated in CI (VOL-99).
-- 20-fixture coach eval matrix with hermetic template-layer assertions in CI; response-layer harness manual today, nightly CI pending [VOL-147](https://linear.app/mabry-ventures/issue/VOL-147).
-- User-journey catalog at [`USER_JOURNEYS.md`](USER_JOURNEYS.md); current coverage **15%**, target **100%** under [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141).
+- 20-fixture coach eval matrix with hermetic template-layer assertions in CI; response-layer harness runs on nightly cron (`coach-evals-nightly.yml`) targeting `relay.volumearc.app` after VOL-223 fixed the dead default URL.
+- User-journey catalog at [`USER_JOURNEYS.md`](USER_JOURNEYS.md); current coverage **18%** (11/62), target **100%** under [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141) (sharpened by [VOL-200](https://linear.app/mabry-ventures/issue/VOL-200) — CI parser gate).
 - Visual regression: **none today** — pending [VOL-135](https://linear.app/mabry-ventures/issue/VOL-135) (pointfreeco SnapshotTesting on VAUI + paywall + onboarding + coach bubble + Live Activity).
 
 ```
