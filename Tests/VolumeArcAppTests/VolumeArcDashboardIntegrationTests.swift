@@ -384,7 +384,8 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
 
     private func makeDashboardModel(
         aiProvider: any AICoachProvider = LocalHeuristicAICoachProvider(),
-        recoveryReader: any RecoveryReader = UnavailableRecoveryReader()
+        recoveryReader: any RecoveryReader = UnavailableRecoveryReader(),
+        telemetrySink: any TelemetrySink = InMemoryTelemetrySink()
     ) -> WorkoutDashboardModel {
         WorkoutDashboardModel(
             aiProvider: aiProvider,
@@ -402,13 +403,38 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
             voicePermissionStore: UnavailableVoicePermissionStore(),
             healthStore: UnavailableHealthStore(),
             notificationStore: InMemoryNotificationStore(),
-            telemetrySink: InMemoryTelemetrySink(),
+            telemetrySink: telemetrySink,
             surfaceStore: UserDefaultsPlatformSurfaceStateStore(),
             subscriptionStore: StoreKitSubscriptionStore(productIDs: []),
             voiceCoach: LiveVoiceCoachOrchestrator(
                 transport: AIRelayVoiceTransport(provider: aiProvider)
             ),
             recoveryReader: recoveryReader
+        )
+    }
+
+    // MARK: - VOL-200 P5 — Signals telemetry
+
+    /// `recordSignalsViewed()` is wired from `SignalsView.task` to emit
+    /// the three journey-catalog events (`signals.readiness.opened`,
+    /// `signals.volume.opened`, `signals.frequency.opened`). The unit
+    /// test pins the contract without booting the simulator — XCUITest
+    /// coverage in `VolumeArcSignalsJourneyTests` exercises the
+    /// view-appearance path.
+    func testRecordSignalsViewedEmitsThreeCatalogEvents() throws {
+        let telemetry = InMemoryTelemetrySink()
+        let model = makeDashboardModel(telemetrySink: telemetry)
+
+        model.recordSignalsViewed()
+
+        let signalsEvents = telemetry.currentEvents.filter { $0.category == "signals" }
+        XCTAssertEqual(signalsEvents.count, 3, "recordSignalsViewed should emit exactly three signals events")
+
+        let names = Set(signalsEvents.map(\.name))
+        XCTAssertEqual(
+            names,
+            ["readiness.opened", "volume.opened", "frequency.opened"],
+            "Signals telemetry event names should match the journey catalog rows verbatim"
         )
     }
 

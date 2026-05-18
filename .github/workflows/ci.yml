@@ -349,13 +349,16 @@ jobs:
       # quick-action-launch).
       # VOL-200 Phase 4 (Profile surface) bumped to 31% (20/63: +2
       # profile rows — edit-profile, diagnostics).
+      # VOL-200 Phase 5 (Signals surface) bumped to 36% (23/63: +3
+      # signals rows — readiness-breakdown, volume-chart,
+      # frequency-heatmap). First fully-covered surface (3/3).
       # The platform commits to 100% by end of Wave 2 (VOL-141/VOL-200).
       # Same ratchet contract as the per-target coverage gate above:
       # any PR that adds a journey test bumps `JOURNEY_COVERAGE_THRESHOLD`
       # in lockstep so the gate is always at-or-above current coverage.
-      - name: Journey coverage gate (>= 31% staged ratchet)
+      - name: Journey coverage gate (>= 36% staged ratchet)
         env:
-          JOURNEY_COVERAGE_THRESHOLD: '31'
+          JOURNEY_COVERAGE_THRESHOLD: '36'
         run: ./scripts/check_journey_coverage.sh
 
       # VOL-97: publish the xcresult bundle so reviewers can open it in

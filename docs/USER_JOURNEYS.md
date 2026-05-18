@@ -24,7 +24,7 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | Today | 5 | 4 | 80% |
 | Workouts | 7 | 3 | 43% |
 | Coach | 6 | 3 | 50% |
-| Signals | 3 | 0 | 0% |
+| Signals | 3 | 3 | 100% |
 | Profile | 8 | 5 | 63% |
 | Watch | 6 | 2 | 33% |
 | Widgets | 3 | 0 | 0% |
@@ -32,7 +32,7 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | App Intents | 6 | 0 | 0% |
 | Background | 4 | 0 | 0% |
 | Failure paths | 6 | 0 | 0% |
-| **Total** | **63** | **20** | **32%** |
+| **Total** | **63** | **23** | **37%** |
 
 > Goal: 100% by end of Wave 2 (cycle 7, 2026-05-31). Burn down via [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141).
 >
@@ -87,9 +87,9 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 
 | ID | Pre-conditions | Steps | Success | Telemetry | Test |
 |---|---|---|---|---|---|
-| `signals.readiness-breakdown` | Signals tab | Open | Five-factor breakdown visible | `signals.readiness.opened` | `[ ]` |
-| `signals.volume-chart` | Signals tab + 7+ days history | Open volume chart | Bar chart renders | `signals.volume.opened` | `[ ]` |
-| `signals.frequency-heatmap` | Signals tab + 4+ weeks history | Open heatmap | Heatmap renders with weekday/week-of-year axes | `signals.frequency.opened` | `[ ]` |
+| `signals.readiness-breakdown` | Signals tab | Open | Five-factor breakdown visible | `signals.readiness.opened` | `VolumeArcSignalsJourneyTests.testSignalsReadinessOpenedFiresOnLaunch` |
+| `signals.volume-chart` | Signals tab + 7+ days history | Open volume chart | Bar chart renders | `signals.volume.opened` | `VolumeArcSignalsJourneyTests.testSignalsVolumeOpenedFiresOnLaunch` |
+| `signals.frequency-heatmap` | Signals tab + 4+ weeks history | Open heatmap | Heatmap renders with weekday/week-of-year axes | `signals.frequency.opened` | `VolumeArcSignalsJourneyTests.testSignalsFrequencyOpenedFiresOnLaunch` |
 
 ## Profile
 

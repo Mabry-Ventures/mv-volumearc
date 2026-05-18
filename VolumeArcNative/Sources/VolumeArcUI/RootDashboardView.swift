@@ -82,11 +82,15 @@ public struct RootDashboardView: View {
         .task {
             let shouldOpenProfileOnLaunch = Self.shouldOpenProfileOnLaunch
             let shouldOpenCoachOnLaunch = Self.shouldOpenCoachOnLaunch
+            let shouldOpenSignalsOnLaunch = Self.shouldOpenSignalsOnLaunch
             if shouldOpenProfileOnLaunch {
                 navigation.openProfile()
             }
             if shouldOpenCoachOnLaunch {
                 navigation.openCoach(prompt: "")
+            }
+            if shouldOpenSignalsOnLaunch {
+                navigation.openSignals()
             }
 
             await model.refresh()
@@ -100,6 +104,10 @@ public struct RootDashboardView: View {
             // VOL-200 P2: same affordance for Coach-tab journeys.
             if shouldOpenCoachOnLaunch, navigation.showOnboarding == false {
                 navigation.openCoach(prompt: "")
+            }
+            // VOL-200 P5: same affordance for Signals-tab journeys.
+            if shouldOpenSignalsOnLaunch, navigation.showOnboarding == false {
+                navigation.openSignals()
             }
             // VOL-93: `-ShowPaywallOnLaunch 1` asks the dashboard to
             // present the paywall as soon as the app boots. This is an
@@ -213,6 +221,21 @@ public struct RootDashboardView: View {
     fileprivate static var shouldOpenCoachOnLaunch: Bool {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: "-OpenCoachOnLaunch") else {
+            return false
+        }
+        let nextIndex = arguments.index(after: index)
+        guard nextIndex < arguments.endIndex else { return true }
+        let rawValue = arguments[nextIndex]
+        guard rawValue.hasPrefix("-") == false else { return true }
+        return rawValue != "0"
+    }
+
+    /// VOL-200 Phase 5: XCUITest helper that opens the Signals tab on
+    /// launch so signals-journey tests don't depend on simulator-specific
+    /// TabView hit testing. Same shape as `shouldOpenCoachOnLaunch`.
+    fileprivate static var shouldOpenSignalsOnLaunch: Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "-OpenSignalsOnLaunch") else {
             return false
         }
         let nextIndex = arguments.index(after: index)
