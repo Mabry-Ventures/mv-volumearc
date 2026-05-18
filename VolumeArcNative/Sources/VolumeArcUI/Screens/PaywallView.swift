@@ -85,8 +85,13 @@ public struct PaywallView: View {
                 .foregroundStyle(VA.Colors.textPrimary)
                 .multilineTextAlignment(.center)
 
+            // VOL-198: hero description must describe ONLY what Premium
+            // actually unlocks. CloudKit sync, Foundation Models, and
+            // Live Activities are free per `docs/PLATFORM.md` (VOL-91);
+            // promising them as Premium value is paid-subscription
+            // misrepresentation and an App Review risk.
             Text(String(
-                localized: "Unlock live voice coaching, CloudKit sync across all your devices, and advanced training signals.",
+                localized: "Unlock the Gemini Pro coach and live voice coaching — the full AI prescription your training deserves.",
                 comment: "Paywall hero description"
             ))
                 .font(VA.Typography.body)
@@ -127,15 +132,36 @@ public struct PaywallView: View {
         }
     }
 
-    private struct PremiumFeature: Identifiable {
+    // VOL-198: visibility raised from `private` to module-internal so
+    // `VolumeArcPaywallFeatureContractTests` (in `VolumeArcAppTests`)
+    // can assert the paywall feature list matches the PLATFORM.md
+    // Premium definition. Not part of the public surface.
+    struct PremiumFeature: Identifiable {
         let icon: String
         let title: String
         let description: String
         var id: String { title }
     }
 
-    private var premiumFeatures: [PremiumFeature] {
+    // VOL-198: paywall features must match the Premium definition in
+    // `docs/PLATFORM.md` (VOL-91) — Gemini Pro coach tier + live voice
+    // coaching. CloudKit sync / Foundation Models / Live Activities
+    // are free for all users and were misadvertised here as paid value;
+    // App Review treats that as paid-feature misrepresentation. Priority
+    // support and "Advanced Signals" were never implemented features.
+    // The constant is exposed `internal` (not private) so a contract
+    // test in `VolumeArcAppTests` can assert it stays aligned with the
+    // entitlement matrix at `VolumeArcAIRuntimeFactory`.
+    static var premiumFeatures: [PremiumFeature] {
         [
+            PremiumFeature(
+                icon: "brain.head.profile",
+                title: String(localized: "AI Coach — Gemini Pro tier", comment: "Premium feature name — AI coach Pro tier"),
+                description: String(
+                    localized: "Reasoning-grade coaching prescriptions. Pro reads more of your history and writes a deeper plan.",
+                    comment: "Premium feature description — AI coach Pro tier"
+                )
+            ),
             PremiumFeature(
                 icon: "waveform.and.mic",
                 title: String(localized: "Live Voice Coaching", comment: "Premium feature name — voice coach"),
@@ -144,40 +170,10 @@ public struct PaywallView: View {
                     comment: "Premium feature description — voice coach"
                 )
             ),
-            PremiumFeature(
-                icon: "icloud.fill",
-                title: String(localized: "Cloud Sync", comment: "Premium feature name — CloudKit sync"),
-                description: String(
-                    localized: "Your training history on every device, always in sync.",
-                    comment: "Premium feature description — CloudKit sync"
-                )
-            ),
-            PremiumFeature(
-                icon: "chart.line.uptrend.xyaxis",
-                title: String(localized: "Advanced Signals", comment: "Premium feature name — advanced signals"),
-                description: String(
-                    localized: "Readiness breakdown, volume trends, progression curves.",
-                    comment: "Premium feature description — advanced signals"
-                )
-            ),
-            PremiumFeature(
-                icon: "brain",
-                title: String(localized: "Foundation Models", comment: "Premium feature name — on-device AI"),
-                description: String(
-                    localized: "On-device AI coaching with full privacy.",
-                    comment: "Premium feature description — on-device AI"
-                )
-            ),
-            PremiumFeature(
-                icon: "star.circle.fill",
-                title: String(localized: "Priority Support", comment: "Premium feature name — priority support"),
-                description: String(
-                    localized: "First in line when you need help.",
-                    comment: "Premium feature description — priority support"
-                )
-            ),
         ]
     }
+
+    private var premiumFeatures: [PremiumFeature] { Self.premiumFeatures }
 
     // MARK: - Plans
 
