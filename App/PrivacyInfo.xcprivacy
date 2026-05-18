@@ -36,10 +36,21 @@
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array>
 		<!--
-			HealthKit data: workouts, heart rate, active energy. Read and
-			written only to deliver personalized coaching and keep the
-			user's Apple Health training history accurate. Never sent off
-			device by VolumeArc (HealthKit is sandboxed to Apple Health).
+			HealthKit data: workouts, heart rate, active energy, HRV,
+			sleep stages. Read and written only to deliver personalized
+			coaching and keep the user's Apple Health training history
+			accurate. VOL-209 disclosure normalization: RAW HealthKit
+			samples are never sent off-device by VolumeArc — they stay
+			in Apple Health (the HealthKit sandbox boundary). However,
+			COMPUTED AGGREGATES derived from those samples (e.g.
+			"7d HRV mean", "last-night sleep duration", "7d strength
+			load") are embedded into the rendered coach prompt and
+			transmitted to the AI relay (`relay.volumearc.app`) and
+			Gemini when the user asks the coach a question. The
+			NSPrivacyCollectedDataType_HealthAndFitness declaration
+			below covers that egress. See `docs/SECURITY.md` threat
+			model and `marketing/src/app/(main)/privacy/page.tsx`
+			user-facing copy for the full disclosure.
 		-->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
