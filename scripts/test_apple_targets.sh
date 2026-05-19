@@ -105,6 +105,44 @@ TEST_RESULT_BUNDLE="${TEST_RESULT_BUNDLE:-$DERIVED_DATA_PATH/TestResults.xcresul
 rm -rf "$TEST_RESULT_BUNDLE"
 reset_app_state
 
+# VOL-231 / VOL-224: warm the simulator (boot + AX-daemon kick) BEFORE
+# unit tests too. Earlier the warm step lived only in front of UI
+# tests; PR #230 then hit a flake where the UNIT-test xcodebuild
+# itself hung indefinitely waiting for the simulator to come up
+# clean (1200s wall-clock timeout). Unit tests run inside a
+# simulator-hosted test runner — they need the same healthy boot
+# state UI tests do. `warm_simulator_for_tests` (defined below) is
+# idempotent; calling it twice (here + before UI tests) is safe and
+# only adds the second AX-daemon kill, which is the whole point.
+warm_simulator_for_tests() {
+  local device="$IOS_TEST_DEVICE_NAME"
+  echo "Pre-warming '$device' for tests (AX daemon stabilization)..."
+  xcrun simctl boot "$device" 2>/dev/null || true
+  # `bootstatus -b` blocks until the device reports `system_app == true`,
+  # which is a stronger signal than `-c` (which only waits for boot
+  # completion). Without this the AX daemon may not be ready when
+  # XCTRunner connects.
+  xcrun simctl bootstatus "$device" -b
+  # Belt-and-suspenders: even after bootstatus reports ready, the AX
+  # daemon can take a few additional seconds to initialize. 15s
+  # eliminates the flake observed on CI runs of PR #83.
+  sleep 15
+  # VOL-231 / VOL-224: pre-emptively restart `AccessibilityUIServer`
+  # inside the booted simulator. The accessibility-stress XCUITests
+  # (`VolumeArcAccessibilityJourneyTests` at `.accessibility5` +
+  # `-NSDoubleLocalizedStrings YES`) reliably push the AX daemon
+  # into a wedged state where the next test-runner install dies with
+  # `Mach error -308 - (ipc/mig) server died`. Killing the daemon
+  # here is safe — `launchd` respawns it within ~1s in a clean
+  # state. `|| true` because the daemon may not yet be running on
+  # the very first boot.
+  echo "Restarting AccessibilityUIServer inside '$device' (VOL-231 mitigation)..."
+  xcrun simctl spawn "$device" killall AccessibilityUIServer 2>/dev/null || true
+  sleep 2
+  echo "Simulator '$device' is ready for tests."
+}
+warm_simulator_for_tests
+
 run_unit_tests() {
   xcodebuild \
     -project "VolumeArcApple.xcodeproj" \
@@ -132,46 +170,14 @@ fi
 # XCUITests (journey coverage)
 reset_app_state
 
-# VOL-88: on self-hosted CI runners,
-# the XCUITest test runner ("VolumeArcAppUITests-Runner") sometimes
-# fails to initialize with:
-#   "Timed out waiting for AX loaded notification"
-# This is the iOS Accessibility daemon failing to come up before
-# XCTRunner's connect timeout. Standard pattern for virtualized
-# simulator environments: explicitly boot the destination simulator
-# and wait for `bootstatus -b` (which includes a Springboard wait)
-# before invoking xcodebuild test. Idempotent — if the simulator is
-# already booted, `simctl boot` returns "Already booted" (handled by
-# `|| true`).
-warm_simulator_for_ui_tests() {
-  local device="$IOS_TEST_DEVICE_NAME"
-  echo "Pre-warming '$device' for UI tests (AX daemon stabilization)..."
-  xcrun simctl boot "$device" 2>/dev/null || true
-  # `bootstatus -b` blocks until the device reports `system_app == true`,
-  # which is a stronger signal than `-c` (which only waits for boot
-  # completion). Without this the AX daemon may not be ready when
-  # XCTRunner connects.
-  xcrun simctl bootstatus "$device" -b
-  # Belt-and-suspenders: even after bootstatus reports ready, the AX
-  # daemon can take a few additional seconds to initialize. 15s
-  # eliminates the flake observed on CI runs of PR #83.
-  sleep 15
-  # VOL-231 / VOL-224: pre-emptively restart `AccessibilityUIServer`
-  # inside the booted simulator. The accessibility-stress XCUITests
-  # (`VolumeArcAccessibilityJourneyTests` at `.accessibility5` +
-  # `-NSDoubleLocalizedStrings YES`) reliably push the AX daemon
-  # into a wedged state where the next `VolumeArcAppUITests-Runner`
-  # install dies with `Mach error -308 - (ipc/mig) server died` —
-  # the exact failure that blew up PR #230 multiple times this
-  # session. Killing the daemon here is safe — `launchd` respawns
-  # it within ~1s in a clean state. `|| true` because the daemon
-  # may not yet be running on the very first boot.
-  echo "Restarting AccessibilityUIServer inside '$device' (VOL-231 mitigation)..."
-  xcrun simctl spawn "$device" killall AccessibilityUIServer 2>/dev/null || true
-  sleep 2
-  echo "Simulator '$device' is ready for XCUITests."
-}
-warm_simulator_for_ui_tests
+# VOL-88 / VOL-231: re-warm the simulator + restart AccessibilityUIServer
+# between unit and UI tests. Unit tests may have left the AX daemon in
+# a degraded state (the accessibility-stress XCUITests aren't the only
+# trigger — any heavy XCTest workload can wedge `AccessibilityUIServer`
+# on M4 self-hosted runners). `warm_simulator_for_tests` is idempotent
+# (boot is a no-op if already booted), so this is just the AX-daemon
+# kick again. See the function definition above for the full rationale.
+warm_simulator_for_tests
 
 ui_test_pipeline() {
   local log_path="$1"
@@ -237,7 +243,7 @@ else
     echo "::warning::XCUITest runner hit a simulator Busy preflight failure; rebooting simulator and retrying once."
     xcrun simctl shutdown "$IOS_TEST_DEVICE_NAME" 2>/dev/null || true
     sleep 10
-    warm_simulator_for_ui_tests
+    warm_simulator_for_tests
     reset_app_state
     run_ui_tests_once 2
   else
