@@ -1551,6 +1551,34 @@
           "covered": 0
         }
       }
+    },
+    {
+      "commit": "d2257c1f4a23677aaa61cb62c704e058b2503da6",
+      "date": "2026-05-19T05:57:26Z",
+      "coverage": 80.26,
+      "passed": true,
+      "targets": {
+        "VolumeArcCore": {
+          "coverage": 80.26,
+          "executable": 6170,
+          "covered": 4952
+        },
+        "VolumeArcAppTests.xctest": {
+          "coverage": 89.96,
+          "executable": 13303,
+          "covered": 11968
+        },
+        "VolumeArcUI": {
+          "coverage": 2.59,
+          "executable": 1661,
+          "covered": 43
+        },
+        "Sentry": {
+          "coverage": 0.0,
+          "executable": 0,
+          "covered": 0
+        }
+      }
     }
   ]
 }
