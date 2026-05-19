@@ -268,7 +268,20 @@ extension VolumeArcApp {
 
     static func makeTelemetrySink(initialEvents: [TelemetryEvent] = []) -> TelemetrySink {
         if VolumeArcRuntimeFlags.isDeterministicMode {
-            return InMemoryTelemetrySink(events: initialEvents)
+            // VOL-230 fix: the `VolumeArcTelemetryDebugProbe` listens on
+            // `.volumeArcTelemetryDidRecord` notifications to expose
+            // events through the `debug.telemetry.events` accessibility
+            // overlay XCUITests poll. Without `postsNotificationOnRecord:
+            // true`, the sink swallows events for the probe, so journey
+            // tests time out waiting for events the production code has
+            // already emitted. Discovered after VOL-227 unblocked UI
+            // test execution: 8+ journey XCUITests failed with
+            // "(<category>/<name>) within Xs; not found in probe
+            // buffer" because the sink wasn't posting at all.
+            return InMemoryTelemetrySink(
+                events: initialEvents,
+                postsNotificationOnRecord: true
+            )
         }
 
         let persistent = UserDefaultsTelemetrySink()

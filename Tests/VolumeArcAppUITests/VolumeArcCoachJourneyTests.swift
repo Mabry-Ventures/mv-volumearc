@@ -36,14 +36,6 @@ final class VolumeArcCoachJourneyTests: XCTestCase {
     /// (VOL-162 / VOL-199 fallback path), so the response arrives
     /// deterministically without depending on the live relay.
     func testCoachAskQuestionStreamsResponse() throws {
-        try XCTSkipIf(
-            true,
-            "VOL-230: `coach/ask_complete` event not seen by probe even " +
-            "though `LocalHeuristicAICoachProvider` emits it on success. " +
-            "Same probe-visibility hypothesis as the Signals + " +
-            "dashboardRefreshTelemetry family of failures — needs " +
-            "single-source-of-truth investigation."
-        )
         let app = VolumeArcAppUITestSupport.makeSeededApp(
             extra: ["-OpenCoachOnLaunch", "1"]
         )
@@ -155,11 +147,6 @@ final class VolumeArcCoachJourneyTests: XCTestCase {
     /// `-StrictPrivacyMode 1` runtime flag (added below) and asserts
     /// the redactor fired against the prompt.
     func testCoachPrivacyModeStrictRedactsEmail() throws {
-        try XCTSkipIf(
-            true,
-            "VOL-230: same probe-visibility root cause as " +
-            "testCoachAskQuestionStreamsResponse."
-        )
         let app = VolumeArcAppUITestSupport.makeSeededApp(
             extra: ["-OpenCoachOnLaunch", "1", "-StrictPrivacyMode", "1"]
         )

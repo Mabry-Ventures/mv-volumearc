@@ -31,14 +31,6 @@ final class VolumeArcSignalsJourneyTests: XCTestCase {
     // MARK: - signals.readiness-breakdown
 
     func testSignalsReadinessOpenedFiresOnLaunch() throws {
-        try XCTSkipIf(
-            true,
-            "VOL-230: probe doesn't see `signals/readiness.opened` event " +
-            "even though the unit test `testRecordSignalsViewedEmitsThreeCatalogEvents` " +
-            "confirms `recordSignalsViewed()` emits correctly. " +
-            "Hypothesis: `SignalsView.task` doesn't fire on the " +
-            "openSignals-launched path; needs investigation."
-        )
         let app = launchSignalsTab()
         VolumeArcAppUITestSupport.assertTelemetryFired(
             in: app,
@@ -52,10 +44,6 @@ final class VolumeArcSignalsJourneyTests: XCTestCase {
     // MARK: - signals.volume-chart
 
     func testSignalsVolumeOpenedFiresOnLaunch() throws {
-        try XCTSkipIf(
-            true,
-            "VOL-230: same root cause as testSignalsReadinessOpenedFiresOnLaunch."
-        )
         let app = launchSignalsTab()
         VolumeArcAppUITestSupport.assertTelemetryFired(
             in: app,
@@ -69,10 +57,6 @@ final class VolumeArcSignalsJourneyTests: XCTestCase {
     // MARK: - signals.frequency-heatmap
 
     func testSignalsFrequencyOpenedFiresOnLaunch() throws {
-        try XCTSkipIf(
-            true,
-            "VOL-230: same root cause as testSignalsReadinessOpenedFiresOnLaunch."
-        )
         let app = launchSignalsTab()
         VolumeArcAppUITestSupport.assertTelemetryFired(
             in: app,
