@@ -87,3 +87,28 @@ jobs:
         # ~1s. Phase 2 (Playwright + axe + Lighthouse) will follow in
         # a separate ticket.
         run: npm run check:links
+
+      # VOL-217 P2: pin the Playwright browser cache inside the job
+      # workspace. The default `~/Library/Caches/ms-playwright/` is
+      # not writable on the self-hosted `mv-volumearc-runner` (EPERM
+      # on `__dirlock`) because the runner home directory is shared
+      # across concurrent jobs and locked. Writing inside the
+      # repo's runner workspace (`$GITHUB_WORKSPACE/.playwright`) is
+      # always per-job and per-checkout safe.
+      - name: Run Playwright smoke
+        timeout-minutes: 10
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright
+        run: |
+          npx playwright install chromium
+          npm run test:e2e
+
+      - name: Run accessibility scan
+        timeout-minutes: 10
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright
+        run: npm run test:a11y
+
+      - name: Run Lighthouse CI
+        timeout-minutes: 10
+        run: npm run test:lighthouse

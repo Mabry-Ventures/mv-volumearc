@@ -69,7 +69,12 @@ Removed from the Pocket template:
 4. **Push to `main`** → Vercel builds and deploys to production within ~1 minute.
 5. **Open a PR** → Vercel posts a preview URL to the PR.
 
-The CI gate at [`.github/workflows/marketing.yml`](../.github/workflows/marketing.yml) runs `npm ci && npm run lint && npm run check:legal && npm run build` on every PR touching `marketing/**`.
+The CI gate at [`.github/workflows/marketing.yml`](../.github/workflows/marketing.yml) runs `npm ci && npm run lint && npm run check:legal && npm run build` on every PR touching `marketing/**`. After the production build, it also runs the VOL-217 quality gates:
+
+- `npm run check:links` — static link guard over `.next/server/app/**/*.html`; fails on dead `href="#"` anchors and unresolved internal links.
+- `npm run test:e2e` — Playwright Chromium smoke coverage for `/`, `/privacy`, `/terms`, `/support`, and `/quality`; each route must return HTTP 200, render its expected `<h1>`, and avoid console/page errors.
+- `npm run test:a11y` — axe-core scan over the same five routes; serious and critical violations fail the build.
+- `npm run test:lighthouse` — starts the production Next server, runs Lighthouse CI for the same five routes, writes JSON reports under `marketing/.lighthouseci/`, and enforces the configured LCP, CLS, INP, Performance, Accessibility, Best Practices, and SEO floors in [`marketing/lighthouserc.json`](../marketing/lighthouserc.json).
 
 **Where it runs (VOL-213 — updated 2026-05-18):** the workflow targets the privileged `mv-volumearc-runner` self-hosted macOS host alongside the Apple toolchain, not `ubuntu-latest`. The previous docs claim of "ubuntu-latest, fork-safe via `pull_request` semantics" was wrong — secret theft isn't the only attack surface, and `npm` postinstall scripts on the self-hosted runner have access to the same Keychain, signing identity, and DerivedData as the Apple builds. VOL-193 (closed 2026-05-18) added the explicit fork-PR guard: same-repo PRs and pushes to `main` run as normal, fork PRs are skipped. Fork contributors should ask a maintainer to push their branch into the upstream so CI can execute against trusted code. `SHADCNBLOCKS_API_KEY` was also removed from the PR job env in VOL-193 — it's only needed at install-time, not for `next build`.
 

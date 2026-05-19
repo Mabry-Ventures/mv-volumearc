@@ -10,6 +10,11 @@ xcuserdata/
 *.xcuserstate
 *.xcarchive
 
+# VOL-217 P2: Playwright browser cache pinned inside the CI runner
+# workspace because `~/Library/Caches/ms-playwright/` is not writable
+# on the self-hosted runner.
+.playwright/
+
 # xcodebuild-generated workspace data — ignore everything in xcworkspace
 # EXCEPT the SPM lockfile that Xcode Cloud requires to be committed (see
 # below). The project is Ruby-generated, so the rest of this dir
