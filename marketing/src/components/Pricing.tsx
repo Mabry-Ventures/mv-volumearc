@@ -260,10 +260,20 @@ export function Pricing() {
               )}
             >
               {['Monthly', 'Annually'].map((period) => (
+                // VOL-228 fix: explicit `bg-sunrise-500` on each label
+                // so axe-core resolves `text-white` against the matching
+                // orange. The parent already paints `bg-sunrise-500`
+                // visually (clip-path reveals only the active half), but
+                // axe doesn't understand clip-path and reports the inner
+                // divs as `text-white` on a transparent / white default.
+                // `aria-hidden` on the parent makes this overlay
+                // decorative-only — the underlying RadioGroup is the
+                // semantic source — but axe still scans the styles, so
+                // the explicit bg is the path of least resistance.
                 <div
                   key={period}
                   className={clsx(
-                    'py-2 text-center text-sm font-semibold text-white',
+                    'bg-sunrise-500 py-2 text-center text-sm font-semibold text-white',
                     period === 'Annually' && '-ml-px',
                   )}
                 >

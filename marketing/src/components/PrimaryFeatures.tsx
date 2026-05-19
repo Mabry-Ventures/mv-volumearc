@@ -347,9 +347,24 @@ function FeaturesDesktop() {
     >
       <TabList className="relative z-10 order-last col-span-6 space-y-6">
         {features.map((feature, featureIndex) => (
-          <div
+          // VOL-228 fix: previously this position was a plain `<div>` and
+          // the `<Tab>` was nested several layers deep inside an `<h3>`.
+          // axe-core flagged it on two axes:
+          //   * `aria-required-children` on the TabList (role="tablist"
+          //     expected `<tab>` children but got `<div>` children).
+          //   * `aria-required-parent` on the inner Tab (role="tab"
+          //     expected a `<tablist>` parent but got an `<h3>` parent
+          //     several levels up).
+          // Making `<Tab>` itself the direct TabList child resolves both
+          // — Headless UI's `as` prop keeps the visual wrapper while
+          // preserving the `role="tab"` semantics. The text-left + outline
+          // utilities preserve the focus-ring behavior from the inner
+          // Tab call site, and the `<h3>` inside still establishes the
+          // heading semantics for the feature name.
+          <Tab
             key={feature.name}
-            className="relative rounded-2xl transition-colors hover:bg-gray-800/30"
+            as="div"
+            className="relative rounded-2xl text-left transition-colors hover:bg-gray-800/30 data-selected:not-data-focus:outline-hidden"
           >
             {featureIndex === selectedIndex && (
               <motion.div
@@ -361,16 +376,14 @@ function FeaturesDesktop() {
             <div className="relative z-10 p-8">
               <feature.icon className="h-8 w-8" />
               <h3 className="mt-6 text-lg font-semibold text-white">
-                <Tab className="text-left data-selected:not-data-focus:outline-hidden">
-                  <span className="absolute inset-0 rounded-2xl" />
-                  {feature.name}
-                </Tab>
+                <span className="absolute inset-0 rounded-2xl" />
+                {feature.name}
               </h3>
               <p className="mt-2 text-sm text-gray-400">
                 {feature.description}
               </p>
             </div>
-          </div>
+          </Tab>
         ))}
       </TabList>
       <div className="relative col-span-6">

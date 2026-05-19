@@ -10,9 +10,17 @@ const baseStyles = {
 
 const variantStyles = {
   solid: {
-    // VolumeArc brand — sunrise orange. Matches VA.Colors.primary.
+    // VolumeArc brand — sunrise orange. VOL-228 fix: original
+    // `bg-sunrise-500` (#F26B33) on white text was 3.27:1 — below
+    // the WCAG AA 4.5:1 threshold for `text-sm font-semibold`,
+    // which axe-core flagged on every page that renders a CTA
+    // button (homepage, /privacy, /terms, /support, /quality, etc.).
+    // `bg-sunrise-700` (`#D14F1C`, the palette's `primaryDeep`
+    // anchor) clocks at ~5.07:1 vs white — well clear of the AA
+    // floor. The active state stays at `sunrise-800` (~6.5:1) so
+    // the press feedback remains a darker shade.
     sunrise:
-      'relative overflow-hidden bg-sunrise-500 text-white shadow-sm shadow-sunrise-500/25 before:absolute before:inset-0 active:before:bg-transparent hover:before:bg-white/10 active:bg-sunrise-600 active:text-white/80 before:transition-colors',
+      'relative overflow-hidden bg-sunrise-700 text-white shadow-sm shadow-sunrise-700/25 before:absolute before:inset-0 active:before:bg-transparent hover:before:bg-white/10 active:bg-sunrise-800 active:text-white/80 before:transition-colors',
     // Inverted: white-on-dark hero CTA. Lands sunrise text on white pill.
     white:
       'bg-white text-sunrise-700 hover:bg-white/95 active:bg-white/90 active:text-sunrise-700/80',

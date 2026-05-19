@@ -11,26 +11,32 @@ const routes = [
 
 const seriousOrCritical = new Set(['serious', 'critical'])
 
-/// VOL-217 Phase 2 introduction allow-list. First activation of this
-/// gate caught three pre-existing violations across the marketing
-/// site that need component-level fixes (tracked separately as
-/// VOL-228):
+/// VOL-228 (closed): the three rules that previously appeared in
+/// the introduction allow-list (`aria-required-children`,
+/// `aria-required-parent`, `color-contrast`) all had a single
+/// underlying root cause fixed in the same PR:
 ///
-///   * `aria-required-children` on `.space-y-6` (homepage only)
-///   * `aria-required-parent`   on Headless UI tab buttons
-///     (`#headlessui-tabs-tab-...` — missing `role="tablist"` parent
-///     wrapper)
-///   * `color-contrast`         on `.justify-center` (all routes)
+///   * Headless UI `<Tab>` wasn't a direct child of `<TabList>` in
+///     `PrimaryFeatures.tsx` (Tab nested inside `<div><h3><Tab>`),
+///     so axe flagged both `aria-required-children` on the TabList
+///     and `aria-required-parent` on the inner Tab. Restructuring
+///     to `<Tab as="div">` as the direct TabList child fixed both.
+///   * `bg-sunrise-500` (#F26B33) with white text only hit a
+///     3.27:1 contrast ratio — below WCAG AA 4.5:1 for
+///     `text-sm font-semibold`. Bumped to `bg-sunrise-700`
+///     (`#D14F1C`, the palette's `primaryDeep` anchor) — ~5.07:1.
+///   * Pricing's period-switcher overlay used `text-white` on a
+///     clip-path-revealed `bg-sunrise-500` parent, which axe
+///     resolved as white-on-white. Added explicit `bg-sunrise-500`
+///     on each inner div so axe sees the same contrast the user
+///     sees.
 ///
-/// All three are real product issues, not test infrastructure.
-/// Tracking them here as an allow-list keeps the gate armed for any
-/// NEW serious/critical violations introduced by future PRs while
-/// the existing three are fixed separately.
-const knownIssueRuleIds = new Set([
-    'aria-required-children',
-    'aria-required-parent',
-    'color-contrast',
-])
+/// The allow-list is now empty. The gate fails on ANY new
+/// serious/critical violation, no exceptions. If the gate needs
+/// to ratchet again in the future, follow the VOL-205 staged-
+/// ratchet pattern — single-rule allow-list with a tracking
+/// ticket for the underlying fix.
+const knownIssueRuleIds: Set<string> = new Set()
 
 async function injectAxe(page: Page) {
   return new AxeBuilder({ page })
