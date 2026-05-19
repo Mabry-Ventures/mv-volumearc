@@ -155,7 +155,12 @@ final class RecoveryContextTests: XCTestCase {
         let rendered = context.asPromptBlock(privacyMode: .standard)
         XCTAssertTrue(rendered.contains("## Recovery (Apple Health)"))
         XCTAssertTrue(rendered.contains("HRV: 58ms 7-day vs 54ms baseline"))
-        XCTAssertTrue(rendered.contains("behind target"))
+        // VOL-227 fix: `sleepDebtHours: -3` falls into the
+        // "significant deficit" branch in `RecoveryContext.asPromptBullets`
+        // (threshold `< -2`), not "behind target" (which now
+        // covers `[-2, 0)` only). The original assertion pre-dated
+        // the more granular descriptor ladder.
+        XCTAssertTrue(rendered.contains("significant deficit"))
         XCTAssertTrue(rendered.contains("Training load (7d strength): 2100kJ across 210min"))
     }
 

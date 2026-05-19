@@ -672,14 +672,32 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         XCTAssertTrue(HealthKitAuthorizationScope.watchReadIdentifiers.contains("HKWorkoutTypeIdentifier"))
         XCTAssertTrue(HealthKitAuthorizationScope.watchReadIdentifiers.contains("HKQuantityTypeIdentifierHeartRate"))
         XCTAssertTrue(HealthKitAuthorizationScope.watchReadIdentifiers.contains("HKQuantityTypeIdentifierActiveEnergyBurned"))
-        // Phone scope intentionally smaller than watch scope (VOL-80).
+        // VOL-227 fix: phone and watch read scopes are disjoint
+        // extensions of the shared `HKWorkoutTypeIdentifier`, not a
+        // subset relationship.
+        //   * Phone adds HRV-SDNN + Sleep Analysis (VOL-181 recovery
+        //     reader), which the watch doesn't need.
+        //   * Watch adds Heart Rate + Active Energy (live workout
+        //     data source), which the phone doesn't need.
+        // The original VOL-80 comment + `isSubset` assertion
+        // pre-dated the VOL-181 recovery work. Replaced with explicit
+        // intersection + disjoint-tail assertions that pin the actual
+        // contract.
+        XCTAssertEqual(
+            HealthKitAuthorizationScope.phoneReadIdentifiers
+                .intersection(HealthKitAuthorizationScope.watchReadIdentifiers),
+            ["HKWorkoutTypeIdentifier"],
+            "Phone and watch read scopes should share Workouts only"
+        )
         XCTAssertTrue(
             HealthKitAuthorizationScope.phoneReadIdentifiers
-                .isSubset(of: HealthKitAuthorizationScope.watchReadIdentifiers)
+                .contains("HKQuantityTypeIdentifierHeartRateVariabilitySDNN"),
+            "Phone read scope should include HRV-SDNN for VOL-181 recovery analysis"
         )
-        XCTAssertLessThan(
-            HealthKitAuthorizationScope.phoneReadIdentifiers.count,
-            HealthKitAuthorizationScope.watchReadIdentifiers.count
+        XCTAssertFalse(
+            HealthKitAuthorizationScope.watchReadIdentifiers
+                .contains("HKQuantityTypeIdentifierHeartRateVariabilitySDNN"),
+            "Watch read scope intentionally excludes HRV-SDNN — phone-only consumer"
         )
     }
 
