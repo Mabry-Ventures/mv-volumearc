@@ -156,6 +156,19 @@ warm_simulator_for_ui_tests() {
   # daemon can take a few additional seconds to initialize. 15s
   # eliminates the flake observed on CI runs of PR #83.
   sleep 15
+  # VOL-231 / VOL-224: pre-emptively restart `AccessibilityUIServer`
+  # inside the booted simulator. The accessibility-stress XCUITests
+  # (`VolumeArcAccessibilityJourneyTests` at `.accessibility5` +
+  # `-NSDoubleLocalizedStrings YES`) reliably push the AX daemon
+  # into a wedged state where the next `VolumeArcAppUITests-Runner`
+  # install dies with `Mach error -308 - (ipc/mig) server died` —
+  # the exact failure that blew up PR #230 multiple times this
+  # session. Killing the daemon here is safe — `launchd` respawns
+  # it within ~1s in a clean state. `|| true` because the daemon
+  # may not yet be running on the very first boot.
+  echo "Restarting AccessibilityUIServer inside '$device' (VOL-231 mitigation)..."
+  xcrun simctl spawn "$device" killall AccessibilityUIServer 2>/dev/null || true
+  sleep 2
   echo "Simulator '$device' is ready for XCUITests."
 }
 warm_simulator_for_ui_tests
