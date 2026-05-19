@@ -162,17 +162,22 @@ warm_simulator_for_ui_tests
 
 ui_test_pipeline() {
   local log_path="$1"
-  # VOL-231: `-test-iterations 2 -retry-tests-on-failure` retries a
-  # failing test once before marking the run failed. Mitigates the
-  # XCUITest-runner-crash flake that emerged post-VOL-227 on the M4
-  # self-hosted runner: the runner spontaneously dies mid-suite,
-  # marking ~4 in-flight tests as failed (different tests each
-  # time — whoever was executing when the runner died). With one
-  # retry, those tests get a fresh launch and almost always pass.
-  # Trades up to ~10% UI-test wall time on the worst-flake runs
-  # for dramatically less PR thrashing on green code. Tests that
-  # are GENUINELY broken still fail (they fail twice in a row);
-  # tests that are flaky get a second chance.
+  # VOL-231 round 2: the original mitigation added
+  # `-test-iterations 2 -retry-tests-on-failure` (PR #233). It
+  # successfully retried flaky tests, but the result bundle
+  # finalization crashed every time a retry was triggered — the
+  # `Coverage gate (VolumeArcCore >= 80%)` step then failed with:
+  #   `xccov: The result bundle could not be opened as it is
+  #    incomplete. Xcode might have failed to finish writing the
+  #    result bundle.`
+  # Pattern observed on 2 PRs (#229, #230) within hours of PR #233
+  # landing on the M4 self-hosted runner. xcodebuild-level retry
+  # was the wrong layer — the shell-level
+  # `run_ui_tests_once 1 / once 2` retry below (which restarts
+  # xcodebuild from scratch on simulator-busy preflight failures)
+  # is the correct mitigation. Reverted to the pre-#233
+  # invocation. The XCUITest runner-crash flake stays open as
+  # VOL-231 with sharding marked as the medium-term fix.
   xcodebuild \
     -project "VolumeArcApple.xcodeproj" \
     -scheme "VolumeArcAppUITests" \
@@ -182,8 +187,6 @@ ui_test_pipeline() {
     -test-timeouts-enabled YES \
     -default-test-execution-time-allowance "$UI_TEST_DEFAULT_ALLOWANCE" \
     -maximum-test-execution-time-allowance "$UI_TEST_MAX_ALLOWANCE" \
-    -test-iterations 2 \
-    -retry-tests-on-failure \
     CODE_SIGNING_ALLOWED=NO \
     test 2>&1 | tee "$log_path"
   return "${PIPESTATUS[0]}"
