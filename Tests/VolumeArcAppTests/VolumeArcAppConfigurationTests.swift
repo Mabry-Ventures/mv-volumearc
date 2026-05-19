@@ -62,15 +62,30 @@ final class VolumeArcAppConfigurationTests: XCTestCase {
         XCTAssertEqual(try store.load(key), "updated")
     }
 
-    // VOL-80: Regression guard. Phone read set is workouts-only. Expanding
-    // this set without a consumer (and an updated usage-description string in
-    // `scripts/generate_xcode_project.rb`) fails App Store review and is a
-    // least-privilege regression. If you add a type, update this assertion
-    // AND the usage-description string in the same PR.
+    // VOL-80 / VOL-181: Regression guard. Phone read set covers the
+    // App Store-justified read types: Workouts (training history),
+    // HRV-SDNN + Sleep Analysis (recovery analysis surfaced via the
+    // VOL-181 `HealthKitRecoveryReader`). Expanding this set without
+    // a consumer (and a matching usage-description string in
+    // `scripts/generate_xcode_project.rb`) fails App Store review
+    // and is a least-privilege regression. If you add a type,
+    // update this assertion AND the usage-description string in
+    // the same PR.
+    //
+    // VOL-227 fix: original assertion was `["HKWorkoutTypeIdentifier"]`
+    // only — pre-dated the VOL-181 recovery work that legitimately
+    // added HRV + Sleep to the phone scope alongside their usage
+    // descriptions. The test had been failing silently in CI because
+    // unit-test exit-code semantics let UI tests still attempt to
+    // run (see VOL-227 for the broader investigation).
     func testPhoneHealthKitReadScopeStaysWorkoutsOnly() {
         XCTAssertEqual(
             HealthKitAuthorizationScope.phoneReadIdentifiers,
-            ["HKWorkoutTypeIdentifier"]
+            [
+                "HKWorkoutTypeIdentifier",
+                "HKQuantityTypeIdentifierHeartRateVariabilitySDNN",
+                "HKCategoryTypeIdentifierSleepAnalysis",
+            ]
         )
     }
 

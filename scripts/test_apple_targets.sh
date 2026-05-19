@@ -215,3 +215,31 @@ else
     exit "$first_ui_status"
   fi
 fi
+
+# VOL-227 sanity check: assert UI tests actually executed test methods.
+# Before VOL-227, four pre-existing unit-test failures triggered an
+# xcodebuild non-zero exit code that the script's `set -e` silently
+# absorbed mid-flight (the `if ! run_with_wallclock_timeout ...; then`
+# branch never ran because the wait semantics returned 0). UI tests
+# never ran for ~7 days while CI reported green. This guard fails
+# loudly if the UI test xcodebuild produced zero `Test Case` lines.
+#
+# Floor of 1 is intentional — the failure mode is "no tests ran at
+# all", not "fewer tests than expected". The journey-coverage gate
+# (VOL-200) is the right place to track per-surface execution counts.
+UI_LOG_TO_CHECK="$DERIVED_DATA_PATH/ui-test-attempt-1.log"
+if [ ! -f "$UI_LOG_TO_CHECK" ]; then
+  UI_LOG_TO_CHECK="$DERIVED_DATA_PATH/ui-test-attempt-2.log"
+fi
+if [ -f "$UI_LOG_TO_CHECK" ]; then
+  UI_METHODS_EXECUTED="$(grep -cE "^Test Case '-\[VolumeArcAppUITests\." "$UI_LOG_TO_CHECK" 2>/dev/null || echo 0)"
+  if [ "$UI_METHODS_EXECUTED" -lt 1 ]; then
+    echo "::error::VOL-227 sanity check failed — UI test xcodebuild produced $UI_METHODS_EXECUTED 'Test Case' lines. The XCUITest suite did not actually execute any methods. Inspect $UI_LOG_TO_CHECK for the failure mode (sim boot, AX daemon, build).";
+    exit 1
+  else
+    echo "VOL-227 sanity check: UI tests executed $UI_METHODS_EXECUTED methods."
+  fi
+else
+  echo "::error::VOL-227 sanity check failed — neither ui-test-attempt-1.log nor ui-test-attempt-2.log exists in $DERIVED_DATA_PATH. The UI test pipeline never wrote a log file.";
+  exit 1
+fi
