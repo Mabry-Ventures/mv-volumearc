@@ -428,6 +428,12 @@ add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   # closes over `VolumeArcAIConfiguration.relayConfiguration` which is
   # also in this list.
   'VolumeArcAIRuntimeFactory.swift',
+  # VOL-224: `VolumeArcAppAttestCoordinatorTests` exercises the App
+  # Attest coordinator + protocol mock directly. Same pattern as the
+  # other App-internal types below — the App target doesn't expose a
+  # Swift module testable from outside, so the source is compiled into
+  # the test bundle. Pure additive; production wiring lands in Phase B.
+  'VolumeArcAppAttestService.swift',
   'VolumeArcCloudConfiguration.swift',
   'VolumeArcLiveActivityController.swift',
   'VolumeArcPersistenceController.swift',
