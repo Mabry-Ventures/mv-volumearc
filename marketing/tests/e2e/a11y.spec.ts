@@ -39,7 +39,13 @@ for (const route of routes) {
   test(`${route.path} has no serious or critical axe violations`, async ({
     page,
   }) => {
-    const response = await page.goto(route.path)
+    // Same `domcontentloaded` rationale as `smoke.spec.ts` — the
+    // homepage's persistent analytics + websocket connections
+    // prevent `load` / `networkidle` from settling within 30s on
+    // a CI runner. The `h1` visibility check below is the contract.
+    const response = await page.goto(route.path, {
+      waitUntil: 'domcontentloaded',
+    })
 
     expect(response?.status(), `${route.path} should return HTTP 200`).toBe(
       200,

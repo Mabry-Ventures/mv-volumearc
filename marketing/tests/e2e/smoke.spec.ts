@@ -39,7 +39,15 @@ for (const route of routes) {
       pageErrors.push(error.message)
     })
 
-    const response = await page.goto(route.path)
+    // `domcontentloaded` is the right wait condition for a static
+    // marketing page — `networkidle` never settles on the homepage
+    // because of the persistent analytics + (in preview builds)
+    // hot-reload websockets, even though the page has been fully
+    // rendered for the user. The `h1` visibility check below is the
+    // contract.
+    const response = await page.goto(route.path, {
+      waitUntil: 'domcontentloaded',
+    })
 
     expect(response?.status(), `${route.path} should return HTTP 200`).toBe(
       200,
@@ -47,7 +55,6 @@ for (const route of routes) {
     await expect(
       page.getByRole('heading', { level: 1, name: route.h1 }),
     ).toBeVisible()
-    await page.waitForLoadState('networkidle')
 
     expect(pageErrors).toEqual([])
     expect(consoleErrors).toEqual([])
