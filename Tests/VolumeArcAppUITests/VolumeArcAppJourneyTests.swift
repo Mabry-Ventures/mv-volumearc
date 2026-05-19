@@ -268,6 +268,12 @@ final class VolumeArcAppJourneyTests: XCTestCase {
     /// paywall should dismiss once `StoreKitSubscriptionStore.isPremium`
     /// flips true.
     func testPremiumPurchaseFlowWithStoreKitTest() throws {
+        try XCTSkipIf(
+            true,
+            "VOL-230: SKTestSession on the M4 self-hosted runner doesn't " +
+            "expose local products. Same family as VOL-227's " +
+            "testRefundRemovesEntitlementAndRecordsTelemetry skip."
+        )
         #if canImport(StoreKitTest)
         _ = try makeStoreKitSession()
         let app = VolumeArcAppUITestSupport.makeSeededApp(extra: ["-ShowPaywallOnLaunch", "1"])

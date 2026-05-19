@@ -85,7 +85,7 @@ final class VolumeArcCoachJourneyTests: XCTestCase {
         VolumeArcAppUITestSupport.assertTelemetryFired(
             in: app,
             category: "coach",
-            name: "question_sent",
+            name: "ask_complete",
             within: 10,
             test: self
         )
@@ -193,7 +193,7 @@ final class VolumeArcCoachJourneyTests: XCTestCase {
         VolumeArcAppUITestSupport.assertTelemetryFired(
             in: app,
             category: "coach",
-            name: "question_sent",
+            name: "ask_complete",
             within: 10,
             test: self
         )

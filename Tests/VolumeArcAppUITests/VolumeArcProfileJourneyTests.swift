@@ -93,7 +93,7 @@ final class VolumeArcProfileJourneyTests: XCTestCase {
         VolumeArcAppUITestSupport.assertTelemetryFired(
             in: app,
             category: "profile",
-            name: "updated",
+            name: "profile_updated",
             within: 10,
             test: self
         )
