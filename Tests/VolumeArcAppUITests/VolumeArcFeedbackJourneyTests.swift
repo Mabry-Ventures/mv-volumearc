@@ -56,11 +56,6 @@ final class VolumeArcFeedbackJourneyTests: XCTestCase {
     /// the tab-bar identity (which has varied between SwiftUI
     /// runtime revisions per the existing chaos journey's notes).
     func testProfileSendFeedbackJourney() throws {
-        try XCTSkipIf(
-            true,
-            "VOL-230: `feedback/submitted` event not seen by probe within 15s. " +
-            "Pre-existing failure exposed by VOL-227 unblocking UI test execution."
-        )
         let app = VolumeArcAppUITestSupport.makeSeededApp(
             extra: ["-OpenProfileOnLaunch", "1"]
         )
