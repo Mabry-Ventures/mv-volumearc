@@ -111,4 +111,17 @@ jobs:
 
       - name: Run Lighthouse CI
         timeout-minutes: 10
+        # VOL-229: `marketing/scripts/run-lighthouse.mjs` resolves
+        # Chrome via Playwright's `chromium.executablePath()`. The
+        # Playwright install above pinned the browser cache to
+        # `${{ github.workspace }}/.playwright` (per VOL-217 P2 to
+        # avoid EPERM on the shared runner home dir). Without the
+        # same `PLAYWRIGHT_BROWSERS_PATH` here, the script's
+        # `chromium.executablePath()` returns a default-but-empty
+        # path; the script falls through to
+        # `/Applications/Google Chrome.app/...` which isn't
+        # installed on the self-hosted runner, and Lighthouse fails
+        # with `No Chrome installations found`.
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright
         run: npm run test:lighthouse
