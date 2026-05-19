@@ -226,11 +226,13 @@ final class VolumeArcAppAttestCoordinatorTests: XCTestCase {
         let coordinator = VolumeArcAppAttestCoordinator(service: mock)
 
         _ = try await coordinator.bootstrapKeyIfNeeded(challenge: Data("first".utf8))
-        XCTAssertNotNil(await coordinator.cachedAttestation())
+        let cachedBeforeReset = await coordinator.cachedAttestation()
+        XCTAssertNotNil(cachedBeforeReset)
 
         await coordinator.reset()
 
-        XCTAssertNil(await coordinator.cachedAttestation())
+        let cachedAfterReset = await coordinator.cachedAttestation()
+        XCTAssertNil(cachedAfterReset)
 
         // Next bootstrap regenerates from scratch.
         _ = try await coordinator.bootstrapKeyIfNeeded(challenge: Data("second".utf8))
