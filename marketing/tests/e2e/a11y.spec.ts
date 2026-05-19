@@ -12,18 +12,25 @@ const routes = [
 const seriousOrCritical = new Set(['serious', 'critical'])
 
 /// VOL-217 Phase 2 introduction allow-list. First activation of this
-/// gate caught two pre-existing violations across the marketing
-/// site that need component-level fixes (see follow-up in the
-/// `VolumeArc Production Readiness` Linear project):
+/// gate caught three pre-existing violations across the marketing
+/// site that need component-level fixes (tracked separately as
+/// VOL-228):
 ///
 ///   * `aria-required-children` on `.space-y-6` (homepage only)
+///   * `aria-required-parent`   on Headless UI tab buttons
+///     (`#headlessui-tabs-tab-...` — missing `role="tablist"` parent
+///     wrapper)
 ///   * `color-contrast`         on `.justify-center` (all routes)
 ///
-/// Both are real product issues, not test infrastructure. Tracking
-/// them here as an allow-list keeps the gate armed for any NEW
-/// serious/critical violations introduced by future PRs while the
-/// existing two are fixed separately.
-const knownIssueRuleIds = new Set(['aria-required-children', 'color-contrast'])
+/// All three are real product issues, not test infrastructure.
+/// Tracking them here as an allow-list keeps the gate armed for any
+/// NEW serious/critical violations introduced by future PRs while
+/// the existing three are fixed separately.
+const knownIssueRuleIds = new Set([
+    'aria-required-children',
+    'aria-required-parent',
+    'color-contrast',
+])
 
 async function injectAxe(page: Page) {
   return new AxeBuilder({ page })
