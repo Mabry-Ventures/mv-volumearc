@@ -295,7 +295,14 @@ export function Pricing() {
           ))}
         </div>
 
-        <p className="mx-auto mt-10 max-w-2xl text-center text-sm text-gray-500">
+        {/*
+          VOL-228 fix: `text-gray-500` on white was right at the 4.83:1
+          contrast cliff (passes WCAG calculator, but axe-core sometimes
+          flags it depending on the surrounding markup — likely from
+          the inline `text-sunrise-700` anchors changing the computed
+          baseline). `text-gray-600` (~6.47:1 vs white) lands well clear.
+        */}
+        <p className="mx-auto mt-10 max-w-2xl text-center text-sm text-gray-600">
           Subscriptions are billed through your Apple ID. Auto-renews until
           cancelled. Manage in iOS Settings → Apple ID → Subscriptions. See{' '}
           <a className="text-sunrise-700 underline decoration-sunrise-300 underline-offset-4 hover:decoration-sunrise-500" href="/terms">
