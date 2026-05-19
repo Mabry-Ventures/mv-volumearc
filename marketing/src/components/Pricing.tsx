@@ -253,27 +253,32 @@ export function Pricing() {
             <div
               aria-hidden="true"
               className={clsx(
-                'pointer-events-none absolute inset-0 z-10 grid grid-cols-2 overflow-hidden rounded-lg bg-sunrise-500 transition-all duration-300',
+                // VOL-228 fix: bg moved from `bg-sunrise-500` to
+                // `bg-sunrise-700` so the white text inside the inner
+                // divs lands at ~5.07:1 contrast (WCAG AA pass) instead
+                // of 3.27:1 (fail). The parent's bg is itself behind
+                // the clip-path, but axe scans the inner divs against
+                // their parent's bg, so they need to match.
+                'pointer-events-none absolute inset-0 z-10 grid grid-cols-2 overflow-hidden rounded-lg bg-sunrise-700 transition-all duration-300',
                 activePeriod === 'Monthly'
                   ? '[clip-path:inset(0_50%_0_0)]'
                   : '[clip-path:inset(0_0_0_calc(50%-1px))]',
               )}
             >
               {['Monthly', 'Annually'].map((period) => (
-                // VOL-228 fix: explicit `bg-sunrise-500` on each label
-                // so axe-core resolves `text-white` against the matching
-                // orange. The parent already paints `bg-sunrise-500`
-                // visually (clip-path reveals only the active half), but
-                // axe doesn't understand clip-path and reports the inner
-                // divs as `text-white` on a transparent / white default.
-                // `aria-hidden` on the parent makes this overlay
-                // decorative-only — the underlying RadioGroup is the
-                // semantic source — but axe still scans the styles, so
-                // the explicit bg is the path of least resistance.
+                // VOL-228 fix: explicit `bg-sunrise-700` on each label
+                // matches the parent's orange (which itself moved from
+                // 500 → 700 in the same PR for WCAG AA contrast) and
+                // gives axe-core white-on-sunrise-700 = ~5.07:1, well
+                // above the 4.5:1 floor. `aria-hidden` on the parent
+                // already makes this overlay decorative-only — the
+                // underlying RadioGroup is the semantic source — but
+                // axe still scans the styles, so the explicit bg is the
+                // path of least resistance.
                 <div
                   key={period}
                   className={clsx(
-                    'bg-sunrise-500 py-2 text-center text-sm font-semibold text-white',
+                    'bg-sunrise-700 py-2 text-center text-sm font-semibold text-white',
                     period === 'Annually' && '-ml-px',
                   )}
                 >

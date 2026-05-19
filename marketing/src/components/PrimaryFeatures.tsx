@@ -187,15 +187,31 @@ function CoachScreen(props: ScreenProps) {
       >
         <div className="space-y-4 px-4 py-6 text-sm">
           <div className="rounded-2xl bg-gray-100 p-4">
-            <p className="text-xs font-semibold tracking-wide text-gray-500 uppercase">
+            {/*
+              VOL-228 fix: `text-gray-500` (#6b7280) on `bg-gray-100`
+              (#f3f4f6) was 4.22:1 — below WCAG AA 4.5:1 for
+              `text-xs font-semibold`. `text-gray-600` (#4b5563)
+              clears at ~6.47:1.
+            */}
+            <p className="text-xs font-semibold tracking-wide text-gray-600 uppercase">
               You
             </p>
             <p className="mt-2 text-gray-900">
               Last week I hit 5×5 at 225. Should I push to 230 today or hold?
             </p>
           </div>
-          <div className="rounded-2xl bg-sunrise-500 p-4 text-white">
-            <p className="text-xs font-semibold tracking-wide text-sunrise-100 uppercase">
+          {/*
+            VOL-228 fix: `bg-sunrise-500` (#F26B33) on `text-white` was
+            3.27:1 — below WCAG AA 4.5:1. Switched to `bg-sunrise-700`
+            (#D14F1C, the palette's `primaryDeep` anchor — ~5.07:1
+            vs white). The inner uppercase eyebrow moved from
+            `text-sunrise-100` (very light orange) to `text-white`
+            because `text-sunrise-100` on `bg-sunrise-700` is still a
+            low-contrast pairing, and white-on-sunrise-700 matches the
+            surrounding body copy.
+          */}
+          <div className="rounded-2xl bg-sunrise-700 p-4 text-white">
+            <p className="text-xs font-semibold tracking-wide text-white uppercase">
               VolumeArc · Pro
             </p>
             <p className="mt-2">
