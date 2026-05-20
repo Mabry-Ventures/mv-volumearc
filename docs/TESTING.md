@@ -282,6 +282,33 @@ Flaky tests are worse than no tests — they erode trust in the suite. If a test
 2. Open a P1 ticket to fix or delete it
 3. Do not merge code that leaves flaky tests behind
 
+## CI runner flake taxonomy (VOL-227 cluster)
+
+When CI fails on the `mv-volumearc-runner` self-hosted host, the failure is almost always one of a small set of recurring **infrastructure** flakes — distinct from test-code flakes (the policy above). Each entry below maps the symptom to the responsible mitigation so on-call can attribute failures fast.
+
+| Symptom string in CI log | Failure shape | Mitigation | Source |
+|---|---|---|---|
+| `Waiting on System App` repeated for >5 min during `Pre-warming '<device>'` | Host-level orphan `launchd_sim` keeps the System App in a half-booted state; `xcrun simctl bootstatus -b` hangs indefinitely | 5-min wallclock around `bootstatus -b` (`SIM_BOOTSTATUS_TIMEOUT` env override). Fails fast with an actionable error pointing at host cleanup instead of burning 18+ min before the outer wallclock kills xcodebuild | VOL-227 round 3 / PR #244 in `scripts/test_apple_targets.sh::warm_simulator_for_tests` |
+| `xctest encountered an error (Failed to establish communication with the test runner. (Channel disconnected))` | XCTest runner died after launch; xcresult bundle may be incomplete | Shell-level per-attempt retry. First failure → shutdown sim, sleep 10s, re-warm, re-run unit tests once. xcodebuild-level `-test-iterations` was tried in VOL-231 round 1 (PR #233) but corrupted the bundle; reverted in #234 | VOL-227 round 2 / PR #241 in `scripts/test_apple_targets.sh::is_channel_disconnect_failure` |
+| `Mach error -308 - (ipc/mig) server died` after the accessibility-stress XCUITests | `AccessibilityUIServer` daemon wedged by `accessibility5` + `NSDoubleLocalizedStrings YES` simultaneously; next test bundle install dies | Per-shard isolation — accessibility-stress tests live in their own UI-shard partition (`accessibility-screenshots`) so the wedge can't poison other shards; pre-emptive `simctl spawn killall AccessibilityUIServer` before every shard | VOL-231 / PR #236 `verify_shard_coverage` + per-shard warm-up |
+| `Application failed preflight checks` / `SBMainWorkspace.*Busy` | XCTRunner install raced against the simulator's SpringBoard | Per-shard sim-busy preflight retry — on first hit, shutdown sim + sleep 10s + re-warm + re-run that one shard | Existing in `scripts/test_apple_targets.sh::run_ui_shard` |
+| `Test crashed with signal kill before establishing connection` / `Early unexpected exit, operation never finished bootstrapping` | OOM or process-watchdog killed the test runner before it bootstrapped; common signature when host is under memory pressure | No PR-side mitigation today — falls to runner-host investigation (see [runner-host operational notes](#runner-host-operational-notes-mv-volumearc-runner)) |  |
+| `Unable to getenv("TESTMANAGERD_SIM_SOCK") while not booting or booted. Current state: Shutdown` | Simulator transitioned to Shutdown mid-test; usually paired with high concurrent-job pressure on the host | No PR-side mitigation today — host-level | |
+| `The result bundle could not be opened as it is incomplete. Xcode might have failed to finish writing the result bundle.` | xcresult bundle finalization failed; downstream Coverage gate can't read it | Avoid xcodebuild-level retries (`-test-iterations` corrupts the bundle); use shell-level retry per #241 instead | VOL-231 round 1 lesson |
+| `No space left on device` during build | Module cache / DerivedData filled the runner disk | Manual cleanup. `~/Library/Developer/Xcode/DerivedData/`, `~/Library/Developer/CoreSimulator/Caches/`, `~/Library/Logs/CoreSimulator/`, plus the workspace `.build/derived-data/` are the four high-yield targets | Host-level — see runner-host runbook |
+
+### Runner-host operational notes (`mv-volumearc-runner`)
+
+The CI runner is a single self-hosted M4 macOS host (currently registered with the `mv-volumearc-runner` label; historical: `mv-shared`). It carries Apple Developer signing identity, persistent SPM + DerivedData caches, and a warm simulator inventory. The host runs >1 job in parallel when capacity allows (`mv-shared-01` + `mv-shared-02` slot suffixes appear in run logs).
+
+Failure modes that need host-level intervention (no PR can fix them):
+
+- **Disk-full** — module cache writes start failing, which cascades into simulator boot wedges + xctest bootstrap failures. Symptom: `'No space left on device'` in the build log. Fix: clean the four directories listed in the taxonomy above; investigate why the cache grew unboundedly if recurring.
+- **Orphan `launchd_sim`** — a prior CI job left a launchd_sim process running outside any active `xcrun simctl` tree. `bootstatus -b` for new sims hangs forever. Fix: `pgrep -f launchd_sim` + kill stragglers; `xcrun simctl shutdown all` for good measure. Long-term: a `JOB_STARTED` hook on the runner that cleans these up before each job (the 2026-05-17 host-level hook from VOL-186 was supposed to handle ghost-SHA workspaces; adding sim cleanup as a sibling step is the natural next move).
+- **Memory pressure** — test runners get `SIGKILL`-ed by the OS before they can bootstrap. Symptom: `Test crashed with signal kill before establishing connection`. Fix: reduce concurrent-slot count for `runs-on: mv-volumearc-runner` (set workflow `concurrency.group` to serialize) OR investigate whether a recent dependency (Sentry, swift-snapshot-testing) is leaking. Long-term: bigger machine, or split iOS-build and watchOS-build jobs onto separate hosts.
+
+If a single CI run hits two or more of these failure modes back-to-back, treat the host as wedged and pause the merge queue until cleanup completes. The 2026-05-19 overnight burndown exhibited exactly this: disk-full triggered cascading sim-wedge + bundle-corruption across 8 PRs, all of which only cleared once the host was upgraded.
+
 ## Test naming
 
 ```swift
