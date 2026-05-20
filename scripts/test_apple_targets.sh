@@ -114,6 +114,15 @@ reset_app_state
 # state UI tests do. `warm_simulator_for_tests` (defined below) is
 # idempotent; calling it twice (here + before UI tests) is safe and
 # only adds the second AX-daemon kill, which is the whole point.
+# Fail-fast threshold for `simctl bootstatus -b`. The "Waiting on
+# System App" wedge (orphan `launchd_sim` left over from a prior CI
+# run) used to burn 18+ minutes here before the outer
+# UNIT_TEST_WALL_TIMEOUT killed the run. Five minutes is well above
+# the legit boot time (~30s warm, ~90s cold) and far below the
+# wedge cliff, so a >5min bootstatus reliably means the host needs
+# orphan-process cleanup, not more patience.
+SIM_BOOTSTATUS_TIMEOUT="${SIM_BOOTSTATUS_TIMEOUT:-300}"
+
 warm_simulator_for_tests() {
   local device="$IOS_TEST_DEVICE_NAME"
   echo "Pre-warming '$device' for tests (AX daemon stabilization)..."
@@ -122,7 +131,31 @@ warm_simulator_for_tests() {
   # which is a stronger signal than `-c` (which only waits for boot
   # completion). Without this the AX daemon may not be ready when
   # XCTRunner connects.
-  xcrun simctl bootstatus "$device" -b
+  #
+  # VOL-227 round 3 (2026-05-20): the M4 self-hosted runner has been
+  # hitting a "Waiting on System App" wedge during this step — PRs
+  # #237 and #238 both burned ~18 minutes here before the outer
+  # wallclock killed xcodebuild and the CI step exited with 137. The
+  # root cause is a host-level orphan `launchd_sim` left over from a
+  # prior run (the user has documented the manual cleanup, but it
+  # needs to happen out-of-band). Wrap bootstatus in a 5-minute
+  # wallclock so the failure mode surfaces 13 min faster with a
+  # clear actionable error message instead of "process killed."
+  set +e
+  run_with_wallclock_timeout "$SIM_BOOTSTATUS_TIMEOUT" "Simulator bootstatus" \
+    xcrun simctl bootstatus "$device" -b
+  local bootstatus_status=$?
+  set -e
+
+  if [ "$bootstatus_status" = "124" ]; then
+    echo "::error::Simulator '$device' bootstatus wedged in 'Waiting on System App' for >${SIM_BOOTSTATUS_TIMEOUT}s. This is the host-level orphan launchd_sim issue. The runner host needs to clean up the stale launchd_sim processes — see docs/INCIDENTS.md (or kill orphan launchd_sim processes outside any active xcrun simctl tree). No PR-side change will help until the host is recovered."
+    exit "$bootstatus_status"
+  fi
+  if [ "$bootstatus_status" != "0" ]; then
+    echo "::error::Simulator bootstatus exited with non-zero status $bootstatus_status (not a wedge — investigate the simctl output above)."
+    exit "$bootstatus_status"
+  fi
+
   # Belt-and-suspenders: even after bootstatus reports ready, the AX
   # daemon can take a few additional seconds to initialize. 15s
   # eliminates the flake observed on CI runs of PR #83.
