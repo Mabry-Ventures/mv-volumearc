@@ -193,43 +193,130 @@ Rationale:
 - **Cost.** GitHub-hosted macOS is billed per minute and adds up under the Sprint-3 cadence; the dedicated machine amortizes.
 - **Determinism.** A single known-good Xcode + simulator runtime install across all workflows avoids "works on GitHub but not the deploy runner" drift.
 
+#### Runner fleet topology (`MVGHRUN01`)
+
+VolumeArc CI runs on the **Mabry Ventures macOS runner fleet on MVGHRUN01** — a single Mac Studio M4 Max 128GB host running macOS Tahoe 26.5. The `mv-shared-01..04` slot suffixes that appear in CI logs are the **flex pool on the same host**, not separate machines.
+
+The host runs multiple per-tenant runner instances, each as its own macOS user account:
+
+| Runner label | macOS account (UID) | ASC API key access |
+|---|---|---|
+| `mv-volumearc-runner` | `volumearc-runner` (UID 505) | ✅ `/Users/volumearc-runner/secrets/AuthKey_7LZU8Z373U.p8` |
+| `mv-shared-01..04` | `githubrunner` (UID 502) — flex pool | ❌ |
+
+**Label-routing matrix:** a job with `runs-on: [self-hosted, mv-volumearc-runner]` matches **5 runners** (1 dedicated `volumearc-runner` + 4 flex). The 4 flex runners do NOT have the ASC key on-disk. Other shared labels:
+
+- `mv-shared` → 6 runners (mv-volumearc-runner + 4 flex + mv-helloyaya-runner)
+- `mac-studio` → 10 runners
+- Auto-tags: `self-hosted`, `macOS`, `ARM64`
+
+Anything else queues forever.
+
+Implications for code in this repo:
+
+- **Release / TestFlight workflows** that need the ASC key must either pin to the dedicated `mv-volumearc-runner` runner OR use an ephemeral keychain seeded from a GitHub Actions secret (preferred — works on any runner). Code that does `cat $APP_STORE_CONNECT_API_KEY_PATH` and lands on a flex runner fails — fine if it fails-fast, footgun if it silently falls back.
+- **Build / test workflows** that don't touch signing run identically on any matched runner.
+
+Env vars available in every job (sourced from `~/.env`, mode `600`):
+
+```
+DEVELOPMENT_TEAM=A886EMZZW6
+APP_STORE_CONNECT_API_KEY_PATH=/Users/volumearc-runner/secrets/AuthKey_7LZU8Z373U.p8  # dedicated runner only
+APP_STORE_CONNECT_ISSUER_ID=69a6de72-e4ca-47e3-e053-5b8c7c11a4d1
+APP_STORE_CONNECT_KEY_ID=7LZU8Z373U
+HOMEBREW_NO_AUTO_UPDATE=1
+HOMEBREW_NO_ANALYTICS=1
+```
+
+**The ASC team key is shared with Clarrium.** Both products use Mabry Ventures team `A886EMZZW6`. Both `clarrium-runner` and `volumearc-runner` accounts have their own copy of the key file (copied at provisioning). Rotation must update both. Treat any third-party iOS dependency in this repo as having access to the ASC key — a leak here compromises Clarrium signing too. Pin and audit aggressively.
+
+#### Cache & DerivedData isolation contract
+
+The host's filesystem is shared across runner accounts, so build outputs must stay workspace-scoped:
+
+- **Do not write to global `~/Library/Developer/Xcode/DerivedData/`.** Every `xcodebuild` invocation in this repo passes `-derivedDataPath` to a workspace-relative path (typically `$ROOT/.build/derived-data/`) or a per-run `mktemp -d`.
+- **SPM lockfile** is seeded from the tracked repo copy into the workspace's `VolumeArcApple.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`. Per-runner workspace ⇒ per-runner SPM state.
+- **Contract test:** `scripts/test_ci_post_xcodebuild_archive_contract.sh` uses `mktemp -d "${TMPDIR:-/tmp}/volumearc-ci-post-xcodebuild.XXXXXX"` so the archive-script tests can't bleed between concurrent runs.
+
+If you add a new `xcodebuild` invocation, pass `-derivedDataPath` explicitly.
+
+#### Process watchdog (host-level)
+
+The host runs a root watchdog every 2 minutes that kills orphan processes. Active job processes are protected via **sentinels**:
+
+- `job-started-hook` writes `/var/run/mv-active-jobs/<runner>.sentinel` with the shell's process group ID.
+- The watchdog refuses to kill any process whose pgid matches an active sentinel.
+- `job-completed-hook` removes the sentinel when the job ends.
+
+Practical impact:
+
+- iOS simulator boots, TestFlight uploads, and any `xcodebuild` invocations inside the job's pgid are protected.
+- Long `simctl` operations (`xcrun simctl boot`, `simctl install`) are protected up to **1h cumulative** before the watchdog kills them as orphans.
+- `launchd_sim` orphans living past **4h** are killed unconditionally (this should never happen in a healthy job — only after a crash).
+
+If a sim job genuinely needs >1h, document it and either bump the watchdog threshold (owner action — open a Linear ticket) or restructure CI to re-launch `simctl` steps within an hour.
+
+#### Trust boundary
+
+VolumeArc CI runs as UID 505 (`volumearc-runner`) on the dedicated runner or UID 502 (`githubrunner`) on flex. As UID 505:
+
+- **Can** read the team's ASC key (intentional — for notarization).
+- **Can** read its own `_work/` directories.
+- **CANNOT** read Clarrium's runner state, helloyaya's runner state, or any flex runner's `~/.env`.
+- **CANNOT** read root-owned files under `/Library/MabryVentures/`.
+
+Notarization concurrency: Apple rate-limits `notarytool` at the team level. If a Clarrium release and a VolumeArc release submit at the same time, expect retries. Each repo's `concurrency:` group handles within-repo serialization; cross-repo coordination is not currently enforced — be aware during release windows.
+
+#### Useful host paths
+
+```
+/Library/MabryVentures/runner-maintenance/     # defensive scripts (root-only, read by maintenance)
+/Library/Logs/MabryVentures/                   # maintenance logs (root-only)
+/Library/Logs/MabryVentures/runner-archive/mv-volumearc-runner/   # archived _diag for this repo
+/var/run/mv-active-jobs/                        # job sentinels (root-owned)
+~/secrets/AuthKey_7LZU8Z373U.p8                 # ASC key (volumearc-runner account, dedicated runner)
+~/.env                                          # per-account env exports (mode 600)
+```
+
+You cannot write defensive automation into `/Library/MabryVentures/` from a workflow — those scripts are root-only. If the runner host needs a behavioral change, open a Linear ticket; the owner SSHs in.
+
 #### Runner maintenance
 
-The runner needs occasional hands-on maintenance:
+Routine hands-on intervention the host owner performs (you can't do these from a workflow):
 
-- **iOS simulator runtimes (VOL-173).** When Xcode auto-updates to a new minor (e.g. 26.4 → 26.5), the matching simulator runtime isn't always auto-installed. Symptom: `xcodebuild: error: Unable to find a destination matching ... iOS X.Y is not installed`. The build-and-test and perf-regression Pre-flight steps in `ci.yml` probe `xcrun simctl list runtimes` and fail fast in ~1s with a precise message (instead of ~30s of confusing xcodebuild output) when no available iOS 26.x runtime is present.
+- **iOS simulator runtimes (VOL-173).** When Xcode auto-updates to a new minor (e.g. 26.4 → 26.5), the matching simulator runtime isn't always auto-installed. Symptom: `xcodebuild: error: Unable to find a destination matching ... iOS X.Y is not installed`. The `Build & Test` and `Performance budgets` Pre-flight steps in `ci.yml` probe `xcrun simctl list runtimes` and fail fast in ~1s with a precise message instead of ~30s of confusing xcodebuild output.
 
-  Fix on the runner machine:
+  The host has an operator-triggered, idle-gated `sim-recovery.sh` that handles the partial-Xcode-upgrade case. If your workflow consistently fails with `Unable to find a destination matching the provided destination specifier`, **open a Linear ticket** — the owner runs `sim-recovery.sh` (or, for the simple cases, just `xcodebuild -downloadPlatform iOS`).
 
-  ```bash
-  # Command-line install (preferred — non-interactive, scriptable):
-  xcodebuild -downloadPlatform iOS
+- **Pin Xcode auto-updates.** macOS App Store auto-updates can introduce surprise SDK changes mid-CI-run. The runner account has automatic downloads disabled (`com.apple.SoftwareUpdate AutomaticDownload`, `com.apple.commerce AutoUpdate`); manual upgrades happen at release boundaries with `xcodebuild -downloadPlatform iOS` (and `watchOS` when the watch app is unblocked) in the same maintenance window.
 
-  # GUI alternative if Xcode rejects the CLI download (rare):
-  # Open Xcode → Settings → Platforms → install the missing iOS runtime
-  ```
+- **Disk-space watchdog (VOL-243).** The DerivedData + simulator-runtime + SPM cache footprint trends upward. CI Pre-flight asserts ≥ 10 GB free at `$HOME` but won't catch a slow leak across runs. The 2026-05-19 incident proved this is now a real failure mode — see [`docs/incident-log.md`](incident-log.md#2026-05-20-0251-utc--self-hosted-runner-cascading-flake-cluster--disk-full-sev2). [VOL-243](https://linear.app/mabry-ventures/issue/VOL-243) tracks the prevention work (daily `launchd` watchdog at a 50 GB free-disk floor → Slack alert).
 
-  After the runtime is back, re-run any jobs that failed Pre-flight via the GitHub Actions UI or `gh run rerun --failed <run-id>`.
+  In the meantime, `df -h ~` during release prep is the manual check. The four high-yield directories to clean:
+  - `~/Library/Developer/Xcode/DerivedData/`
+  - `~/Library/Developer/CoreSimulator/Caches/`
+  - `~/Library/Logs/CoreSimulator/`
+  - Workspace `.build/derived-data/` (per-repo)
 
-- **Pin Xcode auto-updates.** macOS App Store auto-updates can introduce surprise SDK changes mid-CI-run. On the runner, prefer manual Xcode upgrades scheduled around release boundaries:
+- **Homebrew tools required by workflows.** Some workflow steps shell out to brew-installed binaries (note `HOMEBREW_NO_AUTO_UPDATE=1` is set — pin or do `brew update && brew install` explicitly):
+  - `trufflehog` (for `.github/workflows/trufflehog.yml`)
+  - `swiftlint` ≥ 0.62 (already documented in the dev-setup section above)
+  - `jq` (Pre-flight iOS-runtime probe in `.github/workflows/ci.yml`; also used by various `gh api ... --jq` invocations across workflows + the AI review gate)
+  - `actionlint` (optional, used by some pre-commit setups)
 
-  ```bash
-  # Disable automatic app updates entirely on the runner account:
-  defaults write com.apple.SoftwareUpdate AutomaticDownload -bool false
-  defaults write com.apple.commerce AutoUpdate -bool false
-  ```
+- **FileVault is on, no auto-unlock.** Don't request host reboot from CI.
 
-  When manually upgrading Xcode, immediately follow with `xcodebuild -downloadPlatform iOS` (and `watchOS` if the watch app is unblocked) so the matching simulator runtimes land in the same maintenance window.
+- **Runner auto-update is disabled.** Don't run `./config.sh` from a workflow.
 
-- **Disk-space watchdog.** The DerivedData + simulator-runtime + SPM cache footprint trends upward. CI Pre-flight asserts ≥ 10 GB free at `$HOME` but won't catch a slow leak across runs. A daily `launchd` job that posts to Slack when free space drops below 50 GB is a one-line follow-up; for now, eyeball `df -h ~` during release prep.
+#### What will silently bite you
 
-- **Homebrew tools required by workflows.** Some workflow steps shell out to brew-installed binaries:
-  - `trufflehog` (for `.github/workflows/trufflehog.yml`) — `brew install trufflehog`
-  - `swiftlint` ≥ 0.62 (already documented in the dev-setup section above) — `brew install swiftlint`
-  - `jq` (VOL-173 Pre-flight iOS-runtime probe in `.github/workflows/ci.yml` lines ~176 + ~619; also used by various `gh api ... --jq` invocations across workflows and the AI review gate) — `brew install jq`
-  - `actionlint` (optional, used by some pre-commit setups) — `brew install actionlint`
+1. **Wrong `runs-on:` label.** If you target a label that doesn't exist (or has a typo), the job queues forever. Stick to `mv-volumearc-runner`, `mv-shared`, or `mac-studio`.
+2. **ASC key on flex runner.** Release workflows that naively do `cat $APP_STORE_CONNECT_API_KEY_PATH` and land on a flex runner fail. Either pin or use the ephemeral-keychain pattern from a GitHub Actions secret.
+3. **`brew update` is suppressed.** Explicit `brew update && brew install` if your step needs the latest formula.
+4. **Concurrency.** With every workflow on the single host, a typical PR queues ~5 jobs (Build & Test + AI review gate + Trufflehog). The runner service is configured for multiple concurrent jobs; verify after major macOS upgrades that it's still running `--unattended --replace --labels self-hosted,mv-volumearc-runner` with parallel-job support enabled.
+5. **Cross-tenant trust isolation.** Don't try to read another runner account's `~/.env` or workspace — UID isolation will deny it, and even if a permission slip were possible, it would breach the trust boundary documented above.
 
-- **Concurrency.** With every workflow on the single runner, a typical PR queues ~5 jobs (`Build & Test` + 3 AI gate jobs + Trufflehog). The runner is configured for multiple concurrent jobs via the actions/runner service; verify after major macOS upgrades that the service is still running `--unattended --replace --labels self-hosted,mv-volumearc-runner` with parallel-job support enabled.
+When in doubt about host state, open a Linear ticket. The owner SSHs in.
 
 ## Code style
 
