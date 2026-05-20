@@ -120,21 +120,33 @@ struct VolumeArcSmartStackView: View {
 
     @ViewBuilder
     private func activeView(_ state: LiveActivityState) -> some View {
+        // Codex review on PR #238 flagged that the previous layout
+        // always paired a "0:00" countdown with a `REST` label when
+        // `restSecondsRemaining` was nil, misrepresenting "actively
+        // exercising" state as "resting." Split into a resting layout
+        // (countdown + REST label) vs an active-set layout (no
+        // countdown, SET label highlighting the exercise + target).
+        // `LiveActivityState.restSecondsRemaining` is the authoritative
+        // signal — nil OR <= 0 ⇒ no rest period.
+        let isResting = (state.restSecondsRemaining ?? 0) > 0
+
         switch family {
         case .accessoryCircular:
-            activeCircular(state)
+            if isResting { restingCircular(state) } else { activeSetCircular(state) }
         case .accessoryRectangular:
-            activeRectangular(state)
+            if isResting { restingRectangular(state) } else { activeSetRectangular(state) }
         case .accessoryInline:
-            activeInline(state)
+            if isResting { restingInline(state) } else { activeSetInline(state) }
         case .accessoryCorner:
-            activeCorner(state)
+            if isResting { restingCorner(state) } else { activeSetCorner(state) }
         default:
-            activeRectangular(state)
+            if isResting { restingRectangular(state) } else { activeSetRectangular(state) }
         }
     }
 
-    private func activeCircular(_ state: LiveActivityState) -> some View {
+    // MARK: - Resting layouts (rest-timer countdown visible)
+
+    private func restingCircular(_ state: LiveActivityState) -> some View {
         ZStack {
             AccessoryWidgetBackground()
             VStack(spacing: VA.Space.xxs) {
@@ -152,7 +164,7 @@ struct VolumeArcSmartStackView: View {
         .widgetURL(VolumeArcDeepLink.url(for: .nextWorkout))
     }
 
-    private func activeRectangular(_ state: LiveActivityState) -> some View {
+    private func restingRectangular(_ state: LiveActivityState) -> some View {
         VStack(alignment: .leading, spacing: VA.Space.xs) {
             HStack(alignment: .firstTextBaseline, spacing: VA.Space.xs) {
                 Text(restCountdownText(for: state))
@@ -177,22 +189,94 @@ struct VolumeArcSmartStackView: View {
         .widgetURL(VolumeArcDeepLink.url(for: .nextWorkout))
     }
 
-    private func activeInline(_ state: LiveActivityState) -> some View {
+    private func restingInline(_ state: LiveActivityState) -> some View {
         Text(
             String(
                 localized: "Rest \(restCountdownText(for: state)) • \(state.activeExerciseName)",
-                comment: "Watch Smart Stack accessoryInline summary during active workout; placeholders are the rest-timer countdown and the active exercise name"
+                comment: "Watch Smart Stack accessoryInline summary while resting between sets; placeholders are the rest-timer countdown and the active exercise name"
             )
         )
             .widgetURL(VolumeArcDeepLink.url(for: .nextWorkout))
     }
 
-    private func activeCorner(_ state: LiveActivityState) -> some View {
+    private func restingCorner(_ state: LiveActivityState) -> some View {
         Text(restCountdownText(for: state))
             .font(VA.Typography.scoreCompact)
             .monospacedDigit()
             .widgetLabel {
                 Text(state.activeExerciseName)
+                    .font(VA.Typography.rectCaption)
+                    .lineLimit(1)
+            }
+            .widgetURL(VolumeArcDeepLink.url(for: .nextWorkout))
+    }
+
+    // MARK: - Active-set layouts (between rest periods — no countdown)
+
+    private func activeSetCircular(_ state: LiveActivityState) -> some View {
+        ZStack {
+            AccessoryWidgetBackground()
+            VStack(spacing: VA.Space.xxs) {
+                // No rest countdown — surface the exercise as the
+                // glanceable identity instead. Aggressively truncated
+                // because the circular family is small.
+                Text(state.activeExerciseName.prefix(4).uppercased())
+                    .font(VA.Typography.scoreDisplay)
+                    .lineLimit(1)
+                Text(String(
+                    localized: "SET",
+                    comment: "Watch Smart Stack circular badge while user is actively executing a set (not resting)"
+                ))
+                    .font(VA.Typography.microLabel)
+                    .tracking(VA.Tracking.microLabel)
+            }
+        }
+        .widgetURL(VolumeArcDeepLink.url(for: .nextWorkout))
+    }
+
+    private func activeSetRectangular(_ state: LiveActivityState) -> some View {
+        VStack(alignment: .leading, spacing: VA.Space.xs) {
+            HStack(alignment: .firstTextBaseline, spacing: VA.Space.xs) {
+                Text(state.activeExerciseName)
+                    .font(VA.Typography.rectHeadline)
+                    .lineLimit(1)
+                Text(String(
+                    localized: "SET",
+                    comment: "Watch Smart Stack rectangular label while user is actively executing a set"
+                ))
+                    .font(VA.Typography.microLabel)
+                    .tracking(VA.Tracking.microLabel)
+                    .foregroundStyle(VA.Colors.textSecondary)
+            }
+            Text(state.targetSummary)
+                .font(VA.Typography.rectCaption)
+                .lineLimit(1)
+            Text(String(
+                localized: "Tap to log",
+                comment: "Watch Smart Stack call-to-action while a set is in progress"
+            ))
+                .font(VA.Typography.rectFootnote)
+                .foregroundStyle(VA.Colors.textSecondary)
+                .lineLimit(1)
+        }
+        .widgetURL(VolumeArcDeepLink.url(for: .nextWorkout))
+    }
+
+    private func activeSetInline(_ state: LiveActivityState) -> some View {
+        Text(
+            String(
+                localized: "\(state.activeExerciseName) • \(state.targetSummary)",
+                comment: "Watch Smart Stack accessoryInline summary while user is actively executing a set; placeholders are the exercise name and the target summary"
+            )
+        )
+            .widgetURL(VolumeArcDeepLink.url(for: .nextWorkout))
+    }
+
+    private func activeSetCorner(_ state: LiveActivityState) -> some View {
+        Text(state.activeExerciseName.prefix(6).uppercased())
+            .font(VA.Typography.scoreCompact)
+            .widgetLabel {
+                Text(state.targetSummary)
                     .font(VA.Typography.rectCaption)
                     .lineLimit(1)
             }
