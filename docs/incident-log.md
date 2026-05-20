@@ -86,7 +86,7 @@ The `fastlane ios rollback` lane (VOL-178) automatically appends an entry for ev
   - PR #244 (VOL-227 round 3) — `simctl bootstatus -b` wallclock prevents the sim-wedge from burning 18 min per run going forward. Already on main.
   - PR #241 (VOL-227 round 2) — channel-disconnect retry on unit tests. Pending merge (was blocked on the runner being down).
   - PR #246 (VOL-227 round 4) — Codex-only AI review gate while CodeRabbit usage credits are restored. Pending merge.
-  - Outstanding ticket: a daily runner-host disk-pressure cron (mentioned in the 2026-05-14 04:30 UTC postmortem under "Follow-ups") would have warned us before this incident. **Status:** still un-actioned. Filing a tracker is the highest-leverage prevention against recurrence.
+  - **[VOL-243](https://linear.app/mabry-ventures/issue/VOL-243)** — daily runner-host disk-pressure watchdog. The follow-up flagged in the 2026-05-14 04:30 UTC postmortem went un-actioned for 6 days, which is what allowed this cascade. Filed as a dedicated tracker; once landed, a 50 GB free-disk floor will warn before the 10 GB Pre-flight hard floor trips.
 
 ---
 
