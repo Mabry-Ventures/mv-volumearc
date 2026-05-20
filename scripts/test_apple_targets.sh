@@ -213,8 +213,14 @@ unit_test_pipeline() {
 # `run_ui_shard_attempt 2`).
 is_channel_disconnect_failure() {
   local log_path="$1"
+  # CodeRabbit + Codex (PR #241) flagged that a bare match on
+  # `xctest encountered an error` is too broad — it catches unrelated
+  # unit-test failures (e.g. compile errors that xctest reports
+  # through the same error-print path). Tighten to the exact
+  # channel-disconnect signature so non-flake failures keep their
+  # existing exit behavior.
   grep -Eq \
-    'Failed to establish communication with the test runner|Channel disconnected|xctest encountered an error' \
+    'Failed to establish communication with the test runner|Channel disconnected' \
     "$log_path"
 }
 
@@ -238,8 +244,17 @@ run_unit_tests_attempt() {
   return "$status"
 }
 
-if ! run_unit_tests_attempt 1; then
-  first_status=$?
+# CodeRabbit + Codex (PR #241) flagged that `if ! foo; then $? = $?`
+# captures the negation result (0), not the underlying failing exit
+# code — so `first_status` and `second_status` end up 0 on real
+# failures, masking broken unit tests as green CI. Capture the exit
+# code BEFORE any negation by running the attempt with `set +e` first.
+set +e
+run_unit_tests_attempt 1
+first_status=$?
+set -e
+
+if [ "$first_status" != "0" ]; then
   first_log="$DERIVED_DATA_PATH/unit-test-attempt-1.log"
 
   if [ -f "$first_log" ] && is_channel_disconnect_failure "$first_log"; then
@@ -252,12 +267,16 @@ if ! run_unit_tests_attempt 1; then
     warm_simulator_for_tests
     reset_app_state
 
-    if ! run_unit_tests_attempt 2; then
-      second_status=$?
+    set +e
+    run_unit_tests_attempt 2
+    second_status=$?
+    set -e
+
+    if [ "$second_status" != "0" ]; then
       if [ "$second_status" = "124" ]; then
         echo "::error::Unit-test attempt 2 also wall-clock-timed-out. The XCTRunner failure mode is now persistent — investigate runner state."
       else
-        echo "::error::Unit-test attempt 2 failed (exit $second_status) after a channel-disconnect retry. Inspect ui-test-attempt-2.log + the xcresult bundle."
+        echo "::error::Unit-test attempt 2 failed (exit $second_status) after a channel-disconnect retry. Inspect unit-test-attempt-2.log + the xcresult bundle."
       fi
       exit "$second_status"
     fi
