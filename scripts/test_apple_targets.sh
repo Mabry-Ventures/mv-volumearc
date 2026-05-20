@@ -330,12 +330,22 @@ run_watch_tests() {
     test
 }
 
-if ! run_with_wallclock_timeout "$UNIT_TEST_WALL_TIMEOUT" "Watch unit tests" run_watch_tests; then
-  status=$?
-  if [ "$status" = "124" ]; then
+# Codex review on PR #237: `if ! foo; then $? = $?` captures the
+# negation result (0), not the underlying failure exit code — so
+# watch-test failures would slip through as green CI. Run with `set
+# +e` and capture `$?` directly. Same pattern as the iOS unit-test
+# retry mitigation in `claude/unit-test-channel-disconnect-retry`
+# (PR #241).
+set +e
+run_with_wallclock_timeout "$UNIT_TEST_WALL_TIMEOUT" "Watch unit tests" run_watch_tests
+watch_test_status=$?
+set -e
+
+if [ "$watch_test_status" != "0" ]; then
+  if [ "$watch_test_status" = "124" ]; then
     echo "::error::Watch unit-test wall-clock timeout fired. Check the watchOS simulator state; the test bundle takes <10s locally so a multi-minute timeout means xcodebuild itself never made progress."
   fi
-  exit "$status"
+  exit "$watch_test_status"
 fi
 
 # XCUITests (journey coverage) — sharded
