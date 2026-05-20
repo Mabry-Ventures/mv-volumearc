@@ -32,8 +32,8 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | App Intents | 6 | 0 | 0% |
 | Background | 4 | 0 | 0% |
 | Failure paths | 6 | 0 | 0% |
-| Resilience / interruption (VOL-127 P2) | 6 | 2 | 33% |
-| **Total** | **69** | **25** | **36%** |
+| Resilience / interruption (VOL-127 P2) | 6 | 0 | 0% |
+| **Total** | **69** | **23** | **33%** |
 
 > Goal: 100% by end of Wave 2 (cycle 7, 2026-05-31). Burn down via [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141).
 >
@@ -173,8 +173,8 @@ Force-quit / resume + connectivity-interruption journeys. Each row captures a "u
 | `resilience.force-quit-onboarding` | Onboarding open, advanced past welcome | Force-quit app (swipe up from app switcher) → relaunch | Onboarding resumes at the last step the user reached (not from scratch) | `onboarding.resumed` | `[ ]` (VOL-127 P2 — human UAT script below; automation tracked under VOL-141 burn-down) |
 | `resilience.force-quit-active-workout` | Active session, ≥1 set logged | Force-quit app → relaunch | Active session resumes; logged sets persist; `HKWorkoutSession` recovers via the system's session-restore handoff (or fails gracefully with "session ended — start fresh") | `workout.session.resumed` | `[ ]` (VOL-127 P2) |
 | `resilience.force-quit-coach-turn` | Coach stream in flight | Force-quit app → relaunch | Stream completion gracefully aborted; partial response NOT persisted as final; user can re-issue prompt | `coach.stream.aborted` | `[ ]` (VOL-127 P2) |
-| `resilience.wc-interrupt-midpayload` | Watch session active, decision payload in flight | Kill `WCSession` mid-payload (toggle iPhone airplane mode) | Offline payload queue retains the payload; replay fires on reconnect; user sees status banner explaining the queue state | `watch.payload.queued` + `watch.payload.replayed` | `WatchPhonelessJourneyTests.test_watchCompletesWorkoutWithoutPhone_thenDrainsOnReconnect` (queue/drain contract); end-to-end UI assertion `[ ]` (VOL-127 P2) |
-| `resilience.wc-reconnect-replay` | Pending payloads queued | Re-enable iPhone connectivity | All queued payloads transmit in order, no duplication; queue empties; status banner updates | `watch.payload.replayed` (per payload) | `WatchPhonelessJourneyTests.test_watchCompletesWorkoutWithoutPhone_thenDrainsOnReconnect` (queue/drain contract); end-to-end UI assertion `[ ]` (VOL-127 P2) |
+| `resilience.wc-interrupt-midpayload` | Watch session active, decision payload in flight | Kill `WCSession` mid-payload (toggle iPhone airplane mode) | Offline payload queue retains the payload; replay fires on reconnect; user sees status banner explaining the queue state | `watch.payload.queued` + `watch.payload.replayed` | `[ ]` (VOL-127 P2 — end-to-end UI journey not yet automated. The underlying queue/drain contract has unit-level coverage in `WatchPhonelessJourneyTests.test_watchCompletesWorkoutWithoutPhone_thenDrainsOnReconnect`, but the row is uncovered until a real UI test drives the airplane-mode toggle.) |
+| `resilience.wc-reconnect-replay` | Pending payloads queued | Re-enable iPhone connectivity | All queued payloads transmit in order, no duplication; queue empties; status banner updates | `watch.payload.replayed` (per payload) | `[ ]` (VOL-127 P2 — end-to-end UI journey not yet automated. Same `WatchPhonelessJourneyTests` covers the queue contract; the row is uncovered until a real UI test drives the reconnect path.) |
 | `resilience.app-killed-bgtask` | Background fetch task scheduled | Force-quit app between fetches | Next BGTask reschedule fires; sync resumes without duplicate writes | `bgtask.fired` | `[ ]` (VOL-127 P2; needs Xcode "Simulate Background Fetch" or `simctl push` automation) |
 
 ---
@@ -254,7 +254,7 @@ The scripts intentionally test the **degraded paths** (deny, skip, force-quit) m
 
 > Tests rows `resilience.force-quit-onboarding` / `resilience.force-quit-active-workout` / `resilience.force-quit-coach-turn`. Force-quit means swipe up + flick the app card off the app switcher — NOT background-suspend (which the OS owns).
 
-**Setup.** A TestFlight build with `VolumeArcLaunchArguments.preserveOnboardingState = YES` and seeded coach + workout data. Tester sees Today populated with at least one prior session.
+**Setup.** A TestFlight build with seeded coach + workout data. Tester sees Today populated with at least one prior session. (The "deferred onboarding state survives a force-quit" property is what we're testing — there's no opt-in launch flag for it, because it has to work out-of-the-box in production.)
 
 **Path: Force-quit mid-onboarding.**
 1. Fresh install. Begin onboarding.
