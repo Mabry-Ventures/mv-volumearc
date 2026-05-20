@@ -375,6 +375,13 @@ jobs:
       # green and report a step-summary warning when the upload misses.
       # Tracking the underlying race in VOL-103 for a real fix.
       - name: Upload xcresult
+        # VOL-231: now uploads the unit-test xcresult bundle PLUS the
+        # per-shard UI xcresult bundles produced by scripts/test_apple_targets.sh.
+        # Each shard writes:
+        #   TestResults-ui-<shard>.xcresult   (full bundle, openable in Xcode)
+        #   ui-test-<shard>-attempt-{1,2}.log (raw xcodebuild output)
+        # Reviewers can drill into a single failing shard without
+        # downloading the unfiltered firehose.
         if: always()
         continue-on-error: true
         uses: actions/upload-artifact@v7
@@ -382,7 +389,8 @@ jobs:
           name: TestResults-${{ github.run_id }}
           path: |
             .build/derived-data/TestResults.xcresult
-            .build/derived-data/ui-test-attempt-*.log
+            .build/derived-data/TestResults-ui-*.xcresult
+            .build/derived-data/ui-test-*-attempt-*.log
           retention-days: 14
 
       # VOL-97: machine-readable coverage summary so the sticky PR
