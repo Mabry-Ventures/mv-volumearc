@@ -20,7 +20,7 @@
       "parallelizable": true,
       "target": {
         "containerPath": "container:VolumeArcApple.xcodeproj",
-        "identifier": "A8906901880D039CF319442C",
+        "identifier": "98D95A304514FEADCFD6D98C",
         "name": "VolumeArcAppTests"
       }
     },
@@ -34,6 +34,14 @@
         "containerPath": "container:VolumeArcApple.xcodeproj",
         "identifier": "5C345F499E8F9803C17A9A60",
         "name": "VolumeArcAppUITests"
+      }
+    },
+    {
+      "parallelizable": true,
+      "target": {
+        "containerPath": "container:VolumeArcApple.xcodeproj",
+        "identifier": "E9C692F12C2192498EE63A7D",
+        "name": "VolumeArcWidgetUITests"
       }
     }
   ],
