@@ -279,7 +279,15 @@ verify_shard_coverage() {
       if ! printf '%s\n' "$mapped_list" | grep -qFx "$class"; then
         missing+=("$class (in $(basename "$f"))")
       fi
-    done < <(grep -oE 'final class [A-Za-z0-9_]+: XCTestCase' "$f" | awk '{print $3}' | sed 's/://')
+    done < <(
+      # CodeRabbit feedback on PR #236: anchor on the `class …: XCTestCase`
+      # tail so non-`final` declarations (`class FooTests: XCTestCase`,
+      # `public class FooTests: XCTestCase`, etc.) still get picked up.
+      # `grep -oE` strips any leading modifiers because the match starts
+      # at the literal `class` keyword.
+      grep -oE 'class [A-Za-z0-9_]+: XCTestCase' "$f" \
+        | sed -E 's/^class ([A-Za-z0-9_]+): XCTestCase$/\1/'
+    )
   done < <(find Tests/VolumeArcAppUITests -name '*.swift' -type f)
 
   if [ "${#missing[@]}" -gt 0 ]; then
