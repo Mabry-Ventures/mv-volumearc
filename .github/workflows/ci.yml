@@ -338,6 +338,33 @@ jobs:
           COVERAGE_SUMMARY_JSON: .build/coverage-summary-volumearcui.json
         run: ./scripts/check_coverage.sh
 
+      # VOL-138: watchOS coverage gate.
+      #
+      # VolumeArcCoreWatch is the watchOS-compiled flavor of the shared
+      # core library, sourcing from the same `Sources/VolumeArcCore`
+      # directory as the iOS `VolumeArcCore` target. The new
+      # `VolumeArcWatchTests` bundle exercises this against the
+      # watchOS SDK so a Foundation behavior change between iOS and
+      # watchOS (e.g. UserDefaults serialization or Codable Date
+      # encoding) is caught at the right platform layer.
+      #
+      # Phase A floor: **25%**. Measured baseline on first run is
+      # 28.77% — three points of margin below that so a small
+      # source-only addition to VolumeArcCore (which auto-rebuilds
+      # under VolumeArcCoreWatch via shared sources) doesn't trip
+      # the gate before the next test PR catches up. The 85% target
+      # in VOL-138's acceptance criteria is a Phase B/C ratchet
+      # that lands once the per-Watch source surface is moved into
+      # `VolumeArcCoreWatch`-only files and the WatchWorkoutModel
+      # pure logic is extracted into testable types.
+      - name: Coverage gate (VolumeArcCoreWatch >= 25% — staged ratchet, VOL-138)
+        env:
+          XCRESULT: .build/derived-data/TestResults-watch.xcresult
+          COVERAGE_TARGET: VolumeArcCoreWatch
+          COVERAGE_THRESHOLD: '25'
+          COVERAGE_SUMMARY_JSON: .build/coverage-summary-volumearcwatch.json
+        run: ./scripts/check_coverage.sh
+
       # VOL-200 Phase 1: user-journey coverage gate. Parses
       # `docs/USER_JOURNEYS.md`, counts rows with paired XCUITests vs.
       # `[ ]` (uncovered), and fails the build below the threshold.
@@ -396,6 +423,7 @@ jobs:
         # the script's per-attempt retry fires, the per-attempt log
         # files (capturing the channel-disconnect or wall-clock
         # timeout pattern) are inspectable from the run page.
+        # VOL-138: also includes the watchOS test bundle's xcresult.
         # Reviewers can drill into a single failing shard without
         # downloading the unfiltered firehose.
         if: always()
@@ -407,6 +435,7 @@ jobs:
             .build/derived-data/TestResults.xcresult
             .build/derived-data/TestResults-ui-*.xcresult
             .build/derived-data/unit-test-attempt-*.log
+            .build/derived-data/TestResults-watch.xcresult
             .build/derived-data/ui-test-*-attempt-*.log
           retention-days: 14
 

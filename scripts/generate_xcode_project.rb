@@ -107,6 +107,12 @@ test_plan_main_ref = test_plans_group.new_file('VOL-Main.xctestplan')
   ref.last_known_file_type = 'text'
   ref.include_in_index = '0'
 end
+# VOL-138: dedicated watchOS unit test group. The Watch is positioned as
+# a first-class surface in `docs/PRODUCT_POSITIONING.md`, so the same
+# tier of structured unit coverage applied to `VolumeArcCore` should
+# apply to the watch-side connectivity, payload codec, and pending-
+# queue logic. Sources live at `Tests/VolumeArcWatchTests/`.
+watch_tests_group = tests_root_group.new_group('VolumeArcWatchTests', 'VolumeArcWatchTests')
 shared_group = project.main_group.new_group('Shared Native Package Sources')
 core_group = shared_group.new_group('VolumeArcCore', PACKAGE_ROOT.join('Sources/VolumeArcCore').relative_path_from(ROOT).to_s)
 ui_group = shared_group.new_group('VolumeArcUI', PACKAGE_ROOT.join('Sources/VolumeArcUI').relative_path_from(ROOT).to_s)
@@ -136,6 +142,13 @@ app_perf_tests_target = project.new_target(:ui_test_bundle, 'VolumeArcAppPerfTes
 # simulator; widget-family snapshot tests come in Phase B once
 # `VOL-135` / `VOL-201` snapshot infra lands.
 app_widget_ui_tests_target = project.new_target(:ui_test_bundle, 'VolumeArcWidgetUITests', :ios, IOS_DEPLOYMENT_TARGET, nil, :swift, 'VolumeArcWidgetUITests')
+# VOL-138: watchOS unit test bundle. Hosts `VolumeArcCoreWatch` so the
+# tests can exercise the shared connectivity / payload / queue types
+# compiled against the watchOS SDK rather than only the iOS SDK
+# (`VolumeArcAppTests` already exercises the iOS slice via
+# `VolumeArcCore`). Built and run on the watchOS simulator by
+# `scripts/test_apple_targets.sh`.
+app_watch_tests_target = project.new_target(:unit_test_bundle, 'VolumeArcWatchTests', :watchos, WATCHOS_DEPLOYMENT_TARGET, nil, :swift, 'VolumeArcWatchTests')
 
 # xcodeproj only exposes a generic `:app_extension` helper. WidgetKit watch
 # extensions need the watch-specific product type so Xcode archives them as
@@ -338,6 +351,17 @@ configure_target(app_widget_ui_tests_target, bundle_id: 'com.mabryventures.Volum
   'SKIP_INSTALL' => 'YES',
   'TEST_TARGET_NAME' => 'VolumeArcApp',
 })
+# VOL-138: watch-side unit test bundle. No `TEST_TARGET_NAME` — the
+# tests link `VolumeArcCoreWatch` (a static library) directly and run
+# library-level assertions, no host app required. That matches how
+# `VolumeArcAppTests` exercises `VolumeArcCore` on iOS.
+configure_target(app_watch_tests_target, bundle_id: 'com.mabryventures.VolumeArc.watchtests', extra: {
+  'PRODUCT_NAME' => 'VolumeArcWatchTests',
+  'GENERATE_INFOPLIST_FILE' => 'YES',
+  'CODE_SIGNING_ALLOWED' => 'NO',
+  'CODE_SIGNING_REQUIRED' => 'NO',
+  'SKIP_INSTALL' => 'YES',
+})
 
 ui_target.add_dependency(core_target)
 ui_target.frameworks_build_phase.add_file_reference(core_target.product_reference, true)
@@ -360,6 +384,9 @@ app_tests_target.frameworks_build_phase.add_file_reference(ui_target.product_ref
 app_ui_tests_target.add_dependency(app_target)
 app_perf_tests_target.add_dependency(app_target)
 app_widget_ui_tests_target.add_dependency(app_target) # VOL-139
+# VOL-138: watch tests link the watch flavor of the shared core library.
+app_watch_tests_target.add_dependency(core_watch_target)
+app_watch_tests_target.frameworks_build_phase.add_file_reference(core_watch_target.product_reference, true)
 
 widget_target.add_system_framework('WidgetKit')
 widget_target.add_system_framework('AppIntents')
@@ -390,6 +417,8 @@ app_perf_tests_target.add_system_framework('XCTest')
 # VOL-139: widget XCUITest bundle.
 app_widget_ui_tests_target.add_system_framework('XCTest')
 app_widget_ui_tests_target.add_system_framework('WidgetKit')
+# VOL-138: watch test bundle.
+app_watch_tests_target.add_system_framework('XCTest')
 
 embed_watch_extensions_phase = watch_target.new_copy_files_build_phase('Embed Watch Extensions')
 embed_watch_extensions_phase.symbol_dst_subfolder_spec = :plug_ins
@@ -436,6 +465,9 @@ add_swift_sources(ui_tests_group, app_ui_tests_target, ROOT.join('Tests/VolumeAr
 add_swift_sources(perf_tests_group, app_perf_tests_target, ROOT.join('Tests/VolumeArcAppPerfTests'))
 # VOL-139: widget XCUITest sources.
 add_swift_sources(widget_ui_tests_group, app_widget_ui_tests_target, ROOT.join('Tests/VolumeArcWidgetUITests'))
+# VOL-138: watch-side unit tests. Sources live at
+# `Tests/VolumeArcWatchTests/` so they parallel the other test bundles.
+add_swift_sources(watch_tests_group, app_watch_tests_target, ROOT.join('Tests/VolumeArcWatchTests'))
 add_resource(ui_tests_group, app_ui_tests_target, 'VolumeArcTests.storekit')
 # VOL-142: the same StoreKit configuration powers `SKTestSession`-based
 # unit tests under `Tests/VolumeArcAppTests/`. Reuse the existing
@@ -760,6 +792,17 @@ perf_test_scheme.save_as(PROJECT_PATH, 'VolumeArcAppPerfTests', true)
 widget_ui_test_scheme = Xcodeproj::XCScheme.new
 widget_ui_test_scheme.configure_with_targets(app_target, app_widget_ui_tests_target)
 widget_ui_test_scheme.save_as(PROJECT_PATH, 'VolumeArcWidgetUITests', true)
+
+# VOL-138: dedicated watchOS unit test scheme. Mirrors the iOS
+# `VolumeArcAppTests` scheme but with no host application (the bundle
+# links VolumeArcCoreWatch directly). `code_coverage_enabled = true`
+# so `scripts/check_coverage.sh` can be pointed at a watch xcresult
+# bundle once a coverage gate is added (initially informational; the
+# 85% target from VOL-138 acceptance criteria is a follow-on ratchet).
+watch_test_scheme = Xcodeproj::XCScheme.new
+watch_test_scheme.configure_with_targets(nil, app_watch_tests_target)
+watch_test_scheme.test_action.code_coverage_enabled = true
+watch_test_scheme.save_as(PROJECT_PATH, 'VolumeArcWatchTests', true)
 
 # VOL-75 P2: per-target schemes so CI can pass `-scheme` (required by
 # `-derivedDataPath`). Without these, `build_all_targets.sh` has to use

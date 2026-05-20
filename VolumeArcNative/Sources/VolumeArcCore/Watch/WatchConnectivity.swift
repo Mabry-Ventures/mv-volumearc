@@ -180,7 +180,15 @@ public actor UserDefaultsWatchPendingPayloadStore: WatchPendingPayloadStore {
     private let defaults: UserDefaults
     private let key = "com.mabryventures.VolumeArc.watch.pendingPayloads"
 
-    public init(defaults: UserDefaults = .standard) {
+    // VOL-138: `sending` lets non-isolated callers (XCTest methods,
+    // app launch wiring) pass a `UserDefaults` instance across the
+    // actor boundary without Swift 6 "risks causing data races"
+    // diagnostics. `UserDefaults` is not marked `Sendable` in the
+    // current Foundation SDKs, but ownership transfer at init time
+    // is sound — once stored inside the actor, all reads/writes are
+    // serialized by actor isolation. Same fix pattern is used in
+    // Foundation's own Swift 6 transition.
+    public init(defaults: sending UserDefaults = .standard) {
         self.defaults = defaults
     }
 
