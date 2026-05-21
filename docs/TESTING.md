@@ -47,6 +47,9 @@ Tests/VolumeArcAppUITests/
 
 Tests/VolumeArcAppPerfTests/
 └── VolumeArcPerfTests.swift                      # 4 performance-regression tests (VOL-99)
+
+Tests/VolumeArcWidgetUITests/                     # VOL-139 Phase A — widget XCUITest target
+└── VolumeArcWidgetUITests.swift                  # 2 smoke tests (host + WidgetKit linkage)
 ```
 
 A `.swiftlint.yml` under `Tests/` scopes length and implicit-unwrap rules out of the test directory so `sut` + fixture force-unwraps don't get flagged as production bugs.
