@@ -81,6 +81,12 @@ ui_tests_group = tests_root_group.new_group('VolumeArcAppUITests', 'VolumeArcApp
 # VOL-99: performance regression suite group. Hosts
 # `Tests/VolumeArcAppPerfTests/VolumeArcPerfTests.swift`.
 perf_tests_group = tests_root_group.new_group('VolumeArcAppPerfTests', 'VolumeArcAppPerfTests')
+# VOL-139: widget XCUITest group. Hosts
+# `Tests/VolumeArcWidgetUITests/`. Phase A is scaffolding + a build
+# / launch smoke; widget-family snapshot tests come in Phase B once
+# the snapshot regression infrastructure from VOL-135 / VOL-201
+# lands.
+widget_ui_tests_group = tests_root_group.new_group('VolumeArcWidgetUITests', 'VolumeArcWidgetUITests')
 shared_group = project.main_group.new_group('Shared Native Package Sources')
 core_group = shared_group.new_group('VolumeArcCore', PACKAGE_ROOT.join('Sources/VolumeArcCore').relative_path_from(ROOT).to_s)
 ui_group = shared_group.new_group('VolumeArcUI', PACKAGE_ROOT.join('Sources/VolumeArcUI').relative_path_from(ROOT).to_s)
@@ -100,6 +106,16 @@ app_ui_tests_target = project.new_target(:ui_test_bundle, 'VolumeArcAppUITests',
 # `.github/workflows/ci.yml` because each measured test runs several
 # iterations — running on every PR would balloon CI cost.
 app_perf_tests_target = project.new_target(:ui_test_bundle, 'VolumeArcAppPerfTests', :ios, IOS_DEPLOYMENT_TARGET, nil, :swift, 'VolumeArcAppPerfTests')
+# VOL-139: widget XCUITest bundle. Tests live in
+# `Tests/VolumeArcWidgetUITests/`. `TEST_TARGET_NAME = VolumeArcApp`
+# follows the same host-application pattern as
+# `VolumeArcAppUITests` so the test bundle launches the iOS app
+# bundle (which embeds the `VolumeArcWidgets` extension as a
+# `PlugIns/` payload). Phase A is scaffolding + a smoke test
+# verifying the host app + widget extension co-launch on the
+# simulator; widget-family snapshot tests come in Phase B once
+# `VOL-135` / `VOL-201` snapshot infra lands.
+app_widget_ui_tests_target = project.new_target(:ui_test_bundle, 'VolumeArcWidgetUITests', :ios, IOS_DEPLOYMENT_TARGET, nil, :swift, 'VolumeArcWidgetUITests')
 
 # xcodeproj only exposes a generic `:app_extension` helper. WidgetKit watch
 # extensions need the watch-specific product type so Xcode archives them as
@@ -290,6 +306,18 @@ configure_target(app_perf_tests_target, bundle_id: 'com.mabryventures.VolumeArc.
   'SKIP_INSTALL' => 'YES',
   'TEST_TARGET_NAME' => 'VolumeArcApp',
 })
+# VOL-139: widget XCUITest bundle. Hosted by VolumeArcApp so the
+# iOS widget extension (`PlugIns/VolumeArcWidgets.appex`) loads with
+# the host app and the test bundle can interact with the widget
+# host via `WidgetCenter` / `XCUIApplication(bundleIdentifier:)`.
+configure_target(app_widget_ui_tests_target, bundle_id: 'com.mabryventures.VolumeArc.widgetuitests', extra: {
+  'PRODUCT_NAME' => 'VolumeArcWidgetUITests',
+  'GENERATE_INFOPLIST_FILE' => 'YES',
+  'CODE_SIGNING_ALLOWED' => 'NO',
+  'CODE_SIGNING_REQUIRED' => 'NO',
+  'SKIP_INSTALL' => 'YES',
+  'TEST_TARGET_NAME' => 'VolumeArcApp',
+})
 
 ui_target.add_dependency(core_target)
 ui_target.frameworks_build_phase.add_file_reference(core_target.product_reference, true)
@@ -311,6 +339,7 @@ app_tests_target.frameworks_build_phase.add_file_reference(core_target.product_r
 app_tests_target.frameworks_build_phase.add_file_reference(ui_target.product_reference, true)
 app_ui_tests_target.add_dependency(app_target)
 app_perf_tests_target.add_dependency(app_target)
+app_widget_ui_tests_target.add_dependency(app_target) # VOL-139
 
 widget_target.add_system_framework('WidgetKit')
 widget_target.add_system_framework('AppIntents')
@@ -338,6 +367,9 @@ app_tests_target.add_system_framework('StoreKitTest')
 app_ui_tests_target.add_system_framework('XCTest')
 app_ui_tests_target.add_system_framework('StoreKitTest')
 app_perf_tests_target.add_system_framework('XCTest')
+# VOL-139: widget XCUITest bundle.
+app_widget_ui_tests_target.add_system_framework('XCTest')
+app_widget_ui_tests_target.add_system_framework('WidgetKit')
 
 embed_watch_extensions_phase = watch_target.new_copy_files_build_phase('Embed Watch Extensions')
 embed_watch_extensions_phase.symbol_dst_subfolder_spec = :plug_ins
@@ -382,6 +414,8 @@ add_swift_sources(widgets_group, widget_target, ROOT.join('Widgets'))
 add_swift_sources(tests_group, app_tests_target, ROOT.join('Tests/VolumeArcAppTests'))
 add_swift_sources(ui_tests_group, app_ui_tests_target, ROOT.join('Tests/VolumeArcAppUITests'))
 add_swift_sources(perf_tests_group, app_perf_tests_target, ROOT.join('Tests/VolumeArcAppPerfTests'))
+# VOL-139: widget XCUITest sources.
+add_swift_sources(widget_ui_tests_group, app_widget_ui_tests_target, ROOT.join('Tests/VolumeArcWidgetUITests'))
 add_resource(ui_tests_group, app_ui_tests_target, 'VolumeArcTests.storekit')
 # VOL-142: the same StoreKit configuration powers `SKTestSession`-based
 # unit tests under `Tests/VolumeArcAppTests/`. Reuse the existing
@@ -679,6 +713,16 @@ end
 perf_test_scheme = Xcodeproj::XCScheme.new
 perf_test_scheme.configure_with_targets(app_target, app_perf_tests_target)
 perf_test_scheme.save_as(PROJECT_PATH, 'VolumeArcAppPerfTests', true)
+
+# VOL-139: dedicated widget UI test scheme. Mirrors the smoke UI scheme
+# but with the widget-test bundle. The host app launches and the
+# widget extension is automatically embedded via the
+# `Embed Foundation Extensions` build phase, so the test bundle can
+# observe widget timeline reloads + (Phase B) drive the simulator
+# widget gallery to snapshot each family.
+widget_ui_test_scheme = Xcodeproj::XCScheme.new
+widget_ui_test_scheme.configure_with_targets(app_target, app_widget_ui_tests_target)
+widget_ui_test_scheme.save_as(PROJECT_PATH, 'VolumeArcWidgetUITests', true)
 
 # VOL-75 P2: per-target schemes so CI can pass `-scheme` (required by
 # `-derivedDataPath`). Without these, `build_all_targets.sh` has to use
