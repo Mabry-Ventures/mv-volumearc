@@ -256,12 +256,12 @@ final class StoreKitSubscriptionStateMachineTests: XCTestCase {
     }
 
     func test_transactionUpdate_equatable() {
-        let a = TransactionUpdate.granted(productID: "x")
-        let b = TransactionUpdate.granted(productID: "x")
-        let c = TransactionUpdate.granted(productID: "y")
+        let first = TransactionUpdate.granted(productID: "x")
+        let secondSameProduct = TransactionUpdate.granted(productID: "x")
+        let differentProduct = TransactionUpdate.granted(productID: "y")
 
-        XCTAssertEqual(a, b)
-        XCTAssertNotEqual(a, c)
+        XCTAssertEqual(first, secondSameProduct)
+        XCTAssertNotEqual(first, differentProduct)
     }
 }
 #endif
