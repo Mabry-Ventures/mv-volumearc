@@ -68,6 +68,26 @@ The `fastlane ios rollback` lane (VOL-178) automatically appends an entry for ev
   - **[VOL-172](https://linear.app/mabry-ventures/issue/VOL-172)** (AI review gate: distinguish "rate-limit notice" from a real review signal) is the long-term fix; the current gate has no way to detect "bot is rate-limited" and treats silence as failure.
   - This is the **first** admin-bypass merge on main since the AI review gate was promoted to required ([VOL-134](https://linear.app/mabry-ventures/issue/VOL-134) / 2026-05-03). The bypass is documented per `docs/CONTRIBUTING.md` "Bypass / emergency hotfix" convention.
 
+## 2026-05-20 02:51 UTC — Self-hosted runner: cascading flake cluster + disk-full (SEV2)
+
+- **Trigger**: 2026-05-19 overnight Sprint 1 burndown opened eight PRs in quick succession (#236-243) plus mitigations (#244 sim-wedge fail-fast, #241 channel-disconnect retry, #246 Codex-only gate). Within ~3 hours of the first batch landing in the runner queue, every PR began failing with `xctest encountered an error (Channel disconnected)`. By 03:30 UTC, additional PRs were hitting a separate `Waiting on System App` symptom — `xcrun simctl bootstatus -b` hanging for 18+ minutes before the outer 20-min wall-clock killed xcodebuild with exit 137.
+- **Detection**: Pattern emerged across 3+ failed runs of independent PRs within an hour. First failed run [26137224653](https://github.com/Mabry-Ventures/mv-volumearc/actions/runs/26137224653) on PR #236 (VOL-231 sharding); reproduced on #237, #238, #241 with identical channel-disconnect signature, then #237, #238 hit the sim-wedge signature on rerun.
+- **Impact**: Eight PRs (the entire Sprint 1 burndown plus the CI mitigations) blocked from merging for roughly 12 hours. The cascading flakes made it impossible to admin-merge: every PR had at least one infra-failure status check, and the failure modes were diverse enough that "blocked only on infra flake" couldn't be cleanly attributed until we found the root cause.
+- **Root cause** (uncovered ~7h into the outage by inspecting PR #236's failed build log): `'No space left on device'` errors in the iPhoneSimulator module-cache writes. The runner's `$HOME` had filled — likely from accumulated `~/Library/Developer/CoreSimulator/Caches/` + `Logs/CoreSimulator/` after the previous Sprint 1 batch tests. Module-cache write failures cascaded into:
+  - `Could not build module 'os_object' / 'XPC' / 'SwiftShims'` (clang dependency scanning),
+  - half-booted launchd_sim processes (orphan System App wedge),
+  - xcresult bundles that couldn't finalize (downstream Coverage gate `Failed to load result bundle`),
+  - xctest test-runner `SIGKILL` before bootstrap (memory pressure paired with disk pressure).
+
+  Each symptom looked distinct in CI logs but all rooted in the same disk exhaustion.
+- **Resolution**: Owner ran the runner-host cleanup (the four high-yield disk paths) + Xcode auto-update / OS upgrade. PRs cleared their queue + rebased against `main` (which now contains #244's sim-wedge fail-fast mitigation) to inherit the fix.
+- **Postmortem**: rolled into the **CI runner flake taxonomy** added to [`docs/TESTING.md`](TESTING.md#ci-runner-flake-taxonomy-vol-227-cluster) so the next on-call has an attribution table for the six recurring infrastructure flakes. The "Runner-host operational notes" subsection there catalogues the three host-level intervention paths (disk-full, orphan launchd_sim, memory pressure) that no PR can fix.
+- **Follow-ups**:
+  - PR #244 (VOL-227 round 3) — `simctl bootstatus -b` wallclock prevents the sim-wedge from burning 18 min per run going forward. Already on main.
+  - PR #241 (VOL-227 round 2) — channel-disconnect retry on unit tests. Pending merge (was blocked on the runner being down).
+  - PR #246 (VOL-227 round 4) — Codex-only AI review gate while CodeRabbit usage credits are restored. Pending merge.
+  - **[VOL-243](https://linear.app/mabry-ventures/issue/VOL-243)** — daily runner-host disk-pressure watchdog. The follow-up flagged in the 2026-05-14 04:30 UTC postmortem went un-actioned for 6 days, which is what allowed this cascade. Filed as a dedicated tracker; once landed, a 50 GB free-disk floor will warn before the 10 GB Pre-flight hard floor trips.
+
 ---
 
 _No production (App Store) incidents to date. The first such entry will be appended automatically by `fastlane ios rollback` and supplemented manually with the rollback's postmortem link._
