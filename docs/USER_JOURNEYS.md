@@ -32,7 +32,8 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | App Intents | 6 | 0 | 0% |
 | Background | 4 | 0 | 0% |
 | Failure paths | 6 | 0 | 0% |
-| **Total** | **63** | **23** | **37%** |
+| Resilience / interruption (VOL-127 P2) | 6 | 0 | 0% |
+| **Total** | **69** | **23** | **33%** |
 
 > Goal: 100% by end of Wave 2 (cycle 7, 2026-05-31). Burn down via [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141).
 >
@@ -163,6 +164,157 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | `fail.relay-5xx` | Relay returns 500 | Open Coach → ask | Local heuristic responds; UI shows degraded notice | `coach.fallback_used` | `[ ]` |
 | `fail.fm-unavailable` | iOS < 26 or model not downloaded | Open Coach | Provider chain skips FM, uses relay or heuristic | `ai.fm.unavailable` | `[ ]` |
 
+## Resilience / interruption (VOL-127 Phase 2)
+
+Force-quit / resume + connectivity-interruption journeys. Each row captures a "user expects to pick up where they left off" scenario; a regression here would manifest as data loss or a stuck UI on resume. Most of these surfaces have unit-level coverage (`WatchPhonelessJourneyTests` for the watch side, `VolumeArcPersistenceTests` for SwiftData round-tripping) but no end-to-end UAT pass — Phase 2 closes that gap.
+
+| ID | Pre-conditions | Steps | Success | Telemetry | Test |
+|---|---|---|---|---|---|
+| `resilience.force-quit-onboarding` | Onboarding open, advanced past welcome | Force-quit app (swipe up from app switcher) → relaunch | Onboarding resumes at the last step the user reached (not from scratch) | `onboarding.resumed` | `[ ]` (VOL-127 P2 — human UAT script below; automation tracked under VOL-141 burn-down) |
+| `resilience.force-quit-active-workout` | Active session, ≥1 set logged | Force-quit app → relaunch | Active session resumes; logged sets persist; `HKWorkoutSession` recovers via the system's session-restore handoff (or fails gracefully with "session ended — start fresh") | `workout.session.resumed` | `[ ]` (VOL-127 P2) |
+| `resilience.force-quit-coach-turn` | Coach stream in flight | Force-quit app → relaunch | Stream completion gracefully aborted; partial response NOT persisted as final; user can re-issue prompt | `coach.stream.aborted` | `[ ]` (VOL-127 P2) |
+| `resilience.wc-interrupt-midpayload` | Watch session active, decision payload in flight | Kill `WCSession` mid-payload (toggle iPhone airplane mode) | Offline payload queue retains the payload; replay fires on reconnect; user sees status banner explaining the queue state | `watch.payload.queued` + `watch.payload.replayed` | `[ ]` (VOL-127 P2 — end-to-end UI journey not yet automated. The underlying queue/drain contract has unit-level coverage in `WatchPhonelessJourneyTests.test_watchCompletesWorkoutWithoutPhone_thenDrainsOnReconnect`, but the row is uncovered until a real UI test drives the airplane-mode toggle.) |
+| `resilience.wc-reconnect-replay` | Pending payloads queued | Re-enable iPhone connectivity | All queued payloads transmit in order, no duplication; queue empties; status banner updates | `watch.payload.replayed` (per payload) | `[ ]` (VOL-127 P2 — end-to-end UI journey not yet automated. Same `WatchPhonelessJourneyTests` covers the queue contract; the row is uncovered until a real UI test drives the reconnect path.) |
+| `resilience.app-killed-bgtask` | Background fetch task scheduled | Force-quit app between fetches | Next BGTask reschedule fires; sync resumes without duplicate writes | `bgtask.fired` | `[ ]` (VOL-127 P2; needs Xcode "Simulate Background Fetch" or `simctl push` automation) |
+
+---
+
+## Manual UAT scripts (VOL-127 Phase 2)
+
+End-to-end human verification scripts for the journeys we can't reliably automate (system-permission sheets, force-quit/resume, real device-only flows). Each script is paired with the journey ID above and meant to be executed by a UAT tester on a TestFlight build before broad rollout.
+
+The scripts intentionally test the **degraded paths** (deny, skip, force-quit) more aggressively than the happy paths — happy paths are easy to verify by accident; degraded paths are where the silent regressions hide.
+
+### `onboard.healthkit-*` — permission paths
+
+> Tests rows `onboard.healthkit-grant` / `onboard.healthkit-deny` / `onboard.healthkit-skip`. Run all three variants in sequence on a fresh install. The custom rationale screen (VOL-127 Phase 1) appears BEFORE the system sheet — that's what we're verifying along with the post-decision state.
+
+**Setup.** Delete the VolumeArc app from the device. Verify Settings → Health → Apps → VolumeArc is removed (or shows "No Access"). Reinstall from TestFlight.
+
+**Path A: Grant.**
+1. Launch the app cold.
+2. Advance through onboarding screens (Welcome → Athlete → Goals → Permissions).
+3. On the Permissions page, observe the four-bullet HealthKit rationale screen shown BEFORE any system prompt. The screen should explain: what we read (HRV / sleep / workouts), why (coach prescription), what stays on-device, what syncs to CloudKit private DB. **Expected:** the four bullets are present, the body copy is non-truncated at Dynamic Type XXL, and the "Allow Health" CTA is enabled.
+4. Tap "Allow Health". A system permission sheet appears.
+5. Tap "Allow All" on the system sheet.
+6. **Expected:** onboarding advances to the next page (Voice). Telemetry `healthkit.authorized` fires.
+7. Complete onboarding. Open Today.
+8. **Expected:** the readiness hero renders with a real score (not "Grant Health to unlock"). Profile → Diagnostics shows HealthKit as granted for read types (HRV, sleep, completed workouts).
+9. Force-quit, relaunch. **Expected:** the rationale screen does NOT appear again. HealthKit stays granted.
+
+**Path B: Deny.**
+1. Repeat Setup. Reinstall.
+2. Same as Path A through step 4.
+3. Tap "Don't Allow" on the system sheet.
+4. **Expected:** onboarding still advances. Telemetry `healthkit.denied` fires.
+5. Complete onboarding. Open Today.
+6. **Expected:** readiness hero shows "Grant Health to unlock" (or equivalent fallback messaging). The coach uses fallback context (no HRV / sleep references). Profile → Diagnostics shows HealthKit as denied.
+7. **Expected:** the app does NOT silently re-prompt; the user must explicitly tap a "Re-enable Health" affordance in Profile to retry.
+
+**Path C: Skip.**
+1. Repeat Setup. Reinstall.
+2. Same as Path A through step 3.
+3. Tap "Not now" instead of "Allow Health".
+4. **Expected:** onboarding advances. Telemetry `healthkit.skipped` fires.
+5. Same expectations as Path B for Today / Profile / re-prompt behavior.
+
+**Failure modes to look for.**
+- Rationale screen body copy clipped on Dynamic Type XXL (regression in scrolling container).
+- "Allow Health" CTA fires the system sheet WITHOUT showing the rationale first (regression in the rationale-gating).
+- Telemetry events missing or wrong category / name (regression in `HealthKitAuthorizationCoordinator`).
+- Re-prompt loop: the rationale screen re-appears every launch even after a decision (regression in the "decision sticky" state).
+- HealthKit shows as granted in Profile → Diagnostics but the readiness hero still says "Grant Health to unlock" (regression in the readiness-hero state binding).
+
+### `onboard.voice-mic` — voice and microphone permissions
+
+> Tests row `onboard.voice-mic`. Run after the HealthKit path (the screens follow it). Voice is premium-gated, so this also touches the paywall — set up a TestFlight build with the StoreKit configuration that grants premium.
+
+**Setup.** Fresh install, premium grant active in TestFlight account.
+
+1. Advance through onboarding to the Voice page.
+2. **Expected:** the Voice page explains why mic + speech recognition are needed (live coach requests, voice workout logging).
+3. Tap "Enable Voice".
+4. System sheets appear in sequence: Microphone, then Speech Recognition.
+5. Grant both.
+6. **Expected:** telemetry `voice.enabled` fires. The "Enable Voice" CTA changes state to "Enabled" or equivalent.
+7. Complete onboarding. Open Coach.
+8. Tap the mic button.
+9. **Expected:** recording starts; speech-to-text transcribes a test phrase ("How's my form on squats?") into the prompt field; the assistant responds.
+10. Force-quit, relaunch. Open Coach. Tap mic.
+11. **Expected:** mic activates without re-prompting for permission.
+
+**Path B: Deny microphone.**
+1. Repeat Setup. Reinstall.
+2. Same as Path A through step 4.
+3. Deny the microphone prompt.
+4. **Expected:** the Voice page surfaces a "Microphone access blocked. Re-enable in Settings." affordance with a deep link to the system Settings app. The user is not blocked from completing onboarding.
+5. Coach's mic button shows a disabled / system-link state.
+
+### `resilience.force-quit-*` — force-quit / resume
+
+> Tests rows `resilience.force-quit-onboarding` / `resilience.force-quit-active-workout` / `resilience.force-quit-coach-turn`. Force-quit means swipe up + flick the app card off the app switcher — NOT background-suspend (which the OS owns).
+
+**Setup.** A TestFlight build with seeded coach + workout data. Tester sees Today populated with at least one prior session. (The "deferred onboarding state survives a force-quit" property is what we're testing — there's no opt-in launch flag for it, because it has to work out-of-the-box in production.)
+
+**Path: Force-quit mid-onboarding.**
+1. Fresh install. Begin onboarding.
+2. Advance 2-3 screens past Welcome.
+3. Force-quit from the app switcher.
+4. Relaunch the app.
+5. **Expected:** onboarding resumes at the last screen reached (not from Welcome). Any partial input (athlete name, goals) persists.
+
+**Path: Force-quit during active workout.**
+1. From Today, start the next prescribed workout.
+2. Log one set. Confirm.
+3. Force-quit.
+4. Relaunch.
+5. **Expected:** the active session screen is showing; the logged set persists; the rest timer reflects elapsed time (or is reset gracefully if HKWorkoutSession cannot resume — in which case a banner explains).
+6. Complete the remaining sets.
+7. Tap Complete.
+8. **Expected:** session summary appears; CloudKit push is staged (verify via Settings → iCloud → VolumeArc storage growing, or Profile → Diagnostics).
+
+**Path: Force-quit during coach stream.**
+1. Open Coach.
+2. Ask a long-form question ("Build me a 6-week strength block for back squat").
+3. As soon as the streaming response starts (tokens visible), force-quit.
+4. Relaunch.
+5. **Expected:** Coach opens to an idle state. The partial response is NOT shown as a completed message. The user's question persists in the input field (or in a "resume your last question" affordance) so they can re-issue without retyping.
+
+**Failure modes to look for.**
+- Onboarding restarts from Welcome (regression in `UserDefaults`-backed step persistence).
+- Active session loses logged sets (regression in SwiftData persistence — almost certainly a missing `try modelContext.save()`).
+- Rest timer drift > 5 seconds vs wall-clock-elapsed (regression in restEndsAt anchor).
+- Coach shows a partial / truncated response as if it were complete (regression in stream-completion semantics).
+- CloudKit push fails silently — the summary appears but no diagnostic in Profile, the next launch shows the session is gone.
+
+### `resilience.wc-*` — Watch ↔ iPhone interruption
+
+> Tests rows `resilience.wc-interrupt-midpayload` / `resilience.wc-reconnect-replay`. Requires a paired Apple Watch + iPhone on the same TestFlight account.
+
+**Setup.** Watch + iPhone paired. VolumeArc installed on both. iPhone has cellular OR Wi-Fi; watch is paired but not cellular.
+
+**Path: Disconnect during decision payload.**
+1. On the watch, start a session.
+2. Toggle iPhone to airplane mode (the watch can still observe `WCSession.isReachable == false`).
+3. On the watch, tap "Increase" or "Hold" or "Decrease".
+4. **Expected:** the watch updates locally — the decision UI reflects the choice. The status banner reads something like "Decision saved on watch. We'll sync it to phone when available."
+5. Tap "Reset rest timer". Same expectation — local update, queued payload.
+6. Open the watch's Profile / Sync diagnostic to see the pending payload count.
+7. **Expected:** count > 0.
+
+**Path: Reconnect and replay.**
+1. Continue from the above.
+2. Disable airplane mode on the iPhone.
+3. Wait ~10 seconds for `WCSession` to re-establish.
+4. **Expected:** the watch's status banner updates to "Connected again. Replayed N queued update(s)." The pending count returns to 0.
+5. On the iPhone, open Today → recent activity. **Expected:** the watch's decisions show up in the activity log.
+
+**Failure modes to look for.**
+- Decision UI fails to update on the watch when the phone is unreachable (regression in `WatchWorkoutModel.choose(_:)`'s `do/catch` — the local update must happen REGARDLESS of send success).
+- Pending count stays > 0 after reconnect (regression in `WatchConnectivityCoordinator.flushPendingIfReachable`).
+- Duplicate decisions appear on the iPhone after replay (regression in payload-store-clear semantics).
+- Watch process restart between disconnect and reconnect drops the queue (regression in `UserDefaultsWatchPendingPayloadStore` persistence).
+
 ---
 
 ## Burndown plan
@@ -170,7 +322,7 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 Each `[ ]` row above is an item to close. Sibling tickets in [VolumeArc Production Readiness](https://linear.app/mabry-ventures/project/volumearc-production-readiness-af810008523d):
 
 - [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141) parent — close all rows + wire `check_journey_coverage.sh`
-- [VOL-127](https://linear.app/mabry-ventures/issue/VOL-127) — onboarding HK + force-quit + WCSession journeys
+- [VOL-127](https://linear.app/mabry-ventures/issue/VOL-127) — onboarding HK + force-quit + WCSession journeys. **Phase 1** (PR [#159](https://github.com/Mabry-Ventures/mv-volumearc/pull/159)): four-bullet HealthKit rationale pre-prompt screen shipped. **Phase 2**: 6 new resilience/interruption rows in this catalog + 4 manual UAT scripts (HealthKit grant/deny/skip, voice/mic, force-quit at every stage, WCSession interrupt + reconnect) under [Manual UAT scripts](#manual-uat-scripts-vol-127-phase-2). End-to-end automation of those rows remains as `[ ]`.
 - [VOL-142](https://linear.app/mabry-ventures/issue/VOL-142) — paywall + StoreKit edge journeys
 - [VOL-149](https://linear.app/mabry-ventures/issue/VOL-149) — telemetry-as-UAT helper used by every journey
 - [VOL-158](https://linear.app/mabry-ventures/issue/VOL-158) — re-run every journey on iPad
