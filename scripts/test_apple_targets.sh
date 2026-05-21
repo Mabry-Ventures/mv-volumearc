@@ -200,64 +200,135 @@ if ! run_with_wallclock_timeout "$UNIT_TEST_WALL_TIMEOUT" "Unit tests" run_unit_
   exit "$status"
 fi
 
-# XCUITests (journey coverage)
-reset_app_state
+# XCUITests (journey coverage) — sharded
+#
+# VOL-231 round 3: split the UI test target into N partitions so each
+# xcodebuild invocation handles a contained subset. Three goals, in
+# order of importance:
+#
+#   1. **Failure-domain isolation.** Pre-sharding, an AX-daemon wedge
+#      in the accessibility-stress tests (Mach error -308, daemon
+#      ipc/mig server died) brought down the entire UI test run.
+#      Isolating that class of tests into its own shard means the
+#      wedge only kills its own shard; the others still produce a
+#      clean signal.
+#
+#   2. **Granular retry.** The pre-shard "sim-busy preflight retry"
+#      block restarted the whole 35-min UI run. Per-shard retry only
+#      restarts the affected shard.
+#
+#   3. **Matrix-ready.** We have one self-hosted runner today, so
+#      shards run sequentially in the same job. The partitioning + per-
+#      shard log/xcresult layout is the structural piece that lets a
+#      future second runner trivially fan shards into a CI matrix
+#      without touching this script.
+#
+# Shard map (kept here, not in CI yaml, so the contract is shell-
+# testable + version-controlled with the test sources):
+#
+#   smoke                     → fast smoke + telemetry-probe matcher
+#   journeys-core             → heaviest user-flow journeys
+#   journeys-aux              → auxiliary journeys (profile, feedback,
+#                                signals, healthkit perms, watch sim,
+#                                chaos)
+#   accessibility-screenshots → AX-stress (known daemon wedge cause)
+#                                + screenshot capture
+#
+# `verify_shard_coverage` below greps `Tests/VolumeArcAppUITests` for
+# every `final class … XCTestCase` declaration and fails if any class
+# is missing from the map — guards against "added a new test class,
+# forgot to shard it" silently skipping coverage.
 
-# VOL-88 / VOL-231: re-warm the simulator + restart AccessibilityUIServer
-# between unit and UI tests. Unit tests may have left the AX daemon in
-# a degraded state (the accessibility-stress XCUITests aren't the only
-# trigger — any heavy XCTest workload can wedge `AccessibilityUIServer`
-# on M4 self-hosted runners). `warm_simulator_for_tests` is idempotent
-# (boot is a no-op if already booted), so this is just the AX-daemon
-# kick again. See the function definition above for the full rationale.
-warm_simulator_for_tests
+UI_TEST_TARGET="VolumeArcAppUITests"
+UI_SHARDS=(smoke journeys-core journeys-aux accessibility-screenshots)
 
-ui_test_pipeline() {
-  local log_path="$1"
-  # VOL-231 round 2: the original mitigation added
-  # `-test-iterations 2 -retry-tests-on-failure` (PR #233). It
-  # successfully retried flaky tests, but the result bundle
-  # finalization crashed every time a retry was triggered — the
-  # `Coverage gate (VolumeArcCore >= 80%)` step then failed with:
-  #   `xccov: The result bundle could not be opened as it is
-  #    incomplete. Xcode might have failed to finish writing the
-  #    result bundle.`
-  # Pattern observed on 2 PRs (#229, #230) within hours of PR #233
-  # landing on the M4 self-hosted runner. xcodebuild-level retry
-  # was the wrong layer — the shell-level
-  # `run_ui_tests_once 1 / once 2` retry below (which restarts
-  # xcodebuild from scratch on simulator-busy preflight failures)
-  # is the correct mitigation. Reverted to the pre-#233
-  # invocation. The XCUITest runner-crash flake stays open as
-  # VOL-231 with sharding marked as the medium-term fix.
-  xcodebuild \
-    -project "VolumeArcApple.xcodeproj" \
-    -scheme "VolumeArcAppUITests" \
-    -destination "platform=iOS Simulator,name=$IOS_TEST_DEVICE_NAME" \
-    -derivedDataPath "$DERIVED_DATA_PATH" \
-    -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
-    -test-timeouts-enabled YES \
-    -default-test-execution-time-allowance "$UI_TEST_DEFAULT_ALLOWANCE" \
-    -maximum-test-execution-time-allowance "$UI_TEST_MAX_ALLOWANCE" \
-    CODE_SIGNING_ALLOWED=NO \
-    test 2>&1 | tee "$log_path"
-  return "${PIPESTATUS[0]}"
+ui_shard_classes() {
+  local shard="$1"
+  case "$shard" in
+    smoke)
+      cat <<'EOF'
+VolumeArcAppUITests
+VolumeArcTelemetryProbeMatcherTests
+EOF
+      ;;
+    journeys-core)
+      cat <<'EOF'
+VolumeArcAppJourneyTests
+VolumeArcCoachJourneyTests
+VolumeArcTodayJourneyTests
+EOF
+      ;;
+    journeys-aux)
+      cat <<'EOF'
+VolumeArcProfileJourneyTests
+VolumeArcFeedbackJourneyTests
+VolumeArcSignalsJourneyTests
+VolumeArcHealthKitPermissionJourneyTests
+VolumeArcWatchSimulationJourneyTests
+VolumeArcChaosJourneyTests
+EOF
+      ;;
+    accessibility-screenshots)
+      cat <<'EOF'
+VolumeArcAccessibilityJourneyTests
+VolumeArcScreenshotTests
+EOF
+      ;;
+    *)
+      echo "::error::Unknown UI shard: $shard" >&2
+      return 1
+      ;;
+  esac
 }
 
-run_ui_tests_once() {
-  local attempt="$1"
-  local log_path="$DERIVED_DATA_PATH/ui-test-attempt-${attempt}.log"
+ui_shard_only_testing_args() {
+  local shard="$1"
+  while read -r class; do
+    [ -z "$class" ] && continue
+    printf -- '-only-testing:%s/%s\n' "$UI_TEST_TARGET" "$class"
+  done < <(ui_shard_classes "$shard")
+}
 
-  set +e
-  run_with_wallclock_timeout "$UI_TEST_WALL_TIMEOUT" "UI test attempt $attempt" \
-    ui_test_pipeline "$log_path"
-  local status=$?
-  set -e
+verify_shard_coverage() {
+  # bash 3.2 compatibility: use a flat newline-separated string in place
+  # of an associative array — macOS ships bash 3.2 and the existing
+  # script targets that floor.
+  local mapped_list=""
+  local mapped_count=0
+  local shard class
+  for shard in "${UI_SHARDS[@]}"; do
+    while IFS= read -r class; do
+      [ -z "$class" ] && continue
+      mapped_list+="${class}"$'\n'
+      mapped_count=$((mapped_count + 1))
+    done < <(ui_shard_classes "$shard")
+  done
 
-  if [ "$status" = "124" ]; then
-    echo "::error::UI-test attempt $attempt hit ${UI_TEST_WALL_TIMEOUT}s wall-clock timeout (xcodebuild was likely stuck before any test method ran — see ui-test-attempt-${attempt}.log)."
+  local missing=()
+  local f
+  while IFS= read -r f; do
+    while IFS= read -r class; do
+      [ -z "$class" ] && continue
+      if ! printf '%s\n' "$mapped_list" | grep -qFx "$class"; then
+        missing+=("$class (in $(basename "$f"))")
+      fi
+    done < <(
+      # CodeRabbit feedback on PR #236: anchor on the `class …: XCTestCase`
+      # tail so non-`final` declarations (`class FooTests: XCTestCase`,
+      # `public class FooTests: XCTestCase`, etc.) still get picked up.
+      # `grep -oE` strips any leading modifiers because the match starts
+      # at the literal `class` keyword.
+      grep -oE 'class [A-Za-z0-9_]+: XCTestCase' "$f" \
+        | sed -E 's/^class ([A-Za-z0-9_]+): XCTestCase$/\1/'
+    )
+  done < <(find Tests/VolumeArcAppUITests -name '*.swift' -type f)
+
+  if [ "${#missing[@]}" -gt 0 ]; then
+    echo "::error::Unmapped XCUITest classes — add them to UI_SHARDS in scripts/test_apple_targets.sh:" >&2
+    printf '  - %s\n' "${missing[@]}" >&2
+    return 1
   fi
-  return "$status"
+  echo "Shard map covers all ${mapped_count} XCUITest classes."
 }
 
 is_simulator_busy_preflight_failure() {
@@ -267,47 +338,175 @@ is_simulator_busy_preflight_failure() {
     "$log_path"
 }
 
-if run_ui_tests_once 1; then
-  :
-else
-  first_ui_status=$?
-  first_ui_log="$DERIVED_DATA_PATH/ui-test-attempt-1.log"
-  if is_simulator_busy_preflight_failure "$first_ui_log"; then
-    echo "::warning::XCUITest runner hit a simulator Busy preflight failure; rebooting simulator and retrying once."
+ui_shard_pipeline() {
+  local shard="$1"
+  local log_path="$2"
+  local shard_xcresult="$3"
+  local only_testing_args=()
+  while IFS= read -r arg; do
+    [ -z "$arg" ] && continue
+    only_testing_args+=("$arg")
+  done < <(ui_shard_only_testing_args "$shard")
+
+  # VOL-231 round 2 lesson: do NOT pass `-test-iterations` /
+  # `-retry-tests-on-failure` at the xcodebuild level — it corrupts
+  # the xcresult bundle on the self-hosted runner. The shell-level
+  # per-shard retry below is the correct retry layer.
+  xcodebuild \
+    -project "VolumeArcApple.xcodeproj" \
+    -scheme "$UI_TEST_TARGET" \
+    -destination "platform=iOS Simulator,name=$IOS_TEST_DEVICE_NAME" \
+    -derivedDataPath "$DERIVED_DATA_PATH" \
+    -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
+    -resultBundlePath "$shard_xcresult" \
+    -test-timeouts-enabled YES \
+    -default-test-execution-time-allowance "$UI_TEST_DEFAULT_ALLOWANCE" \
+    -maximum-test-execution-time-allowance "$UI_TEST_MAX_ALLOWANCE" \
+    "${only_testing_args[@]}" \
+    CODE_SIGNING_ALLOWED=NO \
+    test 2>&1 | tee "$log_path"
+  return "${PIPESTATUS[0]}"
+}
+
+run_ui_shard_attempt() {
+  local shard="$1"
+  local attempt="$2"
+  local log_path="$DERIVED_DATA_PATH/ui-test-${shard}-attempt-${attempt}.log"
+  local shard_xcresult="$DERIVED_DATA_PATH/TestResults-ui-${shard}.xcresult"
+  # xcodebuild refuses to write to an existing -resultBundlePath.
+  rm -rf "$shard_xcresult"
+
+  set +e
+  run_with_wallclock_timeout "$UI_TEST_WALL_TIMEOUT" \
+    "UI shard '$shard' attempt $attempt" \
+    ui_shard_pipeline "$shard" "$log_path" "$shard_xcresult"
+  local status=$?
+  set -e
+
+  if [ "$status" = "124" ]; then
+    echo "::error::UI shard '$shard' attempt $attempt hit ${UI_TEST_WALL_TIMEOUT}s wall-clock timeout (xcodebuild was likely stuck before any test method ran — see ui-test-${shard}-attempt-${attempt}.log)."
+  fi
+  return "$status"
+}
+
+run_ui_shard() {
+  local shard="$1"
+  echo "::group::UI shard: $shard"
+  reset_app_state
+  warm_simulator_for_tests
+
+  set +e
+  run_ui_shard_attempt "$shard" 1
+  local first_status=$?
+  set -e
+
+  if [ "$first_status" = "0" ]; then
+    echo "::endgroup::"
+    return 0
+  fi
+
+  local first_log="$DERIVED_DATA_PATH/ui-test-${shard}-attempt-1.log"
+  if [ -f "$first_log" ] && is_simulator_busy_preflight_failure "$first_log"; then
+    echo "::warning::Shard '$shard' hit a simulator Busy preflight failure; rebooting + retrying once."
     xcrun simctl shutdown "$IOS_TEST_DEVICE_NAME" 2>/dev/null || true
     sleep 10
     warm_simulator_for_tests
     reset_app_state
-    run_ui_tests_once 2
-  else
-    exit "$first_ui_status"
+    set +e
+    run_ui_shard_attempt "$shard" 2
+    local second_status=$?
+    set -e
+    echo "::endgroup::"
+    return "$second_status"
+  fi
+
+  echo "::endgroup::"
+  return "$first_status"
+}
+
+# Verify shard map is complete BEFORE running anything.
+verify_shard_coverage
+
+# Filter for local diagnostics: `SHARD_FILTER=accessibility-screenshots
+# ./scripts/test_apple_targets.sh` runs just that shard. CI sets nothing
+# so all shards run.
+SHARD_FILTER="${SHARD_FILTER:-}"
+
+# If SHARD_FILTER is set, validate it matches a real shard name BEFORE
+# starting any work. A typo'd filter would otherwise skip every shard
+# and silently exit 0 with zero test methods executed.
+if [ -n "$SHARD_FILTER" ]; then
+  matched=0
+  for shard in "${UI_SHARDS[@]}"; do
+    if [ "$SHARD_FILTER" = "$shard" ]; then
+      matched=1
+      break
+    fi
+  done
+  if [ "$matched" != "1" ]; then
+    echo "::error::SHARD_FILTER='$SHARD_FILTER' does not match any defined shard. Valid: ${UI_SHARDS[*]}" >&2
+    exit 1
   fi
 fi
 
-# VOL-227 sanity check: assert UI tests actually executed test methods.
-# Before VOL-227, four pre-existing unit-test failures triggered an
-# xcodebuild non-zero exit code that the script's `set -e` silently
-# absorbed mid-flight (the `if ! run_with_wallclock_timeout ...; then`
-# branch never ran because the wait semantics returned 0). UI tests
-# never ran for ~7 days while CI reported green. This guard fails
-# loudly if the UI test xcodebuild produced zero `Test Case` lines.
-#
-# Floor of 1 is intentional — the failure mode is "no tests ran at
-# all", not "fewer tests than expected". The journey-coverage gate
-# (VOL-200) is the right place to track per-surface execution counts.
-UI_LOG_TO_CHECK="$DERIVED_DATA_PATH/ui-test-attempt-1.log"
-if [ ! -f "$UI_LOG_TO_CHECK" ]; then
-  UI_LOG_TO_CHECK="$DERIVED_DATA_PATH/ui-test-attempt-2.log"
-fi
-if [ -f "$UI_LOG_TO_CHECK" ]; then
-  UI_METHODS_EXECUTED="$(grep -cE "^Test Case '-\[VolumeArcAppUITests\." "$UI_LOG_TO_CHECK" 2>/dev/null || echo 0)"
-  if [ "$UI_METHODS_EXECUTED" -lt 1 ]; then
-    echo "::error::VOL-227 sanity check failed — UI test xcodebuild produced $UI_METHODS_EXECUTED 'Test Case' lines. The XCUITest suite did not actually execute any methods. Inspect $UI_LOG_TO_CHECK for the failure mode (sim boot, AX daemon, build).";
-    exit 1
-  else
-    echo "VOL-227 sanity check: UI tests executed $UI_METHODS_EXECUTED methods."
+# Run each shard, collecting status. Continue past failures so we get
+# a full picture instead of bailing on the first broken shard — the
+# point of sharding is independent signal per partition.
+declare -a shard_results=()
+for shard in "${UI_SHARDS[@]}"; do
+  if [ -n "$SHARD_FILTER" ] && [ "$SHARD_FILTER" != "$shard" ]; then
+    echo "Skipping shard '$shard' (SHARD_FILTER=$SHARD_FILTER)"
+    continue
   fi
-else
-  echo "::error::VOL-227 sanity check failed — neither ui-test-attempt-1.log nor ui-test-attempt-2.log exists in $DERIVED_DATA_PATH. The UI test pipeline never wrote a log file.";
+  set +e
+  run_ui_shard "$shard"
+  shard_status=$?
+  set -e
+  shard_results+=("$shard:$shard_status")
+done
+
+# Aggregate exit status + per-shard VOL-227 sanity check.
+ui_test_failed=0
+total_methods=0
+echo ""
+echo "===== UI shard summary ====="
+for entry in "${shard_results[@]}"; do
+  shard="${entry%%:*}"
+  status="${entry##*:}"
+
+  log_to_check="$DERIVED_DATA_PATH/ui-test-${shard}-attempt-1.log"
+  if [ ! -f "$log_to_check" ]; then
+    log_to_check="$DERIVED_DATA_PATH/ui-test-${shard}-attempt-2.log"
+  fi
+
+  methods=0
+  if [ -f "$log_to_check" ]; then
+    methods="$(grep -cE "^Test Case '-\[VolumeArcAppUITests\." "$log_to_check" 2>/dev/null || echo 0)"
+  fi
+  total_methods=$((total_methods + methods))
+
+  if [ "$status" != "0" ]; then
+    ui_test_failed=1
+    echo "  ✗ $shard (exit $status, $methods methods executed)"
+    continue
+  fi
+
+  # VOL-227: a shard that exited 0 but ran zero test methods is the
+  # same silent-pass failure mode that motivated the original sanity
+  # check. Floor of 1 per shard — every shard has at least one mapped
+  # class, so zero methods means the runner died before any test
+  # started.
+  if [ "$methods" -lt 1 ]; then
+    ui_test_failed=1
+    echo "  ✗ $shard (exit 0 but 0 methods executed — VOL-227 sanity failure)"
+    echo "::error::VOL-227 sanity check failed for shard '$shard' — 0 test methods executed. Inspect $log_to_check."
+    continue
+  fi
+
+  echo "  ✓ $shard ($methods methods)"
+done
+echo "Total UI test methods executed across all shards: $total_methods"
+
+if [ "$ui_test_failed" != "0" ]; then
   exit 1
 fi
