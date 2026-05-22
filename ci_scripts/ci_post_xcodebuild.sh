@@ -31,13 +31,69 @@ echo "CI_WORKFLOW = ${CI_WORKFLOW:-<unset>}"
 echo "CI_XCODEBUILD_ACTION = ${CI_XCODEBUILD_ACTION:-<unset>}"
 echo "CI_XCODEBUILD_EXIT_CODE = ${CI_XCODEBUILD_EXIT_CODE:-<unset>}"
 echo "CI_ARCHIVE_PATH = ${CI_ARCHIVE_PATH:-<unset>}"
+echo "CI_RESULT_BUNDLE_PATH = ${CI_RESULT_BUNDLE_PATH:-<unset>}"
 
-# Only run on archive workflows. For test/build workflows there's no
-# .xcarchive to extract dSYMs from.
-if [[ "${CI_XCODEBUILD_ACTION:-}" != "archive" ]]; then
-  echo "VOL-126: not an archive workflow (action=${CI_XCODEBUILD_ACTION:-none}); skipping dSYM upload"
-  exit 0
-fi
+# VOL-246: action-correct gating.
+#
+# `CI_XCODEBUILD_ACTION` is never literally "test". A Test action runs
+# `build-for-testing` then `test-without-building`; the latter is the
+# phase where the result bundle (with coverage) exists. `archive` is the
+# release path. Everything else (build, build-for-testing, analyze) has
+# nothing for this hook to do.
+case "${CI_XCODEBUILD_ACTION:-}" in
+  test-without-building)
+    # Coverage gate. Delegate to the SAME `scripts/check_coverage.sh`
+    # the self-hosted CI uses, pointed at Xcode Cloud's result bundle —
+    # one coverage-gate implementation across both CI paths.
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+    if [[ -z "${CI_RESULT_BUNDLE_PATH:-}" || ! -d "${CI_RESULT_BUNDLE_PATH}" ]]; then
+      echo "VOL-246: no result bundle at CI_RESULT_BUNDLE_PATH=${CI_RESULT_BUNDLE_PATH:-<unset>}; nothing to gate"
+      exit 0
+    fi
+    if [[ -n "${CI_XCODEBUILD_EXIT_CODE:-}" && "${CI_XCODEBUILD_EXIT_CODE}" != "0" ]]; then
+      echo "VOL-246: test action already failed (exit=${CI_XCODEBUILD_EXIT_CODE}); the RED test result is the signal — skipping coverage gate"
+      exit 0
+    fi
+
+    COVERAGE_TMP="$(mktemp -d)"
+    export XCRESULT="${CI_RESULT_BUNDLE_PATH}"
+
+    # VolumeArcCore (80%): unit-driven via VolumeArcAppTests, which runs
+    # in full under both VOL-PR and VOL-Main, so the production floor is
+    # valid on every plan.
+    echo "VOL-246: enforcing VolumeArcCore >= 80% coverage from $XCRESULT"
+    COVERAGE_TARGET="VolumeArcCore" COVERAGE_THRESHOLD="80" \
+      COVERAGE_SUMMARY_JSON="$COVERAGE_TMP/volumearccore.json" \
+      "$REPO_ROOT/scripts/check_coverage.sh"
+
+    # VolumeArcUI (2% guard-rail): exercised mostly via UI journeys, so
+    # the floor is only meaningful against the full suite. Enforce it on
+    # the VOL-Main workflow; measure-only on the VOL-PR smoke subset.
+    # Gated on CI_WORKFLOW (the workflow's display name in App Store
+    # Connect) — the workflows MUST be named exactly "VOL PR" / "VOL Main".
+    if [[ "${CI_WORKFLOW:-}" == "VOL Main" ]]; then
+      echo "VOL-246: enforcing VolumeArcUI >= 2% coverage (full suite)"
+      COVERAGE_TARGET="VolumeArcUI" COVERAGE_THRESHOLD="2" \
+        COVERAGE_SUMMARY_JSON="$COVERAGE_TMP/volumearcui.json" \
+        "$REPO_ROOT/scripts/check_coverage.sh"
+    else
+      echo "VOL-246: VolumeArcUI floor enforced on 'VOL Main' only (CI_WORKFLOW=${CI_WORKFLOW:-<unset>}); skipping on subset/other workflow"
+    fi
+
+    echo "VOL-246: coverage gate passed"
+    exit 0
+    ;;
+  archive)
+    # Fall through to the VOL-133 archive contract + dSYM upload below.
+    :
+    ;;
+  *)
+    echo "VOL-126: action '${CI_XCODEBUILD_ACTION:-none}' has no post-build work; exiting 0"
+    exit 0
+    ;;
+esac
 
 if [[ -n "${CI_XCODEBUILD_EXIT_CODE:-}" && "${CI_XCODEBUILD_EXIT_CODE}" != "0" ]]; then
   echo "VOL-126: xcodebuild already failed (exit=${CI_XCODEBUILD_EXIT_CODE}); skipping post-archive validation/upload"

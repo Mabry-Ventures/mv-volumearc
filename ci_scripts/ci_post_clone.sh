@@ -83,6 +83,52 @@ normalize_ai_relay_url() {
 # placeholder (which xcodebuild then resolves to empty), which the
 # Swift `resolveDSN()` / `relayConfiguration()` paths already treat as
 # "not configured".
+# VOL-246: fail-fast hygiene gate (Xcode Cloud).
+#
+# Runs BEFORE xcodebuild for every workflow (PR, Main, archive). A
+# non-zero exit aborts the Xcode Cloud build before the expensive
+# compile/test phase — so a lint regression turns the workflow's check
+# RED at the cheapest possible point. This is the gate the migration's
+# negative-control test exercises: a deliberate `swiftlint --strict`
+# violation must fail the "VOL PR" check here.
+#
+# Scope note: only checks that are (a) workspace-safe (do NOT regenerate
+# the Xcode project) and (b) runnable on Apple's clean Xcode Cloud image
+# (no `xcodeproj` gem) live here — currently `swiftlint --strict` and
+# `validate_release_config.sh --no-build`. The four generator-shape /
+# watch gates that need the `xcodeproj` gem and/or a project regen
+# (test_xcode_project_determinism, test_xcode_project_regen_idempotent,
+# test_watch_app_embedding, validate_watch_app_icon_asset) still run in
+# the self-hosted `ci.yml` "Build & Test" job. They MUST be rehomed
+# before that job is disabled at cutover — see the cutover checklist on
+# the migration PR (the "rehome project-shape gates" blocker).
+echo "VOL-246: running fail-fast hygiene gate"
+if ! command -v swiftlint >/dev/null 2>&1; then
+  echo "swiftlint not on PATH; installing via Homebrew (available on Xcode Cloud images)"
+  brew install swiftlint
+fi
+swiftlint_version="$(swiftlint version 2>/dev/null | head -n1 | awk '{print $NF}')"
+swiftlint_major="$(printf '%s\n' "$swiftlint_version" | cut -d. -f1)"
+swiftlint_minor="$(printf '%s\n' "$swiftlint_version" | cut -d. -f2)"
+# Match the >= 0.62 floor the self-hosted `ci.yml` enforces — the repo's
+# `.swiftlint.yml` rule config is tuned against that minor.
+if [[ "$swiftlint_major" -eq 0 && "$swiftlint_minor" -lt 62 ]]; then
+  echo "::error::SwiftLint $swiftlint_version is below the 0.62 floor (rule config tuned against >= 0.62)"
+  exit 1
+fi
+echo "SwiftLint $swiftlint_version: running --strict from $REPO_ROOT"
+( cd "$REPO_ROOT" && swiftlint --strict )
+
+# Release-config static checks (entitlements, privacy manifests,
+# app-group / CloudKit container constants). `--no-build` skips the
+# project regen + SPM resolve + xcodebuild, so it's workspace-safe and
+# needs neither the `xcodeproj` gem nor a build — just `plutil`, which
+# is present on the Xcode Cloud macOS image. The regen-dependent project
+# gates run in `project-hygiene.yml` on GitHub-hosted Linux instead.
+echo "VOL-246: running validate_release_config.sh --no-build"
+( cd "$REPO_ROOT" && ./scripts/validate_release_config.sh --no-build )
+echo "VOL-246: hygiene gate passed"
+
 INFO_PLIST="$REPO_ROOT/App/Info.plist"
 if [[ -f "$INFO_PLIST" ]]; then
   if [[ -n "${SENTRY_DSN:-}" ]]; then
