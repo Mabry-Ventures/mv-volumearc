@@ -473,6 +473,23 @@ fixture_folder_ref = evals_group.new_reference(fixtures_relative)
 fixture_folder_ref.set_last_known_file_type('folder')
 app_tests_target.resources_build_phase.add_file_reference(fixture_folder_ref, true)
 
+# VOL-246: bundle the real AppIcon.appiconset into the test bundle so
+# `AppIconAssetContractTests` can resolve it via `Bundle(for:)` at run
+# time. Its previous approach walked up from `#filePath` calling
+# `FileManager.fileExists` on the source tree — which works locally and
+# on the self-hosted runner, but FAILS on Xcode Cloud, where unit tests
+# run inside the simulator sandbox and can't read the host checkout at
+# `/Volumes/workspace/repository`. Wired as a FOLDER reference (not a
+# `.xcassets` catalog) so the raw `Contents.json` + the two PNGs copy
+# verbatim into the bundle — the test validates the actual source
+# catalog (folder ref to the real files, copied at build time), not a
+# drifting duplicate.
+app_icon_relative = ROOT.join('App/Assets.xcassets/AppIcon.appiconset')
+                        .relative_path_from(ROOT.join('Tests/VolumeArcAppTests')).to_s
+app_icon_folder_ref = tests_group.new_reference(app_icon_relative)
+app_icon_folder_ref.set_last_known_file_type('folder')
+app_tests_target.resources_build_phase.add_file_reference(app_icon_folder_ref, true)
+
 add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   'Intents/VolumeArcIntents.swift',
   'VolumeArcAIConfiguration.swift',
