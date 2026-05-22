@@ -53,6 +53,21 @@ final class AppIconAssetContractTests: XCTestCase {
     }
 
     private static func appIconSetURL(filePath: String = #filePath) throws -> URL {
+        // Prefer the copy bundled into the test bundle. `generate_xcode_project.rb`
+        // wires `App/Assets.xcassets/AppIcon.appiconset` in as a folder
+        // reference, so the real Contents.json + PNGs are present in the
+        // bundle on every host. This is the only path that works on Xcode
+        // Cloud, where unit tests run in the simulator sandbox and cannot
+        // read the host source tree (`/Volumes/workspace/repository`) via
+        // `#filePath`.
+        if let bundled = Bundle(for: AppIconAssetContractTests.self)
+            .url(forResource: "AppIcon", withExtension: "appiconset") {
+            return bundled
+        }
+
+        // Fallback: walk up from this source file to the catalog. Kept for
+        // any environment where the resource isn't bundled but the source
+        // tree is reachable (e.g. `swift test` outside the Xcode project).
         var cursor = URL(fileURLWithPath: filePath, isDirectory: false)
         while cursor.path != "/" {
             cursor.deleteLastPathComponent()
