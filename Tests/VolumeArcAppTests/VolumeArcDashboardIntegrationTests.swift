@@ -321,6 +321,72 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertFalse(context.contains("Recent coaching notes"), "Strict mode should strip stored coaching memories")
     }
 
+    // VOL-124: strict mode must redact PII from the free-text QUESTION on
+    // the egress path, not just the structured context block. Before the
+    // fix, `askCoach` passed the raw prompt straight to the provider, so a
+    // user who typed an email/phone into the coach box leaked it to the
+    // relay even in strict mode — contradicting the privacy policy.
+    func testStrictPrivacyModeRedactsCoachQuestion() async throws {
+        let store = CapturedContextStore()
+        let provider = CapturingCoachProvider(store: store)
+        let model = makeDashboardModel(aiProvider: provider)
+
+        try userProfileRepository.upsertProfile(
+            UserProfileDefaults(
+                name: "Jane Lifter",
+                coachingStyle: .analytical,
+                privacyMode: .strict,
+                advancementLevel: .advanced,
+                availableEquipment: [.barbell],
+                preferredRepRangeLower: 3,
+                preferredRepRangeUpper: 6,
+                sessionTimeBudgetMinutes: 60,
+                weeklyTrainingDays: 4
+            )
+        )
+        try userProfileRepository.markOnboardingComplete()
+
+        await model.refresh()
+        await model.askCoach("My email is jane@example.com and my phone is 615-555-0142 — should I deload?")
+
+        let outbound = try XCTUnwrap(await store.getPrompt())
+        XCTAssertFalse(outbound.contains("jane@example.com"), "Strict mode must redact the email from the outbound question")
+        XCTAssertFalse(outbound.contains("615-555-0142"), "Strict mode must redact the phone number from the outbound question")
+        XCTAssertTrue(outbound.contains(PromptPrivacyRedactor.redactionMarker), "Strict mode should leave the redaction marker in place")
+        XCTAssertTrue(outbound.lowercased().contains("deload"), "Coaching-relevant text must survive redaction")
+    }
+
+    // VOL-124: the default (standard) mode is a no-op for question
+    // redaction — personalization is intentional there, and the privacy
+    // policy discloses it. This pins that we don't over-redact the default.
+    func testStandardPrivacyModePreservesCoachQuestion() async throws {
+        let store = CapturedContextStore()
+        let provider = CapturingCoachProvider(store: store)
+        let model = makeDashboardModel(aiProvider: provider)
+
+        try userProfileRepository.upsertProfile(
+            UserProfileDefaults(
+                name: "Jane Lifter",
+                coachingStyle: .analytical,
+                privacyMode: .standard,
+                advancementLevel: .advanced,
+                availableEquipment: [.barbell],
+                preferredRepRangeLower: 3,
+                preferredRepRangeUpper: 6,
+                sessionTimeBudgetMinutes: 60,
+                weeklyTrainingDays: 4
+            )
+        )
+        try userProfileRepository.markOnboardingComplete()
+
+        await model.refresh()
+        await model.askCoach("My email is jane@example.com — should I deload?")
+
+        let outbound = try XCTUnwrap(await store.getPrompt())
+        XCTAssertTrue(outbound.contains("jane@example.com"), "Standard mode should not redact the question")
+        XCTAssertFalse(outbound.contains(PromptPrivacyRedactor.redactionMarker), "Standard mode should leave no redaction marker")
+    }
+
     // MARK: - Coach memory
 
     func testCoachMemoryAppendAndProject() throws {
@@ -527,8 +593,13 @@ private struct FixedRecoveryReader: RecoveryReader {
 
 private actor CapturedContextStore {
     private var context: String?
+    private var prompt: String?
     func set(_ value: String) { context = value }
     func get() -> String? { context }
+    // VOL-124: also capture the outbound free-text prompt so tests can
+    // assert strict-mode question redaction on the relay egress path.
+    func setPrompt(_ value: String) { prompt = value }
+    func getPrompt() -> String? { prompt }
 }
 
 private struct CapturingCoachProvider: AICoachProvider, Sendable {
@@ -536,6 +607,7 @@ private struct CapturingCoachProvider: AICoachProvider, Sendable {
 
     func coachResponse(for prompt: String, context: String) async throws -> String {
         await store.set(context)
+        await store.setPrompt(prompt)
         return "Captured"
     }
 }

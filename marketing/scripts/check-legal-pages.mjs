@@ -37,6 +37,41 @@ const placeholderTokens = [
 // so we look for that exact pattern instead.
 const draftBannerPattern = /<strong>\s*Draft[.!]?\s*<\/strong>/i
 
+// VOL-124: positive-content assertions. Placeholder-absence (above)
+// catches a page that reverted to a stub, but NOT a page that silently
+// dropped a required disclosure (e.g. someone deletes the GDPR section
+// in an unrelated refactor). App Review Guideline 3.1.2 + GDPR/CCPA
+// require these topics to be present, so we assert each one. Patterns
+// are deliberately loose (topic keyword, case-insensitive) so ordinary
+// copy-editing doesn't trip them — we're guarding presence of a topic,
+// not exact wording.
+const requiredContent = {
+  'src/app/(main)/privacy/page.tsx': [
+    { label: 'HealthKit disclosure', pattern: /HealthKit/i },
+    { label: 'CloudKit disclosure', pattern: /CloudKit/i },
+    { label: 'AI relay / Gemini disclosure', pattern: /Gemini|relay\.volumearc/i },
+    { label: 'Sentry crash-reporting disclosure', pattern: /Sentry/i },
+    { label: 'GDPR rights', pattern: /GDPR/i },
+    { label: 'CCPA rights', pattern: /CCPA/i },
+    { label: 'deletion / data-rights flow', pattern: /delet/i },
+    { label: 'children / under-13 notice', pattern: /under 13|children/i },
+  ],
+  'src/app/(main)/terms/page.tsx': [
+    { label: 'auto-renewal disclosure', pattern: /auto-?renew/i },
+    { label: 'refund policy', pattern: /refund/i },
+    { label: 'Apple Guideline 3.1.2 reference', pattern: /3\.1\.2/ },
+    { label: 'governing law', pattern: /governing law|Tennessee/i },
+    { label: 'Apple third-party-beneficiary clause', pattern: /third-party beneficiar/i },
+  ],
+}
+
+// VOL-124: the routed contact domain is volumearc.COM (Fastmail
+// catch-all). The legal pages previously used @volumearc.app, which
+// has no mailbox — a GDPR/CCPA request emailed there would bounce.
+// Forbid the email form specifically (not the bare domain, which
+// legitimately appears as relay.volumearc.app / the site URL).
+const forbiddenEmailDomain = /@volumearc\.app\b/i
+
 let failures = 0
 
 for (const relative of targets) {
@@ -67,6 +102,26 @@ for (const relative of targets) {
       `check-legal-pages: FAIL — ${relative} still has the "Draft" banner ` +
       `(<strong>Draft</strong>). Remove it; the page is now final copy. ` +
       `See VOL-195.`,
+    )
+    failures++
+  }
+
+  for (const { label, pattern } of requiredContent[relative] ?? []) {
+    if (!pattern.test(body)) {
+      console.error(
+        `check-legal-pages: FAIL — ${relative} is missing the ${label} ` +
+        `(expected to match ${pattern}). Required by App Review 3.1.2 / ` +
+        `GDPR / CCPA. See VOL-124.`,
+      )
+      failures++
+    }
+  }
+
+  if (forbiddenEmailDomain.test(body)) {
+    console.error(
+      `check-legal-pages: FAIL — ${relative} references an @volumearc.app ` +
+      `email. Contact mail routes via @volumearc.com (Fastmail catch-all); ` +
+      `@volumearc.app has no mailbox and would bounce. See VOL-124.`,
     )
     failures++
   }
