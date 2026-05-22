@@ -193,7 +193,7 @@ struct VolumeArcSmartStackView: View {
         Text(
             String(
                 localized: "Rest \(restCountdownText(for: state)) • \(state.activeExerciseName)",
-                comment: "Watch Smart Stack accessoryInline summary while resting between sets; placeholders are the rest-timer countdown and the active exercise name"
+                comment: "Watch Smart Stack accessoryInline summary while resting; placeholders: rest-timer countdown, active exercise name"
             )
         )
             .widgetURL(VolumeArcDeepLink.url(for: .nextWorkout))
@@ -266,7 +266,7 @@ struct VolumeArcSmartStackView: View {
         Text(
             String(
                 localized: "\(state.activeExerciseName) • \(state.targetSummary)",
-                comment: "Watch Smart Stack accessoryInline summary while user is actively executing a set; placeholders are the exercise name and the target summary"
+                comment: "Watch Smart Stack accessoryInline summary for active set; placeholders: exercise name, target summary"
             )
         )
             .widgetURL(VolumeArcDeepLink.url(for: .nextWorkout))
@@ -340,7 +340,7 @@ struct VolumeArcSmartStackView: View {
         Text(
             String(
                 localized: "\(recommendationBadge(for: snapshot)) • \(snapshot.readinessScore) • \(snapshot.nextWorkoutTitle)",
-                comment: "Watch Smart Stack accessoryInline idle summary; placeholders are the push/hold/rest recommendation, the readiness score, and the next workout title"
+                comment: "Watch Smart Stack accessoryInline idle summary; placeholders: recommendation badge, readiness score, next workout title"
             )
         )
             .widgetURL(VolumeArcDeepLink.url(for: .today))
