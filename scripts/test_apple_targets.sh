@@ -288,6 +288,66 @@ if [ "$first_status" != "0" ]; then
   fi
 fi
 
+# VOL-138: watchOS unit tests.
+#
+# `VolumeArcWatchTests` links `VolumeArcCoreWatch` and exercises the
+# watchOS-compiled flavor of the connectivity / payload / queue types
+# that the iOS-side `VolumeArcAppTests` only exercises against the iOS
+# SDK. The bundle has no host application — it runs library assertions
+# directly on the watch simulator.
+#
+# Watch tests run AFTER the iOS unit tests and BEFORE the UI test
+# shards because:
+#   1. They're fast (~7 sec total locally), so the failure signal is
+#      cheap and shows up before the expensive UI runs.
+#   2. They run on a separate watchOS simulator destination, so they
+#      can't poison the iOS test runner's AccessibilityUIServer or
+#      sim state.
+WATCHOS_TEST_DEVICE_NAME="$(resolve_watch_test_device)"
+WATCH_TEST_RESULT_BUNDLE="${WATCH_TEST_RESULT_BUNDLE:-$DERIVED_DATA_PATH/TestResults-watch.xcresult}"
+rm -rf "$WATCH_TEST_RESULT_BUNDLE"
+
+# Boot the watch sim ahead of time. `simctl bootstatus -b` blocks until
+# the device's system app reports ready, same as the iOS sim warm-up.
+echo "Pre-booting '$WATCHOS_TEST_DEVICE_NAME' for watch tests..."
+xcrun simctl boot "$WATCHOS_TEST_DEVICE_NAME" 2>/dev/null || true
+xcrun simctl bootstatus "$WATCHOS_TEST_DEVICE_NAME" -b
+sleep 5
+
+run_watch_tests() {
+  xcodebuild \
+    -project "VolumeArcApple.xcodeproj" \
+    -scheme "VolumeArcWatchTests" \
+    -destination "platform=watchOS Simulator,name=$WATCHOS_TEST_DEVICE_NAME" \
+    -derivedDataPath "$DERIVED_DATA_PATH" \
+    -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
+    -enableCodeCoverage YES \
+    -resultBundlePath "$WATCH_TEST_RESULT_BUNDLE" \
+    -test-timeouts-enabled YES \
+    -default-test-execution-time-allowance "$UNIT_TEST_DEFAULT_ALLOWANCE" \
+    -maximum-test-execution-time-allowance "$UNIT_TEST_MAX_ALLOWANCE" \
+    CODE_SIGNING_ALLOWED=NO \
+    test
+}
+
+# Codex review on PR #237: `if ! foo; then $? = $?` captures the
+# negation result (0), not the underlying failure exit code — so
+# watch-test failures would slip through as green CI. Run with `set
+# +e` and capture `$?` directly. Same pattern as the iOS unit-test
+# retry mitigation in `claude/unit-test-channel-disconnect-retry`
+# (PR #241).
+set +e
+run_with_wallclock_timeout "$UNIT_TEST_WALL_TIMEOUT" "Watch unit tests" run_watch_tests
+watch_test_status=$?
+set -e
+
+if [ "$watch_test_status" != "0" ]; then
+  if [ "$watch_test_status" = "124" ]; then
+    echo "::error::Watch unit-test wall-clock timeout fired. Check the watchOS simulator state; the test bundle takes <10s locally so a multi-minute timeout means xcodebuild itself never made progress."
+  fi
+  exit "$watch_test_status"
+fi
+
 # XCUITests (journey coverage) — sharded
 #
 # VOL-231 round 3: split the UI test target into N partitions so each
@@ -326,6 +386,7 @@ fi
 # every `final class … XCTestCase` declaration and fails if any class
 # is missing from the map — guards against "added a new test class,
 # forgot to shard it" silently skipping coverage.
+reset_app_state
 
 UI_TEST_TARGET="VolumeArcAppUITests"
 UI_SHARDS=(smoke journeys-core journeys-aux accessibility-screenshots)

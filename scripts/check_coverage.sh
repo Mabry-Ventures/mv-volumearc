@@ -19,7 +19,11 @@
 #                    VOL-201 snapshot baselines. Bump the floor in
 #                    the same PR that adds the testable view-model
 #                    extraction.)
-#   - VolumeArcWatch: pending VOL-138 (no dedicated test target yet)
+#   - VolumeArcCoreWatch: 2% (VOL-138 Phase A; uses XCRESULT=.../TestResults-watch.xcresult
+#                    against the `VolumeArcWatchTests` bundle. 85% is
+#                    the long-term target from the ticket — gated by
+#                    moving WatchWorkoutModel pure logic into
+#                    `VolumeArcCoreWatch`-only files first.)
 #   - Widgets:       pending VOL-139 (no dedicated test target yet)
 # The 90%+ commitment in `docs/PLATFORM.md` is the target end-state;
 # per VOL-140 / VOL-205 the ratchet path is one PR per bump so the
