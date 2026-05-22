@@ -17,8 +17,133 @@ public protocol PremiumEntitlementProviding: AnyObject {
     var isPremium: Bool { get }
 }
 
+/// VOL-142 Phase 2: testable shape of a StoreKit transaction update.
+///
+/// `StoreKit.Transaction` is an opaque system value type — there's no
+/// public initializer, so tests can't construct one directly. The Phase
+/// 1 SKTestSession integration test (`StoreKitSubscriptionRevocationTests.testRefundRemovesEntitlementAndRecordsTelemetry`)
+/// proved that `SKTestSession.refundTransaction` propagation is flaky on
+/// the M4 self-hosted runner — the test is currently `XCTSkip`-ped.
+///
+/// `TransactionUpdate` is the value-type slice of `Transaction` that
+/// `StoreKitSubscriptionStore.applyTransactionUpdate(_:)` actually
+/// reads. Tests construct it directly; production code bridges via
+/// `init(from: Transaction)`. State-machine assertions for refund /
+/// family-share / grace-period / billing-retry / ask-to-buy live at
+/// this layer instead of trying to drive a flaky SKTestSession.
+///
+/// Sendable + Equatable so test fixtures stay clean.
+public struct TransactionUpdate: Sendable, Equatable {
+    public let productID: String
+    /// Non-nil ⇒ the transaction was revoked (refund, family-share
+    /// removal, developer-issued grant rescinded, etc.). The store
+    /// treats any non-nil value as "remove from entitlements."
+    public let revocationDate: Date?
+    /// Best-effort textual description of `Transaction.revocationReason`.
+    /// Stored as a string instead of the StoreKit enum so the value
+    /// type is StoreKit-free and the test target doesn't need to
+    /// `import StoreKit` (StoreKit's `RevocationReason` is opaque +
+    /// platform-gated).
+    public let revocationReasonDescription: String?
+    /// Textual description of `Transaction.ownershipType` — typically
+    /// "purchased" or "familyShared". Same StoreKit-free rationale as
+    /// `revocationReasonDescription`.
+    public let ownershipTypeDescription: String
+
+    public init(
+        productID: String,
+        revocationDate: Date? = nil,
+        revocationReasonDescription: String? = nil,
+        ownershipTypeDescription: String = "purchased"
+    ) {
+        self.productID = productID
+        self.revocationDate = revocationDate
+        self.revocationReasonDescription = revocationReasonDescription
+        self.ownershipTypeDescription = ownershipTypeDescription
+    }
+
+    /// Whether the update represents a revocation. `Transaction.currentEntitlements`
+    /// omits revoked transactions, but `Transaction.updates` delivers
+    /// them with a non-nil `revocationDate` — that's the path tests
+    /// pin.
+    public var isRevocation: Bool { revocationDate != nil }
+
+    // MARK: - Convenience constructors (test ergonomics)
+
+    /// Construct a grant update — entitlement should be inserted.
+    public static func granted(
+        productID: String,
+        ownershipType: String = "purchased"
+    ) -> TransactionUpdate {
+        TransactionUpdate(
+            productID: productID,
+            revocationDate: nil,
+            revocationReasonDescription: nil,
+            ownershipTypeDescription: ownershipType
+        )
+    }
+
+    /// Construct a refund update — entitlement should be removed,
+    /// telemetry should fire with `revocationReason` = "developerIssue".
+    public static func refunded(
+        productID: String,
+        at date: Date = Date(timeIntervalSince1970: 1_700_000_000),
+        reason: String = "developerIssue"
+    ) -> TransactionUpdate {
+        TransactionUpdate(
+            productID: productID,
+            revocationDate: date,
+            revocationReasonDescription: reason,
+            ownershipTypeDescription: "purchased"
+        )
+    }
+
+    /// Construct a family-share grant — `ownershipType == "familyShared"`.
+    /// Entitlement should be inserted; tests assert the ownership type
+    /// rides into the telemetry metadata so support can correlate
+    /// "I was a family member" reports.
+    public static func familyShared(productID: String) -> TransactionUpdate {
+        TransactionUpdate(
+            productID: productID,
+            revocationDate: nil,
+            revocationReasonDescription: nil,
+            ownershipTypeDescription: "familyShared"
+        )
+    }
+
+    /// Construct a family-share removal — non-nil revocation with the
+    /// `familyShared` ownership context preserved so telemetry can
+    /// distinguish from a refund.
+    public static func familySharingRemoved(
+        productID: String,
+        at date: Date = Date(timeIntervalSince1970: 1_700_000_000)
+    ) -> TransactionUpdate {
+        TransactionUpdate(
+            productID: productID,
+            revocationDate: date,
+            revocationReasonDescription: "developerIssue",
+            ownershipTypeDescription: "familyShared"
+        )
+    }
+}
+
 #if canImport(StoreKit)
 import StoreKit
+
+extension TransactionUpdate {
+    /// Bridge from the real `StoreKit.Transaction`. Production code
+    /// uses this when wiring `Transaction.updates` into the store;
+    /// tests bypass it entirely by constructing `TransactionUpdate`
+    /// values directly.
+    public init(from transaction: Transaction) {
+        self.init(
+            productID: transaction.productID,
+            revocationDate: transaction.revocationDate,
+            revocationReasonDescription: transaction.revocationReason.map { String(describing: $0) },
+            ownershipTypeDescription: String(describing: transaction.ownershipType)
+        )
+    }
+}
 
 /// Observable StoreKit 2 subscription store.
 /// Loads products on init, exposes purchase status as @Published state,
@@ -167,16 +292,31 @@ public final class StoreKitSubscriptionStore: ObservableObject, PremiumEntitleme
         }
     }
 
-    /// VOL-142: handle a verified transaction from any source (initial
-    /// purchase, `Transaction.updates` listener, restore). Splits the
-    /// previously-inlined "insert into purchasedProductIDs" so the
-    /// revocation case is enforced everywhere — `Transaction.updates`
-    /// is the primary delivery channel for refunds and family-share
-    /// revocations, and the prior code only INSERTED, leaving a
-    /// refunded user marked premium until the next refresh.
+    /// VOL-142 Phase 1: bridge from `StoreKit.Transaction` to the
+    /// testable value type below. The production `Transaction.updates`
+    /// listener delivers `Transaction` values; tests construct
+    /// `TransactionUpdate` directly via the static convenience
+    /// constructors. Both call paths funnel through
+    /// `applyTransactionUpdate(_ update: TransactionUpdate)` so the
+    /// state-machine logic is exercised identically in both worlds.
     fileprivate func applyTransactionUpdate(_ transaction: Transaction) {
-        if transaction.revocationDate != nil {
-            let removed = purchasedProductIDs.remove(transaction.productID) != nil
+        applyTransactionUpdate(TransactionUpdate(from: transaction))
+    }
+
+    /// VOL-142 Phase 2: the actual state-machine + telemetry path.
+    /// Pure value-type input → testable from outside without
+    /// `SKTestSession`. The previously-inline "insert into
+    /// purchasedProductIDs" path was split here so the revocation
+    /// case is enforced everywhere — `Transaction.updates` is the
+    /// primary delivery channel for refunds + family-share
+    /// revocations + developer-issued rescinds, and the pre-Phase-1
+    /// code only INSERTED, leaving a refunded user marked premium
+    /// until the next `refreshEntitlements` call. `internal`
+    /// visibility (not `fileprivate`) so `@testable import VolumeArcCore`
+    /// can reach it.
+    internal func applyTransactionUpdate(_ update: TransactionUpdate) {
+        if update.isRevocation {
+            let removed = purchasedProductIDs.remove(update.productID) != nil
             if removed {
                 telemetry?.record(TelemetryEvent(
                     category: "subscription.entitlement",
@@ -184,14 +324,15 @@ public final class StoreKitSubscriptionStore: ObservableObject, PremiumEntitleme
                     severity: .warning,
                     message: "Entitlement revoked via Transaction.updates (refund or family-share removal).",
                     metadata: [
-                        "productID": transaction.productID,
-                        "revocationReason": String(describing: transaction.revocationReason),
+                        "productID": update.productID,
+                        "revocationReason": update.revocationReasonDescription ?? "unknown",
+                        "ownershipType": update.ownershipTypeDescription,
                         "source": "updates",
                     ]
                 ))
             }
         } else {
-            let inserted = purchasedProductIDs.insert(transaction.productID).inserted
+            let inserted = purchasedProductIDs.insert(update.productID).inserted
             if inserted {
                 telemetry?.record(TelemetryEvent(
                     category: "subscription.entitlement",
@@ -199,8 +340,8 @@ public final class StoreKitSubscriptionStore: ObservableObject, PremiumEntitleme
                     severity: .info,
                     message: "Entitlement granted via Transaction.updates.",
                     metadata: [
-                        "productID": transaction.productID,
-                        "ownershipType": String(describing: transaction.ownershipType),
+                        "productID": update.productID,
+                        "ownershipType": update.ownershipTypeDescription,
                         "source": "updates",
                     ]
                 ))
