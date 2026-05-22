@@ -312,3 +312,14 @@ private final class AssertUnusedCloudSyncTransport: CloudSyncTransport, @uncheck
         )
     }
 }
+
+// NEGATIVE-CONTROL (red): VOL-246 cutover gate. Designed to FAIL so the owner
+// can confirm the VolumeArc PR check turns RED on a bad PR (red-means-caught).
+// Appended to an existing file (no new file) to avoid pbxproj churn; lives in
+// VolumeArcAppTests, which the active VOL-PR plan runs in full.
+// DO NOT MERGE — close after verification.
+final class NegativeControlTests: XCTestCase {
+    func testNegativeControlAlwaysFails() {
+        XCTFail("negative control")
+    }
+}
