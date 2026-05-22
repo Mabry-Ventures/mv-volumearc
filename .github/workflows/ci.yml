@@ -387,11 +387,15 @@ jobs:
       # green and report a step-summary warning when the upload misses.
       # Tracking the underlying race in VOL-103 for a real fix.
       - name: Upload xcresult
-        # VOL-231: now uploads the unit-test xcresult bundle PLUS the
+        # VOL-231: uploads the unit-test xcresult bundle PLUS the
         # per-shard UI xcresult bundles produced by scripts/test_apple_targets.sh.
         # Each shard writes:
         #   TestResults-ui-<shard>.xcresult   (full bundle, openable in Xcode)
         #   ui-test-<shard>-attempt-{1,2}.log (raw xcodebuild output)
+        # VOL-227 round 2: also includes unit-test attempt logs so when
+        # the script's per-attempt retry fires, the per-attempt log
+        # files (capturing the channel-disconnect or wall-clock
+        # timeout pattern) are inspectable from the run page.
         # Reviewers can drill into a single failing shard without
         # downloading the unfiltered firehose.
         if: always()
@@ -402,6 +406,7 @@ jobs:
           path: |
             .build/derived-data/TestResults.xcresult
             .build/derived-data/TestResults-ui-*.xcresult
+            .build/derived-data/unit-test-attempt-*.log
             .build/derived-data/ui-test-*-attempt-*.log
           retention-days: 14
 

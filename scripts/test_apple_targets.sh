@@ -176,7 +176,8 @@ warm_simulator_for_tests() {
 }
 warm_simulator_for_tests
 
-run_unit_tests() {
+unit_test_pipeline() {
+  local log_path="$1"
   xcodebuild \
     -project "VolumeArcApple.xcodeproj" \
     -scheme "VolumeArcAppTests" \
@@ -189,15 +190,102 @@ run_unit_tests() {
     -default-test-execution-time-allowance "$UNIT_TEST_DEFAULT_ALLOWANCE" \
     -maximum-test-execution-time-allowance "$UNIT_TEST_MAX_ALLOWANCE" \
     CODE_SIGNING_ALLOWED=NO \
-    test
+    test 2>&1 | tee "$log_path"
+  return "${PIPESTATUS[0]}"
 }
 
-if ! run_with_wallclock_timeout "$UNIT_TEST_WALL_TIMEOUT" "Unit tests" run_unit_tests; then
-  status=$?
+# VOL-227 round 2 (2026-05-19): the iOS unit-test runner on
+# `mv-shared-01` / `mv-shared-02` started hitting a consistent
+# `xctest encountered an error (Failed to establish communication with
+# the test runner. (Channel disconnected))` flake during May 19 batch
+# runs (PRs #236, #237, #238 all hit it across three independent
+# invocations). The failure timing varies (70s vs 420s into test
+# execution), so it's not a specific flaky test — it's a runner-state
+# regression. The xcresult bundle gets left incomplete, which
+# downstream breaks the Coverage gate with a "Metadata.plist couldn't
+# be opened" error.
+#
+# The shell-level mitigation: detect the channel-disconnect pattern in
+# the test log, kill the simulator, re-warm, and retry the unit-test
+# invocation once. xcresult bundle is removed before the retry so
+# xcodebuild can write a fresh one. Mirrors the per-shard sim-busy
+# retry pattern that already exists for UI tests (`run_ui_shard` →
+# `run_ui_shard_attempt 2`).
+is_channel_disconnect_failure() {
+  local log_path="$1"
+  # CodeRabbit + Codex (PR #241) flagged that a bare match on
+  # `xctest encountered an error` is too broad — it catches unrelated
+  # unit-test failures (e.g. compile errors that xctest reports
+  # through the same error-print path). Tighten to the exact
+  # channel-disconnect signature so non-flake failures keep their
+  # existing exit behavior.
+  grep -Eq \
+    'Failed to establish communication with the test runner|Channel disconnected' \
+    "$log_path"
+}
+
+run_unit_tests_attempt() {
+  local attempt="$1"
+  local log_path="$DERIVED_DATA_PATH/unit-test-attempt-${attempt}.log"
+
+  # xcodebuild refuses to write to an existing -resultBundlePath.
+  rm -rf "$TEST_RESULT_BUNDLE"
+
+  set +e
+  run_with_wallclock_timeout "$UNIT_TEST_WALL_TIMEOUT" \
+    "Unit tests attempt $attempt" \
+    unit_test_pipeline "$log_path"
+  local status=$?
+  set -e
+
   if [ "$status" = "124" ]; then
-    echo "::error::Unit-test wall-clock timeout fired. The likely cause is the XCTRunner failing to launch on the simulator (search prior runs for 'Timed out waiting for AX loaded notification'). Inspect the .xcresult bundle for the last test method that started; that's where execution stalled."
+    echo "::error::Unit-test attempt $attempt wall-clock timeout fired. See unit-test-attempt-${attempt}.log."
   fi
-  exit "$status"
+  return "$status"
+}
+
+# CodeRabbit + Codex (PR #241) flagged that `if ! foo; then $? = $?`
+# captures the negation result (0), not the underlying failing exit
+# code — so `first_status` and `second_status` end up 0 on real
+# failures, masking broken unit tests as green CI. Capture the exit
+# code BEFORE any negation by running the attempt with `set +e` first.
+set +e
+run_unit_tests_attempt 1
+first_status=$?
+set -e
+
+if [ "$first_status" != "0" ]; then
+  first_log="$DERIVED_DATA_PATH/unit-test-attempt-1.log"
+
+  if [ -f "$first_log" ] && is_channel_disconnect_failure "$first_log"; then
+    echo "::warning::Unit-test attempt 1 hit a channel-disconnect flake; rebooting simulator + retrying once."
+    # Channel disconnect means the test-runner process died. The sim
+    # state itself may be wedged — shutdown + re-warm to give the
+    # second attempt a clean slate.
+    xcrun simctl shutdown "$IOS_TEST_DEVICE_NAME" 2>/dev/null || true
+    sleep 10
+    warm_simulator_for_tests
+    reset_app_state
+
+    set +e
+    run_unit_tests_attempt 2
+    second_status=$?
+    set -e
+
+    if [ "$second_status" != "0" ]; then
+      if [ "$second_status" = "124" ]; then
+        echo "::error::Unit-test attempt 2 also wall-clock-timed-out. The XCTRunner failure mode is now persistent — investigate runner state."
+      else
+        echo "::error::Unit-test attempt 2 failed (exit $second_status) after a channel-disconnect retry. Inspect unit-test-attempt-2.log + the xcresult bundle."
+      fi
+      exit "$second_status"
+    fi
+  else
+    if [ "$first_status" = "124" ]; then
+      echo "::error::Unit-test wall-clock timeout fired. The likely cause is the XCTRunner failing to launch on the simulator (search prior runs for 'Timed out waiting for AX loaded notification'). Inspect the .xcresult bundle for the last test method that started; that's where execution stalled."
+    fi
+    exit "$first_status"
+  fi
 fi
 
 # XCUITests (journey coverage) — sharded
