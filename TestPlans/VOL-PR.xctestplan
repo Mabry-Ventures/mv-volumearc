@@ -1,0 +1,49 @@
+{
+  "configurations": [
+    {
+      "id": "6A16F15C-9A10-5AD5-6689-FB7F5FD26A01",
+      "name": "Configuration 1",
+      "options": {
+      }
+    }
+  ],
+  "defaultOptions": {
+    "codeCoverage": true,
+    "targetForVariableExpansion": {
+      "containerPath": "container:VolumeArcApple.xcodeproj",
+      "identifier": "8F89B150DDAD32D7BB23F8BA",
+      "name": "VolumeArcApp"
+    }
+  },
+  "testTargets": [
+    {
+      "parallelizable": true,
+      "target": {
+        "containerPath": "container:VolumeArcApple.xcodeproj",
+        "identifier": "29DD2A72FCA6C3DAD5DFB5B9",
+        "name": "VolumeArcAppTests"
+      }
+    },
+    {
+      "parallelizable": true,
+      "selectedTests": [
+        "VolumeArcAppUITests",
+        "VolumeArcTelemetryProbeMatcherTests"
+      ],
+      "target": {
+        "containerPath": "container:VolumeArcApple.xcodeproj",
+        "identifier": "5C345F499E8F9803C17A9A60",
+        "name": "VolumeArcAppUITests"
+      }
+    },
+    {
+      "parallelizable": true,
+      "target": {
+        "containerPath": "container:VolumeArcApple.xcodeproj",
+        "identifier": "E9C692F12C2192498EE63A7D",
+        "name": "VolumeArcWidgetUITests"
+      }
+    }
+  ],
+  "version": 1
+}

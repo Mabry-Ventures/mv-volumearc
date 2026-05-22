@@ -3,6 +3,7 @@
 
 require 'digest'
 require 'fileutils'
+require 'json'
 require 'pathname'
 require 'xcodeproj'
 
@@ -740,6 +741,137 @@ watch_scheme.save_as(PROJECT_PATH, 'VolumeArcWatch', true)
 watch_widgets_scheme = Xcodeproj::XCScheme.new
 watch_widgets_scheme.configure_with_targets(watch_widgets_target, nil)
 watch_widgets_scheme.save_as(PROJECT_PATH, 'VolumeArcWatchWidgets', true)
+
+# VOL-246: Xcode Cloud test plans.
+#
+# Xcode Cloud test workflows reference a scheme + a test plan. We attach
+# two checked-in plans to the VolumeArcApp scheme:
+#
+#   VOL-PR.xctestplan   — whole VolumeArcAppTests (unit/integration) + a
+#                          UI smoke subset + the widget smoke target.
+#                          Fast pre-merge gate (~10 min target).
+#   VOL-Main.xctestplan — full unit + every UI journey + widget suite.
+#                          Runs post-merge as the integration backstop.
+#
+# These are WRITTEN by the generator (not hand-authored) so each test
+# target's `identifier` stays pinned to the deterministic blueprint UUID
+# this script assigns. A hand-authored plan would silently point at a
+# stale UUID the next time the target graph shifts; writing them here
+# guarantees they track. They are still committed + reviewable, and the
+# determinism gate (`scripts/test_xcode_project_determinism.sh`) re-runs
+# this generator and asserts the committed plans are byte-identical.
+#
+# Sharding note: this replaces the 4-way shell sharding in
+# `scripts/test_apple_targets.sh` for the Xcode Cloud path. Each target
+# is `parallelizable: true`, so Xcode Cloud distributes test classes
+# across parallel simulator clones on its ephemeral Macs instead of the
+# sequential-shard workaround the self-hosted runner needs.
+#
+# Perf (VolumeArcAppPerfTests) is intentionally excluded — it stays
+# tag-gated via its own scheme so measured runs don't inflate test time.
+# Watch unit tests (VolumeArcWatchTests, pending VOL-138 / PR #237) are
+# NOT here yet: that target needs a watchOS destination, which is a
+# separate test-plan entry once it lands on main.
+TEST_PLANS_DIR = ROOT.join('TestPlans')
+FileUtils.mkdir_p(TEST_PLANS_DIR)
+
+def test_plan_target_ref(uuid, name)
+  {
+    'containerPath' => 'container:VolumeArcApple.xcodeproj',
+    'identifier' => uuid,
+    'name' => name,
+  }
+end
+
+def deterministic_plan_guid(seed)
+  hex = Digest::MD5.hexdigest(seed)
+  "#{hex[0, 8]}-#{hex[8, 4]}-#{hex[12, 4]}-#{hex[16, 4]}-#{hex[20, 12]}".upcase
+end
+
+def write_test_plan(path, configuration_id:, expansion_target:, test_targets:)
+  plan = {
+    'configurations' => [
+      {
+        'id' => configuration_id,
+        'name' => 'Configuration 1',
+        'options' => {},
+      },
+    ],
+    'defaultOptions' => {
+      'codeCoverage' => true,
+      'targetForVariableExpansion' => expansion_target,
+    },
+    'testTargets' => test_targets,
+    'version' => 1,
+  }
+  File.write(path, "#{JSON.pretty_generate(plan)}\n")
+end
+
+app_expansion_ref = test_plan_target_ref(app_target.uuid, 'VolumeArcApp')
+app_tests_ref = test_plan_target_ref(app_tests_target.uuid, 'VolumeArcAppTests')
+app_ui_tests_ref = test_plan_target_ref(app_ui_tests_target.uuid, 'VolumeArcAppUITests')
+app_widget_ui_tests_ref = test_plan_target_ref(app_widget_ui_tests_target.uuid, 'VolumeArcWidgetUITests')
+
+# VOL-PR smoke subset mirrors the `smoke` shard from the self-hosted
+# `UI_SHARDS` map: the launch/navigation smoke class + the telemetry
+# probe-matcher unit-style UI tests. Whole-class identifiers (no method
+# suffix) keep the allowlist coarse and stable.
+write_test_plan(
+  TEST_PLANS_DIR.join('VOL-PR.xctestplan'),
+  configuration_id: deterministic_plan_guid('VolumeArc/TestPlan/VOL-PR/Configuration1'),
+  expansion_target: app_expansion_ref,
+  test_targets: [
+    { 'parallelizable' => true, 'target' => app_tests_ref },
+    {
+      'parallelizable' => true,
+      'selectedTests' => %w[VolumeArcAppUITests VolumeArcTelemetryProbeMatcherTests],
+      'target' => app_ui_tests_ref,
+    },
+    { 'parallelizable' => true, 'target' => app_widget_ui_tests_ref },
+  ],
+)
+
+write_test_plan(
+  TEST_PLANS_DIR.join('VOL-Main.xctestplan'),
+  configuration_id: deterministic_plan_guid('VolumeArc/TestPlan/VOL-Main/Configuration1'),
+  expansion_target: app_expansion_ref,
+  test_targets: [
+    { 'parallelizable' => true, 'target' => app_tests_ref },
+    { 'parallelizable' => true, 'target' => app_ui_tests_ref },
+    { 'parallelizable' => true, 'target' => app_widget_ui_tests_ref },
+  ],
+)
+
+# Attach both plans to the VolumeArcApp scheme's Test action. xcodeproj
+# (this gem version) doesn't expose <TestPlans> on XCScheme, so patch the
+# saved scheme XML deterministically — same approach as the StoreKit
+# reference patch on the UI-test scheme above. VOL-PR is the default; the
+# self-hosted `test_apple_targets.sh` keeps using the per-target
+# VolumeArcAppTests / VolumeArcAppUITests schemes, so the two CI paths
+# coexist during shadow.
+app_scheme_path = PROJECT_PATH.join('xcshareddata/xcschemes/VolumeArcApp.xcscheme')
+app_scheme_xml = File.read(app_scheme_path)
+# Built line-by-line with explicit indentation (a squiggly heredoc would
+# strip the leading whitespace and flatten the block against the margin).
+test_plans_block = [
+  '      <TestPlans>',
+  '         <TestPlanReference',
+  '            reference = "container:TestPlans/VOL-PR.xctestplan"',
+  '            default = "YES">',
+  '         </TestPlanReference>',
+  '         <TestPlanReference',
+  '            reference = "container:TestPlans/VOL-Main.xctestplan">',
+  '         </TestPlanReference>',
+  '      </TestPlans>',
+].join("\n")
+unless app_scheme_xml.include?('<TestPlans>')
+  inserted = app_scheme_xml.sub!(/(<TestAction\b[^>]*>\n)/m) { "#{Regexp.last_match(1)}#{test_plans_block}\n" }
+  unless inserted
+    raise "Failed to insert <TestPlans> into #{app_scheme_path}; " \
+          'VolumeArcApp TestAction XML format may have changed.'
+  end
+  File.write(app_scheme_path, app_scheme_xml)
+end
 
 # VOL-90: seed the workspace-level `Package.resolved` from the tracked
 # root-level copy so SPM resolution is deterministic across machines.

@@ -17,10 +17,16 @@ run_patch() {
   local relay_url="$1"
   local action="${2:-test}"
   local build_number="${3:-}"
+  # SKIP_HYGIENE_GATE=1: this harness stubs only Info.plist + the project
+  # file, so the VOL-246 hygiene gate (swiftlint --strict +
+  # validate_release_config) has no Swift sources / .swiftlint.yml /
+  # scripts/ to act on. Skip it so this test stays scoped to the config
+  # patching it actually asserts. Real Xcode Cloud runs never set it.
   SENTRY_DSN="https://examplePublicKey@o0.ingest.sentry.io/0" \
     VOLUMEARC_AI_RELAY_URL="$relay_url" \
     CI_XCODEBUILD_ACTION="$action" \
     CI_BUILD_NUMBER="$build_number" \
+    SKIP_HYGIENE_GATE=1 \
     PATH="$TMP_DIR/bin:$PATH" \
     bash "$TMP_DIR/ci_scripts/ci_post_clone.sh" >"$LOG_PATH"
 }
@@ -68,6 +74,7 @@ fi
 if SENTRY_DSN="https://examplePublicKey@o0.ingest.sentry.io/0" \
   VOLUMEARC_AI_RELAY_URL="http://relay.volumearc.app" \
   CI_XCODEBUILD_ACTION="test" \
+  SKIP_HYGIENE_GATE=1 \
   bash "$TMP_DIR/ci_scripts/ci_post_clone.sh" >"$LOG_PATH" 2>&1; then
   echo "FAIL: ci_post_clone.sh accepted a non-HTTPS relay URL" >&2
   exit 1
@@ -76,6 +83,7 @@ fi
 if SENTRY_DSN="https://examplePublicKey@o0.ingest.sentry.io/0" \
   VOLUMEARC_AI_RELAY_URL="https://example.com" \
   CI_XCODEBUILD_ACTION="test" \
+  SKIP_HYGIENE_GATE=1 \
   bash "$TMP_DIR/ci_scripts/ci_post_clone.sh" >"$LOG_PATH" 2>&1; then
   echo "FAIL: ci_post_clone.sh accepted a non-allowlisted relay host" >&2
   exit 1
