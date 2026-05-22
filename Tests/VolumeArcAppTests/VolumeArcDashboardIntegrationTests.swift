@@ -349,7 +349,8 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         await model.refresh()
         await model.askCoach("My email is jane@example.com and my phone is 615-555-0142 — should I deload?")
 
-        let outbound = try XCTUnwrap(await store.getPrompt())
+        let capturedPrompt = await store.getPrompt()
+        let outbound = try XCTUnwrap(capturedPrompt)
         XCTAssertFalse(outbound.contains("jane@example.com"), "Strict mode must redact the email from the outbound question")
         XCTAssertFalse(outbound.contains("615-555-0142"), "Strict mode must redact the phone number from the outbound question")
         XCTAssertTrue(outbound.contains(PromptPrivacyRedactor.redactionMarker), "Strict mode should leave the redaction marker in place")
@@ -382,7 +383,8 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         await model.refresh()
         await model.askCoach("My email is jane@example.com — should I deload?")
 
-        let outbound = try XCTUnwrap(await store.getPrompt())
+        let capturedPrompt = await store.getPrompt()
+        let outbound = try XCTUnwrap(capturedPrompt)
         XCTAssertTrue(outbound.contains("jane@example.com"), "Standard mode should not redact the question")
         XCTAssertFalse(outbound.contains(PromptPrivacyRedactor.redactionMarker), "Standard mode should leave no redaction marker")
     }
