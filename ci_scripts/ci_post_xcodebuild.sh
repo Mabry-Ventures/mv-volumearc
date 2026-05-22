@@ -45,8 +45,18 @@ case "${CI_XCODEBUILD_ACTION:-}" in
     # Coverage gate. Delegate to the SAME `scripts/check_coverage.sh`
     # the self-hosted CI uses, pointed at Xcode Cloud's result bundle —
     # one coverage-gate implementation across both CI paths.
-    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-    REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+    #
+    # Xcode Cloud sets CI_PRIMARY_REPOSITORY_PATH to the cloned repo root;
+    # this is more reliable than computing from $0 (which Xcode Cloud may
+    # invoke with a bare script name, not a full path). Fall back to the
+    # BASH_SOURCE[0]-relative calculation for local / self-hosted runs.
+    if [[ -n "${CI_PRIMARY_REPOSITORY_PATH:-}" ]]; then
+      REPO_ROOT="${CI_PRIMARY_REPOSITORY_PATH}"
+    else
+      SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+      REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+    fi
+    echo "VOL-246: REPO_ROOT=$REPO_ROOT"
 
     if [[ -z "${CI_RESULT_BUNDLE_PATH:-}" || ! -d "${CI_RESULT_BUNDLE_PATH}" ]]; then
       echo "VOL-246: no result bundle at CI_RESULT_BUNDLE_PATH=${CI_RESULT_BUNDLE_PATH:-<unset>}; nothing to gate"
@@ -55,6 +65,14 @@ case "${CI_XCODEBUILD_ACTION:-}" in
     if [[ -n "${CI_XCODEBUILD_EXIT_CODE:-}" && "${CI_XCODEBUILD_EXIT_CODE}" != "0" ]]; then
       echo "VOL-246: test action already failed (exit=${CI_XCODEBUILD_EXIT_CODE}); the RED test result is the signal — skipping coverage gate"
       exit 0
+    fi
+
+    CHECK_COVERAGE="$REPO_ROOT/scripts/check_coverage.sh"
+    if [[ ! -f "$CHECK_COVERAGE" ]]; then
+      echo "::error::VOL-246: check_coverage.sh not found at $CHECK_COVERAGE"
+      echo "  REPO_ROOT=$REPO_ROOT"
+      echo "  scripts dir: $(ls "$REPO_ROOT/scripts/" 2>&1 | head -5)"
+      exit 1
     fi
 
     COVERAGE_TMP="$(mktemp -d)"
@@ -66,7 +84,7 @@ case "${CI_XCODEBUILD_ACTION:-}" in
     echo "VOL-246: enforcing VolumeArcCore >= 80% coverage from $XCRESULT"
     COVERAGE_TARGET="VolumeArcCore" COVERAGE_THRESHOLD="80" \
       COVERAGE_SUMMARY_JSON="$COVERAGE_TMP/volumearccore.json" \
-      "$REPO_ROOT/scripts/check_coverage.sh"
+      bash "$CHECK_COVERAGE"
 
     # VolumeArcUI (2% guard-rail): exercised mostly via UI journeys, so
     # the floor is only meaningful against the full suite. Enforce it on
@@ -77,7 +95,7 @@ case "${CI_XCODEBUILD_ACTION:-}" in
       echo "VOL-246: enforcing VolumeArcUI >= 2% coverage (full suite)"
       COVERAGE_TARGET="VolumeArcUI" COVERAGE_THRESHOLD="2" \
         COVERAGE_SUMMARY_JSON="$COVERAGE_TMP/volumearcui.json" \
-        "$REPO_ROOT/scripts/check_coverage.sh"
+        bash "$CHECK_COVERAGE"
     else
       echo "VOL-246: VolumeArcUI floor enforced on 'VOL Main' only (CI_WORKFLOW=${CI_WORKFLOW:-<unset>}); skipping on subset/other workflow"
     fi
