@@ -120,6 +120,19 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 
 **Watch app** (`WatchWorkoutView.swift`): `WatchWorkoutModel` manages `HKWorkoutSession` + `HKLiveWorkoutBuilder` for real HealthKit workout tracking, rest timers (90s default), coach cue requests, and set decisions (increase/hold/decrease). Communicates with iPhone via `WatchConnectivityCoordinator` with real `WCSession` transfer and offline payload queue replay when the phone is unreachable.
 
+**Phone-less workout completion (VOL-235).** The watch app is designed so an Apple Watch user can leave the iPhone at home and complete a full strength session from the wrist alone. The contract:
+
+| Capability | Phone unreachable | Notes |
+| --- | --- | --- |
+| Next prescribed set | ✅ Works locally | `autopilot` is built from `VolumeArcProductDefaults` at `WatchWorkoutModel.init` — no phone roundtrip required for the prescription. |
+| Log a set decision (`increase` / `hold` / `decrease`) | ✅ Works locally | `choose(_:)` updates `selectedAction` immediately; the `liveState` payload queues for replay. |
+| Rest timer | ✅ Works locally | `restEndsAt` is a `@Published` local property; `resetRestTimer()` updates it before attempting the `restTimer` payload send. |
+| Start / end / complete session | ✅ Works locally | Each method updates `sessionActive` regardless of send success; payload queues for replay. |
+| Coach cue (live response) | ⚠️ Degraded | The watch sends a `coachCue` payload, but the LLM response comes back via the iPhone's relay. With no phone, the prompt queues; the user sees a "queued on watch until phone reconnects" status. |
+| Pending-payload replay | ✅ Works on reconnect | `refreshConnectivity()` calls `flushPendingIfReachable()`, which drains every queued payload in original order. The queue is `UserDefaults`-backed so it survives a watch process restart. |
+
+Verified by `Tests/VolumeArcWatchTests/WatchPhonelessJourneyTests.swift` (3 tests: full-session-then-drain, coach-cue queue, queue survives process restart). The model's `do/catch`-around-send pattern across `startSession()`, `choose(_:)`, `resetRestTimer()`, `requestCoachCue()`, `endSession()`, and `completeWorkout()` is what makes the phone-less path work — a regression that removes any of those wrappers would surface as a `WatchPhonelessJourneyTests` failure.
+
 **Widgets** (`VolumeArcWidgets.swift`, `WatchWidgets/`): `NextWorkoutWidget` (systemSmall, systemMedium) and the watchOS widget extension read from `PlatformSurfaceDefaultsReader` which returns real snapshots written by the app on state changes. `ActiveWorkoutLiveActivity` shows exercise, target, and rest timer on lock screen and Dynamic Island with real updates driven by the workout session controller.
 
 **App Intents** (`VolumeArcIntents.swift`): Six Siri Shortcuts -- StartNextWorkout, AskCoach, OpenSignals, StartWorkoutSession, LogRecommendedSet, SyncVolumeArc. All open the app via `VolumeArcDeepLink` and `RootDashboardView` consumes `DashboardNavigationModel.selectedTab` + `coachPrompt` to route to the correct destination. Dashboard action methods drive real state changes through the repository layer.
