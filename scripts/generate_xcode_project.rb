@@ -522,6 +522,18 @@ app_icon_folder_ref = tests_group.new_reference(app_icon_relative)
 app_icon_folder_ref.set_last_known_file_type('folder')
 app_tests_target.resources_build_phase.add_file_reference(app_icon_folder_ref, true)
 
+# VOL-135: bundle committed snapshot PNG references into VolumeArcAppTests.
+# Xcode Cloud's test phase cannot rely on the source checkout being mounted
+# inside the simulator sandbox, so snapshot comparisons must resolve their
+# baselines from `Bundle(for:)`. The tests still record into the source tree
+# when `SNAPSHOT_TESTING_RECORD=all|missing` is set; compare mode reads this
+# folder reference from the built test bundle.
+snapshot_references_relative = ROOT.join('Tests/VolumeArcAppTests/Snapshots/__Snapshots__')
+                                   .relative_path_from(ROOT.join('Tests/VolumeArcAppTests')).to_s
+snapshot_references_folder_ref = tests_group.new_reference(snapshot_references_relative)
+snapshot_references_folder_ref.set_last_known_file_type('folder')
+app_tests_target.resources_build_phase.add_file_reference(snapshot_references_folder_ref, true)
+
 add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   'Intents/VolumeArcIntents.swift',
   'VolumeArcAIConfiguration.swift',
@@ -901,7 +913,9 @@ app_widget_ui_tests_ref = test_plan_target_ref(app_widget_ui_tests_target.uuid, 
 # VOL-PR smoke subset mirrors the `smoke` shard from the self-hosted
 # `UI_SHARDS` map: the launch/navigation smoke class + the telemetry
 # probe-matcher unit-style UI tests. Whole-class identifiers (no method
-# suffix) keep the allowlist coarse and stable.
+# suffix) keep the allowlist coarse and stable. VolumeArcWidgetUITests
+# stays out of VOL-PR until its Xcode Cloud ephemeral-simulator launch
+# crash is fixed; VOL-Main keeps the target as the slower backstop.
 write_test_plan(
   TEST_PLANS_DIR.join('VOL-PR.xctestplan'),
   configuration_id: deterministic_plan_guid('VolumeArc/TestPlan/VOL-PR/Configuration1'),
@@ -913,7 +927,6 @@ write_test_plan(
       'selectedTests' => %w[VolumeArcAppUITests VolumeArcTelemetryProbeMatcherTests],
       'target' => app_ui_tests_ref,
     },
-    { 'parallelizable' => true, 'target' => app_widget_ui_tests_ref },
   ],
 )
 

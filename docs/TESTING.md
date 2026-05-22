@@ -212,20 +212,15 @@ Visual regression coverage for VAUI components and the critical screens (Onboard
 
 - **Phase 1 (this PR's introduction):** `pointfreeco/swift-snapshot-testing` v1.19 wired into the `VolumeArcAppTests` target. `Tests/VolumeArcAppTests/Snapshots/` is the canonical home; one infrastructure smoke test (`VolumeArcSnapshotInfrastructureTests`) proves the dependency links and the directory layout works. No baseline PNGs yet.
 
-- **Phase 2+ (follow-up PRs):** each component / screen lands in its own PR with its baseline PNG committed under `Tests/VolumeArcAppTests/Snapshots/__Snapshots__/`. See VOL-135's acceptance criteria for the full matrix (light + dark, `.medium` + `.accessibility5` Dynamic Type, reduce-transparency on/off).
+- **Phase 2+ (follow-up PRs):** the first pilot baseline covers `VAButton` primary in light + dark. Each additional component / screen should land in its own PR with its baseline PNG committed under `Tests/VolumeArcAppTests/Snapshots/__Snapshots__/`. The generated project copies that folder into the `VolumeArcAppTests` bundle so Xcode Cloud can compare snapshots even when the source checkout is not mounted during the test phase. See VOL-135's acceptance criteria for the full matrix (light + dark, `.medium` + `.accessibility5` Dynamic Type, reduce-transparency on/off).
 
 ### Recording a new snapshot
 
 1. Add the test under `Tests/VolumeArcAppTests/Snapshots/<Surface>SnapshotTests.swift`.
-2. Run **on the same simulator CI uses** (iPhone 17, iOS 26.4) so the PNG matches CI's pixel output. Set record mode via env var:
+2. Run **on the same simulator CI uses** (iPhone 17, iOS 26.5) so the PNG matches CI's pixel output. The helper script writes a temporary `.record-snapshots` marker because Xcode does not reliably pass arbitrary shell environment variables through to the XCTest process:
 
    ```bash
-   SNAPSHOT_TESTING_RECORD_MODE=all \
-   xcodebuild test \
-     -project VolumeArcApple.xcodeproj \
-     -scheme VolumeArcAppTests \
-     -destination "platform=iOS Simulator,name=iPhone 17,OS=26.4" \
-     -only-testing:VolumeArcAppTests/<YourSnapshotTestClass>
+   SNAPSHOT_TEST_FILTER=<YourSnapshotTestClass> ./scripts/record_snapshots.sh
    ```
 
    The first run writes the PNG; subsequent runs compare against it.
@@ -238,7 +233,7 @@ If a snapshot test fails on CI, the xcresult bundle (`TestResults-<run-id>` arti
 
 ### Why not auto-record on CI
 
-The library's default record mode is `.missing`: if there's no baseline, the test silently records one and passes. On CI's read-only branch, the recorded PNG never gets committed back, so the next CI run again has no baseline and again silently records. That gives the illusion of a regression gate without one. The discipline above (record locally, commit baseline, CI compares) keeps the gate honest.
+The library's default record mode is `.missing`: if there's no baseline, the test silently records one and passes. VolumeArc's `assertVolumeArcSnapshot` wrapper overrides the default to `.never` unless `SNAPSHOT_TESTING_RECORD` is set, so CI fails when a baseline is missing. The discipline above (record locally, commit baseline, CI compares the bundled copy) keeps the gate honest.
 
 ## Writing unit tests
 
@@ -411,10 +406,11 @@ func testPaywallSnapshots() {
         ])),
     ]
     for (suffix, traits) in traits {
-        assertSnapshot(
+        assertVolumeArcSnapshot(
             of: view,
             as: .image(on: .iPhone17, traits: traits),
-            named: suffix
+            named: suffix,
+            in: self
         )
     }
 }
@@ -433,11 +429,11 @@ pointfreeco SnapshotTesting captures pixel-identical baselines that **drift betw
 ### Local workflow
 
 1. Author the snapshot test in `Tests/VolumeArcAppTests/Snapshots/<TestClass>.swift`.
-2. Run `./scripts/record_snapshots.sh` (or `SNAPSHOT_TEST_FILTER=<TestClass> ./scripts/record_snapshots.sh` for a single family).
+2. Run `./scripts/record_snapshots.sh` (or `SNAPSHOT_TEST_FILTER=<TestClass> ./scripts/record_snapshots.sh` for a single family). The script sets `SNAPSHOT_TESTING_RECORD=all` and writes a temporary `.record-snapshots` marker, which makes `assertVolumeArcSnapshot` write into the source-tree `__Snapshots__` directory.
 3. Review the generated PNGs under `Tests/VolumeArcAppTests/Snapshots/__Snapshots__/<TestClass>/`.
 4. Commit the PNGs in the same PR as the surface change.
 5. CI runs with default (non-recording) mode and asserts.
 
-Recording new baselines without committing them silently breaks the gate (CI re-records each run, never compares), so always commit the PNG in the same PR.
+Recording new baselines without committing them fails CI because compare mode uses `.never` and reads the bundled reference directory. Always commit the PNG in the same PR.
 
 CI failures from snapshot diffs block merge on the same gate as unit tests.
