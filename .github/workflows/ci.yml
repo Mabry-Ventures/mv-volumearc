@@ -149,6 +149,13 @@ jobs:
         run: bash ./.github/scripts/prepare_ruby_toolchain.sh xcodeproj
         shell: bash
 
+      - name: Install Ruby bundle
+        # VOL-138: `bundle install` pins the exact xcodeproj/cfpropertylist
+        # versions from Gemfile.lock so downstream `bundle exec ruby` calls
+        # are immune to a broken user-gem installation (e.g. xcodeproj-1.27.x
+        # missing gem_version.rb after an interrupted `gem install`).
+        run: bundle install --quiet
+
       - name: Pre-flight
         # VOL-75: fail fast if the runner is missing something required.
         # Cheaper than a 20-minute build that dies at step 6 on a sick runner.
@@ -273,7 +280,7 @@ jobs:
         run: ./scripts/test_xcode_project_regen_idempotent.sh
 
       - name: Watch app archive gate
-        run: ruby scripts/test_watch_app_embedding.rb
+        run: bundle exec ruby scripts/test_watch_app_embedding.rb
 
       - name: Seed SPM lockfile into workspace
         # VOL-90: the canonical `Package.resolved` lives at repo root
