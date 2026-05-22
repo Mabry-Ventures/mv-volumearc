@@ -42,19 +42,24 @@ echo "CI_RESULT_BUNDLE_PATH = ${CI_RESULT_BUNDLE_PATH:-<unset>}"
 # nothing for this hook to do.
 case "${CI_XCODEBUILD_ACTION:-}" in
   test-without-building)
-    # Coverage gate. Delegate to the SAME `scripts/check_coverage.sh`
-    # the self-hosted CI uses, pointed at Xcode Cloud's result bundle —
-    # one coverage-gate implementation across both CI paths.
+    # Coverage gate. On Xcode Cloud's test machine, `ci_scripts/` is the
+    # ONLY part of the repository that is guaranteed to be present — the
+    # `test-without-building` step runs on a separate machine from
+    # `build-for-testing` and does NOT receive the full source tree.
+    # `scripts/check_coverage.sh` and its Python companion are therefore
+    # copied into `ci_scripts/` (see ci_scripts/check_coverage.sh and
+    # ci_scripts/_compute_coverage_summary.py) so they are always available
+    # on the test machine.
     #
-    # Xcode Cloud sets CI_PRIMARY_REPOSITORY_PATH to the cloned repo root;
-    # this is more reliable than computing from $0 (which Xcode Cloud may
-    # invoke with a bare script name, not a full path). Fall back to the
-    # BASH_SOURCE[0]-relative calculation for local / self-hosted runs.
+    # For local / self-hosted runs where ci_scripts/ and scripts/ live
+    # together in the same tree, this script first checks for the
+    # ci_scripts/-local copy and falls back to REPO_ROOT/scripts/ so no
+    # workflow breaks during the transition.
+    COVERAGE_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
     if [[ -n "${CI_PRIMARY_REPOSITORY_PATH:-}" ]]; then
       REPO_ROOT="${CI_PRIMARY_REPOSITORY_PATH}"
     else
-      SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-      REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+      REPO_ROOT="$(cd "$COVERAGE_SCRIPT_DIR/.." && pwd)"
     fi
     echo "VOL-246: REPO_ROOT=$REPO_ROOT"
 
@@ -67,13 +72,18 @@ case "${CI_XCODEBUILD_ACTION:-}" in
       exit 0
     fi
 
-    CHECK_COVERAGE="$REPO_ROOT/scripts/check_coverage.sh"
+    # Prefer the ci_scripts/-local copy (guaranteed on the Xcode Cloud test
+    # machine). Fall back to scripts/ for self-hosted / local runs.
+    if [[ -f "$COVERAGE_SCRIPT_DIR/check_coverage.sh" ]]; then
+      CHECK_COVERAGE="$COVERAGE_SCRIPT_DIR/check_coverage.sh"
+    else
+      CHECK_COVERAGE="$REPO_ROOT/scripts/check_coverage.sh"
+    fi
     if [[ ! -f "$CHECK_COVERAGE" ]]; then
-      echo "::error::VOL-246: check_coverage.sh not found at $CHECK_COVERAGE"
-      echo "  REPO_ROOT=$REPO_ROOT"
-      echo "  scripts dir: $(ls "$REPO_ROOT/scripts/" 2>&1 | head -5)"
+      echo "::error::VOL-246: check_coverage.sh not found in $COVERAGE_SCRIPT_DIR or $REPO_ROOT/scripts/"
       exit 1
     fi
+    echo "VOL-246: using $CHECK_COVERAGE"
 
     COVERAGE_TMP="$(mktemp -d)"
     export XCRESULT="${CI_RESULT_BUNDLE_PATH}"
