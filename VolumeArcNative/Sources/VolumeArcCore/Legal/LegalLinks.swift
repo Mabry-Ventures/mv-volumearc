@@ -4,13 +4,14 @@ import Foundation
 ///
 /// These are referenced by the paywall and any other surface that needs to
 /// point the user at Terms of Service or Privacy Policy. Keeping them in one
-/// place means the real published URLs can be swapped in when the marketing
-/// site is stood up closer to launch (VOL-71).
+/// place means there is a single source of truth for the published URLs
+/// (VOL-71 wired them; VOL-160 stood up the marketing site).
 ///
-/// Note: the destinations are placeholder URLs on `volumearc.app` that may
-/// return 404 until the marketing site ships. That's intentional — App Store
-/// review requires these links to be wired up even before the pages are live
-/// so reviewers can see intent.
+/// Both destinations are live: the marketing site shipped (VOL-160) and the
+/// pages carry finalized legal copy (VOL-195/VOL-124). `marketing` CI runs
+/// `check-legal-pages.mjs` to fail the build if either page regresses to
+/// placeholder/draft content, so these links resolve to real Terms /
+/// Privacy content for App Store review (Guideline 3.1.2).
 public enum LegalLinks {
     // swiftlint:disable force_unwrapping
     // The URL literals below are static, valid https:// strings that cannot

@@ -489,13 +489,29 @@ public final class WorkoutDashboardModel: ObservableObject {
 
         let context = buildCoachContext()
 
+        // VOL-124 / VOL-197: redact PII from the free-text question before it
+        // leaves the device for the relay. In `.standard` mode this is a no-op;
+        // in `.strict` mode it strips email / phone / name / street-address
+        // tokens. This is symmetric with `buildCoachContext()`, which already
+        // redacts the structured context via `asPromptBlock(privacyMode:)`.
+        // The user still sees the original text in `userMessage` above — only
+        // the outbound copy sent to the provider is redacted. Before this, the
+        // strict-mode redactor was only applied inside the typed-`CoachContext`
+        // template overloads, never on the relay path's free-text question, so
+        // the privacy-policy claim ("redacts … before transmission") was
+        // unbacked on the cloud path.
+        let outboundPrompt = PromptPrivacyRedactor.redactQuestion(
+            prompt,
+            privacyMode: athlete.privacyMode
+        )
+
         // Create a placeholder message we'll append tokens to as they arrive.
         let streamingID = UUID()
         coachMessages.append(CoachMessage(id: streamingID, sender: .coach, content: ""))
 
         var accumulated = ""
         do {
-            let stream = aiProvider.streamCoachResponse(for: prompt, context: context)
+            let stream = aiProvider.streamCoachResponse(for: outboundPrompt, context: context)
             for try await chunk in stream {
                 accumulated += chunk
                 if let index = coachMessages.firstIndex(where: { $0.id == streamingID }) {

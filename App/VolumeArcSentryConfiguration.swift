@@ -49,9 +49,16 @@ enum VolumeArcSentryConfiguration {
             // crash sees the user's last 30s of UI. maskAllText hides
             // every text element (workout notes, coach memory, profile
             // fields) so HealthKit numbers and free-text never appear in
-            // the replay frames. Images are not masked because we don't
-            // render PII in images today; revisit if/when we add user
-            // photo uploads.
+            // the replay frames.
+            //
+            // VOL-124: maskAllImages is now `true` as well. The privacy
+            // policy discloses crash-session replay with BOTH text and
+            // images masked; keeping images unmasked would contradict that
+            // disclosure the moment any view renders user-derived imagery
+            // (e.g. a future progress-photo or share-card surface). Masking
+            // images now is cheap defense-in-depth and keeps the policy
+            // accurate without depending on "we don't render PII in images
+            // today" staying true.
             //
             // Requires sentry-cocoa 8.36.0+. VOL-188 bumped the pin to
             // 9.13.0 (sentry-cocoa 9.x major). The 4-arg replay initializer
@@ -64,7 +71,7 @@ enum VolumeArcSentryConfiguration {
                 sessionSampleRate: 0.0,
                 onErrorSampleRate: 1.0,
                 maskAllText: true,
-                maskAllImages: false
+                maskAllImages: true
             )
             options.sessionReplay = replay
 
