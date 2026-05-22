@@ -93,7 +93,17 @@ final class HealthKitRecoveryReaderTests: XCTestCase {
 
         let context = await reader.currentRecovery(now: .now)
 
-        XCTAssertFalse(context.hasAnyData)
+        // Every *measured* field is nil. Note `sleepDailyTargetHours` is
+        // always populated (it's the configured target, not read data), so
+        // `hasAnyData` is intentionally true here — we assert the measured
+        // fields rather than `hasAnyData`.
+        XCTAssertNil(context.hrvMean7Day)
+        XCTAssertNil(context.hrvBaseline28Day)
+        XCTAssertNil(context.hrvDeltaPercent)
+        XCTAssertNil(context.sleep7DayTotalHours)
+        XCTAssertNil(context.sleepDebtHours)
+        XCTAssertNil(context.strengthLoad7DayKJ)
+        XCTAssertNil(context.strengthLoad7DayMinutes)
         XCTAssertEqual(sink.events(named: "recovery_all_empty").count, 1)
         // Each of the four queries returned nil → four empty events.
         XCTAssertEqual(sink.events(named: "recovery_query_empty").count, 4)
