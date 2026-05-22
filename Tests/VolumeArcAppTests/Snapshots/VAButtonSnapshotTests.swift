@@ -28,6 +28,7 @@ import UIKit
 import XCTest
 import VolumeArcUI
 
+@MainActor
 final class VAButtonSnapshotTests: XCTestCase {
 
     private func primaryButton() -> some View {
