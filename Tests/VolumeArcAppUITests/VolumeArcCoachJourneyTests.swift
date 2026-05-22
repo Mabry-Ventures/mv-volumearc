@@ -198,4 +198,93 @@ final class VolumeArcCoachJourneyTests: XCTestCase {
             test: self
         )
     }
+
+    // MARK: - coach.follow-up-turn
+
+    /// VOL-141: the multi-turn journey. Ask one question, wait for the
+    /// first response to finish streaming, then ask a follow-up and
+    /// assert a SECOND coach bubble renders. The journey's success
+    /// criterion ("memory context referenced") isn't deterministically
+    /// assertable against the heuristic provider's free text, so the
+    /// contract pinned here is the structural one: a follow-up turn
+    /// produces a distinct second coach response in the same session.
+    ///
+    /// Bubble identifiers come from `CoachView.swift`: the first coach
+    /// reply (enumerated offset 1, non-empty) is `coach.firstResponse`;
+    /// every later bubble is `coach.message.<offset>`. After two turns
+    /// the messages are [user, coach, user, coach], so the follow-up
+    /// response is `coach.message.3`.
+    ///
+    /// Telemetry: the catalog names this `coach.session_continued`, but
+    /// that event isn't emitted yet (mirrors the `ask_complete`
+    /// substitution the sibling tests use); we assert `coach.ask_complete`
+    /// fires, which the second send re-triggers. Wiring the dedicated
+    /// `session_continued` event is a documented follow-up.
+    func testCoachFollowUpTurnRendersSecondResponse() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenCoachOnLaunch", "1"]
+        )
+        app.launch()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
+
+        let composer = app.descendants(matching: .any)
+            .matching(identifier: "coach.input")
+            .firstMatch
+        XCTAssertTrue(
+            composer.waitForExistence(timeout: 15),
+            "Coach composer should be reachable within 15s in -UITestMode"
+        )
+
+        let sendButton = app.descendants(matching: .any)
+            .matching(identifier: "coach.send")
+            .firstMatch
+
+        // Turn 1.
+        composer.tap()
+        composer.typeText("Should I push today?")
+        XCTAssertTrue(sendButton.waitForExistence(timeout: 5))
+        sendButton.tap()
+
+        let firstResponse = app.descendants(matching: .any)
+            .matching(identifier: "coach.firstResponse")
+            .firstMatch
+        XCTAssertTrue(
+            firstResponse.waitForExistence(timeout: 10),
+            "First coach response should appear within 10s of the first Send"
+        )
+
+        // Send is disabled while streaming; wait for the first turn's
+        // streaming indicator to clear before issuing the follow-up so
+        // the second Send is actually enabled.
+        let streamingIndicator = app.descendants(matching: .any)
+            .matching(identifier: "coach.streamingIndicator")
+            .firstMatch
+        _ = streamingIndicator.waitForNonExistence(timeout: 15)
+
+        // Turn 2 (the follow-up).
+        composer.tap()
+        composer.typeText("What about my bench specifically?")
+        XCTAssertTrue(
+            sendButton.waitForExistence(timeout: 5) && sendButton.isEnabled,
+            "Send should re-enable once the first turn finishes streaming"
+        )
+        sendButton.tap()
+
+        // The follow-up's coach bubble is the 4th message (offset 3).
+        let followUpResponse = app.descendants(matching: .any)
+            .matching(identifier: "coach.message.3")
+            .firstMatch
+        XCTAssertTrue(
+            followUpResponse.waitForExistence(timeout: 10),
+            "A second coach response bubble should render after the follow-up Send"
+        )
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "coach",
+            name: "ask_complete",
+            within: 10,
+            test: self
+        )
+    }
 }

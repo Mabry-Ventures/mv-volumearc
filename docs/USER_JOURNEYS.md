@@ -80,7 +80,7 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | `coach.ask-question` | Coach tab | Type question → tap Send | Response stream starts within 2s | `coach.question_sent` + `coach.first_token_received` | `VolumeArcCoachJourneyTests.testCoachAskQuestionStreamsResponse` |
 | `coach.scroll-memory` | Memory present | Scroll Coach tab | Memory loads paginated | (perf-only) | `VolumeArcCoachJourneyTests.testCoachScrollMemory` |
 | `coach.voice-prompt` | Premium + voice flag on | Tap mic → speak → release | Question transcribed → response spoken | `voice.session_started` | `[ ]` |
-| `coach.follow-up-turn` | Question answered | Type follow-up → Send | Memory context referenced in response | `coach.session_continued` | `[ ]` |
+| `coach.follow-up-turn` | Question answered | Type follow-up → Send | Memory context referenced in response | `coach.session_continued` | `VolumeArcCoachJourneyTests.testCoachFollowUpTurnRendersSecondResponse` (asserts a second coach bubble renders for the follow-up turn; the `coach.session_continued` event wiring is a follow-up — test gates on `coach.ask_complete`) |
 | `coach.relay-fallback` | Force relay 5xx | Ask question | Fallback to local heuristic; UI shows degraded notice | `coach.fallback_used` | `[ ]` |
 | `coach.privacy-mode-strict` | Privacy mode = strict | Ask question | PII redacted from prompt | `coach.privacy_redaction_applied` | `VolumeArcCoachJourneyTests.testCoachPrivacyModeStrictRedactsEmail` (asserts `coach.question_sent` today; the `coach.privacy_redaction_applied` event wiring follows-up at the `CoachPromptTemplate` call site — `PromptPrivacyRedactor` from VOL-197 currently has unit-test coverage only) |
 
