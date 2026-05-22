@@ -64,9 +64,11 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
+      # Runs BEFORE checkout: a runner/account mismatch should abort
+      # before we clone repo code onto the wrong host, giving the
+      # cleanest possible failure. The job is no-build / no-secret /
+      # read-only, so this isn't a security boundary — it's fail-fast
+      # hygiene (Codex P3).
       - name: Runner / UID fail-fast guard (VOL-246)
         # Hard-fail if this lands anywhere other than a trusted Mabry
         # Ventures self-hosted account, so a GitHub-hosted fallback or a
@@ -94,17 +96,32 @@ jobs:
               exit 1
               ;;
           esac
-          # The checked-out workspace must be owned by the running user;
-          # a mismatch means the runner account and the _work tree are out
-          # of sync (a known footgun on multi-account self-hosted hosts).
-          if owner_uid="$(stat -f '%u' "${GITHUB_WORKSPACE}" 2>/dev/null)"; then :; \
-            elif owner_uid="$(stat -c '%u' "${GITHUB_WORKSPACE}" 2>/dev/null)"; then :; \
-            else owner_uid="unknown"; fi
-          if [ "${owner_uid}" != "${uid}" ]; then
-            echo "::error::GITHUB_WORKSPACE (${GITHUB_WORKSPACE}) is owned by uid=${owner_uid} but the job runs as uid=${uid} — runner/account mismatch. Refusing to continue."
-            exit 1
+          # Workspace-ownership consistency: the runner agent creates
+          # GITHUB_WORKSPACE during job setup (before this step), owned by
+          # the runner account — a mismatch means the account and the
+          # _work tree are out of sync (a known footgun on multi-account
+          # self-hosted hosts). Running pre-checkout, the directory exists
+          # but is empty; if it somehow doesn't exist yet (brand-new
+          # runner), skip the check rather than fail spuriously — the UID
+          # gate above is the hard guarantee.
+          if [ -d "${GITHUB_WORKSPACE}" ]; then
+            if owner_uid="$(stat -f '%u' "${GITHUB_WORKSPACE}" 2>/dev/null)"; then :; \
+              elif owner_uid="$(stat -c '%u' "${GITHUB_WORKSPACE}" 2>/dev/null)"; then :; \
+              else owner_uid="unknown"; fi
+            if [ "${owner_uid}" = "unknown" ]; then
+              echo "::warning::Could not stat GITHUB_WORKSPACE owner; skipping ownership check (uid gate already passed)."
+            elif [ "${owner_uid}" != "${uid}" ]; then
+              echo "::error::GITHUB_WORKSPACE (${GITHUB_WORKSPACE}) is owned by uid=${owner_uid} but the job runs as uid=${uid} — runner/account mismatch. Refusing to continue."
+              exit 1
+            else
+              echo "Workspace ownership consistent (uid=${uid})."
+            fi
+          else
+            echo "GITHUB_WORKSPACE does not exist yet (fresh runner, pre-checkout); skipping ownership check."
           fi
-          echo "Workspace ownership consistent (uid=${uid})."
+
+      - name: Checkout
+        uses: actions/checkout@v6
 
       - name: Prepare Ruby toolchain
         # Same bootstrap as `ci.yml`: ensure Homebrew Ruby + the pinned
