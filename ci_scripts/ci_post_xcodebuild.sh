@@ -101,7 +101,7 @@ case "${CI_XCODEBUILD_ACTION:-}" in
         COVERAGE_SUMMARY_JSON="$COVERAGE_TMP/volumearccore.json" \
         bash "$CHECK_COVERAGE"
     else
-      echo "VOL-246: measuring VolumeArcCore coverage (non-blocking on VOL-PR; hard gate on VOL-Main)"
+      echo "VOL-246: measuring VolumeArcCore coverage (non-blocking on 'VOL PR'; hard gate on 'VOL Main')"
       COVERAGE_TARGET="VolumeArcCore" COVERAGE_THRESHOLD="0" \
         COVERAGE_SUMMARY_JSON="$COVERAGE_TMP/volumearccore.json" \
         bash "$CHECK_COVERAGE"
