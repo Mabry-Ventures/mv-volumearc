@@ -555,6 +555,13 @@ add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   # directly into the test bundle. Guarded by `#if canImport(Sentry)`.
   'VolumeArcSentryConfiguration.swift',
   'VolumeArcWidgetController.swift',
+  # VOL-136: same pattern — `HealthKitRecoveryReaderTests` injects a
+  # `FakeRecoverySampleSource` through the reader's internal seam init to
+  # exercise the HRV-delta / sleep-debt aggregation + the empty / partial /
+  # query-failed telemetry routing without a live `HKHealthStore`. The App
+  # target exposes no testable Swift module, so the source is compiled into
+  # the test bundle. Guarded by `#if canImport(HealthKit)` inside the file.
+  'Health/HealthKitRecoveryReader.swift',
 ])
 
 # Sentry Swift Package dependency

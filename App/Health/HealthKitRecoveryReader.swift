@@ -24,16 +24,64 @@ import VolumeArcCore
 /// `RecoveryContext.asPromptBullets()` simply omits that line). Errors
 /// are only thrown for HK availability or authorization failures.
 ///
-/// The struct accepts a `HKHealthStore` dependency at init so the
-/// production path can share the app's existing store instance and
-/// tests (which can't easily mock `HKHealthStore` directly) can
-/// substitute a different reader implementation via the
-/// `RecoveryReader` protocol seam.
+/// VOL-136: the reader is split into two pieces so its orchestration
+/// (query fan-out, telemetry routing, HRV-delta / sleep-debt
+/// aggregation) is unit-testable without a live `HKHealthStore`:
+///
+/// - `RecoverySampleSource` is a HealthKit-free seam exposing the three
+///   primitive fetches the reader needs as plain `Double?` / typed
+///   optionals.
+/// - `HealthKitRecoverySampleSource` is the production implementation
+///   that runs the real `HKStatisticsQuery` / `HKSampleQuery` calls.
+/// - `HealthKitRecoveryReader` orchestrates the source: it owns the
+///   availability gate, the per-field `runQuery` telemetry wrapper, the
+///   empty/partial diagnostics, and the final `RecoveryContext`
+///   assembly. Tests inject a `FakeRecoverySampleSource` to exercise all
+///   of that deterministically (see `HealthKitRecoveryReaderTests`).
+///
+/// The public `init(healthStore:…)` is unchanged, so the production call
+/// site in `VolumeArcAppFactories` keeps working with no edits.
+
+/// Strength-training load summary for a window: total active energy in
+/// kilojoules and total workout minutes. HealthKit-free so it can cross
+/// the `RecoverySampleSource` seam and be asserted in unit tests.
+public struct RecoveryStrengthLoad: Sendable, Equatable {
+    public let kj: Double
+    public let minutes: Double
+
+    public init(kj: Double, minutes: Double) {
+        self.kj = kj
+        self.minutes = minutes
+    }
+}
+
+/// HealthKit-free seam over the three primitive recovery fetches.
+/// Implementations absorb HealthKit specifics and return plain numeric
+/// optionals (`nil` == "no samples in window"); throwing is reserved for
+/// genuine query failures so the reader can route them to distinct
+/// telemetry.
+public protocol RecoverySampleSource: Sendable {
+    /// Whether health data can be read on this device at all (the
+    /// production source forwards `HKHealthStore.isHealthDataAvailable()`).
+    var isHealthDataAvailable: Bool { get }
+
+    /// Discrete-average HRV (SDNN) in milliseconds over the trailing
+    /// `days` window, or `nil` if there were no samples.
+    func meanHRVMilliseconds(overDays days: Int, now: Date) async throws -> Double?
+
+    /// Total asleep hours (Core + Deep + REM) over the trailing `days`
+    /// window, or `nil` if there were no asleep samples.
+    func totalAsleepHours(overDays days: Int, now: Date) async throws -> Double?
+
+    /// Strength-training load (energy + duration) over the trailing
+    /// `days` window, or `nil` if there were no strength workouts.
+    func strengthLoad(overDays days: Int, now: Date) async throws -> RecoveryStrengthLoad?
+}
+
 public struct HealthKitRecoveryReader: RecoveryReader {
 
-    private let healthStore: HKHealthStore
+    private let source: RecoverySampleSource
     private let sleepTargetHours: Double
-    private let strengthActivityType: HKWorkoutActivityType
     /// VOL-203: optional telemetry sink. When set, the reader emits
     /// typed events so operators can distinguish "user has no data"
     /// from "permission revoked" from "query failed" — three states
@@ -44,20 +92,41 @@ public struct HealthKitRecoveryReader: RecoveryReader {
     /// the operator needs to act on.
     private let telemetrySink: (any TelemetrySink)?
 
+    /// Production initializer. Builds a real `HKHealthStore`-backed
+    /// sample source. The signature is unchanged from before VOL-136 so
+    /// existing call sites compile without edits.
     public init(
         healthStore: HKHealthStore = HKHealthStore(),
         sleepTargetHours: Double = 8.0,
         strengthActivityType: HKWorkoutActivityType = .traditionalStrengthTraining,
         telemetrySink: (any TelemetrySink)? = nil
     ) {
-        self.healthStore = healthStore
+        self.init(
+            source: HealthKitRecoverySampleSource(
+                healthStore: healthStore,
+                strengthActivityType: strengthActivityType
+            ),
+            sleepTargetHours: sleepTargetHours,
+            telemetrySink: telemetrySink
+        )
+    }
+
+    /// VOL-136 seam initializer. Injects an arbitrary `RecoverySampleSource`
+    /// so tests can drive the reader's aggregation + telemetry paths with a
+    /// deterministic in-memory fake. `internal` (not `private`) so the App
+    /// test target can reach it; not part of the public API.
+    init(
+        source: RecoverySampleSource,
+        sleepTargetHours: Double = 8.0,
+        telemetrySink: (any TelemetrySink)? = nil
+    ) {
+        self.source = source
         self.sleepTargetHours = sleepTargetHours
-        self.strengthActivityType = strengthActivityType
         self.telemetrySink = telemetrySink
     }
 
     public func currentRecovery(now: Date = .now) async -> RecoveryContext {
-        guard HKHealthStore.isHealthDataAvailable() else {
+        guard source.isHealthDataAvailable else {
             // VOL-203: simulator / unsupported-device path. Operator
             // shouldn't see this as a real "user data missing" event,
             // so route it to its own category for filtering.
@@ -65,8 +134,8 @@ public struct HealthKitRecoveryReader: RecoveryReader {
                 category: "healthkit",
                 name: "recovery_unavailable",
                 severity: .info,
-                message: "HKHealthStore not available on this device — recovery context omitted.",
-                metadata: ["reason": "HKHealthStore.isHealthDataAvailable() == false"]
+                message: "Health data not available on this device — recovery context omitted.",
+                metadata: ["reason": "isHealthDataAvailable == false"]
             ))
             return RecoveryContext()
         }
@@ -78,10 +147,10 @@ public struct HealthKitRecoveryReader: RecoveryReader {
         // permissions from query failures. The reader still returns
         // `RecoveryContext` (the protocol contract); the caller path
         // doesn't change, but the telemetry stream carries the signal.
-        async let hrv7 = runQuery(field: "hrv7") { try await self.meanHRV(overDays: 7, now: now) }
-        async let hrv28 = runQuery(field: "hrv28") { try await self.meanHRV(overDays: 28, now: now) }
-        async let sleep7 = runQuery(field: "sleep7") { try await self.totalSleepHours(overDays: 7, now: now) }
-        async let load = runQuery(field: "strength_load") { try await self.strengthLoad(overDays: 7, now: now) }
+        async let hrv7 = runQuery(field: "hrv7") { try await self.source.meanHRVMilliseconds(overDays: 7, now: now) }
+        async let hrv28 = runQuery(field: "hrv28") { try await self.source.meanHRVMilliseconds(overDays: 28, now: now) }
+        async let sleep7 = runQuery(field: "sleep7") { try await self.source.totalAsleepHours(overDays: 7, now: now) }
+        async let load = runQuery(field: "strength_load") { try await self.source.strengthLoad(overDays: 7, now: now) }
 
         let mean7Day = await hrv7
         let baseline = await hrv28
@@ -143,7 +212,7 @@ public struct HealthKitRecoveryReader: RecoveryReader {
 
     // MARK: - Query telemetry wrapper (VOL-203)
 
-    /// Wraps a single HK-backed query so a throw becomes a typed
+    /// Wraps a single source query so a throw becomes a typed
     /// `healthkit.recovery_query_failed` telemetry event (with the
     /// field name and the underlying error code, but never the user
     /// values) and a successful empty result becomes a
@@ -151,7 +220,7 @@ public struct HealthKitRecoveryReader: RecoveryReader {
     /// a flat `Double?` / typed-optional back, so the per-field
     /// degradation behavior matches the prior `try?` pattern exactly.
     /// `T` is the per-field optional shape (Double? for HRV/sleep,
-    /// (kj, minutes)? for strength load).
+    /// `RecoveryStrengthLoad?` for strength load).
     private func runQuery<T>(field: String, work: @Sendable () async throws -> T?) async -> T? {
         do {
             let value = try await work()
@@ -181,10 +250,32 @@ public struct HealthKitRecoveryReader: RecoveryReader {
             return nil
         }
     }
+}
+
+/// Production `RecoverySampleSource` that runs the real HealthKit
+/// queries. Extracted from `HealthKitRecoveryReader` in VOL-136 so the
+/// reader's orchestration can be unit-tested behind the seam; the query
+/// bodies are unchanged.
+public struct HealthKitRecoverySampleSource: RecoverySampleSource {
+
+    private let healthStore: HKHealthStore
+    private let strengthActivityType: HKWorkoutActivityType
+
+    public init(
+        healthStore: HKHealthStore = HKHealthStore(),
+        strengthActivityType: HKWorkoutActivityType = .traditionalStrengthTraining
+    ) {
+        self.healthStore = healthStore
+        self.strengthActivityType = strengthActivityType
+    }
+
+    public var isHealthDataAvailable: Bool {
+        HKHealthStore.isHealthDataAvailable()
+    }
 
     // MARK: - HRV
 
-    private func meanHRV(overDays days: Int, now: Date) async throws -> Double? {
+    public func meanHRVMilliseconds(overDays days: Int, now: Date) async throws -> Double? {
         guard let hrvType = HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN) else {
             return nil
         }
@@ -210,7 +301,7 @@ public struct HealthKitRecoveryReader: RecoveryReader {
 
     // MARK: - Sleep
 
-    private func totalSleepHours(overDays days: Int, now: Date) async throws -> Double? {
+    public func totalAsleepHours(overDays days: Int, now: Date) async throws -> Double? {
         guard let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else {
             return nil
         }
@@ -257,12 +348,7 @@ public struct HealthKitRecoveryReader: RecoveryReader {
 
     // MARK: - Strength load
 
-    private struct StrengthLoadSummary {
-        let kj: Double
-        let minutes: Double
-    }
-
-    private func strengthLoad(overDays days: Int, now: Date) async throws -> StrengthLoadSummary? {
+    public func strengthLoad(overDays days: Int, now: Date) async throws -> RecoveryStrengthLoad? {
         let workoutType = HKObjectType.workoutType()
         let start = Calendar.current.date(byAdding: .day, value: -days, to: now) ?? now
         let datePredicate = HKQuery.predicateForSamples(withStart: start, end: now, options: .strictStartDate)
@@ -299,7 +385,7 @@ public struct HealthKitRecoveryReader: RecoveryReader {
                 }
                 // 1 kcal = 4.184 kJ (Apple Health convention).
                 let totalKJ = totalKcal * 4.184
-                continuation.resume(returning: StrengthLoadSummary(kj: totalKJ, minutes: totalMinutes))
+                continuation.resume(returning: RecoveryStrengthLoad(kj: totalKJ, minutes: totalMinutes))
             }
             healthStore.execute(query)
         }
