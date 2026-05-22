@@ -1,3 +1,5 @@
+// NEGATIVE-CONTROL (green): VOL-246 cutover gate — no-op comment to prove
+// the VolumeArc PR workflow actually builds + runs tests. DO NOT MERGE.
 import Foundation
 
 public protocol NotificationStore: Sendable {}
