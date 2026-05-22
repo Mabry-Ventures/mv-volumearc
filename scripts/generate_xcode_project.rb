@@ -88,6 +88,25 @@ perf_tests_group = tests_root_group.new_group('VolumeArcAppPerfTests', 'VolumeAr
 # the snapshot regression infrastructure from VOL-135 / VOL-201
 # lands.
 widget_ui_tests_group = tests_root_group.new_group('VolumeArcWidgetUITests', 'VolumeArcWidgetUITests')
+# VOL-246: register the Xcode Cloud test plans as project file references.
+# The shared scheme's <TestPlans> block is enough for
+# `xcodebuild -showTestPlans`, but the App Store Connect workflow editor
+# enumerates test plans from the PROJECT model — without these
+# PBXFileReferences the Test Option dropdown only offers "Use Scheme
+# Setting" and won't surface VOL-PR / VOL-Main per-workflow. The
+# `.xctestplan` files themselves are (re)written near the end of this
+# script, after `project.save`; here we only add the project references
+# so they get deterministic UUIDs from `predictabilize_uuids`.
+test_plans_group = project.main_group.new_group('TestPlans', 'TestPlans')
+test_plan_pr_ref = test_plans_group.new_file('VOL-PR.xctestplan')
+test_plan_main_ref = test_plans_group.new_file('VOL-Main.xctestplan')
+# Pin the file type to what Xcode itself records for a test plan so the
+# project model matches a natively-authored one (the gem leaves an
+# unrecognized extension as a generic file otherwise).
+[test_plan_pr_ref, test_plan_main_ref].each do |ref|
+  ref.last_known_file_type = 'text'
+  ref.include_in_index = '0'
+end
 shared_group = project.main_group.new_group('Shared Native Package Sources')
 core_group = shared_group.new_group('VolumeArcCore', PACKAGE_ROOT.join('Sources/VolumeArcCore').relative_path_from(ROOT).to_s)
 ui_group = shared_group.new_group('VolumeArcUI', PACKAGE_ROOT.join('Sources/VolumeArcUI').relative_path_from(ROOT).to_s)

@@ -1,0 +1,137 @@
+name: Repo Hygiene
+
+# VOL-246: project-generator integrity gates, rehomed off `ci.yml`.
+#
+# Cutover context: when the self-hosted `ci.yml` "Build & Test" job is
+# disabled (its build/test/sim work moves to Xcode Cloud), two gates lose
+# their home:
+#
+#   * Generator determinism (VOL-95)       — `ruby generate_xcode_project.rb`
+#                                             is byte-stable run-to-run
+#   * Generator regen-idempotence (VOL-106) — the committed project ==
+#                                             a fresh regen (catches a
+#                                             hand-edited / stale-committed
+#                                             pbxproj)
+#
+# These are project-generator integrity checks. They are macOS-bound (the
+# generator monkey-patches the `xcodeproj` gem's UUID generator and the
+# committed project was generated on macOS, so the comparison must run on
+# the same platform to be meaningful) — they CANNOT move to Xcode Cloud
+# (clean image, no `xcodeproj` gem) and SHOULD NOT move to a Linux runner
+# (cross-platform regen could diverge). They run here as a no-build,
+# no-simulator, no-test Ruby job (~30s) — distinct from the heavy
+# build/sim work the migration moves to Xcode Cloud, and with zero
+# orphan-CoreSimulator-cascade risk because it never boots a simulator.
+#
+# The two watch gates that also lived in `ci.yml` (watch-app embedding,
+# watch AppIcon renditions) are NOT rehomed here: they are already covered
+# — more strongly, against the real built artifact — by the VOL-133
+# archive contract in `ci_scripts/ci_post_xcodebuild.sh`, which runs on
+# Xcode Cloud's archive/release flow.
+#
+# At cutover the owner adds the "Repo Hygiene" job as a required status
+# check on `main`.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: repo-hygiene-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  repo-hygiene:
+    name: Repo Hygiene
+    # VOL-132: same fork-PR guard as `ci.yml` — this job executes the
+    # repo's generator (arbitrary repo code) on the privileged self-hosted
+    # host, so it must not run untrusted fork code.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # The `mv-volumearc-runner` label is carried by BOTH the dedicated
+    # `volumearc-runner` host (uid 505) AND the shared flex pool
+    # `mv-shared-01..04` (githubrunner, uid 502). The dedicated runner's
+    # label set is a strict subset of the flex runners', so NO `runs-on`
+    # combination can isolate the dedicated host — the job lands on
+    # whichever of the five is idle. That's fine for these no-build gates
+    # (they only need Ruby + the xcodeproj gem, ensured per-job below);
+    # the UID guard step asserts we're on a trusted MV-fleet account.
+    runs-on: [self-hosted, mv-volumearc-runner]
+    timeout-minutes: 10
+
+    steps:
+      # Runs BEFORE checkout: a runner/account mismatch should abort
+      # before we clone repo code onto the wrong host, giving the
+      # cleanest possible failure. The job is no-build / no-secret /
+      # read-only, so this isn't a security boundary — it's fail-fast
+      # hygiene (Codex P3).
+      - name: Runner / UID fail-fast guard (VOL-246)
+        # Hard-fail if this lands anywhere other than a trusted Mabry
+        # Ventures self-hosted account, so a GitHub-hosted fallback or a
+        # misconfigured runner can never produce a misleading green/red
+        # for project-integrity. uid 505 = dedicated volumearc-runner
+        # (preferred); uid 502 = githubrunner flex pool (acceptable — the
+        # gates are platform-equivalent there). Anything else aborts.
+        shell: bash
+        run: |
+          set -euo pipefail
+          uid="$(id -u)"
+          user="$(id -un)"
+          runner="${RUNNER_NAME:-unknown}"
+          echo "Repo Hygiene preflight: uid=${uid} user=${user} runner=${runner}"
+          echo "  GITHUB_WORKSPACE=${GITHUB_WORKSPACE}"
+          case "${uid}" in
+            505)
+              echo "On dedicated volumearc-runner (uid 505)."
+              ;;
+            502)
+              echo "::warning::Repo Hygiene is running on the shared flex pool (githubrunner uid 502, runner=${runner}) rather than the dedicated volumearc-runner (uid 505). The 'mv-volumearc-runner' label matches both and these no-build gates run correctly on either, so this is allowed — noting it for visibility."
+              ;;
+            *)
+              echo "::error::Repo Hygiene landed on an unexpected uid=${uid} (user=${user}, runner=${runner}). Expected a Mabry Ventures self-hosted account — volumearc-runner (uid 505) or the githubrunner flex pool (uid 502). A GitHub-hosted or misconfigured runner must not run the project-integrity gates. Refusing to continue."
+              exit 1
+              ;;
+          esac
+          # Workspace-ownership consistency: the runner agent creates
+          # GITHUB_WORKSPACE during job setup (before this step), owned by
+          # the runner account — a mismatch means the account and the
+          # _work tree are out of sync (a known footgun on multi-account
+          # self-hosted hosts). Running pre-checkout, the directory exists
+          # but is empty; if it somehow doesn't exist yet (brand-new
+          # runner), skip the check rather than fail spuriously — the UID
+          # gate above is the hard guarantee.
+          if [ -d "${GITHUB_WORKSPACE}" ]; then
+            if owner_uid="$(stat -f '%u' "${GITHUB_WORKSPACE}" 2>/dev/null)"; then :; \
+              elif owner_uid="$(stat -c '%u' "${GITHUB_WORKSPACE}" 2>/dev/null)"; then :; \
+              else owner_uid="unknown"; fi
+            if [ "${owner_uid}" = "unknown" ]; then
+              echo "::warning::Could not stat GITHUB_WORKSPACE owner; skipping ownership check (uid gate already passed)."
+            elif [ "${owner_uid}" != "${uid}" ]; then
+              echo "::error::GITHUB_WORKSPACE (${GITHUB_WORKSPACE}) is owned by uid=${owner_uid} but the job runs as uid=${uid} — runner/account mismatch. Refusing to continue."
+              exit 1
+            else
+              echo "Workspace ownership consistent (uid=${uid})."
+            fi
+          else
+            echo "GITHUB_WORKSPACE does not exist yet (fresh runner, pre-checkout); skipping ownership check."
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Prepare Ruby toolchain
+        # Same bootstrap as `ci.yml`: ensure Homebrew Ruby + the pinned
+        # `xcodeproj` gem are on PATH on whichever fleet runner this lands
+        # on (the system Ruby is EOL and lacks the gem).
+        run: bash ./.github/scripts/prepare_ruby_toolchain.sh xcodeproj
+        shell: bash
+
+      - name: Generator determinism gate (VOL-95)
+        run: ./scripts/test_xcode_project_determinism.sh
+
+      - name: Generator regen-idempotence gate (VOL-106)
+        run: ./scripts/test_xcode_project_regen_idempotent.sh
