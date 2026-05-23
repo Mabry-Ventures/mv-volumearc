@@ -93,16 +93,20 @@ public enum HealthKitAuthorizationScope {
     ]
 
     /// Types the app asks permission to READ on iPhone. Workouts feed
-    /// readiness + coach context + training history UI; HRV (SDNN) and
-    /// sleep analysis feed the VOL-181 `HealthKitRecoveryReader` which
-    /// drives the "Recovery (Apple Health)" section of the coach
-    /// prompt and the Today-tab recovery chip. No heart rate, no
-    /// active energy at phone scope — those are only consumed by the
+    /// readiness + coach context + training history UI; HRV (SDNN),
+    /// sleep analysis, Apple Workout Effort, wrist temperature, and
+    /// respiratory rate feed the `HealthKitRecoveryReader` which drives
+    /// the "Recovery (Apple Health)" prompt block and "Vitals say" chip.
+    /// No heart rate at phone scope — that is only consumed by the
     /// watchOS live-workout pipeline.
     public static let phoneReadIdentifiers: Set<String> = [
         "HKWorkoutTypeIdentifier",
         "HKQuantityTypeIdentifierHeartRateVariabilitySDNN",
         "HKCategoryTypeIdentifierSleepAnalysis",
+        "HKQuantityTypeIdentifierWorkoutEffortScore",
+        "HKQuantityTypeIdentifierEstimatedWorkoutEffortScore",
+        "HKQuantityTypeIdentifierAppleSleepingWristTemperature",
+        "HKQuantityTypeIdentifierRespiratoryRate",
     ]
 
     /// Types the app asks permission to READ on Apple Watch. Adds heart rate
@@ -262,14 +266,27 @@ public actor HealthKitRuntimeStore: HealthStore {
     static func phoneReadTypes() -> Set<HKObjectType> {
         // Mirrors `HealthKitAuthorizationScope.phoneReadIdentifiers`.
         var types: Set<HKObjectType> = [HKObjectType.workoutType()]
-        // VOL-181: HRV (SDNN) + sleep analysis are read on iPhone by
+        // HRV (SDNN), sleep analysis, Apple Workout Effort, wrist
+        // temperature, and respiratory rate are read on iPhone by
         // `HealthKitRecoveryReader` to populate the coach prompt's
-        // recovery section and the Today-tab recovery chip.
+        // recovery section and the Today-tab "Vitals say" chip.
         if let hrv = HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN) {
             types.insert(hrv)
         }
         if let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) {
             types.insert(sleep)
+        }
+        if let effort = HKObjectType.quantityType(forIdentifier: .workoutEffortScore) {
+            types.insert(effort)
+        }
+        if let estimatedEffort = HKObjectType.quantityType(forIdentifier: .estimatedWorkoutEffortScore) {
+            types.insert(estimatedEffort)
+        }
+        if let wristTemperature = HKObjectType.quantityType(forIdentifier: .appleSleepingWristTemperature) {
+            types.insert(wristTemperature)
+        }
+        if let respiratoryRate = HKObjectType.quantityType(forIdentifier: .respiratoryRate) {
+            types.insert(respiratoryRate)
         }
         return types
     }

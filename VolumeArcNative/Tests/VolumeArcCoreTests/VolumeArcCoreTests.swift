@@ -35,13 +35,21 @@ import HealthKit
     #expect(result?.contains("42") == true)
 }
 
-<<<<<<< HEAD
-// VOL-80: Regression test. The phone read set must stay small — only workouts.
-// Adding heart rate, active energy, sleep, HRV, etc. on the phone requires a
-// consumer for that data AND an updated `NSHealthShareUsageDescription` string
-// in `scripts/generate_xcode_project.rb` that names the new category.
-@Test func phoneHealthKitReadScopeIsWorkoutsOnly() {
-    #expect(HealthKitAuthorizationScope.phoneReadIdentifiers == ["HKWorkoutTypeIdentifier"])
+// VOL-80 / VOL-181 / VOL-154: Regression test. The phone read set must
+// stay least-privilege and match the recovery surfaces that consume it.
+// Adding a HealthKit type requires a real consumer AND an updated
+// `NSHealthShareUsageDescription` string in `scripts/generate_xcode_project.rb`
+// that names the new category.
+@Test func phoneHealthKitReadScopeMatchesRecoveryConsumers() {
+    #expect(HealthKitAuthorizationScope.phoneReadIdentifiers == [
+        "HKWorkoutTypeIdentifier",
+        "HKQuantityTypeIdentifierHeartRateVariabilitySDNN",
+        "HKCategoryTypeIdentifierSleepAnalysis",
+        "HKQuantityTypeIdentifierWorkoutEffortScore",
+        "HKQuantityTypeIdentifierEstimatedWorkoutEffortScore",
+        "HKQuantityTypeIdentifierAppleSleepingWristTemperature",
+        "HKQuantityTypeIdentifierRespiratoryRate",
+    ])
 }
 
 // VOL-80: Regression test. Watch adds heart rate + active energy so the live
@@ -73,7 +81,7 @@ import HealthKit
     #expect(watchIdentifiers == HealthKitAuthorizationScope.watchReadIdentifiers)
 }
 #endif
-=======
+
 @Test func legalLinksAreHTTPS() {
     // VOL-71: both legal URLs must parse and use https. App Store review
     // will reject legal links that fall back to http or are malformed, even
@@ -86,4 +94,3 @@ import HealthKit
     #expect(LegalLinks.privacyPolicy.host == "volumearc.app")
     #expect(LegalLinks.privacyPolicy.path == "/privacy")
 }
->>>>>>> origin/main

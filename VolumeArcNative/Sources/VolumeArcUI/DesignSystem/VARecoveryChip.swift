@@ -12,7 +12,9 @@ import VolumeArcCore
 /// 2. Sleep debt if `|sleepDebtHours| > 2` (a deficit large enough
 ///    that programming should react)
 /// 3. Apple Watch Vitals score, when present
-/// 4. "All systems normal" fallback when data is present but
+/// 4. Wrist-temperature or respiratory-rate vitals trend
+/// 5. Apple Workout Effort / Training Load score
+/// 6. "All systems normal" fallback when data is present but
 ///    unremarkable
 ///
 /// Renders nothing (`EmptyView`) when `recovery.hasAnyData == false` —
@@ -45,7 +47,7 @@ public struct VARecoveryChip: View {
                     .font(VA.Typography.headline)
                     .foregroundStyle(dominantSignal.tint)
                 VStack(alignment: .leading, spacing: VA.Space.xxs) {
-                    Text(String(localized: "Recovery", comment: "Recovery chip leading label"))
+                    Text(String(localized: "Vitals say", comment: "Recovery chip leading label"))
                         .font(VA.Typography.footnote)
                         .foregroundStyle(VA.Colors.textSecondary)
                     Text(dominantSignal.headline)
@@ -139,6 +141,48 @@ public struct VARecoveryChip: View {
             )
         }
 
+        if let delta = recovery.wristTemperatureDeltaCelsius, abs(delta) >= 0.15 {
+            let sign = delta >= 0 ? "+" : ""
+            let value = String(format: "%.2f", delta)
+            return Signal(
+                headline: String(
+                    localized: "Wrist temp \(sign)\(value)°C",
+                    comment: "Recovery chip headline for overnight wrist-temperature trend"
+                ),
+                iconName: delta >= 0 ? "thermometer.high" : "thermometer.low",
+                tint: abs(delta) >= 0.3 ? VA.Colors.warning : VA.Colors.secondary,
+                accessibilityLabel: "Wrist temperature \(sign)\(value) degrees Celsius versus baseline"
+            )
+        }
+
+        if let delta = recovery.respiratoryRateDelta, abs(delta) >= 0.5 {
+            let sign = delta >= 0 ? "+" : ""
+            let value = String(format: "%.1f", delta)
+            return Signal(
+                headline: String(
+                    localized: "Breathing \(sign)\(value) br/min",
+                    comment: "Recovery chip headline for respiratory-rate trend"
+                ),
+                iconName: "lungs.fill",
+                tint: delta > 0 ? VA.Colors.warning : VA.Colors.success,
+                accessibilityLabel: "Respiratory rate \(sign)\(value) breaths per minute versus baseline"
+            )
+        }
+
+        if let effort = recovery.appleWorkoutEffort7DayAverage
+            ?? recovery.appleEstimatedWorkoutEffort7DayAverage {
+            let value = String(format: "%.1f", effort)
+            return Signal(
+                headline: String(
+                    localized: "Training load \(value)/10",
+                    comment: "Recovery chip headline for Apple Workout Effort"
+                ),
+                iconName: "figure.strengthtraining.traditional",
+                tint: effort >= 8 ? VA.Colors.warning : VA.Colors.primary,
+                accessibilityLabel: "Apple training load effort \(value) out of 10"
+            )
+        }
+
         return Signal(
             headline: String(
                 localized: "All systems normal",
@@ -222,6 +266,46 @@ public struct VARecoveryDetailSheet: View {
                             if let minutes = recovery.strengthLoad7DayMinutes {
                                 row(label: String(localized: "Time", comment: "Recovery detail strength load time label"),
                                     value: String(format: "%.0f min", minutes))
+                            }
+                        }
+                    }
+
+                    if recovery.appleWorkoutEffort7DayAverage != nil
+                        || recovery.appleEstimatedWorkoutEffort7DayAverage != nil {
+                        section(title: String(localized: "Apple Training Load", comment: "Recovery detail Apple training load section title")) {
+                            if let effort = recovery.appleWorkoutEffort7DayAverage {
+                                row(label: String(localized: "Workout Effort", comment: "Recovery detail Apple Workout Effort label"),
+                                    value: String(format: "%.1f/10", effort))
+                            }
+                            if let effort = recovery.appleEstimatedWorkoutEffort7DayAverage {
+                                row(label: String(localized: "Estimated effort", comment: "Recovery detail estimated Workout Effort label"),
+                                    value: String(format: "%.1f/10", effort))
+                            }
+                        }
+                    }
+
+                    if recovery.wristTemperature7DayMeanCelsius != nil
+                        || recovery.wristTemperatureDeltaCelsius != nil
+                        || recovery.respiratoryRate7DayMean != nil
+                        || recovery.respiratoryRateDelta != nil {
+                        section(title: String(localized: "Vitals trends", comment: "Recovery detail Vitals trend section title")) {
+                            if let temp = recovery.wristTemperature7DayMeanCelsius {
+                                row(label: String(localized: "Wrist temp 7d", comment: "Recovery detail wrist temperature mean label"),
+                                    value: String(format: "%.2f°C", temp))
+                            }
+                            if let delta = recovery.wristTemperatureDeltaCelsius {
+                                let sign = delta >= 0 ? "+" : ""
+                                row(label: String(localized: "Wrist temp vs baseline", comment: "Recovery detail wrist temperature delta label"),
+                                    value: "\(sign)\(String(format: "%.2f", delta))°C")
+                            }
+                            if let rate = recovery.respiratoryRate7DayMean {
+                                row(label: String(localized: "Respiratory rate 7d", comment: "Recovery detail respiratory rate mean label"),
+                                    value: String(format: "%.1f br/min", rate))
+                            }
+                            if let delta = recovery.respiratoryRateDelta {
+                                let sign = delta >= 0 ? "+" : ""
+                                row(label: String(localized: "Breathing vs baseline", comment: "Recovery detail respiratory rate delta label"),
+                                    value: "\(sign)\(String(format: "%.1f", delta)) br/min")
                             }
                         }
                     }

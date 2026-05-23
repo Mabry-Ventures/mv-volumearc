@@ -676,8 +676,9 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         // VOL-227 fix: phone and watch read scopes are disjoint
         // extensions of the shared `HKWorkoutTypeIdentifier`, not a
         // subset relationship.
-        //   * Phone adds HRV-SDNN + Sleep Analysis (VOL-181 recovery
-        //     reader), which the watch doesn't need.
+        //   * Phone adds HRV-SDNN, Sleep Analysis, Apple Workout Effort,
+        //     wrist temperature, and respiratory rate (recovery reader),
+        //     which the watch doesn't need.
         //   * Watch adds Heart Rate + Active Energy (live workout
         //     data source), which the phone doesn't need.
         // The original VOL-80 comment + `isSubset` assertion
@@ -694,6 +695,26 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
             HealthKitAuthorizationScope.phoneReadIdentifiers
                 .contains("HKQuantityTypeIdentifierHeartRateVariabilitySDNN"),
             "Phone read scope should include HRV-SDNN for VOL-181 recovery analysis"
+        )
+        XCTAssertTrue(
+            HealthKitAuthorizationScope.phoneReadIdentifiers
+                .contains("HKQuantityTypeIdentifierWorkoutEffortScore"),
+            "Phone read scope should include Apple Workout Effort for VOL-154 training load"
+        )
+        XCTAssertTrue(
+            HealthKitAuthorizationScope.phoneReadIdentifiers
+                .contains("HKQuantityTypeIdentifierEstimatedWorkoutEffortScore"),
+            "Phone read scope should include estimated Workout Effort for VOL-154 training load fallback"
+        )
+        XCTAssertTrue(
+            HealthKitAuthorizationScope.phoneReadIdentifiers
+                .contains("HKQuantityTypeIdentifierAppleSleepingWristTemperature"),
+            "Phone read scope should include wrist temperature for VOL-154 Vitals trends"
+        )
+        XCTAssertTrue(
+            HealthKitAuthorizationScope.phoneReadIdentifiers
+                .contains("HKQuantityTypeIdentifierRespiratoryRate"),
+            "Phone read scope should include respiratory rate for VOL-154 Vitals trends"
         )
         XCTAssertFalse(
             HealthKitAuthorizationScope.watchReadIdentifiers
