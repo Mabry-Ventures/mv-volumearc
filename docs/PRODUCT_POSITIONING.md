@@ -44,7 +44,7 @@ The pitch: *"If you live inside the Apple ecosystem, VolumeArc is the only stren
 **What we'd need to still ship to credibly hold this position:**
 - Exercise catalog: scale from ~11 to 100+ (not 1000 — curated, not exhaustive). Tracked in a new VOL ticket (see downstream below).
 - HealthKit depth: move beyond the minimal reads to actually consume HRV trend, sleep debt, training load from Apple's derived metrics. Partially in flight via Readiness but needs pre-launch polish.
-- Cross-device UX proof: every feature needs to feel as good on iPad as on Watch. Currently untested on iPad.
+- Cross-device UX proof: v1.0 deliberately means iPhone + paired Apple Watch. iPad remains a post-v1 expansion that needs its own UX audit before we claim it.
 - A "what Apple did for you" moment: surface real HealthKit-derived insights on the home tab. The coach's voice needs to reference data only Apple can give us.
 
 **What we do NOT build for this positioning:**
@@ -94,7 +94,7 @@ The pitch: *"Real human coaches write the programs. VolumeArc runs them."*
 |---|---|---|
 | VOL-103 (TBD) | Scale exercise catalog 11 → 100+ (curated, not exhaustive). Include HealthKit-supported movements first. | P1 pre-launch |
 | VOL-104 (TBD) | HealthKit depth pass — consume HRV trend, sleep debt, training load in readiness card UI | P1 pre-launch |
-| VOL-105 (TBD) | iPad UX audit — every feature validated on iPad 11" and iPad Pro 13" | P2 pre-launch |
+| VOL-105 (TBD) | iPad UX audit — every feature validated on iPad 11" and iPad Pro 13" | Post-v1 expansion |
 | VOL-106 (TBD) | App Store copy + screenshots refresh aligned to Option A positioning | P1 pre-launch |
 | VOL-107 (TBD) | Marketing site copy (volumearc.app) — headline/subhead/feature tiles aligned to Option A | P2 pre-launch |
 | VOL-108 (TBD) | Post-launch decision gate — revisit Options B/C after first 90 days of usage data | P4 post-launch |

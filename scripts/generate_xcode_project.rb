@@ -208,13 +208,10 @@ configure_target(ui_target, extra: {
 })
 configure_target(app_target, bundle_id: 'com.mabryventures.VolumeArc', extra: {
   'PRODUCT_NAME' => 'VolumeArc',
-  # VOL-131: iPhone-only for v1.0 TestFlight. iPad support deferred
-  # until VOL-158 completes its UX-audit pass against the iPad form
-  # factor. The TestFlight-eligible matrix is the iPhone family (1);
-  # iPad lands as a separate explicit decision once the audit signs
-  # off on the experience. Snapfile + CI test matrix are already
-  # iPhone-only — this change brings the entitlement / device-family
-  # declaration in line with the shipped surface.
+  # VOL-131: iPhone-only for v1.0 TestFlight. The TestFlight-eligible
+  # matrix is the iPhone family (1); iPad is a post-v1 product
+  # expansion that requires a fresh UX audit, Snapfile update, and App
+  # Store metadata change before this flips to 1,2.
   'TARGETED_DEVICE_FAMILY' => '1',
   'INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents' => 'YES',
   'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc reads your completed workouts, heart-rate variability, sleep, Workout Effort, wrist temperature, and respiratory rate from Apple Health to show your training history, calculate readiness, and let the AI coach reference your recovery trend (HRV vs baseline, sleep debt, weekly strength load, Vitals trends, and Training Load).',
