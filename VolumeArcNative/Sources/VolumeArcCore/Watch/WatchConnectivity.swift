@@ -7,6 +7,7 @@ public enum WatchPayloadKind: String, Sendable, Codable {
     case endSession
     case coachCue
     case completedWorkout
+    case voiceCoachToggle
 }
 
 public struct WatchPayload: Sendable, Codable {

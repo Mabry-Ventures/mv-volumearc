@@ -76,8 +76,8 @@ enum VolumeArcLaunchArguments {
     /// real-device canary).
     ///
     /// `<kind>` is a `WatchPayloadKind` rawValue: `restTimer`,
-    /// `liveState`, `startSession`, `endSession`, `coachCue`, or
-    /// `completedWorkout`. The flag is gated on `-UITestMode 1` —
+    /// `liveState`, `startSession`, `endSession`, `coachCue`,
+    /// `completedWorkout`, or `voiceCoachToggle`. The flag is gated on `-UITestMode 1` —
     /// production app launches ignore it even if accidentally set.
     static var postFakeWatchPayloadKind: String? {
         let arguments = ProcessInfo.processInfo.arguments

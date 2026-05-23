@@ -453,7 +453,8 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
     private func makeDashboardModel(
         aiProvider: any AICoachProvider = LocalHeuristicAICoachProvider(),
         recoveryReader: any RecoveryReader = UnavailableRecoveryReader(),
-        telemetrySink: any TelemetrySink = InMemoryTelemetrySink()
+        telemetrySink: any TelemetrySink = InMemoryTelemetrySink(),
+        watchVoiceSettingsStore: any WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore()
     ) -> WorkoutDashboardModel {
         WorkoutDashboardModel(
             aiProvider: aiProvider,
@@ -477,7 +478,8 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
             voiceCoach: LiveVoiceCoachOrchestrator(
                 transport: AIRelayVoiceTransport(provider: aiProvider)
             ),
-            recoveryReader: recoveryReader
+            recoveryReader: recoveryReader,
+            watchVoiceSettingsStore: watchVoiceSettingsStore
         )
     }
 
@@ -504,6 +506,21 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
             ["readiness.opened", "volume.opened", "frequency.opened"],
             "Signals telemetry event names should match the journey catalog rows verbatim"
         )
+    }
+
+    func testHandleWatchVoiceTogglePayloadPersistsMirroredSetting() async throws {
+        let settings = DashboardTestWatchVoiceSettingsStore(enabled: true)
+        let model = makeDashboardModel(watchVoiceSettingsStore: settings)
+        let payload = WatchPayload(
+            kind: .voiceCoachToggle,
+            workoutID: "voice-toggle",
+            body: WatchVoiceCoach.encodeSettingsPayload(isEnabled: false)
+        )
+
+        await model.handleWatchPayload(payload)
+
+        let enabled = await settings.isWatchVoiceEnabled()
+        XCTAssertFalse(enabled)
     }
 
     // MARK: - VOL-181 recovery wiring
@@ -611,6 +628,22 @@ private struct CapturingCoachProvider: AICoachProvider, Sendable {
         await store.set(context)
         await store.setPrompt(prompt)
         return "Captured"
+    }
+}
+
+private actor DashboardTestWatchVoiceSettingsStore: WatchVoiceSettingsStore {
+    private var enabled: Bool
+
+    init(enabled: Bool) {
+        self.enabled = enabled
+    }
+
+    func isWatchVoiceEnabled() async -> Bool {
+        enabled
+    }
+
+    func setWatchVoiceEnabled(_ enabled: Bool) async {
+        self.enabled = enabled
     }
 }
 #endif

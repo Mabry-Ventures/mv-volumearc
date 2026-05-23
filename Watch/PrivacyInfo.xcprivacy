@@ -7,8 +7,9 @@
 		manifest. VOL-73.
 
 		Scope notes:
-		- Microphone / SpeechRecognizer: NOT used on watchOS (voice
-		  coaching is phone-only). No audio data collection here.
+		- Microphone / SpeechRecognizer: watchOS voice coaching uses
+		  AVSpeechSynthesizer for playback-only spoken cues; no audio is
+		  recorded, recognized, or collected on watchOS.
 		- Location: not used anywhere in VolumeArc.
 		- HealthKit: HKWorkoutSession / HKLiveWorkoutBuilder are
 		  watchOS-specific per HealthStore.swift. Watch target carries

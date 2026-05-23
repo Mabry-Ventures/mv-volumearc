@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 #if canImport(SwiftUI)
 import Foundation
 import SwiftUI
@@ -77,6 +78,7 @@ public final class WorkoutDashboardModel: ObservableObject {
     /// context). Internal so the extracted coach-context extension
     /// can call `currentRecovery()`.
     let recoveryReader: RecoveryReader
+    private let watchVoiceSettingsStore: WatchVoiceSettingsStore
 
     #if canImport(SwiftData)
     private let workoutRepository: SwiftDataWorkoutRepository?
@@ -125,7 +127,8 @@ public final class WorkoutDashboardModel: ObservableObject {
         // so existing test sites (which don't care about recovery)
         // keep compiling unchanged. App-level wiring injects the real
         // `HealthKitRecoveryReader`.
-        recoveryReader: RecoveryReader = UnavailableRecoveryReader()
+        recoveryReader: RecoveryReader = UnavailableRecoveryReader(),
+        watchVoiceSettingsStore: WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore()
     ) {
         self.aiProvider = aiProvider
         self.voiceCoach = voiceCoach
@@ -133,6 +136,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.featureFlags = featureFlags ?? LocalFeatureFlagProvider()
         self.healthStore = healthStore
         self.recoveryReader = recoveryReader
+        self.watchVoiceSettingsStore = watchVoiceSettingsStore
         self.workoutRepository = repository
         self.coachMemoryRepository = coachMemoryRepository
         self.userProfileRepository = userProfileRepository
@@ -167,7 +171,8 @@ public final class WorkoutDashboardModel: ObservableObject {
         subscriptionStore: StoreKitSubscriptionStore,
         voiceCoach: LiveVoiceCoachOrchestrator,
         featureFlags: FeatureFlagProvider? = nil,
-        recoveryReader: RecoveryReader = UnavailableRecoveryReader()
+        recoveryReader: RecoveryReader = UnavailableRecoveryReader(),
+        watchVoiceSettingsStore: WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore()
     ) {
         self.aiProvider = aiProvider
         self.voiceCoach = voiceCoach
@@ -175,6 +180,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.featureFlags = featureFlags ?? LocalFeatureFlagProvider()
         self.healthStore = healthStore
         self.recoveryReader = recoveryReader
+        self.watchVoiceSettingsStore = watchVoiceSettingsStore
         #if canImport(SwiftData)
         self.workoutRepository = nil
         self.coachMemoryRepository = nil
@@ -202,7 +208,8 @@ public final class WorkoutDashboardModel: ObservableObject {
         surfaceStore: PlatformSurfaceStateStore,
         voiceCoach: LiveVoiceCoachOrchestrator,
         featureFlags: FeatureFlagProvider? = nil,
-        recoveryReader: RecoveryReader = UnavailableRecoveryReader()
+        recoveryReader: RecoveryReader = UnavailableRecoveryReader(),
+        watchVoiceSettingsStore: WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore()
     ) {
         self.aiProvider = aiProvider
         self.voiceCoach = voiceCoach
@@ -210,6 +217,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.featureFlags = featureFlags ?? LocalFeatureFlagProvider()
         self.healthStore = healthStore
         self.recoveryReader = recoveryReader
+        self.watchVoiceSettingsStore = watchVoiceSettingsStore
         #if canImport(SwiftData)
         self.workoutRepository = nil
         self.coachMemoryRepository = nil
@@ -641,6 +649,10 @@ public final class WorkoutDashboardModel: ObservableObject {
         // the visible signal — XCUITests wait on this string and
         // shouldn't have to wait for the full repository round-trip.
         lastWatchPayloadKindForTesting = payload.kind.rawValue
+        if payload.kind == .voiceCoachToggle,
+           let settings = WatchVoiceCoach.decodeSettingsPayload(from: payload.body) {
+            await watchVoiceSettingsStore.setWatchVoiceEnabled(settings.isEnabled)
+        }
         await refresh()
     }
 
