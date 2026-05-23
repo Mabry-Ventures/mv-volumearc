@@ -4,6 +4,8 @@ import VolumeArcCore
 /// VOL-170: deterministic property-style checks over the numeric and
 /// serialization surfaces that have the largest input spaces.
 final class VolumeArcPropertyBasedTests: XCTestCase {
+    private static let referenceDate = Date(timeIntervalSince1970: 1_720_000_000)
+
     private let progressionEngine = ProgressionEngine()
     private let readinessModel = ReadinessModel()
 
@@ -50,35 +52,50 @@ final class VolumeArcPropertyBasedTests: XCTestCase {
         }
     }
 
-    func testProgressionSuggestedActionRespectsLowReadinessAcrossRandomInputs() {
+    func testProgressionSuggestedActionTracksTopSetRPEAcrossRandomInputs() {
         var rng = SeededPropertyGenerator(seed: 0x170DEC0A)
 
         for caseIndex in 0..<1_000 {
             let weight = rng.double(in: 45...500)
             let reps = rng.int(in: 3...12)
-            let rpe = rng.double(in: 5.0...7.0)
+            let goal = rng.element(from: StrengthGoal.allCases)
             let athlete = AthleteProfile(
-                name: "Low Readiness \(caseIndex)",
+                name: "Action Boundary \(caseIndex)",
                 advancementLevel: rng.element(from: AdvancementLevel.allCases),
                 availableEquipment: [.barbell],
                 weeklyTrainingDays: rng.int(in: 2...5)
             )
 
-            let state = progressionEngine.buildAutopilotState(
+            let easyState = progressionEngine.buildAutopilotState(
                 for: ExerciseHistory(
                     exerciseID: "back-squat",
-                    sessions: [exerciseSession(weight: weight, reps: reps, rpe: rpe)]
+                    sessions: [exerciseSession(weight: weight, reps: reps, rpe: rng.double(in: 5.0...7.0))]
                 ),
                 athlete: athlete,
-                goal: rng.element(from: StrengthGoal.allCases),
-                recentSessions: underRecoveredSessions(using: &rng),
+                goal: goal,
+                recentSessions: [],
+                memory: CoachMemory()
+            )
+            let grindingState = progressionEngine.buildAutopilotState(
+                for: ExerciseHistory(
+                    exerciseID: "back-squat",
+                    sessions: [exerciseSession(weight: weight, reps: reps, rpe: rng.double(in: 9.0...10.0))]
+                ),
+                athlete: athlete,
+                goal: goal,
+                recentSessions: [],
                 memory: CoachMemory()
             )
 
             XCTAssertEqual(
-                state.suggestedAction,
-                .decrease,
-                "Case \(caseIndex): low readiness should override easy-set progression"
+                easyState.suggestedAction,
+                .increase,
+                "Case \(caseIndex): easy top sets with rested context should progress"
+            )
+            XCTAssertEqual(
+                grindingState.suggestedAction,
+                .hold,
+                "Case \(caseIndex): grinding top sets should not progress automatically"
             )
         }
     }
@@ -242,7 +259,7 @@ final class VolumeArcPropertyBasedTests: XCTestCase {
         using rng: inout SeededPropertyGenerator,
         averageRPE: Double
     ) -> [RecentSession] {
-        let now = Date.now
+        let now = Self.referenceDate
         let count = rng.int(in: 3...6)
         return (0..<count).map { index in
             RecentSession(
@@ -252,20 +269,6 @@ final class VolumeArcPropertyBasedTests: XCTestCase {
                 totalVolumeLoad: rng.double(in: 3_000...18_000),
                 averageRPE: averageRPE,
                 completedSetCount: rng.int(in: 6...20)
-            )
-        }
-    }
-
-    private func underRecoveredSessions(using rng: inout SeededPropertyGenerator) -> [RecentSession] {
-        let now = Date.now
-        return (0..<8).map { index in
-            RecentSession(
-                date: now.addingTimeInterval(TimeInterval(-index * rng.int(in: 2...8) * 3_600)),
-                durationMinutes: rng.int(in: 105...150),
-                exerciseIDs: ["back-squat", "deadlift"],
-                totalVolumeLoad: rng.double(in: 22_000...55_000),
-                averageRPE: rng.double(in: 9.5...10.0),
-                completedSetCount: rng.int(in: 18...32)
             )
         }
     }
