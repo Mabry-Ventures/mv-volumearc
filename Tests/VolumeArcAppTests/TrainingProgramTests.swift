@@ -144,6 +144,19 @@ final class TrainingProgramTests: XCTestCase {
         XCTAssertTrue(replacementPlan.contains { $0.title == "HST Full Body A" })
         XCTAssertFalse(replacementPlan.contains { $0.title == "StrongLifts A" })
 
+        let reassignedActiveRecords = try ModelContext(container).fetch(FetchDescriptor<TrainingProgramRecord>(
+            predicate: #Predicate<TrainingProgramRecord> { program in
+                program.isActive
+            }
+        ))
+        XCTAssertEqual(reassignedActiveRecords.count, 1)
+
+        let reassignedContext = try XCTUnwrap(repository.activeProgramContext(
+            on: nextStartDate,
+            calendar: calendar
+        ))
+        XCTAssertEqual(reassignedContext.programID, "hst")
+
         let reassignedProgram = try XCTUnwrap(repository.activeProgram())
         XCTAssertEqual(reassignedProgram.id, "hst")
     }
