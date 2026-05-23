@@ -21,6 +21,7 @@ final class WatchWorkoutModel: ObservableObject {
     )
     @Published private(set) var sessionActive = false
     @Published private(set) var pendingSyncCount = 0
+    @Published private(set) var currentHeartRateBPM: Int?
     @Published private(set) var statusMessage = String(localized: "Watch coach standing by.", comment: "Watch default status")
 
     private let coordinator: WatchConnectivityCoordinator
@@ -371,6 +372,7 @@ private struct WatchRestTimerDisplay: View {
 }
 
 struct WatchWorkoutView: View {
+    @Environment(\.isLuminanceReduced) private var isLuminanceReduced
     @StateObject private var model: WatchWorkoutModel
 
     init(model: WatchWorkoutModel) {
@@ -378,11 +380,19 @@ struct WatchWorkoutView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: VA.Space.lg) {
-                Text(String(localized: "Now", comment: "Watch current exercise header"))
-                    .font(VA.Typography.caption)
-                    .foregroundStyle(VA.Colors.textSecondary)
+        Group {
+            if isLuminanceReduced {
+                WatchAlwaysOnWorkoutView(
+                    autopilot: model.autopilot,
+                    restEndsAt: model.restEndsAt,
+                    heartRateBPM: model.currentHeartRateBPM
+                )
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: VA.Space.lg) {
+                        Text(String(localized: "Now", comment: "Watch current exercise header"))
+                            .font(VA.Typography.caption)
+                            .foregroundStyle(VA.Colors.textSecondary)
 
                 Text(model.autopilot.nextExerciseName)
                     .font(VA.Typography.title)
@@ -619,8 +629,15 @@ struct WatchWorkoutView: View {
                         comment: "Watch complete workout button accessibility hint"
                     )
                 )
+                    }
+                    .padding()
+                }
             }
-            .padding()
+        }
+        .transaction { transaction in
+            if isLuminanceReduced {
+                transaction.animation = nil
+            }
         }
         .task {
             await model.loadPersistedState()

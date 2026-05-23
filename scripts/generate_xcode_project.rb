@@ -421,6 +421,7 @@ app_widget_ui_tests_target.add_system_framework('XCTest')
 app_widget_ui_tests_target.add_system_framework('WidgetKit')
 # VOL-138: watch test bundle.
 app_watch_tests_target.add_system_framework('XCTest')
+app_watch_tests_target.add_system_framework('SwiftUI')
 
 embed_watch_extensions_phase = watch_target.new_copy_files_build_phase('Embed Watch Extensions')
 embed_watch_extensions_phase.symbol_dst_subfolder_spec = :plug_ins
@@ -470,6 +471,12 @@ add_swift_sources(widget_ui_tests_group, app_widget_ui_tests_target, ROOT.join('
 # VOL-138: watch-side unit tests. Sources live at
 # `Tests/VolumeArcWatchTests/` so they parallel the other test bundles.
 add_swift_sources(watch_tests_group, app_watch_tests_target, ROOT.join('Tests/VolumeArcWatchTests'))
+# VOL-234: compile the standalone AOD render contract into watch tests so
+# the inline snapshot can pin the dimmed workout surface without a host app.
+add_selected_swift_sources(watch_group, app_watch_tests_target, ROOT.join('Watch'), [
+  'VADesignTokens.swift',
+  'WatchAlwaysOnWorkoutView.swift',
+])
 add_resource(ui_tests_group, app_ui_tests_target, 'VolumeArcTests.storekit')
 # VOL-142: the same StoreKit configuration powers `SKTestSession`-based
 # unit tests under `Tests/VolumeArcAppTests/`. Reuse the existing
