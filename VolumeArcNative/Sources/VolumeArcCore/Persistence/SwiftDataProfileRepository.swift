@@ -126,13 +126,13 @@ public struct SwiftDataTrainingPlanRepository: Sendable {
     @MainActor
     public func upsertPlan(_ workouts: [WeeklyWorkout]) throws {
         let context = ModelContext(container)
-        try upsertPlan(workouts, in: context)
+        try stageUpsertPlan(workouts, in: context)
         try context.save()
     }
 
     /// Stage a training plan upsert into an existing context.
     @MainActor
-    public func upsertPlan(_ workouts: [WeeklyWorkout], in context: ModelContext) throws {
+    func stageUpsertPlan(_ workouts: [WeeklyWorkout], in context: ModelContext) throws {
         var descriptor = FetchDescriptor<TrainingPlanRecord>()
         descriptor.fetchLimit = 1
 

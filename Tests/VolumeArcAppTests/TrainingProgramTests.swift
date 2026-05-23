@@ -85,6 +85,22 @@ final class TrainingProgramTests: XCTestCase {
         XCTAssertEqual(context.sessionTitle, "Starting Strength B")
     }
 
+    func testScheduledSessionAdvancesWeekWhenNextSessionWrapsToFirstProgramDay() throws {
+        let calendar = Self.utcCalendar
+        let assignedAt = Self.date(year: 2026, month: 5, day: 23)
+        let fridayBeforeNextWeek = Self.date(year: 2026, month: 5, day: 29)
+
+        let context = try XCTUnwrap(TrainingProgramCatalog.startingStrength.scheduledSession(
+            on: fridayBeforeNextWeek,
+            assignedAt: assignedAt,
+            calendar: calendar
+        ))
+
+        XCTAssertEqual(context.weekNumber, 2)
+        XCTAssertEqual(context.dayNumber, 1)
+        XCTAssertEqual(context.sessionTitle, "Starting Strength A")
+    }
+
     @MainActor
     func testRepositoryHydratesCatalogAndAssignsProgramToTrainingPlan() throws {
         let calendar = Self.utcCalendar

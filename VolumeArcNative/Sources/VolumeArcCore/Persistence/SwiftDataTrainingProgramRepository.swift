@@ -81,7 +81,7 @@ public struct SwiftDataTrainingProgramRepository: Sendable {
             record.updatedAt = .now
         }
 
-        try trainingPlanRepository?.upsertPlan(definition.weeklyWorkouts(startingOn: startDate, calendar: calendar), in: context)
+        try trainingPlanRepository?.stageUpsertPlan(definition.weeklyWorkouts(startingOn: startDate, calendar: calendar), in: context)
         try context.save()
         return activeContext
     }

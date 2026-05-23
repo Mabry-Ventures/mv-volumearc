@@ -148,7 +148,9 @@ public struct TrainingProgramDefinition: Sendable, Equatable, Identifiable {
             return nil
         }
 
-        let rawWeek = (elapsedDays / 7) + 1
+        let baseWeek = (elapsedDays / 7) + 1
+        let rollsIntoNextWeek = next.dayNumber == 1 && elapsedDays % 7 != 0
+        let rawWeek = baseWeek + (rollsIntoNextWeek ? 1 : 0)
         let weekNumber = min(max(1, rawWeek), max(1, weeks))
 
         return ActiveTrainingProgramContext(
