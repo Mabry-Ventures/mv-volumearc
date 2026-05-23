@@ -28,12 +28,13 @@ The trade-off: every iOS engineer needs Node 22 / npm to build the marketing sit
 ```
 marketing/src/app/
 ├── layout.tsx                      Root metadata + fonts
+├── api/support/route.ts            Server-only Resend transactional email route
 ├── (main)/
 │   ├── layout.tsx                  Header + Footer chrome (delegates to components/Layout.tsx)
 │   ├── page.tsx                    Landing — Hero, PrimaryFeatures, SecondaryFeatures, CallToAction, Pricing, FAQs
 │   ├── terms/page.tsx              Terms of Service (DRAFT — VOL-124)
 │   ├── privacy/page.tsx            Privacy Policy (DRAFT — VOL-124)
-│   ├── support/page.tsx            Contact, common issues, press
+│   ├── support/page.tsx            Contact form, common issues, press
 │   └── quality/page.tsx            Public coach-quality eval-trend (scaffold — VOL-148)
 └── not-found.tsx                   Fallback 404
 ```
@@ -66,6 +67,9 @@ Removed from the Pocket template:
 3. **Environment variables** set in the Vercel project:
    - `SHADCNBLOCKS_API_KEY` (mirrors the GitHub secret of the same name)
    - `NEXT_PUBLIC_SITE_URL=https://volumearc.app` (production), preview branches inherit Vercel's auto value
+   - `RESEND_API_KEY` (server-only; never exposed to the browser)
+   - `RESEND_FROM_EMAIL=VolumeArc <noreply@volumearc.app>` after the sending domain is verified in Resend
+   - `SUPPORT_EMAIL_TO=support@mabryventures.com`
 4. **Push to `main`** → Vercel builds and deploys to production within ~1 minute.
 5. **Open a PR** → Vercel posts a preview URL to the PR.
 
@@ -104,6 +108,7 @@ Reference: [`mv-design/docs/shadcnblocks.md`](../../mv-design/docs/shadcnblocks.
 | Feature copy | Marketing + Engineering | `docs/FEATURES.md` row flips status |
 | Pricing | Founder | App Store Connect StoreKit products change |
 | FAQs | Support + Engineering | New common issue surfaces in TestFlight feedback |
+| `/support` contact form | Support + Engineering | Resend sending-domain or support-routing change |
 | `/quality` page | Engineering | Auto-published from `docs/coach-eval-trend.json` (VOL-148) |
 | `/terms` + `/privacy` | Legal counsel | After every material data-flow change in the app |
 

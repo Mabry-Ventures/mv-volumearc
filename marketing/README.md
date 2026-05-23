@@ -36,7 +36,7 @@ npm run build
 /                       Landing — Hero, PrimaryFeatures, SecondaryFeatures, CallToAction, Pricing, FAQs
 /terms                  Terms of Service (DRAFT — pending legal review, VOL-124)
 /privacy                Privacy Policy (DRAFT — pending legal review, VOL-124)
-/support                Support, contact, common issues, press
+/support                Support, Resend-backed contact form, common issues, press
 /quality                Public coach-quality eval-trend (scaffold — VOL-148)
 ```
 
@@ -70,6 +70,9 @@ The build command and output directory are pinned in [`vercel.json`](vercel.json
 |---|---|---|---|
 | `SHADCNBLOCKS_API_KEY` | required | required | Same value as in `mv-design` |
 | `NEXT_PUBLIC_SITE_URL` | `https://volumearc.app` | (auto) | |
+| `RESEND_API_KEY` | required | required | Server-only; powers `/api/support` |
+| `RESEND_FROM_EMAIL` | `VolumeArc <noreply@volumearc.app>` | same or verified preview sender | Must be a Resend-verified domain |
+| `SUPPORT_EMAIL_TO` | `support@mabryventures.com` | same | Destination for support form submissions |
 
 CI build smoke (no deploy) runs in [`.github/workflows/marketing.yml`](../.github/workflows/marketing.yml).
 

@@ -60,3 +60,37 @@ for (const route of routes) {
     expect(consoleErrors).toEqual([])
   })
 }
+
+test('/support form posts a support request and renders success', async ({
+  page,
+}) => {
+  await page.route('**/api/support', async (route) => {
+    const request = route.request()
+    const body = request.postDataJSON() as Record<string, unknown>
+
+    expect(request.method()).toBe('POST')
+    expect(body.name).toBe('Jared Mabry')
+    expect(body.email).toBe('jared@example.com')
+    expect(body.category).toBe('bug-report')
+    expect(body.message).toContain('coach response panel')
+    expect(body.company).toBe('')
+
+    await route.fulfill({
+      status: 202,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true }),
+    })
+  })
+
+  await page.goto('/support', { waitUntil: 'domcontentloaded' })
+  await page.getByLabel('Name').fill('Jared Mabry')
+  await page.getByLabel('Email').fill('jared@example.com')
+  await page.getByLabel('Topic').selectOption('bug-report')
+  await page
+    .getByLabel('Message')
+    .fill('The coach response panel got stuck after a streamed reply.')
+  await page.getByRole('button', { name: 'Send message' }).click()
+
+  await expect(page.getByRole('status')).toContainText('Message sent.')
+  await expect(page.getByRole('status')).toContainText('one business day')
+})
