@@ -32,7 +32,7 @@ jobs:
     if: github.event_name == 'pull_request_target' && !github.event.pull_request.draft
     runs-on: [self-hosted, mv-volumearc-runner]
     steps:
-      - name: Request Codex review for current head SHA
+      - name: Request AI reviews for current head SHA
         uses: actions/github-script@v9
         with:
           script: |
@@ -61,37 +61,46 @@ jobs:
               `<!-- codex-review-request:${sha} -->`,
               `<!-- codex-review-request:${sha} -->\n@codex review`
             );
-            // VOL-227 round 4 (2026-05-20): CodeRabbit org-wide usage
-            // credit exhaustion observed during the 2026-05-19 overnight
-            // batch — the bot stopped re-reviewing pushed fixes, leaving
-            // the CHANGES_REQUESTED reviewDecision stuck on otherwise-
-            // ready PRs. Until the subscription is restored, Codex is
-            // the sole AI reviewer; the CodeRabbit request + gate job
-            // are dropped from this workflow. Restore the @coderabbitai
-            // ensureComment call and the `coderabbit-review` job below
-            // once credits are back.
+            await ensureComment(
+              `<!-- coderabbit-review-request:${sha} -->`,
+              `<!-- coderabbit-review-request:${sha} -->\n@coderabbitai review`
+            );
 
-  codex-review:
-    name: Codex Code Review
+  ai-review:
+    name: ${{ matrix.ai_name }} Code Review
     if: >-
       github.event_name == 'pull_request_target' ||
       github.event_name == 'issue_comment' ||
       github.event_name == 'pull_request_review' ||
       github.event_name == 'pull_request_review_comment'
     runs-on: [self-hosted, mv-volumearc-runner]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ai_name: Codex
+            ai_logins: '["codex","chatgpt-codex-connector[bot]"]'
+            request_marker: codex-review-request
+            wait_minutes: '15'
+          - ai_name: CodeRabbit
+            ai_logins: '["coderabbitai[bot]","coderabbitai"]'
+            request_marker: coderabbit-review-request
+            wait_minutes: '20'
     steps:
-      - name: Wait for Codex review signal
+      - name: Wait for ${{ matrix.ai_name }} review signal
         uses: actions/github-script@v9
         env:
-          AI_LOGINS: '["codex","chatgpt-codex-connector[bot]"]'
-          AI_NAME: Codex
-          WAIT_MINUTES: '15'
+          AI_LOGINS: ${{ matrix.ai_logins }}
+          AI_NAME: ${{ matrix.ai_name }}
+          REQUEST_MARKER: ${{ matrix.request_marker }}
+          WAIT_MINUTES: ${{ matrix.wait_minutes }}
         with:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const botLogins = JSON.parse(process.env.AI_LOGINS);
             const aiName = process.env.AI_NAME || 'AI';
+            const requestMarker = process.env.REQUEST_MARKER || '';
             const waitMinutes = Number(process.env.WAIT_MINUTES || '15');
             const delayMs = 30000;
             const deadline = Date.now() + waitMinutes * 60 * 1000;
@@ -111,6 +120,55 @@ jobs:
               }
               core.setFailed(`Unable to determine pull request number for ${aiName} review gate.`);
               return null;
+            }
+
+            function bodyText(value) {
+              return String(value || '')
+                .replace(/<!--[\s\S]*?-->/g, '')
+                .replace(/<[^>]+>/g, '\n')
+                .replace(/\r\n/g, '\n')
+                .replace(/&nbsp;/g, ' ')
+                .trim();
+            }
+
+            function nonReviewReason(candidate) {
+              const text = bodyText(candidate.body);
+              const compact = text.replace(/\s+/g, ' ').trim();
+
+              if (
+                /Codex usage limits have been reached/i.test(text) ||
+                /Review limit reached/i.test(text) ||
+                /rate limited by coderabbit\.ai/i.test(text) ||
+                /couldn't start this review/i.test(text) ||
+                /organization has run out of usage credits/i.test(text) ||
+                /used your available PR reviews/i.test(text)
+              ) {
+                return `${aiName} skipped review: rate-limit notice is not a review signal`;
+              }
+
+              if (
+                /Review triggered\./i.test(text) &&
+                !/\b(review findings|finding|issue|suggestion|nitpick|walkthrough|summary)\b/i.test(text.replace(/Review triggered\./ig, ''))
+              ) {
+                return `${aiName} skipped review: trigger acknowledgement is not a review signal`;
+              }
+
+              if (
+                /(^|\n)\s*(?:✅\s*)?#{0,6}\s*Actions performed\b/i.test(text) &&
+                !/(^|\n)\s*#{1,6}\s+(?!Actions performed\b)/im.test(text.replace(/(^|\n)\s*(?:✅\s*)?#{0,6}\s*Actions performed\b[^\n]*/i, '\n'))
+              ) {
+                return `${aiName} skipped review: actions-only automation comment is not a review signal`;
+              }
+
+              return null;
+            }
+
+            function candidateTime(candidate) {
+              return new Date(candidate.createdAt).getTime();
+            }
+
+            function candidateLabel(candidate) {
+              return `${candidate.kind} from ${candidate.login} at ${candidate.createdAt}`;
             }
 
             async function hasSignal(prNumber) {
@@ -149,19 +207,79 @@ jobs:
               const matches = (login) => botLogins.includes(login || '');
               const isFresh = (value) => value && new Date(value) >= baseline;
 
-              const review = reviews.find((item) => matches(item.user?.login) && isFresh(item.submitted_at));
-              if (review) {
-                return { ok: true, reason: `Review from ${review.user.login} at ${review.submitted_at}` };
+              const candidates = [];
+
+              for (const item of reviews) {
+                if (matches(item.user?.login) && (item.commit_id === headSha || isFresh(item.submitted_at))) {
+                  candidates.push({
+                    kind: 'review',
+                    login: item.user.login,
+                    createdAt: item.submitted_at,
+                    body: item.body,
+                  });
+                }
               }
 
-              const issueComment = issueComments.find((item) => matches(item.user?.login) && isFresh(item.created_at));
-              if (issueComment) {
-                return { ok: true, reason: `Issue comment from ${issueComment.user.login} at ${issueComment.created_at}` };
+              for (const item of issueComments) {
+                if (matches(item.user?.login) && isFresh(item.created_at)) {
+                  candidates.push({
+                    kind: 'issue comment',
+                    login: item.user.login,
+                    createdAt: item.created_at,
+                    body: item.body,
+                  });
+                }
               }
 
-              const reviewComment = reviewComments.find((item) => matches(item.user?.login) && isFresh(item.created_at));
-              if (reviewComment) {
-                return { ok: true, reason: `Review comment from ${reviewComment.user.login} at ${reviewComment.created_at}` };
+              for (const item of reviewComments) {
+                if (matches(item.user?.login) && (item.commit_id === headSha || isFresh(item.created_at))) {
+                  candidates.push({
+                    kind: 'review comment',
+                    login: item.user.login,
+                    createdAt: item.created_at,
+                    body: item.body,
+                  });
+                }
+              }
+
+              const marker = `<!-- ${requestMarker}:${headSha} -->`;
+              const requestComments = issueComments.filter((item) =>
+                requestMarker && typeof item.body === 'string' && item.body.includes(marker)
+              );
+              for (const item of requestComments) {
+                const reactions = await github.paginate(github.rest.reactions.listForIssueComment, {
+                  owner,
+                  repo,
+                  comment_id: item.id,
+                  per_page: 100,
+                });
+                const reaction = reactions.find((entry) =>
+                  entry.content === '+1' && matches(entry.user?.login) && isFresh(entry.created_at)
+                );
+                if (reaction) {
+                  candidates.push({
+                    kind: '+1 reaction',
+                    login: reaction.user.login,
+                    createdAt: reaction.created_at,
+                    body: '+1',
+                  });
+                }
+              }
+
+              candidates.sort((left, right) => candidateTime(right) - candidateTime(left));
+
+              const accepted = candidates.find((candidate) => !nonReviewReason(candidate));
+              if (accepted) {
+                return { ok: true, reason: candidateLabel(accepted) };
+              }
+
+              if (candidates.length > 0) {
+                const latest = candidates[0];
+                const reason = nonReviewReason(latest) || `${aiName} bot activity was not accepted as a review signal`;
+                return {
+                  ok: false,
+                  reason: `${reason}; latest bot activity was ${candidateLabel(latest)} for head ${headSha.slice(0, 7)}`,
+                };
               }
 
               return {
@@ -186,34 +304,3 @@ jobs:
             }
 
             core.setFailed(`${lastReason}. Timed out waiting for ${aiName} review.`);
-
-  # VOL-227 round 4 (2026-05-20): CodeRabbit gate job disabled while
-  # the org's CodeRabbit usage credits are exhausted. The bot is rate-
-  # limited and not re-reviewing pushed fixes, leaving the
-  # CHANGES_REQUESTED reviewDecision stuck on otherwise-ready PRs.
-  # Codex is the sole required AI reviewer for now. To restore
-  # CodeRabbit:
-  #   1. Confirm the CodeRabbit subscription / credits are back.
-  #   2. Un-comment the @coderabbitai request in `request-ai-reviews`
-  #      above.
-  #   3. Un-comment the `coderabbit-review` job below.
-  #   4. (If applicable) add `CodeRabbit Code Review` back to the
-  #      required status checks list in the branch protection rule
-  #      for `main`.
-  # coderabbit-review:
-  #   name: CodeRabbit Code Review
-  #   if: >-
-  #     github.event_name == 'pull_request_target' ||
-  #     github.event_name == 'issue_comment' ||
-  #     github.event_name == 'pull_request_review' ||
-  #     github.event_name == 'pull_request_review_comment'
-  #   runs-on: [self-hosted, mv-volumearc-runner]
-  #   steps:
-  #     - name: Wait for CodeRabbit review signal
-  #       uses: actions/github-script@v9
-  #       env:
-  #         AI_LOGINS: '["coderabbitai[bot]","coderabbitai"]'
-  #         AI_NAME: CodeRabbit
-  #         WAIT_MINUTES: '20'
-  #       with:
-  #         script: |

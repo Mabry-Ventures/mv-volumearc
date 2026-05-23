@@ -165,6 +165,8 @@ The `Require AI Code Reviews` ruleset on `main` requires the following checks to
 - `CodeRabbit Code Review` — wait-for-signal job (20-minute window) in `ai-review-gate.yml`
 - `Codex Code Review` — wait-for-signal job (15-minute window) in `ai-review-gate.yml`
 
+The AI review gate only accepts substantive review signals on the current PR head: pull request reviews, review comments, issue comments that are not known bot acknowledgements, or a bot `+1` reaction on the current-head review request comment. It deliberately ignores non-review bot messages such as Codex rate-limit notices, CodeRabbit review-limit notices, CodeRabbit `Review triggered.` acknowledgements, and CodeRabbit `Actions performed`-only comments. If only a non-review message arrives before the wait window expires, the gate fails with an explicit skipped-review reason instead of producing a false green check.
+
 `strict_required_status_checks_policy: true` is set, meaning the PR branch must be up-to-date with `main` before merge. Stale PRs need a rebase or merge from main to retrigger CI.
 
 ### Bypass / emergency hotfix
