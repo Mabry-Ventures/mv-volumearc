@@ -187,6 +187,7 @@ public struct UserDefaultsTelemetrySink: TelemetrySink, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         defaults.removeObject(forKey: key)
+        defaults.synchronize()
     }
 }
 
