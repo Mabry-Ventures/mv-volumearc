@@ -30,6 +30,8 @@ public struct DashboardRefreshSnapshot: Sendable {
     public let readiness: ReadinessAssessment
     public let autopilot: WorkoutAutopilotState
     public let nextWorkout: WeeklyWorkout?
+    public let trainingPrograms: [TrainingProgramDefinition]
+    public let activeProgram: ActiveTrainingProgramContext?
     public let activeWorkout: ActiveWorkout?
     public let isOnboardingComplete: Bool
 
@@ -39,6 +41,8 @@ public struct DashboardRefreshSnapshot: Sendable {
         readiness: ReadinessAssessment,
         autopilot: WorkoutAutopilotState,
         nextWorkout: WeeklyWorkout?,
+        trainingPrograms: [TrainingProgramDefinition],
+        activeProgram: ActiveTrainingProgramContext?,
         activeWorkout: ActiveWorkout?,
         isOnboardingComplete: Bool
     ) {
@@ -47,6 +51,8 @@ public struct DashboardRefreshSnapshot: Sendable {
         self.readiness = readiness
         self.autopilot = autopilot
         self.nextWorkout = nextWorkout
+        self.trainingPrograms = trainingPrograms
+        self.activeProgram = activeProgram
         self.activeWorkout = activeWorkout
         self.isOnboardingComplete = isOnboardingComplete
     }
@@ -91,6 +97,8 @@ public actor DashboardRefreshLoader {
             readiness: readiness,
             autopilot: autopilot,
             nextWorkout: try loadNextWorkout(in: context),
+            trainingPrograms: try loadTrainingPrograms(in: context),
+            activeProgram: try loadActiveProgramContext(in: context),
             activeWorkout: try loadActiveWorkout(in: context),
             isOnboardingComplete: profile?.onboardingCompleted ?? false
         )
@@ -210,6 +218,38 @@ public actor DashboardRefreshLoader {
         guard !sortedWorkouts.isEmpty else { return nil }
         let todayWeekday = WeeklyWorkout.trainingWeekday(for: .now)
         return sortedWorkouts.first { $0.dayOfWeek >= todayWeekday } ?? sortedWorkouts.first
+    }
+
+    private func loadTrainingPrograms(in context: ModelContext) throws -> [TrainingProgramDefinition] {
+        let records = try context.fetch(FetchDescriptor<TrainingProgramRecord>())
+        let programs = records.compactMap(TrainingProgramDefinition.init(record:))
+        guard !programs.isEmpty else {
+            return TrainingProgramCatalog.curated
+        }
+        return programs.sorted { lhs, rhs in
+            let lhsIndex = TrainingProgramCatalog.curated.firstIndex { $0.id == lhs.id } ?? Int.max
+            let rhsIndex = TrainingProgramCatalog.curated.firstIndex { $0.id == rhs.id } ?? Int.max
+            if lhsIndex != rhsIndex {
+                return lhsIndex < rhsIndex
+            }
+            return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+        }
+    }
+
+    private func loadActiveProgramContext(in context: ModelContext) throws -> ActiveTrainingProgramContext? {
+        var descriptor = FetchDescriptor<TrainingProgramRecord>(
+            predicate: #Predicate<TrainingProgramRecord> { program in
+                program.isActive
+            },
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = 1
+        guard let record = try context.fetch(descriptor).first,
+              let definition = TrainingProgramDefinition(record: record)
+        else {
+            return nil
+        }
+        return definition.scheduledSession(on: .now, assignedAt: record.assignedAt ?? record.updatedAt)
     }
 
     private func logTrainingPlanDecodeFailure(error: Error) {

@@ -16,12 +16,13 @@ import SwiftData
 public final class WorkoutDashboardModel: ObservableObject {
 
     // MARK: - Published state
-
     @Published public private(set) var readiness: ReadinessAssessment = ReadinessAssessment(score: 85, brief: "Ready to train.", factors: [])
     @Published public private(set) var autopilot: WorkoutAutopilotState?
     @Published public private(set) var recentSessions: [RecentSession] = []
     @Published public private(set) var athlete: AthleteProfile = VolumeArcProductDefaults.athleteProfile
     @Published public private(set) var nextWorkout: WeeklyWorkout?
+    @Published public private(set) var trainingPrograms: [TrainingProgramDefinition] = TrainingProgramCatalog.curated
+    @Published public private(set) var activeProgram: ActiveTrainingProgramContext?
 
     @Published public var activeWorkoutTitle: String?
     @Published public private(set) var isSessionActive: Bool = false
@@ -55,7 +56,6 @@ public final class WorkoutDashboardModel: ObservableObject {
     @Published public private(set) var lastWatchPayloadKindForTesting: String?
 
     // MARK: - Dependencies
-
     private let aiProvider: AICoachProvider
     private let voiceCoach: LiveVoiceCoachOrchestrator
     // VOL-181: relaxed from `private` to internal so the extracted
@@ -85,6 +85,7 @@ public final class WorkoutDashboardModel: ObservableObject {
     let coachMemoryRepository: SwiftDataCoachMemoryRepository?
     private let userProfileRepository: SwiftDataUserProfileRepository?
     private let trainingPlanRepository: SwiftDataTrainingPlanRepository?
+    let trainingProgramRepository: SwiftDataTrainingProgramRepository?
     private let refreshLoader: DashboardRefreshLoader?
     #endif
 
@@ -96,7 +97,6 @@ public final class WorkoutDashboardModel: ObservableObject {
     private var activeWorkoutID: String?
 
     // MARK: - Initializers
-
     #if canImport(SwiftData) && canImport(StoreKit)
     public init(
         aiProvider: AICoachProvider,
@@ -137,6 +137,10 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.coachMemoryRepository = coachMemoryRepository
         self.userProfileRepository = userProfileRepository
         self.trainingPlanRepository = trainingPlanRepository
+        self.trainingProgramRepository = SwiftDataTrainingProgramRepository(
+            container: repository.container,
+            trainingPlanRepository: trainingPlanRepository
+        )
         self.refreshLoader = DashboardRefreshLoader(container: repository.container)
         self.syncEngine = syncEngine
         self.subscriptionStore = subscriptionStore
@@ -176,6 +180,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.coachMemoryRepository = nil
         self.userProfileRepository = nil
         self.trainingPlanRepository = nil
+        self.trainingProgramRepository = nil
         self.refreshLoader = nil
         #endif
         self.syncEngine = syncEngine
@@ -210,6 +215,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.coachMemoryRepository = nil
         self.userProfileRepository = nil
         self.trainingPlanRepository = nil
+        self.trainingProgramRepository = nil
         self.refreshLoader = nil
         #endif
         #if canImport(StoreKit)
@@ -220,7 +226,6 @@ public final class WorkoutDashboardModel: ObservableObject {
     }
 
     // MARK: - Refresh
-
     /// Reload all published state from repositories. Called at launch and after writes.
     @discardableResult
     public func refresh() async -> Bool {
@@ -245,6 +250,8 @@ public final class WorkoutDashboardModel: ObservableObject {
             self.readiness = snapshot.readiness
             self.autopilot = snapshot.autopilot
             self.nextWorkout = snapshot.nextWorkout
+            self.trainingPrograms = snapshot.trainingPrograms
+            self.activeProgram = snapshot.activeProgram
 
             if let active = snapshot.activeWorkout {
                 self.activeWorkoutID = active.identifier
@@ -287,7 +294,6 @@ public final class WorkoutDashboardModel: ObservableObject {
     }
 
     // MARK: - Dashboard actions
-
     /// Start a new workout session.
     public func startWorkoutSession() async {
         #if canImport(SwiftData)
@@ -483,7 +489,6 @@ public final class WorkoutDashboardModel: ObservableObject {
     }
 
     // MARK: - Coach
-
     /// Send a prompt to the AI coach and stream the response into `coachMessages` token-by-token.
     public func askCoach(_ prompt: String) async {
         guard !prompt.trimmingCharacters(in: .whitespaces).isEmpty else { return }

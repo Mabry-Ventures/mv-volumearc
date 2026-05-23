@@ -44,7 +44,7 @@ final class HealthKitAuthorizationTests: XCTestCase {
     private var savedSimulatePermissionPrompts: Bool!
 
     override func setUp() async throws {
-        let schema = Schema(VolumeArcSchemaV4.models)
+        let schema = Schema(VolumeArcSchemaV5.models)
         let config = ModelConfiguration(
             "HealthKitAuthTests-\(UUID().uuidString)",
             schema: schema,
