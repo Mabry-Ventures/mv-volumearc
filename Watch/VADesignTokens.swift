@@ -40,6 +40,21 @@ public enum VA {
 
         /// Muted text — metadata, hints, captions.
         public static let textSecondary = Color.secondary
+
+        /// AOD background — fixed black for low-power watch rendering.
+        public static let aodBackground = Color.black
+
+        /// AOD primary text — fixed white for high contrast on black.
+        public static let aodTextPrimary = Color.white
+
+        /// AOD secondary text — pure grayscale metadata.
+        public static let aodTextSecondary = Color.gray.opacity(0.68)
+
+        /// AOD tertiary text — dim pure grayscale metadata.
+        public static let aodTextTertiary = Color.gray.opacity(0.58)
+
+        /// AOD accent — brand primary, reduced for low-power watch rendering.
+        public static let aodAccent = primary.opacity(0.22)
     }
 
     // MARK: - Typography
@@ -50,6 +65,10 @@ public enum VA {
     public enum Typography {
         /// Hero number display (rest timer, readiness score).
         public static let display = Font.title2.bold()
+
+        /// AOD rest-timer display, sized for wrist-down glanceability.
+        public static let aodTimerDisplay = Font.system(size: 46, weight: .semibold, design: .rounded)
+            .monospacedDigit()
 
         /// Screen headers and the current exercise title.
         public static let title = Font.title3.bold()
@@ -84,6 +103,13 @@ public enum VA {
         public static let sm: CGFloat = 8
         public static let md: CGFloat = 12
         public static let lg: CGFloat = 16
+    }
+
+    // MARK: - Scale
+
+    public enum Scale {
+        public static let aodSetLineMinimum: CGFloat = 0.72
+        public static let aodTimerMinimum: CGFloat = 0.68
     }
 }
 #endif

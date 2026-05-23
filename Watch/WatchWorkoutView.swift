@@ -113,6 +113,10 @@ final class WatchWorkoutModel: ObservableObject {
         await persistState()
     }
 
+    func updateHeartRate(beatsPerMinute bpm: Int?) {
+        currentHeartRateBPM = bpm
+    }
+
     func choose(_ action: WorkoutAction) async {
         await ensureSessionStarted()
         selectedAction = action
@@ -630,7 +634,7 @@ struct WatchWorkoutView: View {
                     )
                 )
                     }
-                    .padding()
+                    .padding(VA.Space.xl)
                 }
             }
         }

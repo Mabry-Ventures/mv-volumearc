@@ -42,7 +42,7 @@ final class WatchAlwaysOnWorkoutSnapshotTests: XCTestCase {
         )
     }
 
-    func test_aodSnapshot_suppressesHeartRateWhenUnavailable() {
+    func test_aodSnapshot_suppressesHeartRateWhenUnavailable() throws {
         let now = Date(timeIntervalSinceReferenceDate: 1_000)
         let snapshot = WatchAlwaysOnWorkoutSnapshot.make(
             autopilot: WorkoutAutopilotState(
@@ -58,9 +58,26 @@ final class WatchAlwaysOnWorkoutSnapshotTests: XCTestCase {
             heartRateBPM: nil
         )
 
-        XCTAssertNil(snapshot.heartRateText)
-        XCTAssertEqual(snapshot.restTimerText, "GO")
-        XCTAssertFalse(snapshot.interactiveControlsVisible)
+        try assertInlineJSONSnapshot(
+            of: snapshot,
+            matches:
+            """
+            {
+              "animationPolicy" : "disabled",
+              "interactiveControlsVisible" : false,
+              "palette" : [
+                "black",
+                "white",
+                "gray",
+                "brandPrimary@0.22"
+              ],
+              "restAccessibilityLabel" : "Rest complete",
+              "restAccessibilityValue" : "Ready for the next set",
+              "restTimerText" : "GO",
+              "setLine" : "Deadlift - 315lb x 3-5"
+            }
+            """
+        )
     }
 
     private func assertInlineJSONSnapshot(

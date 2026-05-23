@@ -51,6 +51,7 @@ struct WatchAlwaysOnWorkoutSnapshot: Codable, Equatable {
     }
 
     private static func restAccessibilityValue(for remaining: Int) -> String {
+        // watchOS 26.5 produced "42 second remaining" from inline inflection here.
         if remaining == 0 {
             return String(localized: "Ready for the next set", comment: "Watch AOD rest complete accessibility value")
         }
@@ -81,27 +82,26 @@ struct WatchAlwaysOnWorkoutView: View {
             VStack(alignment: .leading, spacing: VA.Space.md) {
                 Text(String(localized: "Active set", comment: "Watch AOD current set label"))
                     .font(VA.Typography.caption)
-                    .foregroundStyle(Color.gray.opacity(0.68))
+                    .foregroundStyle(VA.Colors.aodTextSecondary)
 
                 HStack(spacing: VA.Space.sm) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(VA.Colors.primary.opacity(0.22))
-                        .frame(width: 3)
+                    RoundedRectangle(cornerRadius: VA.Radius.sm)
+                        .fill(VA.Colors.aodAccent)
+                        .frame(width: VA.Space.xxs)
                     Text(snapshot.setLine)
-                        .font(.system(.footnote, design: .rounded).weight(.semibold))
+                        .font(VA.Typography.footnote)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.72)
-                        .foregroundStyle(Color.white)
+                        .minimumScaleFactor(VA.Scale.aodSetLineMinimum)
+                        .foregroundStyle(VA.Colors.aodTextPrimary)
                 }
 
                 Spacer(minLength: VA.Space.xs)
 
                 Text(snapshot.restTimerText)
-                    .font(.system(size: 46, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
+                    .font(VA.Typography.aodTimerDisplay)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.68)
-                    .foregroundStyle(Color.white)
+                    .minimumScaleFactor(VA.Scale.aodTimerMinimum)
+                    .foregroundStyle(VA.Colors.aodTextPrimary)
                     .accessibilityLabel(snapshot.restAccessibilityLabel)
                     .accessibilityValue(snapshot.restAccessibilityValue)
 
@@ -109,12 +109,12 @@ struct WatchAlwaysOnWorkoutView: View {
                     Text(heartRateText)
                         .font(VA.Typography.caption)
                         .monospacedDigit()
-                        .foregroundStyle(Color.gray.opacity(0.58))
+                        .foregroundStyle(VA.Colors.aodTextTertiary)
                 }
             }
             .padding(VA.Space.xl)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            .background(Color.black.ignoresSafeArea())
+            .background(VA.Colors.aodBackground.ignoresSafeArea())
         }
         .transaction { transaction in
             transaction.animation = nil
