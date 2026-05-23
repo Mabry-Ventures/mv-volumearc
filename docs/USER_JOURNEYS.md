@@ -27,13 +27,13 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | Signals | 3 | 3 | 100% |
 | Profile | 8 | 7 | 88% |
 | Watch | 6 | 2 | 33% |
-| Widgets | 3 | 0 | 0% |
+| Widgets | 3 | 1 | 33% |
 | Live Activities | 3 | 0 | 0% |
 | App Intents | 6 | 6 | 100% |
 | Background | 4 | 1 | 25% |
 | Failure paths | 6 | 0 | 0% |
 | Resilience / interruption (VOL-127 P2) | 6 | 0 | 0% |
-| **Total** | **69** | **33** | **48%** |
+| **Total** | **69** | **34** | **49%** |
 
 > Goal: 100% by end of Wave 2 (cycle 7, 2026-05-31). Burn down via [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141).
 >
@@ -123,7 +123,7 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 |---|---|---|---|---|---|
 | `widget.add-small` | App installed | Long-press home → Add → VolumeArc Small | Widget renders with current snapshot | (no in-widget telemetry) | `[ ]` |
 | `widget.add-medium` | App installed | Add medium widget | Widget renders | (no in-widget telemetry) | `[ ]` |
-| `widget.tap-deep-link` | Widget present | Tap widget | App opens to deep-link target | `deeplink.received` | `[ ]` |
+| `widget.tap-deep-link` | Widget present | Tap widget | App opens to deep-link target | `deeplink.received` | `VolumeArcAppJourneyTests.testWidgetDeepLinkRoutesToTodayAndEmitsTelemetry` |
 
 ## Live Activities
 
