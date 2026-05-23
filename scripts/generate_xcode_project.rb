@@ -321,6 +321,7 @@ configure_target(app_tests_target, bundle_id: 'com.mabryventures.VolumeArc.tests
   'GENERATE_INFOPLIST_FILE' => 'YES',
   'CODE_SIGNING_ALLOWED' => 'NO',
   'CODE_SIGNING_REQUIRED' => 'NO',
+  'SWIFT_ACTIVE_COMPILATION_CONDITIONS' => 'DEBUG VOLUMEARC_WIDGET_SNAPSHOT_TESTING',
   'SKIP_INSTALL' => 'YES',
 })
 configure_target(app_ui_tests_target, bundle_id: 'com.mabryventures.VolumeArc.uitests', extra: {
@@ -406,6 +407,7 @@ app_tests_target.add_system_framework('AuthenticationServices')
 app_tests_target.add_system_framework('Security')
 app_tests_target.add_system_framework('AppIntents')
 app_tests_target.add_system_framework('ActivityKit')
+app_tests_target.add_system_framework('WidgetKit')
 # VOL-142: StoreKitTest powers `SKTestSession`-based unit tests
 # (`StoreKitSubscriptionRevocationTests`) for refund / family-share /
 # grace-period coverage at the model level. UITest target already has
@@ -574,6 +576,9 @@ add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   # target exposes no testable Swift module, so the source is compiled into
   # the test bundle. Guarded by `#if canImport(HealthKit)` inside the file.
   'Health/HealthKitRecoveryReader.swift',
+])
+add_selected_swift_sources(widgets_group, app_tests_target, ROOT.join('Widgets'), [
+  'VolumeArcWidgets.swift',
 ])
 
 # Sentry Swift Package dependency

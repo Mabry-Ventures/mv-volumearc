@@ -36,8 +36,18 @@ struct NextWorkoutProvider: TimelineProvider {
 }
 
 struct NextWorkoutWidgetView: View {
-    @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetFamily) private var environmentFamily
+    private let familyOverride: WidgetFamily?
     let entry: NextWorkoutProvider.Entry
+
+    init(entry: NextWorkoutProvider.Entry, family: WidgetFamily? = nil) {
+        self.entry = entry
+        self.familyOverride = family
+    }
+
+    private var family: WidgetFamily {
+        familyOverride ?? environmentFamily
+    }
 
     var body: some View {
         switch family {
@@ -485,7 +495,9 @@ struct ActiveWorkoutLiveActivity: Widget {
 }
 #endif
 
+#if !VOLUMEARC_WIDGET_SNAPSHOT_TESTING
 @main
+#endif
 struct VolumeArcWidgets: WidgetBundle {
     var body: some Widget {
         NextWorkoutWidget()
