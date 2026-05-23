@@ -544,7 +544,7 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
         XCTAssertEqual(doubleTapEvent.metadata["selectedAction"], WorkoutAction.hold.rawValue)
     }
 
-    func test_doubleTapLogNextSetDoesNothingWhenDisabledAndRequiresActiveWorkout() async throws {
+    func test_doubleTapDisabledDoesNotRecordTelemetryButManualButtonStillLogsSet() async throws {
         let transport = RecordingWatchTransport(reachable: true)
         let healthStore = FakeLiveHealthStore()
         let haptics = RecordingWatchActionButtonHaptics()
@@ -568,12 +568,36 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
         XCTAssertTrue(playedHaptics.isEmpty)
         XCTAssertTrue(telemetry.currentEvents.isEmpty)
 
-        await model.setDoubleTapEnabled(true)
-        await model.handleDoubleTapLogNextSet()
+        await model.startSession()
+        await model.logSetManually()
 
         sentPayloads = await transport.sent
         playedHaptics = await haptics.played
-        XCTAssertEqual(model.statusMessage, "Start a session to use Double Tap.")
+        let sentKinds = sentPayloads.map(\.kind)
+        XCTAssertEqual(model.statusMessage, "Set logged on Watch.")
+        XCTAssertTrue(sentKinds.contains(.liveState))
+        XCTAssertTrue(sentKinds.contains(.restTimer))
+        XCTAssertEqual(playedHaptics, [.acknowledged])
+        XCTAssertTrue(telemetry.currentEvents.isEmpty)
+    }
+
+    func test_doubleTapLogNextSetRequiresActiveWorkout() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let haptics = RecordingWatchActionButtonHaptics()
+        let telemetry = InMemoryTelemetrySink()
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            doubleTapTelemetrySink: telemetry,
+            actionButtonHaptics: haptics
+        )
+
+        await model.handleDoubleTapLogNextSet()
+
+        let sentPayloads = await transport.sent
+        let playedHaptics = await haptics.played
+        XCTAssertEqual(model.statusMessage, "Start a session to log a set.")
         XCTAssertTrue(sentPayloads.isEmpty)
         XCTAssertTrue(playedHaptics.isEmpty)
         XCTAssertTrue(telemetry.currentEvents.isEmpty)

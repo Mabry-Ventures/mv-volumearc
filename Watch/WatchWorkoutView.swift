@@ -552,10 +552,23 @@ final class WatchWorkoutModel: ObservableObject {
 
     func handleDoubleTapLogNextSet() async {
         guard isDoubleTapEnabled else { return }
+        await logSetFromWatchControl(source: .doubleTap)
+    }
+
+    func logSetManually() async {
+        await logSetFromWatchControl(source: .manual)
+    }
+
+    private enum SetLogSource {
+        case doubleTap
+        case manual
+    }
+
+    private func logSetFromWatchControl(source: SetLogSource) async {
         guard sessionActive else {
             statusMessage = String(
-                localized: "Start a session to use Double Tap.",
-                comment: "Watch Double Tap inactive-session status"
+                localized: "Start a session to log a set.",
+                comment: "Watch log-set inactive-session status"
             )
             await persistState()
             return
@@ -564,9 +577,15 @@ final class WatchWorkoutModel: ObservableObject {
         await choose(selectedAction)
         await resetRestTimer(announcesSetComplete: false)
         await actionButtonHaptics.play(.acknowledged)
-        await speakDoubleTapConfirmation()
-        recordDoubleTapSetLogged()
-        statusMessage = String(localized: "Set logged from Double Tap.", comment: "Watch Double Tap set logged status")
+        switch source {
+        case .doubleTap:
+            await speakDoubleTapConfirmation()
+            recordDoubleTapSetLogged()
+            statusMessage = String(localized: "Set logged from Double Tap.", comment: "Watch Double Tap set logged status")
+        case .manual:
+            await speakVoiceEvent(.setComplete(restSeconds: 90))
+            statusMessage = String(localized: "Set logged on Watch.", comment: "Watch manual set logged status")
+        }
         await persistState()
     }
 
@@ -1060,21 +1079,37 @@ struct WatchWorkoutView: View {
                     )
 
                     if model.sessionActive {
-                        Button(String(localized: "Log Set", comment: "Watch Double Tap primary log-set button")) {
+                        Button(String(localized: "Log Set", comment: "Watch manual log-set button")) {
                             Task {
-                                await model.handleDoubleTapLogNextSet()
+                                await model.logSetManually()
                             }
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(VA.Colors.primary)
-                        .handGestureShortcut(.primaryAction, isEnabled: model.canUseDoubleTapPrimaryAction)
-                        .accessibilityIdentifier("watch.doubleTap.logSetButton")
+                        .accessibilityIdentifier("watch.logSet.button")
                         .accessibilityLabel(
                             String(
-                                localized: "Log set with Double Tap",
-                                comment: "Watch Double Tap log-set button accessibility label"
+                                localized: "Log set",
+                                comment: "Watch manual log-set button accessibility label"
                             )
                         )
+
+                        if model.canUseDoubleTapPrimaryAction {
+                            Button(
+                                String(
+                                    localized: "Double Tap Log Set",
+                                    comment: "Watch Double Tap gesture shortcut target label"
+                                )
+                            ) {
+                                Task {
+                                    await model.handleDoubleTapLogNextSet()
+                                }
+                            }
+                            .handGestureShortcut(.primaryAction, isEnabled: true)
+                            .frame(width: 1, height: 1)
+                            .opacity(0.01)
+                            .accessibilityHidden(true)
+                        }
                     }
                 }
 
