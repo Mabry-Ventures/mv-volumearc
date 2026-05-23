@@ -5,10 +5,9 @@
 //   * `coach.scroll-memory`
 //   * `coach.privacy-mode-strict`
 //
-// The remaining 3 (`coach.voice-prompt`, `coach.follow-up-turn`,
-// `coach.relay-fallback`) need separate setup (premium fixture +
-// chaos infrastructure / two-message turn flow) and follow in
-// subsequent PRs.
+// The remaining 2 (`coach.voice-prompt`, dedicated degraded-notice
+// surfacing for `coach.relay-fallback`) need separate setup (premium
+// fixture + product copy) and follow in subsequent PRs.
 //
 // Every test uses the `-OpenCoachOnLaunch 1` launch arg the
 // `RootDashboardView` reads at launch (VOL-200 Phase 2 affordance,
@@ -283,6 +282,57 @@ final class VolumeArcCoachJourneyTests: XCTestCase {
             in: app,
             category: "coach",
             name: "ask_complete",
+            within: 10,
+            test: self
+        )
+    }
+
+    // MARK: - coach.relay-fallback
+
+    /// VOL-141 / VOL-168: force the relay path to fail with a
+    /// deterministic 503 before it yields a token, then assert the
+    /// existing `FallbackCoachProvider` switches to the local heuristic
+    /// path and emits the journey-catalog `coach.fallback_used` event.
+    func testCoachRelay5xxFallsBackToLocalHeuristic() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenCoachOnLaunch", "1", "-CHAOS_AIRELAY_5XX"]
+        )
+        app.launch()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
+
+        let composer = app.descendants(matching: .any)
+            .matching(identifier: "coach.input")
+            .firstMatch
+        XCTAssertTrue(
+            composer.waitForExistence(timeout: 15),
+            "Coach composer should be reachable under AIRelay chaos"
+        )
+
+        composer.tap()
+        composer.typeText("Should I push today?")
+
+        let sendButton = app.descendants(matching: .any)
+            .matching(identifier: "coach.send")
+            .firstMatch
+        XCTAssertTrue(sendButton.waitForExistence(timeout: 5))
+        sendButton.tap()
+
+        let firstResponse = app.descendants(matching: .any)
+            .matching(identifier: "coach.firstResponse")
+            .firstMatch
+        XCTAssertTrue(
+            firstResponse.waitForExistence(timeout: 10),
+            "Local heuristic fallback should render a coach response after relay 5xx"
+        )
+        XCTAssertFalse(
+            firstResponse.label.localizedCaseInsensitiveContains("trouble reaching"),
+            "Relay 5xx should not surface the generic hard-failure message when fallback succeeds"
+        )
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "coach",
+            name: "fallback_used",
             within: 10,
             test: self
         )
