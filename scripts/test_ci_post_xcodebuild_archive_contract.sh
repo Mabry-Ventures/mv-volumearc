@@ -163,6 +163,26 @@ if ! grep -q "VolumeArcRelaySigningKey is missing or unresolved" "$LOG_PATH"; th
   exit 1
 fi
 
+write_plist "$APP_BUNDLE/Info.plist" "16" "https://relay.volumearc.app"
+plutil -remove VolumeArcRelaySigningKey "$APP_BUNDLE/Info.plist"
+if CI_XCODEBUILD_ACTION="archive" \
+  CI_XCODEBUILD_EXIT_CODE="0" \
+  CI_BUILD_NUMBER="16" \
+  CI_DERIVED_DATA_PATH="$TMP_DIR/Derived" \
+  SENTRY_AUTH_TOKEN="fake-token" \
+  SENTRY_CLI_TEST_LOG="$SENTRY_LOG" \
+  NM_BIN="$TMP_DIR/bin/nm" \
+  PATH="$TMP_DIR/bin:$PATH" \
+  bash "$ROOT_DIR/ci_scripts/ci_post_xcodebuild.sh" >"$LOG_PATH" 2>&1; then
+  echo "FAIL: ci_post_xcodebuild.sh accepted production relay config without signing key when VOLUMEARC_AI_RELAY_URL is unset" >&2
+  exit 1
+fi
+if ! grep -q "VolumeArcRelaySigningKey is missing or unresolved" "$LOG_PATH"; then
+  echo "FAIL: env-unset relay signing-key failure did not explain the archive contract violation" >&2
+  cat "$LOG_PATH" >&2
+  exit 1
+fi
+
 rm -rf "$WATCH_BUNDLE"
 if CI_XCODEBUILD_ACTION="archive" \
   CI_XCODEBUILD_EXIT_CODE="0" \

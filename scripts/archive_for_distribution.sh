@@ -28,6 +28,29 @@ patch_relay_signing_key() {
     echo "       It must match the Cloudflare Worker RELAY_SIGNING_KEY secret; otherwise TestFlight coach relay auth returns 401." >&2
     exit 1
   fi
+  PLIST_ENV_NAME="VOLUMEARC_RELAY_SIGNING_KEY" /usr/bin/ruby <<'RUBY'
+require "base64"
+
+env_name = ENV.fetch("PLIST_ENV_NAME")
+value = ENV.fetch(env_name, "")
+
+if value.match?(/\s/)
+  warn "ERROR: #{env_name} must be a single base64 value with no whitespace."
+  exit 1
+end
+
+begin
+  decoded = Base64.strict_decode64(value)
+rescue ArgumentError
+  warn "ERROR: #{env_name} must be valid standard base64."
+  exit 1
+end
+
+if decoded.bytesize < 32
+  warn "ERROR: #{env_name} must decode to at least 32 bytes."
+  exit 1
+end
+RUBY
 
   INFO_PLIST_BACKUP="$(mktemp "${TMPDIR:-/tmp}/volumearc-info-plist.XXXXXX")"
   cp "$INFO_PLIST" "$INFO_PLIST_BACKUP"

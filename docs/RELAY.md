@@ -121,7 +121,7 @@ VOLUMEARC_RELAY_SIGNING_KEY = <contents of relay/.secrets/relay_signing_key.txt>
 
 Xcode Cloud injects the relay URL and signing key from workflow environment variables in `ci_scripts/ci_post_clone.sh` before archive:
 
-```
+```bash
 VOLUMEARC_AI_RELAY_URL = https://relay.volumearc.app
 VOLUMEARC_RELAY_SIGNING_KEY = <same value as Worker RELAY_SIGNING_KEY>
 ```

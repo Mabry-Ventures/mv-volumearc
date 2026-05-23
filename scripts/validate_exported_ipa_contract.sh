@@ -157,7 +157,7 @@ require_dir "$WATCH_WIDGET_BUNDLE" "embedded watch widget extension"
 
 require_plist_value "VolumeArcAIRelayURL" "$EXPECTED_RELAY_URL" "$APP_BUNDLE/Info.plist"
 
-# VOL-196: if the relay URL is configured (release builds always have
+# VOL-182: if the relay URL is configured (release builds always have
 # it set), the signing key must also be configured. Without the key,
 # `AIRelayCoachProvider` installs but every coach request throws
 # `relayUnavailable`, silently degrading cloud AI and live voice in

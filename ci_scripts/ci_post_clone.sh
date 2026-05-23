@@ -94,6 +94,39 @@ File.write(path, xml)
 RUBY
 }
 
+validate_relay_signing_key_env() {
+  local env_name="$1"
+
+  PLIST_ENV_NAME="$env_name" /usr/bin/ruby <<'RUBY'
+require "base64"
+
+env_name = ENV.fetch("PLIST_ENV_NAME")
+value = ENV.fetch(env_name, "")
+
+if value.empty?
+  warn "::error::#{env_name} is required for archive workflows."
+  exit 1
+end
+
+if value.match?(/\s/)
+  warn "::error::#{env_name} must be a single base64 value with no whitespace."
+  exit 1
+end
+
+begin
+  decoded = Base64.strict_decode64(value)
+rescue ArgumentError
+  warn "::error::#{env_name} must be valid standard base64."
+  exit 1
+end
+
+if decoded.bytesize < 32
+  warn "::error::#{env_name} must decode to at least 32 bytes."
+  exit 1
+end
+RUBY
+}
+
 # Patch runtime config from Xcode Cloud env vars into the bundle's
 # Info.plist BEFORE xcodebuild runs. Xcode Cloud's environment
 # variables don't propagate to `xcodebuild` as build settings, so the
@@ -196,6 +229,7 @@ if [[ -f "$INFO_PLIST" ]]; then
   # see this PR's `App/VolumeArcAppAttestSessionProvider.swift` for the
   # Phase A scaffolding that runs alongside the HMAC path during rollout.
   if [[ -n "${VOLUMEARC_RELAY_SIGNING_KEY:-}" ]]; then
+    validate_relay_signing_key_env "VOLUMEARC_RELAY_SIGNING_KEY"
     replace_plist_string_from_env "VolumeArcRelaySigningKey" "VOLUMEARC_RELAY_SIGNING_KEY" "$INFO_PLIST"
     echo "Patched VolumeArcRelaySigningKey into Info.plist (len=${#VOLUMEARC_RELAY_SIGNING_KEY})"
   else
