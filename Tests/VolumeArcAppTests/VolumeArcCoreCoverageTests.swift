@@ -587,6 +587,7 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
             workoutTitle: "Squat",
             activeExerciseName: "Back Squat",
             targetSummary: "225 x 5",
+            setProgressSummary: "Set 3/5 · 225 lb",
             restSecondsRemaining: 90
         )
         let data = try JSONEncoder().encode(state)
@@ -594,6 +595,7 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         XCTAssertEqual(decoded.workoutTitle, "Squat")
         XCTAssertEqual(decoded.activeExerciseName, "Back Squat")
         XCTAssertEqual(decoded.targetSummary, "225 x 5")
+        XCTAssertEqual(decoded.setProgressSummary, "Set 3/5 · 225 lb")
         XCTAssertEqual(decoded.restSecondsRemaining, 90)
 
         let withoutRest = LiveActivityState(
@@ -604,6 +606,7 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         )
         let data2 = try JSONEncoder().encode(withoutRest)
         let decoded2 = try JSONDecoder().decode(LiveActivityState.self, from: data2)
+        XCTAssertNil(decoded2.setProgressSummary)
         XCTAssertNil(decoded2.restSecondsRemaining)
     }
 

@@ -327,6 +327,18 @@ public enum VA {
         /// Readiness pill (Live Activity leading accessory).
         public static let activityPill: CGFloat = 52
 
+        /// Apple Watch supplemental Live Activity countdown pill.
+        public static let watchLiveActivityPill: CGFloat = 48
+
+        /// Minimum scale for lock screen Live Activity set-progress copy.
+        public static let liveActivitySetLineMinimumScale: CGFloat = 0.82
+
+        /// Minimum scale for Apple Watch supplemental Live Activity set-progress copy.
+        public static let watchLiveActivitySetLineMinimumScale: CGFloat = 0.78
+
+        /// Minimum scale for Live Activity countdown glyphs inside circular pills.
+        public static let liveActivityTimerMinimumScale: CGFloat = 0.72
+
         /// Ring stroke width on system medium layout.
         public static let ringStrokeMedium: CGFloat = 8
 
