@@ -53,6 +53,27 @@ final class HealthKitRecoveryReaderTests: XCTestCase {
         XCTAssertNil(context.appleWatchVitalsScore)
     }
 
+    func testWorkoutEffortSummaryPreservesEstimatedFallbackWhenExplicitQueryFails() throws {
+        let summary = try HealthKitRecoverySampleSource.makeWorkoutEffortSummary(
+            explicitScore: nil,
+            explicitError: SampleHealthKitError.queryFailed,
+            estimatedScore: 6.4
+        )
+
+        XCTAssertNil(summary?.workoutScore)
+        XCTAssertEqual(summary?.estimatedScore, 6.4)
+    }
+
+    func testWorkoutEffortSummaryRethrowsExplicitErrorWhenNoFallbackExists() {
+        XCTAssertThrowsError(
+            try HealthKitRecoverySampleSource.makeWorkoutEffortSummary(
+                explicitScore: nil,
+                explicitError: SampleHealthKitError.queryFailed,
+                estimatedScore: nil
+            )
+        )
+    }
+
     func testPositiveHRVDeltaWhenRecentAboveBaseline() async {
         let source = FakeRecoverySampleSource(hrv7DayMilliseconds: 66, hrv28DayMilliseconds: 60)
         let reader = HealthKitRecoveryReader(source: source)
@@ -166,5 +187,9 @@ final class HealthKitRecoveryReaderTests: XCTestCase {
         XCTAssertEqual(failures.first?.metadata["field"], "sleep7")
         XCTAssertEqual(failures.first?.metadata["error_code"], "5")
     }
+}
+
+private enum SampleHealthKitError: Error {
+    case queryFailed
 }
 #endif

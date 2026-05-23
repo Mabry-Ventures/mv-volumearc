@@ -477,7 +477,16 @@ public struct HealthKitRecoverySampleSource: RecoverySampleSource {
     // MARK: - Apple Workout Effort
 
     public func workoutEffort(overDays days: Int, now: Date) async throws -> RecoveryWorkoutEffort? {
-        let explicitScore = try await workoutEffortAverageViaRelationships(overDays: days, now: now)
+        let explicitScore: Double?
+        let explicitError: Error?
+        do {
+            explicitScore = try await workoutEffortAverageViaRelationships(overDays: days, now: now)
+            explicitError = nil
+        } catch {
+            explicitScore = nil
+            explicitError = error
+        }
+
         let estimatedScore = try await averageQuantitySample(
             identifier: .estimatedWorkoutEffortScore,
             unit: .appleEffortScore(),
@@ -485,7 +494,22 @@ public struct HealthKitRecoverySampleSource: RecoverySampleSource {
             now: now
         )
 
-        guard explicitScore != nil || estimatedScore != nil else { return nil }
+        return try Self.makeWorkoutEffortSummary(
+            explicitScore: explicitScore,
+            explicitError: explicitError,
+            estimatedScore: estimatedScore
+        )
+    }
+
+    static func makeWorkoutEffortSummary(
+        explicitScore: Double?,
+        explicitError: Error?,
+        estimatedScore: Double?
+    ) throws -> RecoveryWorkoutEffort? {
+        guard explicitScore != nil || estimatedScore != nil else {
+            if let explicitError { throw explicitError }
+            return nil
+        }
         return RecoveryWorkoutEffort(workoutScore: explicitScore, estimatedScore: estimatedScore)
     }
 
