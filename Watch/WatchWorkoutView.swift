@@ -200,6 +200,32 @@ final class WatchWorkoutModel: ObservableObject {
         currentHeartRateBPM = bpm
     }
 
+    var watchVitalsInsight: String {
+        if let currentHeartRateBPM {
+            return String(
+                localized: "Live HR \(currentHeartRateBPM) bpm",
+                comment: "Watch Vitals insight when live heart rate is available"
+            )
+        }
+
+        if readiness.score >= 80 {
+            return String(
+                localized: "Green light for planned load",
+                comment: "Watch Vitals insight for high readiness"
+            )
+        } else if readiness.score >= 65 {
+            return String(
+                localized: "Steady effort, listen for fatigue",
+                comment: "Watch Vitals insight for moderate readiness"
+            )
+        } else {
+            return String(
+                localized: "Keep today conservative",
+                comment: "Watch Vitals insight for low readiness"
+            )
+        }
+    }
+
     func choose(_ action: WorkoutAction) async {
         await ensureSessionStarted()
         selectedAction = action
@@ -946,6 +972,8 @@ struct WatchWorkoutView: View {
                         .font(VA.Typography.body)
                         .foregroundStyle(VA.Colors.textSecondary)
 
+                    watchVitalsChip
+
                     Text(
                         String(
                             localized: "Fallback: \(VolumeArcExerciseCatalog.frontSquat.name)",
@@ -1069,6 +1097,42 @@ struct WatchWorkoutView: View {
                 await model.applyWatchPayload(payload)
             }
         }
+    }
+
+    private var watchVitalsChip: some View {
+        HStack(spacing: VA.Space.sm) {
+            Image(systemName: "applewatch")
+                .font(VA.Typography.headline)
+                .foregroundStyle(VA.Colors.secondary)
+
+            VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                Text(String(localized: "Vitals say", comment: "Watch Vitals chip label"))
+                    .font(VA.Typography.caption)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                Text(model.watchVitalsInsight)
+                    .font(VA.Typography.body)
+                    .foregroundStyle(VA.Colors.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(VA.Space.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: VA.Radius.sm, style: .continuous)
+                .fill(VA.Colors.secondary.opacity(0.14))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: VA.Radius.sm, style: .continuous)
+                .strokeBorder(VA.Colors.secondary.opacity(0.35), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("watch.vitalsSayChip")
+        .accessibilityLabel(
+            String(
+                localized: "Vitals say \(model.watchVitalsInsight)",
+                comment: "Watch Vitals chip accessibility label"
+            )
+        )
     }
 
     private func actionButton(title: String, icon: String, action: WorkoutAction) -> some View {

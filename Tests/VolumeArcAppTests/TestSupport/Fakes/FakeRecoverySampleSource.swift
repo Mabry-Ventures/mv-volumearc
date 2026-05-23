@@ -20,10 +20,18 @@ final class FakeRecoverySampleSource: RecoverySampleSource, @unchecked Sendable 
     var hrv28DayMilliseconds: Double?
     var asleepHours: Double?
     var strength: RecoveryStrengthLoad?
+    var effort: RecoveryWorkoutEffort?
+    var wristTemperature7DayCelsius: Double?
+    var wristTemperature28DayCelsius: Double?
+    var respiratoryRate7Day: Double?
+    var respiratoryRate28Day: Double?
 
     var hrvError: Error?
     var sleepError: Error?
     var strengthError: Error?
+    var effortError: Error?
+    var wristTemperatureError: Error?
+    var respiratoryRateError: Error?
 
     init(
         healthDataAvailable: Bool = true,
@@ -31,18 +39,34 @@ final class FakeRecoverySampleSource: RecoverySampleSource, @unchecked Sendable 
         hrv28DayMilliseconds: Double? = nil,
         asleepHours: Double? = nil,
         strength: RecoveryStrengthLoad? = nil,
+        effort: RecoveryWorkoutEffort? = nil,
+        wristTemperature7DayCelsius: Double? = nil,
+        wristTemperature28DayCelsius: Double? = nil,
+        respiratoryRate7Day: Double? = nil,
+        respiratoryRate28Day: Double? = nil,
         hrvError: Error? = nil,
         sleepError: Error? = nil,
-        strengthError: Error? = nil
+        strengthError: Error? = nil,
+        effortError: Error? = nil,
+        wristTemperatureError: Error? = nil,
+        respiratoryRateError: Error? = nil
     ) {
         self.healthDataAvailable = healthDataAvailable
         self.hrv7DayMilliseconds = hrv7DayMilliseconds
         self.hrv28DayMilliseconds = hrv28DayMilliseconds
         self.asleepHours = asleepHours
         self.strength = strength
+        self.effort = effort
+        self.wristTemperature7DayCelsius = wristTemperature7DayCelsius
+        self.wristTemperature28DayCelsius = wristTemperature28DayCelsius
+        self.respiratoryRate7Day = respiratoryRate7Day
+        self.respiratoryRate28Day = respiratoryRate28Day
         self.hrvError = hrvError
         self.sleepError = sleepError
         self.strengthError = strengthError
+        self.effortError = effortError
+        self.wristTemperatureError = wristTemperatureError
+        self.respiratoryRateError = respiratoryRateError
     }
 
     var isHealthDataAvailable: Bool { healthDataAvailable }
@@ -62,6 +86,21 @@ final class FakeRecoverySampleSource: RecoverySampleSource, @unchecked Sendable 
     func strengthLoad(overDays days: Int, now: Date) async throws -> RecoveryStrengthLoad? {
         if let strengthError { throw strengthError }
         return strength
+    }
+
+    func workoutEffort(overDays days: Int, now: Date) async throws -> RecoveryWorkoutEffort? {
+        if let effortError { throw effortError }
+        return effort
+    }
+
+    func meanWristTemperatureCelsius(overDays days: Int, now: Date) async throws -> Double? {
+        if let wristTemperatureError { throw wristTemperatureError }
+        return days <= 7 ? wristTemperature7DayCelsius : wristTemperature28DayCelsius
+    }
+
+    func meanRespiratoryRate(overDays days: Int, now: Date) async throws -> Double? {
+        if let respiratoryRateError { throw respiratoryRateError }
+        return days <= 7 ? respiratoryRate7Day : respiratoryRate28Day
     }
 }
 #endif

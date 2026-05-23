@@ -54,7 +54,7 @@
 	     verify the authorization path even before build-setting
 	     `INFOPLIST_KEY_*` values are merged by Xcode. -->
 	<key>NSHealthShareUsageDescription</key>
-	<string>VolumeArc reads your completed workouts from Apple Health to show your training history and calculate readiness.</string>
+	<string>VolumeArc reads your completed workouts, heart-rate variability, sleep, Workout Effort, wrist temperature, and respiratory rate from Apple Health to show your training history, calculate readiness, and let the AI coach reference your recovery trend.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>VolumeArc writes completed workouts so your training history stays in sync with Apple Health.</string>
 

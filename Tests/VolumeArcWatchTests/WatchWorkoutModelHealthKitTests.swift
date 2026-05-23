@@ -80,6 +80,18 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
         try await waitUntil { model.currentHeartRateBPM == 123 }
     }
 
+    func test_watchVitalsInsightUsesLiveHeartRateWhenAvailable() {
+        let model = makeModel(
+            transport: RecordingWatchTransport(reachable: true),
+            healthStore: FakeLiveHealthStore()
+        )
+        XCTAssertFalse(model.watchVitalsInsight.isEmpty)
+
+        model.updateHeartRate(beatsPerMinute: 118)
+
+        XCTAssertEqual(model.watchVitalsInsight, "Live HR 118 bpm")
+    }
+
     func test_loadPersistedStateResumesLiveMetricsForActiveWorkout() async throws {
         let transport = RecordingWatchTransport(reachable: true)
         let healthStore = FakeLiveHealthStore()
