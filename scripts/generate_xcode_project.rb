@@ -400,6 +400,7 @@ app_target.add_system_framework('AVFoundation')
 app_target.add_system_framework('Security')
 app_target.add_system_framework('Speech')
 app_target.add_system_framework('WorkoutKit')
+watch_target.add_system_framework('AppIntents')
 watch_target.add_system_framework('WatchKit')
 watch_target.add_system_framework('SwiftUI')
 watch_target.add_system_framework('WorkoutKit')
@@ -427,6 +428,8 @@ app_widget_ui_tests_target.add_system_framework('XCTest')
 app_widget_ui_tests_target.add_system_framework('WidgetKit')
 # VOL-138: watch test bundle.
 app_watch_tests_target.add_system_framework('XCTest')
+app_watch_tests_target.add_system_framework('AppIntents')
+app_watch_tests_target.add_system_framework('WatchKit')
 app_watch_tests_target.add_system_framework('SwiftUI')
 app_watch_tests_target.add_system_framework('WorkoutKit')
 app_watch_tests_target.add_system_framework('AVFoundation')
@@ -484,6 +487,7 @@ add_swift_sources(watch_tests_group, app_watch_tests_target, ROOT.join('Tests/Vo
 # verified without a host app.
 add_selected_swift_sources(watch_group, app_watch_tests_target, ROOT.join('Watch'), [
   'VADesignTokens.swift',
+  'WatchActionButtonIntents.swift',
   'WatchAlwaysOnWorkoutView.swift',
   'WatchVoicePlayback.swift',
   'WatchWorkoutView.swift',
