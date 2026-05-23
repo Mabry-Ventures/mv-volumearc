@@ -423,7 +423,7 @@ final class VolumeArcAppJourneyTests: XCTestCase {
         )
     }
 
-    // MARK: - 5. Background deep-link arrival
+    // MARK: - 5. Deep-link arrivals
 
     /// VOL-141: deterministic coverage for `bg.deep-link-arrival`.
     /// The launch argument sends a valid VolumeArc URL through the same
@@ -441,6 +441,35 @@ final class VolumeArcAppJourneyTests: XCTestCase {
             identifier: "signals.root",
             timeout: 15,
             "External deep link should route to the Signals tab"
+        )
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "deeplink",
+            name: "received",
+            within: 10,
+            test: self
+        )
+    }
+
+    /// VOL-141: deterministic coverage for `widget.tap-deep-link`.
+    /// WidgetKit itself is not reliable to automate in CI, but the
+    /// production widget attaches `VolumeArcDeepLink.url(for: .today)`
+    /// via `.widgetURL(...)`; this exercises the same URL contract at
+    /// the app boundary and verifies the telemetry emitted by the
+    /// handler remains wired.
+    func testWidgetDeepLinkRoutesToTodayAndEmitsTelemetry() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenDeepLinkOnLaunch", "volumearc://today?source=widget"]
+        )
+        app.launch()
+        assertAppReachedForeground(app)
+
+        _ = waitForElement(
+            in: app,
+            identifier: "today.scroll",
+            timeout: 15,
+            "Widget deep link should route to the Today tab"
         )
 
         VolumeArcAppUITestSupport.assertTelemetryFired(
