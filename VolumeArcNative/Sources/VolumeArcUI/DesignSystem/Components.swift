@@ -505,11 +505,33 @@ public struct VACoachBubble: View {
     private let sender: Sender
     private let content: String
     private let isStreaming: Bool
+    private let contentRendering: ContentRendering
+
+    private enum ContentRendering {
+        case text
+        case deterministicSnapshot
+    }
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     public init(sender: Sender, content: String, isStreaming: Bool = false) {
         self.sender = sender
         self.content = content
         self.isStreaming = isStreaming
+        self.contentRendering = .text
+    }
+
+    @_spi(Testing)
+    public init(
+        sender: Sender,
+        content: String,
+        isStreaming: Bool = false,
+        rendersDeterministicSnapshotContent: Bool
+    ) {
+        self.sender = sender
+        self.content = content
+        self.isStreaming = isStreaming
+        self.contentRendering = rendersDeterministicSnapshotContent ? .deterministicSnapshot : .text
     }
 
     public var body: some View {
@@ -536,10 +558,7 @@ public struct VACoachBubble: View {
     @ViewBuilder
     private var bubbleContent: some View {
         let stack = VStack(alignment: .leading, spacing: VA.Space.xs) {
-            Text(content)
-                .font(VA.Typography.body)
-                .foregroundStyle(sender == .user ? VA.Colors.textOnPrimary : VA.Colors.textPrimary)
-                .multilineTextAlignment(.leading)
+            bubbleTextContent
 
             if isStreaming {
                 typingIndicator
@@ -557,6 +576,54 @@ public struct VACoachBubble: View {
             stack
                 .vaGlassBackground(in: RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous))
         }
+    }
+
+    @ViewBuilder
+    private var bubbleTextContent: some View {
+        switch contentRendering {
+        case .text:
+            Text(content)
+                .font(VA.Typography.body)
+                .foregroundStyle(sender == .user ? VA.Colors.textOnPrimary : VA.Colors.textPrimary)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+        case .deterministicSnapshot:
+            deterministicSnapshotTextContent
+        }
+    }
+
+    private var deterministicSnapshotTextContent: some View {
+        VStack(alignment: .leading, spacing: snapshotLineSpacing) {
+            Capsule()
+                .fill(snapshotTextColor.opacity(0.82))
+                .frame(width: snapshotPrimaryLineWidth, height: snapshotLineHeight)
+            if content.count > 16 || dynamicTypeSize.isAccessibilitySize {
+                Capsule()
+                    .fill(snapshotTextColor.opacity(0.54))
+                    .frame(width: snapshotSecondaryLineWidth, height: snapshotLineHeight)
+            }
+        }
+    }
+
+    private var snapshotTextColor: Color {
+        sender == .user ? VA.Colors.textOnPrimary : VA.Colors.textPrimary
+    }
+
+    private var snapshotLineHeight: CGFloat {
+        dynamicTypeSize.isAccessibilitySize ? 18 : 10
+    }
+
+    private var snapshotLineSpacing: CGFloat {
+        dynamicTypeSize.isAccessibilitySize ? 8 : 5
+    }
+
+    private var snapshotPrimaryLineWidth: CGFloat {
+        let base = CGFloat(content.count) * (dynamicTypeSize.isAccessibilitySize ? 11 : 7)
+        return min(max(base, 56), dynamicTypeSize.isAccessibilitySize ? 224 : 172)
+    }
+
+    private var snapshotSecondaryLineWidth: CGFloat {
+        snapshotPrimaryLineWidth * 0.68
     }
 
     private var accessibilityLabelText: String {

@@ -8,7 +8,7 @@ VolumeArc currently ships with **540+ test functions** across unit + integration
 - 6-metric performance budget (cold launch, scroll fps, scroll hitches, memory, coach P50, coach P95) tag-gated in CI (VOL-99).
 - 20-fixture coach eval matrix with hermetic template-layer assertions in CI; response-layer harness runs on nightly cron (`coach-evals-nightly.yml`) targeting `relay.volumearc.app` after VOL-223 fixed the dead default URL.
 - User-journey catalog at [`USER_JOURNEYS.md`](USER_JOURNEYS.md); current coverage **18%** (11/62), target **100%** under [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141) (sharpened by [VOL-200](https://linear.app/mabry-ventures/issue/VOL-200) — CI parser gate).
-- Visual regression: SnapshotTesting is wired with bundled baselines for VAButton, the next-workout widget, and core VAUI card/toast surfaces; broader paywall, onboarding, coach bubble, and Live Activity matrices continue under [VOL-135](https://linear.app/mabry-ventures/issue/VOL-135).
+- Visual regression: SnapshotTesting is wired with bundled baselines for VAButton, the next-workout widget, core VAUI card/toast surfaces, the active-workout Live Activity watch surface, and coach transcript bubbles; broader paywall, onboarding, RootDashboard tab, and remaining Live Activity matrices continue under [VOL-135](https://linear.app/mabry-ventures/issue/VOL-135).
 
 ```
 Tests/VolumeArcAppTests/
@@ -212,7 +212,7 @@ Visual regression coverage for VAUI components and the critical screens (Onboard
 
 - **Phase 1 (this PR's introduction):** `pointfreeco/swift-snapshot-testing` v1.19 wired into the `VolumeArcAppTests` target. `Tests/VolumeArcAppTests/Snapshots/` is the canonical home; one infrastructure smoke test (`VolumeArcSnapshotInfrastructureTests`) proves the dependency links and the directory layout works. No baseline PNGs yet.
 
-- **Phase 2+ (follow-up PRs):** the first pilot baseline covers `VAButton` primary in light + dark. Each additional component / screen should land in its own PR with its baseline PNG committed under `Tests/VolumeArcAppTests/Snapshots/__Snapshots__/`. The generated project copies that folder into the `VolumeArcAppTests` bundle so Xcode Cloud can compare snapshots even when the source checkout is not mounted during the test phase. See VOL-135's acceptance criteria for the full matrix (light + dark, `.medium` + `.accessibility5` Dynamic Type, reduce-transparency on/off).
+- **Phase 2+ (follow-up PRs):** active bundled baselines cover `VAButton` primary, the next-workout widget, core VAUI card/toast surfaces, the active-workout Live Activity watch surface, and `VACoachBubble` transcript states in light/dark plus accessibility Dynamic Type. Each additional component / screen should land in its own PR with its baseline PNG committed under `Tests/VolumeArcAppTests/Snapshots/__Snapshots__/`. The generated project copies that folder into the `VolumeArcAppTests` bundle so Xcode Cloud can compare snapshots even when the source checkout is not mounted during the test phase. See VOL-135's acceptance criteria for the full matrix (light + dark, `.medium` + `.accessibility5` Dynamic Type, reduce-transparency on/off).
 
 ### Recording a new snapshot
 
@@ -435,5 +435,7 @@ pointfreeco SnapshotTesting captures pixel-identical baselines that **drift betw
 5. CI runs with default (non-recording) mode and asserts.
 
 Recording new baselines without committing them fails CI because compare mode uses `.never` and reads the bundled reference directory. Always commit the PNG in the same PR.
+
+Current bundled baseline families: `VAButtonSnapshotTests`, `VADesignSystemSnapshotTests`, `NextWorkoutWidgetSnapshotTests`, `ActiveWorkoutLiveActivitySnapshotTests`, and `VACoachBubbleSnapshotTests`.
 
 CI failures from snapshot diffs block merge on the same gate as unit tests.

@@ -83,6 +83,15 @@ public extension View {
     }
 }
 
+@_spi(Testing) public extension View {
+    /// Test-only override for deterministic visual snapshots of glass-backed
+    /// components. Production code leaves this unset and follows the system
+    /// accessibilityReduceTransparency value.
+    func vaGlassReduceTransparencyOverride(_ override: Bool?) -> some View {
+        environment(\.vaGlassReduceTransparencyOverride, override)
+    }
+}
+
 // MARK: - Internal modifier
 
 /// Identifies which `VA.Materials` token to apply. Stored as a value type so
@@ -93,14 +102,26 @@ private enum VAGlassKind {
     case tinted(Color?)
 }
 
+private struct VAGlassReduceTransparencyOverrideKey: EnvironmentKey {
+    static let defaultValue: Bool? = nil
+}
+
+private extension EnvironmentValues {
+    var vaGlassReduceTransparencyOverride: Bool? {
+        get { self[VAGlassReduceTransparencyOverrideKey.self] }
+        set { self[VAGlassReduceTransparencyOverrideKey.self] = newValue }
+    }
+}
+
 private struct VAGlassBackgroundModifier<S: Shape>: ViewModifier {
     let kind: VAGlassKind
     let shape: S
 
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.vaGlassReduceTransparencyOverride) private var reduceTransparencyOverride
 
     func body(content: Content) -> some View {
-        if reduceTransparency {
+        if reduceTransparencyOverride ?? reduceTransparency {
             // Reduce-transparency users get a solid surface fill — no blur,
             // no see-through. Matches the design system's surface hierarchy.
             content.background(VA.Colors.surfacePrimary, in: shape)
