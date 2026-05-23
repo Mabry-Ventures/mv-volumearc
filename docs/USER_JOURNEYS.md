@@ -29,11 +29,11 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | Watch | 6 | 2 | 33% |
 | Widgets | 3 | 0 | 0% |
 | Live Activities | 3 | 0 | 0% |
-| App Intents | 6 | 0 | 0% |
+| App Intents | 6 | 6 | 100% |
 | Background | 4 | 0 | 0% |
 | Failure paths | 6 | 0 | 0% |
 | Resilience / interruption (VOL-127 P2) | 6 | 0 | 0% |
-| **Total** | **69** | **26** | **38%** |
+| **Total** | **69** | **32** | **46%** |
 
 > Goal: 100% by end of Wave 2 (cycle 7, 2026-05-31). Burn down via [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141).
 >
@@ -137,12 +137,12 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 
 | ID | Pre-conditions | Steps | Success | Telemetry | Test |
 |---|---|---|---|---|---|
-| `intent.start-next-workout` | App backgrounded | "Hey Siri, start next workout" | App opens → Workouts tab → active session | `intent.start_next_workout.invoked` | `[ ]` |
-| `intent.ask-coach` | Any | "Hey Siri, ask VolumeArc..." | App opens → Coach tab → prefilled prompt | `intent.ask_coach.invoked` | `[ ]` |
-| `intent.open-signals` | Any | "Hey Siri, open VolumeArc Signals" | App opens → Signals tab | `intent.open_signals.invoked` | `[ ]` |
-| `intent.start-workout-session` | Any | Shortcut runs | Session begins | `intent.start_session.invoked` | `[ ]` |
-| `intent.log-recommended-set` | Active session | Shortcut runs | Recommended set logged | `intent.log_set.invoked` | `[ ]` |
-| `intent.sync-volumearc` | Any | Shortcut runs | `CloudSyncCoordinator.syncCycle` runs | `intent.sync.invoked` | `[ ]` |
+| `intent.start-next-workout` | App backgrounded | "Hey Siri, start next workout" | App opens → Workouts tab → active session | `intent.start_next_workout.invoked` | `VolumeArcIntentJourneyTests.testStartNextWorkoutIntentStartsLiveSessionAndEmitsTelemetry` |
+| `intent.ask-coach` | Any | "Hey Siri, ask VolumeArc..." | App opens → Coach tab → prefilled prompt | `intent.ask_coach.invoked` | `VolumeArcIntentJourneyTests.testAskCoachIntentPrefillsPromptAndEmitsTelemetry` |
+| `intent.open-signals` | Any | "Hey Siri, open VolumeArc Signals" | App opens → Signals tab | `intent.open_signals.invoked` | `VolumeArcIntentJourneyTests.testOpenSignalsIntentRoutesToSignalsAndEmitsTelemetry` |
+| `intent.start-workout-session` | Any | Shortcut runs | Session begins | `intent.start_workout_session.invoked` | `VolumeArcIntentJourneyTests.testStartWorkoutSessionIntentStartsLiveSessionAndEmitsTelemetry` |
+| `intent.log-recommended-set` | Active session | Shortcut runs | Recommended set logged | `intent.log_recommended_set.invoked` | `VolumeArcIntentJourneyTests.testLogRecommendedSetIntentLogsSetAndEmitsTelemetry` |
+| `intent.sync-volumearc` | Any | Shortcut runs | `CloudSyncCoordinator.syncCycle` runs | `intent.sync_now.invoked` | `VolumeArcIntentJourneyTests.testSyncVolumeArcIntentRoutesToSignalsAndRequestsSync` |
 
 ## Background
 

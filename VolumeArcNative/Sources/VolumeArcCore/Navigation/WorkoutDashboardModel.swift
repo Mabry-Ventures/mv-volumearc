@@ -333,50 +333,6 @@ public final class WorkoutDashboardModel: ObservableObject {
         #endif
     }
 
-    /// Log the currently recommended set from autopilot state.
-    public func logRecommendedSet() async {
-        #if canImport(SwiftData)
-        guard let workoutRepository, let autopilot else { return }
-
-        if activeWorkoutID == nil {
-            await startWorkoutSession()
-        }
-        guard let workoutID = activeWorkoutID else { return }
-
-        let set = WorkoutSetPerformance(
-            weight: autopilot.nextTarget.weight,
-            reps: autopilot.nextTarget.repRange.lowerBound,
-            rpe: autopilot.nextTarget.targetRPE,
-            completedAt: .now
-        )
-
-        do {
-            try workoutRepository.appendSet(
-                set,
-                forExercise: autopilot.nextExerciseID,
-                to: workoutID
-            )
-            loggedSetCountThisSession += 1
-
-            telemetrySink.record(TelemetryEvent(
-                category: "workout",
-                name: "set_logged",
-                severity: .info,
-                message: "Logged \(Int(set.weight))lb x \(set.reps) on \(autopilot.nextExerciseName)"
-            ))
-
-            await refresh()
-        } catch {
-            telemetrySink.record(TelemetryEvent(
-                category: "workout",
-                name: "set_log_failed",
-                severity: .error,
-                message: error.localizedDescription
-            ))
-        }
-        #endif
-    }
-
     /// End the currently active workout session.
     @discardableResult
     public func completeWorkoutSession() async -> RecentSession? {
@@ -686,6 +642,55 @@ public final class WorkoutDashboardModel: ObservableObject {
 }
 
 public extension WorkoutDashboardModel {
+    /// Log the currently recommended set from autopilot state.
+    func logRecommendedSet() async {
+        #if canImport(SwiftData)
+        guard let workoutRepository else { return }
+
+        if autopilot == nil {
+            await refresh()
+        }
+        guard let autopilot else { return }
+
+        if activeWorkoutID == nil {
+            await startWorkoutSession()
+        }
+        guard let workoutID = activeWorkoutID else { return }
+
+        let set = WorkoutSetPerformance(
+            weight: autopilot.nextTarget.weight,
+            reps: autopilot.nextTarget.repRange.lowerBound,
+            rpe: autopilot.nextTarget.targetRPE,
+            completedAt: .now
+        )
+
+        do {
+            try workoutRepository.appendSet(
+                set,
+                forExercise: autopilot.nextExerciseID,
+                to: workoutID
+            )
+            loggedSetCountThisSession += 1
+
+            telemetrySink.record(TelemetryEvent(
+                category: "workout",
+                name: "set_logged",
+                severity: .info,
+                message: "Logged \(Int(set.weight))lb x \(set.reps) on \(autopilot.nextExerciseName)"
+            ))
+
+            await refresh()
+        } catch {
+            telemetrySink.record(TelemetryEvent(
+                category: "workout",
+                name: "set_log_failed",
+                severity: .error,
+                message: error.localizedDescription
+            ))
+        }
+        #endif
+    }
+
     /// VOL-110: BGTask app-refresh entry point with bracketing telemetry.
     @discardableResult
     func performBackgroundRefresh() async -> Bool {
