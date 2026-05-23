@@ -7,8 +7,9 @@ VolumeArc currently ships with **540+ test functions** across unit + integration
 - 80% line-coverage gate enforced on `VolumeArcCore` (VOL-52), targeted to rise to **90%** under [VOL-140](https://linear.app/mabry-ventures/issue/VOL-140) (sharpened by [VOL-205](https://linear.app/mabry-ventures/issue/VOL-205)). New gates: `VolumeArcUI` (≥85% target, **18%** staged floor after the VOL-135 snapshot ratchet), `VolumeArcCoreWatch` (≥85% target, **25%** Phase A floor — measured baseline 28.77% from [VOL-138](https://linear.app/mabry-ventures/issue/VOL-138) Phase A; ratchets up once `WatchWorkoutModel` pure logic is extracted), Widgets (≥75% target — view-layer snapshot coverage started under [VOL-139](https://linear.app/mabry-ventures/issue/VOL-139); line-coverage gate remains pending a dedicated target).
 - 6-metric performance budget (cold launch, scroll fps, scroll hitches, memory, coach P50, coach P95) tag-gated in CI (VOL-99).
 - 20-fixture coach eval matrix with hermetic template-layer assertions in CI; response-layer harness runs on nightly cron (`coach-evals-nightly.yml`) targeting `relay.volumearc.app` after VOL-223 fixed the dead default URL.
-- User-journey catalog at [`USER_JOURNEYS.md`](USER_JOURNEYS.md); current coverage **18%** (11/62), target **100%** under [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141) (sharpened by [VOL-200](https://linear.app/mabry-ventures/issue/VOL-200) — CI parser gate).
+- User-journey catalog at [`USER_JOURNEYS.md`](USER_JOURNEYS.md); current coverage **56%** (39/69), target **100%** under [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141) (sharpened by [VOL-200](https://linear.app/mabry-ventures/issue/VOL-200) — CI parser gate).
 - Visual regression: SnapshotTesting is wired with bundled baselines for VAButton, the next-workout widget, core VAUI card/toast surfaces, the active-workout Live Activity lock-screen/banner and watch surfaces, coach transcript bubbles, the Premium paywall loaded-empty/failure shell, and the full onboarding flow; RootDashboard tab and remaining Live Activity matrices continue under [VOL-135](https://linear.app/mabry-ventures/issue/VOL-135).
+- Exploratory UAT: [`UAT_AGENT.md`](UAT_AGENT.md) documents the nightly LLM-driven XCUITest bridge from [VOL-169](https://linear.app/mabry-ventures/issue/VOL-169). It reads screenshots + accessibility trees, executes bounded safe actions, uploads transcripts, and posts a GitHub issue report.
 
 ```
 Tests/VolumeArcAppTests/
@@ -92,7 +93,7 @@ The UI test target runs as four shards instead of one mega-invocation. Each shar
 
 | Shard                       | Classes                                                                                                                                                          | Why                                                                                                                                |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `smoke`                     | `VolumeArcAppUITests`, `VolumeArcTelemetryProbeMatcherTests`                                                                                                     | Fast regression detection; matcher parsing isolated from full-app journeys                                                         |
+| `smoke`                     | `VolumeArcAppUITests`, `VolumeArcTelemetryProbeMatcherTests`, `VolumeArcExploratoryUATAgentTests`                                                                | Fast regression detection; matcher parsing isolated from full-app journeys; VOL-169 compiles here but skips unless nightly-enabled |
 | `journeys-core`             | `VolumeArcAppJourneyTests`, `VolumeArcCoachJourneyTests`, `VolumeArcTodayJourneyTests`                                                                           | Heaviest user-flow journeys; isolating them keeps a single hang from the parent journey suite from poisoning lighter shards        |
 | `journeys-aux`              | `VolumeArcProfileJourneyTests`, `VolumeArcFeedbackJourneyTests`, `VolumeArcSignalsJourneyTests`, `VolumeArcHealthKitPermissionJourneyTests`, `VolumeArcWatchSimulationJourneyTests`, `VolumeArcChaosJourneyTests` | Mid-cost flows + permission-dialog interrupts + chaos / watch-simulation                                                          |
 | `accessibility-screenshots` | `VolumeArcAccessibilityJourneyTests`, `VolumeArcScreenshotTests`                                                                                                 | Known AX-daemon wedge cause (`accessibility5` + `NSDoubleLocalizedStrings`); when the daemon dies, the wedge stays inside this shard |
@@ -164,6 +165,12 @@ This was the root cause behind VOL-175's "probe flakes when chaos journey is in 
 ## Chaos / fault injection (VOL-168)
 
 [`docs/CHAOS.md`](CHAOS.md) is the source of truth. The short version: every chaos flag is a `-CHAOS_*` launch argument that the `ChaosController` (`App/Debug/`) reads, which causes `VolumeArcAppFactories` to wrap the matching subsystem in a fault-injecting decorator. Paired journeys in `VolumeArcChaosJourneyTests` exercise the fault and assert graceful degradation — including the diagnostic telemetry event via VOL-149's `assertTelemetryFired` helper. The wiring is `#if DEBUG`-gated everywhere so Release builds compile every chaos check down to `return false`. Phase 1 ships the HealthKit-auth-denied flag + journey; Phase 2 extends to WatchConnectivity / StoreKit / BGTaskScheduler / AIRelay.
+
+## Exploratory UAT agent (VOL-169)
+
+[`docs/UAT_AGENT.md`](UAT_AGENT.md) is the source of truth. The short version: `scripts/run_uat_agent.sh` launches the app through a gated XCUITest, sends screenshots + accessibility trees to the OpenAI Responses API, executes one bounded action at a time, and writes a JSON/Markdown anomaly report. The workflow runs nightly in `.github/workflows/uat-agent-nightly.yml`, uploads the xcresult/report artifacts, and posts to a GitHub issue named `Nightly exploratory UAT report`.
+
+The test class is mapped to the `smoke` shard only so the shard-coverage verifier knows about it. It calls `XCTSkip` unless `UAT_AGENT_ENABLED=1`, so normal PR and Xcode Cloud suites do not inherit the nightly model loop.
 
 ## StoreKit edge cases (VOL-142)
 

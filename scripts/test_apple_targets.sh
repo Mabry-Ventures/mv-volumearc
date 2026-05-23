@@ -398,6 +398,7 @@ ui_shard_classes() {
       cat <<'EOF'
 VolumeArcAppUITests
 VolumeArcTelemetryProbeMatcherTests
+VolumeArcExploratoryUATAgentTests
 EOF
       ;;
     journeys-core)

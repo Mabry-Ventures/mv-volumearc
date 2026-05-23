@@ -96,6 +96,7 @@ This is the granular per-feature checklist. For high-level system status, see [`
 | Marketing site (`marketing/` → `volumearc.app`) | 🚧 | Next.js 16 + Tailwind v4 + shadcn/ui site adapted from Tailwind Plus Pocket. Pages: `/`, `/terms`, `/privacy`, `/support`, `/quality`; `/quality` is wired to the public coach-eval trend file. CI build gate live. Vercel project link + custom domain + legal counsel review pending. See [`docs/MARKETING.md`](MARKETING.md). |
 | Generated Xcode project | ✅ | `scripts/generate_xcode_project.rb` remains the only source of truth for the Xcode project. |
 | CI pipeline (M4 self-hosted runners) | ✅ | Build, unit/integration tests, UI smoke tests, lint, and validation run on the dedicated Apple Silicon PR and main runner. |
+| Exploratory UAT agent | ✅ | Nightly workflow drives a gated XCUITest bridge with screenshots + accessibility trees, bounded model-selected actions, JSON/Markdown reports, and a sticky GitHub issue summary. Tracked in [VOL-169](https://linear.app/mabry-ventures/issue/VOL-169). |
 | Fastlane (test/beta/release) | ✅ | TestFlight automation and App Store submission lanes ship. |
 | Archive script | ✅ | `archive_for_distribution.sh` produces signed distribution archives. |
 | Privacy manifests | ✅ | Required manifests ship for all relevant targets and are validated. |
