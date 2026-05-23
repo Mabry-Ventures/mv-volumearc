@@ -38,7 +38,7 @@
 
 #if canImport(StoreKit)
 import XCTest
-@testable import VolumeArcCore
+@_spi(Testing) @testable import VolumeArcCore
 
 @MainActor
 final class StoreKitSubscriptionStateMachineTests: XCTestCase {
@@ -46,6 +46,69 @@ final class StoreKitSubscriptionStateMachineTests: XCTestCase {
     private static let monthly = "com.mabryventures.VolumeArc.premium.monthly"
     private static let yearly = "com.mabryventures.VolumeArc.premium.yearly"
     private static let allProductIDs = [monthly, yearly]
+
+    // MARK: - Product loading
+
+    func test_paywallAppearLoadPolicy_loadsIdleProductionState() {
+        let store = StoreKitSubscriptionStore(
+            productIDs: Self.allProductIDs,
+            loadingState: .idle,
+            allowsAutomaticProductReload: true
+        )
+
+        XCTAssertTrue(
+            store.shouldLoadProductsOnPaywallAppear,
+            "An idle production store should load when the paywall appears."
+        )
+    }
+
+    func test_paywallAppearLoadPolicy_retriesLoadedEmptyProductionState() {
+        let store = StoreKitSubscriptionStore(
+            productIDs: Self.allProductIDs,
+            loadingState: .loaded,
+            allowsAutomaticProductReload: true
+        )
+
+        XCTAssertTrue(
+            store.shouldLoadProductsOnPaywallAppear,
+            "A transient empty StoreKit response should retry when the paywall appears again."
+        )
+    }
+
+    func test_paywallAppearLoadPolicy_retriesFailedProductionState() {
+        let store = StoreKitSubscriptionStore(
+            productIDs: Self.allProductIDs,
+            loadingState: .failed("StoreKit temporarily unavailable."),
+            allowsAutomaticProductReload: true
+        )
+
+        XCTAssertTrue(
+            store.shouldLoadProductsOnPaywallAppear,
+            "A transient StoreKit failure should retry when the paywall appears again."
+        )
+    }
+
+    func test_paywallAppearLoadPolicy_doesNotAutoReloadDeterministicFixtures() {
+        let store = StoreKitSubscriptionStore(
+            productIDs: Self.allProductIDs,
+            loadingState: .loaded
+        )
+
+        XCTAssertFalse(
+            store.shouldLoadProductsOnPaywallAppear,
+            "Snapshot and state-machine fixtures opt out so injected loaded-empty states remain stable."
+        )
+    }
+
+    func test_paywallAppearLoadPolicy_doesNotStartSecondConcurrentLoad() {
+        let store = StoreKitSubscriptionStore(
+            productIDs: Self.allProductIDs,
+            loadingState: .loading,
+            allowsAutomaticProductReload: true
+        )
+
+        XCTAssertFalse(store.shouldLoadProductsOnPaywallAppear)
+    }
 
     // MARK: - Grant path
 
