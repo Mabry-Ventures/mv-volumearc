@@ -15,6 +15,7 @@ private enum WatchHealthCaptureError: Error {
 }
 
 @MainActor
+// swiftlint:disable:next type_body_length
 final class WatchWorkoutModel: ObservableObject {
     @Published private(set) var autopilot: WorkoutAutopilotState
     @Published private(set) var readiness: ReadinessAssessment
@@ -27,6 +28,7 @@ final class WatchWorkoutModel: ObservableObject {
     @Published private(set) var sessionActive = false
     @Published private(set) var pendingSyncCount = 0
     @Published private(set) var currentHeartRateBPM: Int?
+    @Published private(set) var isWatchVoiceEnabled = true
     @Published private(set) var statusMessage = String(localized: "Watch coach standing by.", comment: "Watch default status")
     #if DEBUG
     @Published private(set) var liveMetricEventCount = 0
@@ -36,7 +38,10 @@ final class WatchWorkoutModel: ObservableObject {
     private let stateStore: WatchSessionStateStore
     private let healthStore: HealthStore
     private let workoutKitScheduler: WorkoutKitScheduling
+    private let voicePlayback: WatchVoicePlayback
+    private let voiceSettingsStore: WatchVoiceSettingsStore
     private var activeWorkoutID: String
+    private var isLuminanceReduced = false
     private var liveMetricsTask: Task<Void, Never>?
 
     init(
@@ -44,6 +49,8 @@ final class WatchWorkoutModel: ObservableObject {
         stateStore: WatchSessionStateStore,
         healthStore: HealthStore = UnavailableHealthStore(),
         workoutKitScheduler: WorkoutKitScheduling = UnavailableWorkoutKitScheduler(),
+        voicePlayback: WatchVoicePlayback = UnavailableWatchVoicePlayback(),
+        voiceSettingsStore: WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore(),
         workoutID: String = WatchWorkoutModel.makeWorkoutID()
     ) {
         let engine = ProgressionEngine()
@@ -67,6 +74,8 @@ final class WatchWorkoutModel: ObservableObject {
         self.stateStore = stateStore
         self.healthStore = healthStore
         self.workoutKitScheduler = workoutKitScheduler
+        self.voicePlayback = voicePlayback
+        self.voiceSettingsStore = voiceSettingsStore
         self.activeWorkoutID = workoutID
     }
 
@@ -78,11 +87,17 @@ final class WatchWorkoutModel: ObservableObject {
             ),
             stateStore: Self.makeStateStore(),
             healthStore: Self.makeHealthStore(),
-            workoutKitScheduler: Self.makeWorkoutKitScheduler()
+            workoutKitScheduler: Self.makeWorkoutKitScheduler(),
+            voicePlayback: Self.makeVoicePlayback(),
+            voiceSettingsStore: UserDefaultsWatchVoiceSettingsStore()
         )
     }
 
     func loadPersistedState() async {
+        isWatchVoiceEnabled = await voiceSettingsStore.isWatchVoiceEnabled()
+        if isWatchVoiceEnabled {
+            await voicePlayback.prewarm()
+        }
         if let snapshot = await stateStore.load() {
             activeWorkoutID = snapshot.workoutID
             selectedAction = snapshot.selectedAction
@@ -95,6 +110,41 @@ final class WatchWorkoutModel: ObservableObject {
         if sessionActive {
             observeLiveWorkoutMetrics()
         }
+    }
+
+    func setLuminanceReduced(_ reduced: Bool) {
+        isLuminanceReduced = reduced
+    }
+
+    func setWatchVoiceEnabled(_ enabled: Bool) async {
+        await applyWatchVoiceEnabled(enabled, syncToPeer: true)
+    }
+
+    func applyWatchPayload(_ payload: WatchPayload) async {
+        guard payload.kind == .voiceCoachToggle,
+              let settings = WatchVoiceCoach.decodeSettingsPayload(from: payload.body)
+        else { return }
+        await applyWatchVoiceEnabled(settings.isEnabled, syncToPeer: false)
+    }
+
+    private func applyWatchVoiceEnabled(_ enabled: Bool, syncToPeer: Bool) async {
+        isWatchVoiceEnabled = enabled
+        await voiceSettingsStore.setWatchVoiceEnabled(enabled)
+        guard isWatchVoiceEnabled == enabled else { return }
+        if enabled {
+            await voicePlayback.prewarm()
+            guard isWatchVoiceEnabled == enabled else { return }
+            statusMessage = String(localized: "Watch voice coach enabled.", comment: "Watch voice coach enabled status")
+        } else {
+            await voicePlayback.stop()
+            guard isWatchVoiceEnabled == enabled else { return }
+            statusMessage = String(localized: "Watch voice coach muted.", comment: "Watch voice coach disabled status")
+        }
+        if syncToPeer {
+            await syncWatchVoiceSetting(enabled)
+            guard isWatchVoiceEnabled == enabled else { return }
+        }
+        await persistState()
     }
 
     func refreshConnectivity() async {
@@ -133,8 +183,17 @@ final class WatchWorkoutModel: ObservableObject {
         } catch {
             statusMessage = String(localized: "Rest timer updated locally. Phone sync will retry.", comment: "Watch rest timer offline status")
         }
+        await speakVoiceEvent(.setComplete(restSeconds: 90))
         pendingSyncCount = await coordinator.pendingPayloadCount()
         await persistState()
+    }
+
+    func announceRestRemaining(seconds: Int) async {
+        if sessionActive { await speakVoiceEvent(.restRemaining(seconds: seconds)) }
+    }
+
+    func announceRestTimerAlert(seconds: Int) async {
+        if sessionActive { await speakVoiceEvent(.restRemaining(seconds: seconds), allowDuringLuminanceReduced: true) }
     }
 
     func updateHeartRate(beatsPerMinute bpm: Int?) {
@@ -202,6 +261,10 @@ final class WatchWorkoutModel: ObservableObject {
                 )
             sessionActive = true
         }
+        if isWatchVoiceEnabled {
+            await voicePlayback.prewarm()
+        }
+        await speakVoiceEvent(.nextSet(exerciseName: autopilot.nextExerciseName, target: autopilot.nextTarget))
         pendingSyncCount = await coordinator.pendingPayloadCount()
         await persistState()
     }
@@ -237,6 +300,10 @@ final class WatchWorkoutModel: ObservableObject {
         }
 
         sessionActive = true
+        if isWatchVoiceEnabled {
+            await voicePlayback.prewarm()
+        }
+        await speakVoiceEvent(.nextSet(exerciseName: autopilot.nextExerciseName, target: autopilot.nextTarget))
         pendingSyncCount = await coordinator.pendingPayloadCount()
         await persistState()
     }
@@ -295,6 +362,7 @@ final class WatchWorkoutModel: ObservableObject {
             statusMessage = String(localized: "Watch ended the session. Phone sync will retry.", comment: "Watch session end offline")
         }
         await stopNativeWorkoutCapture()
+        await voicePlayback.stop()
         sessionActive = false
         activeWorkoutID = Self.makeWorkoutID()
         pendingSyncCount = await coordinator.pendingPayloadCount()
@@ -318,6 +386,7 @@ final class WatchWorkoutModel: ObservableObject {
                 comment: "Coach cue offline status"
             )
         }
+        await speakVoiceEvent(.coachCue(autopilot.bestCue))
         pendingSyncCount = await coordinator.pendingPayloadCount()
         await persistState()
     }
@@ -370,6 +439,7 @@ final class WatchWorkoutModel: ObservableObject {
             statusMessage = String(localized: "Workout summary queued for the phone.", comment: "Workout complete offline status")
         }
         await stopNativeWorkoutCapture()
+        await voicePlayback.stop()
         sessionActive = false
         activeWorkoutID = Self.makeWorkoutID()
         pendingSyncCount = await coordinator.pendingPayloadCount()
@@ -425,6 +495,14 @@ final class WatchWorkoutModel: ObservableObject {
         }
         #endif
         return UnavailableWorkoutKitScheduler()
+    }
+
+    private static func makeVoicePlayback() -> WatchVoicePlayback {
+        #if canImport(AVFoundation)
+        return AVFoundationWatchVoicePlayback()
+        #else
+        return UnavailableWatchVoicePlayback()
+        #endif
     }
 
     private static func makeWorkoutID() -> String {
@@ -490,6 +568,30 @@ final class WatchWorkoutModel: ObservableObject {
                 }
             }
         }
+    }
+
+    private func speakVoiceEvent(_ event: WatchVoiceEvent, allowDuringLuminanceReduced: Bool = false) async {
+        guard isWatchVoiceEnabled else { return }
+        guard isLuminanceReduced == false || allowDuringLuminanceReduced else { return }
+        let utterance = WatchVoiceCoach.utterance(for: event)
+        do {
+            try await voicePlayback.speak(utterance)
+        } catch {
+            statusMessage = String(
+                localized: "Watch voice coach unavailable.",
+                comment: "Watch voice coach playback failure status"
+            )
+        }
+    }
+
+    private func syncWatchVoiceSetting(_ enabled: Bool) async {
+        let payload = WatchPayload(
+            kind: .voiceCoachToggle,
+            workoutID: activeWorkoutID,
+            body: WatchVoiceCoach.encodeSettingsPayload(isEnabled: enabled)
+        )
+        try? await coordinator.send(payload)
+        pendingSyncCount = await coordinator.pendingPayloadCount()
     }
 
     private func persistState() async {
@@ -572,6 +674,32 @@ private struct WatchRestTimerDisplay: View {
                         )
                     )
             }
+        }
+    }
+}
+
+private struct WatchRestThirtySecondObserver: View {
+    let endsAt: Date
+    let onThirtySecondsRemaining: () -> Void
+    @State private var didAnnounceThirtySeconds = false
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let remaining = max(Int(endsAt.timeIntervalSince(context.date)), 0)
+
+            Color.clear
+                .onChange(of: remaining) { oldValue, newValue in
+                    if newValue > 30 {
+                        didAnnounceThirtySeconds = false
+                    }
+                    if oldValue > 30, newValue <= 30, newValue > 0, didAnnounceThirtySeconds == false {
+                        didAnnounceThirtySeconds = true
+                        onThirtySecondsRemaining()
+                    }
+                }
+                .onChange(of: endsAt) { _, _ in
+                    didAnnounceThirtySeconds = false
+                }
         }
     }
 }
@@ -729,10 +857,38 @@ struct WatchWorkoutView: View {
 
                     Divider()
 
-                    WatchRestTimerDisplay(endsAt: model.restEndsAt) {
-                        Task { await model.resetRestTimer() }
-                    }
+                    WatchRestTimerDisplay(
+                        endsAt: model.restEndsAt,
+                        onReset: {
+                            Task { await model.resetRestTimer() }
+                        }
+                    )
                 }
+
+                    Divider()
+
+                    Text(String(localized: "Settings", comment: "Watch settings section header"))
+                        .font(VA.Typography.caption)
+                        .foregroundStyle(VA.Colors.textSecondary)
+
+                    Toggle(
+                        String(localized: "Voice Coach on Watch", comment: "Watch voice coach toggle label"),
+                        isOn: Binding(
+                            get: { model.isWatchVoiceEnabled },
+                            set: { enabled in
+                                Task {
+                                    await model.setWatchVoiceEnabled(enabled)
+                                }
+                            }
+                        )
+                    )
+                    .accessibilityIdentifier("watch.voiceCoach.toggle")
+                    .accessibilityHint(
+                        String(
+                            localized: "Turns spoken set cues and rest alerts on this Apple Watch on or off",
+                            comment: "Watch voice coach toggle accessibility hint"
+                        )
+                    )
 
                     Divider()
 
@@ -882,13 +1038,36 @@ struct WatchWorkoutView: View {
                 }
             }
         }
+        .overlay {
+            WatchRestThirtySecondObserver(
+                endsAt: model.restEndsAt,
+                onThirtySecondsRemaining: {
+                    Task { await model.announceRestTimerAlert(seconds: 30) }
+                }
+            )
+            .frame(width: 0, height: 0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
         .transaction { transaction in
             if isLuminanceReduced {
                 transaction.animation = nil
             }
         }
         .task {
+            model.setLuminanceReduced(isLuminanceReduced)
             await model.loadPersistedState()
+        }
+        .onChange(of: isLuminanceReduced) { _, newValue in
+            model.setLuminanceReduced(newValue)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: WatchConnectivityNotifications.payloadDidArrive)) { notification in
+            guard let payload = notification.userInfo?[WatchConnectivityNotifications.payloadUserInfoKey] as? WatchPayload else {
+                return
+            }
+            Task {
+                await model.applyWatchPayload(payload)
+            }
         }
     }
 

@@ -169,6 +169,118 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
         XCTAssertEqual(summary.workoutID, workoutID)
     }
 
+    func test_watchVoiceCoachEmitsWorkoutEventTTSStrings() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let voicePlayback = FakeWatchVoicePlayback()
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            voicePlayback: voicePlayback
+        )
+
+        let nextSet = WatchVoiceCoach.utterance(
+            for: .nextSet(exerciseName: model.autopilot.nextExerciseName, target: model.autopilot.nextTarget)
+        )
+        let setComplete = WatchVoiceCoach.utterance(for: .setComplete(restSeconds: 90))
+        let restRemaining = WatchVoiceCoach.utterance(for: .restRemaining(seconds: 30))
+        let coachCue = WatchVoiceCoach.utterance(for: .coachCue(model.autopilot.bestCue))
+
+        await model.startSession()
+        await model.resetRestTimer()
+        await model.announceRestRemaining(seconds: 30)
+        await model.requestCoachCue()
+
+        let spoken = await voicePlayback.spoken
+        XCTAssertTrue(spoken.contains(nextSet))
+        XCTAssertTrue(spoken.contains(setComplete))
+        XCTAssertTrue(spoken.contains(restRemaining))
+        XCTAssertTrue(spoken.contains(coachCue))
+        XCTAssertTrue(spoken.allSatisfy { $0.delivery == .textToSpeech })
+
+        let prewarmCount = await voicePlayback.prewarmCount
+        XCTAssertEqual(prewarmCount, 1)
+    }
+
+    func test_watchVoiceCoachSettingDisablesSpeechAndPersists() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let voicePlayback = FakeWatchVoicePlayback()
+        let settings = InMemoryWatchVoiceSettingsStore(enabled: true)
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            voicePlayback: voicePlayback,
+            voiceSettingsStore: settings
+        )
+
+        await model.setWatchVoiceEnabled(false)
+        await model.startSession()
+        await model.resetRestTimer()
+
+        let spoken = await voicePlayback.spoken
+        XCTAssertTrue(spoken.isEmpty)
+        let enabled = await settings.isWatchVoiceEnabled()
+        XCTAssertFalse(enabled)
+        let stopCount = await voicePlayback.stopCount
+        XCTAssertEqual(stopCount, 1)
+        let voicePayloads = await transport.sent.filter { $0.kind == .voiceCoachToggle }
+        XCTAssertEqual(voicePayloads.count, 1)
+        XCTAssertEqual(WatchVoiceCoach.decodeSettingsPayload(from: voicePayloads[0].body)?.isEnabled, false)
+        let prewarmCount = await voicePlayback.prewarmCount
+        XCTAssertEqual(prewarmCount, 0)
+    }
+
+    func test_watchVoiceCoachAppliesMirroredPhoneToggleWithoutEchoingPayload() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let voicePlayback = FakeWatchVoicePlayback()
+        let settings = InMemoryWatchVoiceSettingsStore(enabled: true)
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            voicePlayback: voicePlayback,
+            voiceSettingsStore: settings
+        )
+        let payload = WatchPayload(
+            kind: .voiceCoachToggle,
+            workoutID: "phone-toggle",
+            body: WatchVoiceCoach.encodeSettingsPayload(isEnabled: false)
+        )
+
+        await model.applyWatchPayload(payload)
+
+        let enabled = await settings.isWatchVoiceEnabled()
+        XCTAssertFalse(enabled)
+        let stopCount = await voicePlayback.stopCount
+        XCTAssertEqual(stopCount, 1)
+        let sentPayloads = await transport.sent
+        XCTAssertTrue(sentPayloads.isEmpty)
+    }
+
+    func test_watchVoiceCoachSuppressesAutomaticSpeechDuringAODExceptRestTimerAlert() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let voicePlayback = FakeWatchVoicePlayback()
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            voicePlayback: voicePlayback
+        )
+
+        model.setLuminanceReduced(true)
+        await model.startSession()
+        await model.requestCoachCue()
+        await model.resetRestTimer()
+        await model.announceRestRemaining(seconds: 30)
+        let suppressed = await voicePlayback.spoken
+        XCTAssertTrue(suppressed.isEmpty)
+
+        await model.announceRestTimerAlert(seconds: 30)
+        let spoken = await voicePlayback.spoken
+        XCTAssertEqual(spoken, [WatchVoiceUtterance(text: "30 seconds remaining")])
+    }
+
     func test_scheduleRecommendedWorkoutRequestsAuthorizationAndSchedulesStructuralPrescription() async throws {
         let transport = RecordingWatchTransport(reachable: true)
         let healthStore = FakeLiveHealthStore()
@@ -294,6 +406,8 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
         stateStore: InMemoryWatchSessionStateStore = InMemoryWatchSessionStateStore(),
         healthStore: FakeLiveHealthStore,
         workoutKitScheduler: WorkoutKitScheduling = UnavailableWorkoutKitScheduler(),
+        voicePlayback: WatchVoicePlayback = UnavailableWatchVoicePlayback(),
+        voiceSettingsStore: WatchVoiceSettingsStore = InMemoryWatchVoiceSettingsStore(enabled: true),
         workoutID: String = "watch-seeded"
     ) -> WatchWorkoutModel {
         WatchWorkoutModel(
@@ -304,6 +418,8 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
             stateStore: stateStore,
             healthStore: healthStore,
             workoutKitScheduler: workoutKitScheduler,
+            voicePlayback: voicePlayback,
+            voiceSettingsStore: voiceSettingsStore,
             workoutID: workoutID
         )
     }
@@ -428,6 +544,40 @@ private actor FakeWorkoutKitScheduler: WorkoutKitScheduling {
 
     func schedule(_ prescription: WorkoutKitPrescription, at date: DateComponents) async throws {
         scheduled.append(WorkoutKitScheduleCall(prescription: prescription, date: date))
+    }
+}
+
+private actor FakeWatchVoicePlayback: WatchVoicePlayback {
+    private(set) var prewarmCount = 0
+    private(set) var spoken: [WatchVoiceUtterance] = []
+    private(set) var stopCount = 0
+
+    func prewarm() async {
+        prewarmCount += 1
+    }
+
+    func speak(_ utterance: WatchVoiceUtterance) async throws {
+        spoken.append(utterance)
+    }
+
+    func stop() async {
+        stopCount += 1
+    }
+}
+
+private actor InMemoryWatchVoiceSettingsStore: WatchVoiceSettingsStore {
+    private var enabled: Bool
+
+    init(enabled: Bool) {
+        self.enabled = enabled
+    }
+
+    func isWatchVoiceEnabled() async -> Bool {
+        enabled
+    }
+
+    func setWatchVoiceEnabled(_ enabled: Bool) async {
+        self.enabled = enabled
     }
 }
 

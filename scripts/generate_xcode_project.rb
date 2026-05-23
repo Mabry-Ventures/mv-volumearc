@@ -403,6 +403,7 @@ app_target.add_system_framework('WorkoutKit')
 watch_target.add_system_framework('WatchKit')
 watch_target.add_system_framework('SwiftUI')
 watch_target.add_system_framework('WorkoutKit')
+watch_target.add_system_framework('AVFoundation')
 watch_widgets_target.add_system_framework('WidgetKit')
 watch_widgets_target.add_system_framework('SwiftUI')
 watch_widgets_target.add_system_framework('WorkoutKit')
@@ -428,6 +429,7 @@ app_widget_ui_tests_target.add_system_framework('WidgetKit')
 app_watch_tests_target.add_system_framework('XCTest')
 app_watch_tests_target.add_system_framework('SwiftUI')
 app_watch_tests_target.add_system_framework('WorkoutKit')
+app_watch_tests_target.add_system_framework('AVFoundation')
 
 embed_watch_extensions_phase = watch_target.new_copy_files_build_phase('Embed Watch Extensions')
 embed_watch_extensions_phase.symbol_dst_subfolder_spec = :plug_ins
@@ -483,6 +485,7 @@ add_swift_sources(watch_tests_group, app_watch_tests_target, ROOT.join('Tests/Vo
 add_selected_swift_sources(watch_group, app_watch_tests_target, ROOT.join('Watch'), [
   'VADesignTokens.swift',
   'WatchAlwaysOnWorkoutView.swift',
+  'WatchVoicePlayback.swift',
   'WatchWorkoutView.swift',
 ])
 add_resource(ui_tests_group, app_ui_tests_target, 'VolumeArcTests.storekit')

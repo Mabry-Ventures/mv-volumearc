@@ -48,6 +48,7 @@ final class WatchPayloadCodecTests: XCTestCase {
             .endSession,
             .coachCue,
             .completedWorkout,
+            .voiceCoachToggle,
         ] {
             let original = WatchPayload(
                 kind: kind,
@@ -107,6 +108,15 @@ final class WatchPayloadCodecTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(createdAt, before.addingTimeInterval(-1))
             XCTAssertLessThanOrEqual(createdAt, after.addingTimeInterval(1))
         }
+    }
+
+    func test_voice_settings_payload_roundtrip() {
+        let body = WatchVoiceCoach.encodeSettingsPayload(isEnabled: false)
+        let payload = WatchPayload(kind: .voiceCoachToggle, workoutID: "voice", body: body)
+        let decoded = WatchPayload(dictionary: payload.asDictionary())
+
+        XCTAssertEqual(decoded?.kind, .voiceCoachToggle)
+        XCTAssertEqual(WatchVoiceCoach.decodeSettingsPayload(from: decoded?.body ?? "")?.isEnabled, false)
     }
 
     // MARK: - Codable JSON round-trip

@@ -311,7 +311,8 @@ extension VolumeArcApp {
     /// build accidentally received the launch arg, this helper would
     /// silently no-op rather than fabricate a watch event. Pairs with
     /// the `WatchPayloadKind` enum: `restTimer`, `liveState`,
-    /// `startSession`, `endSession`, `coachCue`, `completedWorkout`. An
+    /// `startSession`, `endSession`, `coachCue`, `completedWorkout`,
+    /// `voiceCoachToggle`. An
     /// unrecognized kind is silently ignored (returns without posting)
     /// rather than crashing — the test owns choosing a valid kind.
     static func postSimulatedWatchPayloadIfRequested() {
