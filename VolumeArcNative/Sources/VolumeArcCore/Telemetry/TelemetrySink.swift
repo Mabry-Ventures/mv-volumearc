@@ -187,6 +187,9 @@ public struct UserDefaultsTelemetrySink: TelemetrySink, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         defaults.removeObject(forKey: key)
+        if let emptyEvents = try? JSONEncoder().encode([TelemetryEvent]()) {
+            defaults.set(emptyEvents, forKey: key)
+        }
         // CI has observed stale reads immediately after clear() in
         // testUserDefaultsTelemetrySinkPersistsAndClears. synchronize() is
         // deprecated/unnecessary in normal app code, but this sink uses a

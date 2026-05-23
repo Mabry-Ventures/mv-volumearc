@@ -81,10 +81,14 @@ public struct RootDashboardView: View {
         .vaToastOverlay(toastPresenter)
         .task {
             let shouldOpenProfileOnLaunch = Self.shouldOpenProfileOnLaunch
+            let shouldOpenWorkoutsOnLaunch = Self.shouldOpenWorkoutsOnLaunch
             let shouldOpenCoachOnLaunch = Self.shouldOpenCoachOnLaunch
             let shouldOpenSignalsOnLaunch = Self.shouldOpenSignalsOnLaunch
             if shouldOpenProfileOnLaunch {
                 navigation.openProfile()
+            }
+            if shouldOpenWorkoutsOnLaunch {
+                navigation.openWorkouts()
             }
             if shouldOpenCoachOnLaunch {
                 navigation.openCoach(prompt: "")
@@ -100,6 +104,10 @@ public struct RootDashboardView: View {
             // simulator-specific TabView hit testing.
             if shouldOpenProfileOnLaunch, navigation.showOnboarding == false {
                 navigation.openProfile()
+            }
+            // VOL-141: stable entry point for Workouts-tab journeys.
+            if shouldOpenWorkoutsOnLaunch, navigation.showOnboarding == false {
+                navigation.openWorkouts()
             }
             // VOL-200 P2: same affordance for Coach-tab journeys.
             if shouldOpenCoachOnLaunch, navigation.showOnboarding == false {
@@ -204,6 +212,20 @@ public struct RootDashboardView: View {
     private static var shouldOpenProfileOnLaunch: Bool {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: "-OpenProfileOnLaunch") else {
+            return false
+        }
+        let nextIndex = arguments.index(after: index)
+        guard nextIndex < arguments.endIndex else { return true }
+        let rawValue = arguments[nextIndex]
+        guard rawValue.hasPrefix("-") == false else { return true }
+        return rawValue != "0"
+    }
+
+    /// VOL-141: XCUITest helper that opens the Workouts tab on launch
+    /// so Workouts-only journeys do not depend on TabView hit testing.
+    fileprivate static var shouldOpenWorkoutsOnLaunch: Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "-OpenWorkoutsOnLaunch") else {
             return false
         }
         let nextIndex = arguments.index(after: index)

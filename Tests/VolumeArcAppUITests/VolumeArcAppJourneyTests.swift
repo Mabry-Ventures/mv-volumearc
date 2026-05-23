@@ -423,6 +423,56 @@ final class VolumeArcAppJourneyTests: XCTestCase {
         )
     }
 
+    /// VOL-141: deterministic coverage for `workouts.view-detail`.
+    /// The seeded fixture contains recent completed sessions; launching
+    /// directly into Workouts avoids relying on tab-bar hit testing.
+    func testWorkoutHistoryRowOpensSessionDetailAndEmitsTelemetry() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenWorkoutsOnLaunch", "1"]
+        )
+        app.launch()
+        assertAppReachedForeground(app)
+
+        _ = waitForElement(
+            in: app,
+            identifier: "workouts.root",
+            timeout: 15,
+            "Workouts tab should open on launch"
+        )
+
+        let historyRow = app.descendants(matching: .any)
+            .matching(identifier: "workouts.historyRow")
+            .firstMatch
+        if !historyRow.waitForExistence(timeout: 15) {
+            VolumeArcAppUITestSupport.attachDebugSnapshot(
+                of: app,
+                named: "workouts.historyRow.missing",
+                to: self
+            )
+            XCTFail("Seeded Workouts tab should expose a completed-session history row")
+            return
+        }
+        XCTAssertTrue(
+            VolumeArcAppUITestSupport.scrollIntoViewAndTap(historyRow, in: app, timeout: 1),
+            "Completed-session history row should be tappable"
+        )
+
+        _ = waitForElement(
+            in: app,
+            identifier: "session.detail.root",
+            timeout: 10,
+            "Session detail should appear after tapping a Workouts history row"
+        )
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "workout",
+            name: "detail.opened",
+            within: 10,
+            test: self
+        )
+    }
+
     // MARK: - 5. Deep-link arrivals
 
     /// VOL-141: deterministic coverage for `bg.deep-link-arrival`.

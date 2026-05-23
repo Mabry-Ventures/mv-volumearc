@@ -1,5 +1,6 @@
 #if canImport(SwiftUI)
 import SwiftUI
+import VolumeArcCore
 
 struct WorkoutIdleLibrary: View {
     let featuredTitle: String
@@ -197,6 +198,79 @@ struct WorkoutIdleLibrary: View {
             }
         }
         .buttonStyle(.plain)
+    }
+}
+
+struct WorkoutHistorySection: View {
+    let sessions: [RecentSession]
+    let onOpen: (RecentSession) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: VA.Space.md) {
+            VASectionHeader(
+                String(localized: "History", comment: "Workouts history section title"),
+                subtitle: subtitle
+            )
+            ForEach(Array(visibleSessions.enumerated()), id: \.offset) { _, session in
+                historyRow(session)
+            }
+        }
+    }
+
+    private var visibleSessions: [RecentSession] {
+        VolumeArcRuntimeFlags.isPerformanceTestMode ? sessions : Array(sessions.prefix(5))
+    }
+
+    private var subtitle: String {
+        sessions.count == 1
+            ? String(localized: "1 completed session", comment: "Workouts history subtitle, singular")
+            : String(localized: "\(sessions.count) completed sessions", comment: "Workouts history subtitle, plural")
+    }
+
+    private func historyRow(_ session: RecentSession) -> some View {
+        NavigationLink {
+            SessionDetailView(session: session) {
+                onOpen(session)
+            }
+        } label: {
+            VACard(style: .flat) {
+                HStack(spacing: VA.Space.md) {
+                    WorkoutIllustrationTile(systemImage: "checkmark.circle.fill", size: 52, accent: VA.Colors.success)
+                    VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                        Text(session.date.formatted(.dateTime.weekday(.wide).month().day()))
+                            .font(VA.Typography.headline)
+                            .foregroundStyle(VA.Colors.textPrimary)
+                        Text(summary(for: session))
+                            .font(VA.Typography.footnote)
+                            .foregroundStyle(VA.Colors.textSecondary)
+                    }
+                    Spacer()
+                    VAMetricDisplay(
+                        label: String(localized: "Load", comment: "Metric label for total weight lifted in a session"),
+                        value: "\(Int(session.totalVolumeLoad))",
+                        unit: String(localized: "lb", comment: "Weight unit abbreviation - pounds"),
+                        style: .compact
+                    )
+                    Image(systemName: "chevron.right")
+                        .font(VA.Typography.caption)
+                        .foregroundStyle(VA.Colors.textTertiary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(String(
+            localized: "Opens this session's details",
+            comment: "Accessibility hint for tapping a workout history row"
+        ))
+        .accessibilityIdentifier("workouts.historyRow")
+    }
+
+    private func summary(for session: RecentSession) -> String {
+        let rpeText = String(format: "%.1f", session.averageRPE)
+        let setsText = session.completedSetCount == 1
+            ? String(localized: "1 set", comment: "Session summary set count, singular")
+            : String(localized: "\(session.completedSetCount) sets", comment: "Session summary set count, plural")
+        return "\(setsText) - \(session.durationMinutes)min - RPE \(rpeText)"
     }
 }
 

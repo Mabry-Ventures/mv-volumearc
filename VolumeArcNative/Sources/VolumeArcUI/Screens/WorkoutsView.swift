@@ -334,6 +334,9 @@ public struct WorkoutsView: View {
 
     private var idleState: some View {
         VStack(alignment: .leading, spacing: VA.Space.xl) {
+            if !model.recentSessions.isEmpty {
+                recentSessionsHistory
+            }
             programsLibraryLink
             WorkoutIdleLibrary(
                 featuredTitle: model.nextWorkout?.title ?? String(
@@ -346,8 +349,8 @@ public struct WorkoutsView: View {
                 ),
                 startWorkout: startWorkout
             )
+            .accessibilityIdentifier("workouts.emptyState")
         }
-        .accessibilityIdentifier("workouts.emptyState")
     }
 
     private var programsLibraryLink: some View {
@@ -379,6 +382,12 @@ public struct WorkoutsView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("workouts.programsLibrary")
+    }
+
+    private var recentSessionsHistory: some View {
+        WorkoutHistorySection(sessions: model.recentSessions) { session in
+            model.recordWorkoutDetailOpened(session: session)
+        }
     }
 
     // MARK: - Actions
