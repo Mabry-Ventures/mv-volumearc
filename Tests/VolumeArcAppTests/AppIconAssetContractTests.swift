@@ -7,6 +7,17 @@ final class AppIconAssetContractTests: XCTestCase {
         let height: UInt32
     }
 
+    private struct PNGMetadata: Equatable {
+        let width: UInt32
+        let height: UInt32
+        let bitDepth: UInt8
+        let colorType: UInt8
+
+        var size: PNGSize {
+            PNGSize(width: width, height: height)
+        }
+    }
+
     func testAppIconCatalogShipsLightAndDarkStoreReadyIcons() throws {
         let appIconURL = try Self.appIconSetURL()
         let contentsURL = appIconURL.appendingPathComponent("Contents.json")
@@ -20,7 +31,11 @@ final class AppIconAssetContractTests: XCTestCase {
             "AppIcon Contents.json should declare icon images"
         )
 
-        XCTAssertEqual(images.count, 2, "AppIcon should ship exactly one light and one dark universal marketing icon")
+        XCTAssertEqual(
+            images.count,
+            3,
+            "AppIcon should ship light, dark, and tinted universal marketing icons"
+        )
 
         let light = try image(named: "AppIcon-Light.png", in: images)
         XCTAssertEqual(light["idiom"] as? String, "universal")
@@ -45,11 +60,46 @@ final class AppIconAssetContractTests: XCTestCase {
                 "\(filename) should exist in AppIcon.appiconset"
             )
             XCTAssertEqual(
-                try pngSize(at: imageURL),
+                try pngMetadata(at: imageURL).size,
                 PNGSize(width: 1024, height: 1024),
                 "\(filename) should be an App Store-ready 1024x1024 PNG"
             )
         }
+    }
+
+    func testAppIconCatalogShipsTintedVariant() throws {
+        let appIconURL = try Self.appIconSetURL()
+        let contentsURL = appIconURL.appendingPathComponent("Contents.json")
+        let contentsData = try Data(contentsOf: contentsURL)
+        let root = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: contentsData) as? [String: Any],
+            "AppIcon Contents.json should be a dictionary"
+        )
+        let images = try XCTUnwrap(
+            root["images"] as? [[String: Any]],
+            "AppIcon Contents.json should declare icon images"
+        )
+
+        let tinted = try image(named: "AppIcon-Tinted.png", in: images)
+        XCTAssertEqual(tinted["idiom"] as? String, "universal")
+        XCTAssertEqual(tinted["platform"] as? String, "ios")
+        XCTAssertEqual(tinted["size"] as? String, "1024x1024")
+        XCTAssertEqual(
+            tinted["appearances"] as? [[String: String]],
+            [["appearance": "luminosity", "value": "tinted"]],
+            "The tinted app icon should be wired through iOS tinted-luminosity metadata"
+        )
+
+        let imageURL = appIconURL.appendingPathComponent("AppIcon-Tinted.png")
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: imageURL.path),
+            "AppIcon-Tinted.png should exist in AppIcon.appiconset"
+        )
+
+        let metadata = try pngMetadata(at: imageURL)
+        XCTAssertEqual(metadata.size, PNGSize(width: 1024, height: 1024))
+        XCTAssertEqual(metadata.bitDepth, 8, "Tinted app icon should be 8-bit PNG")
+        XCTAssertEqual(metadata.colorType, 4, "Tinted app icon should be grayscale with alpha")
     }
 
     private static func appIconSetURL(filePath: String = #filePath) throws -> URL {
@@ -90,15 +140,17 @@ final class AppIconAssetContractTests: XCTestCase {
         )
     }
 
-    private func pngSize(at url: URL) throws -> PNGSize {
+    private func pngMetadata(at url: URL) throws -> PNGMetadata {
         let data = try Data(contentsOf: url)
         let pngSignature = [UInt8](data.prefix(8))
         XCTAssertEqual(pngSignature, [137, 80, 78, 71, 13, 10, 26, 10], "\(url.lastPathComponent) should be a PNG")
         XCTAssertGreaterThanOrEqual(data.count, 24, "\(url.lastPathComponent) should include a PNG IHDR chunk")
 
-        return PNGSize(
+        return PNGMetadata(
             width: data.uint32BigEndian(at: 16),
-            height: data.uint32BigEndian(at: 20)
+            height: data.uint32BigEndian(at: 20),
+            bitDepth: data[24],
+            colorType: data[25]
         )
     }
 }
