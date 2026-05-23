@@ -182,6 +182,12 @@ final class WatchPayloadCodecTests: XCTestCase {
         XCTAssertEqual(decoded.selectedAction, .hold)
         XCTAssertEqual(decoded.coachPrompt, "Fallback?")
         XCTAssertTrue(decoded.sessionActive)
+        XCTAssertEqual(decoded.statusMessage, "Queued")
+        XCTAssertEqual(
+            decoded.restEndsAt.timeIntervalSinceReferenceDate,
+            700000000,
+            accuracy: 0.001
+        )
     }
 
     func test_session_snapshot_handles_every_workout_action() throws {

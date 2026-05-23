@@ -60,7 +60,7 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
                 capturedAt: Date(timeIntervalSinceReferenceDate: 100)
             )
         )
-        try await Task.sleep(nanoseconds: 20_000_000)
+        try await waitUntil { model.liveMetricEventCount == 1 }
         XCTAssertNil(model.currentHeartRateBPM)
 
         await healthStore.emit(
@@ -167,7 +167,7 @@ private actor FakeLiveHealthStore: HealthStore {
 
     func requestAuthorization() async throws -> Bool {
         calls.append(.requestAuthorization)
-        return authorized
+        return true
     }
 
     func startWorkoutSession(activityType: WorkoutActivityType) async throws {

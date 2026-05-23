@@ -151,16 +151,49 @@ private actor LiveWorkoutMetricsHub {
 }
 #endif
 
-public final class HealthKitRuntimeStore: NSObject, HealthStore, @unchecked Sendable {
+public actor HealthKitRuntimeStore: HealthStore {
     private let healthStore = HKHealthStore()
     #if os(watchOS)
+    private final class DelegateRelay: NSObject, HKLiveWorkoutBuilderDelegate {
+        weak var owner: HealthKitRuntimeStore?
+
+        func workoutBuilder(_ workoutBuilder: HKLiveWorkoutBuilder, didCollectDataOf collectedTypes: Set<HKSampleType>) {
+            emitMetrics(from: workoutBuilder)
+        }
+
+        func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {
+            emitMetrics(from: workoutBuilder)
+        }
+
+        private func emitMetrics(from workoutBuilder: HKLiveWorkoutBuilder) {
+            let heartRateBPM = HealthKitRuntimeStore.heartRateBPM(from: workoutBuilder)
+            let activeEnergyKilocalories = HealthKitRuntimeStore.activeEnergyKilocalories(from: workoutBuilder)
+            let elapsedTime = workoutBuilder.elapsedTime
+            let capturedAt = Date.now
+
+            Task { [weak owner] in
+                await owner?.emitMetrics(
+                    heartRateBPM: heartRateBPM,
+                    activeEnergyKilocalories: activeEnergyKilocalories,
+                    elapsedTime: elapsedTime,
+                    capturedAt: capturedAt
+                )
+            }
+        }
+    }
+
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
     private let metricsHub = LiveWorkoutMetricsHub()
+    private let delegateRelay = DelegateRelay()
     private var currentWorkoutID: String?
     #endif
 
-    override public init() {}
+    public init() {
+        #if os(watchOS)
+        delegateRelay.owner = self
+        #endif
+    }
 
     public var isAuthorized: Bool {
         get async {
@@ -202,7 +235,7 @@ public final class HealthKitRuntimeStore: NSObject, HealthStore, @unchecked Send
         #endif
 
         try await healthStore.requestAuthorization(toShare: typesToShare, read: typesToRead)
-        return true
+        return await isAuthorized
     }
 
     static func phoneReadTypes() -> Set<HKObjectType> {
@@ -246,7 +279,7 @@ public final class HealthKitRuntimeStore: NSObject, HealthStore, @unchecked Send
         let session = try HKWorkoutSession(healthStore: healthStore, configuration: configuration)
         let builder = session.associatedWorkoutBuilder()
         builder.dataSource = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: configuration)
-        builder.delegate = self
+        builder.delegate = delegateRelay
 
         self.session = session
         self.builder = builder
@@ -305,16 +338,21 @@ public final class HealthKitRuntimeStore: NSObject, HealthStore, @unchecked Send
         }
     }
 
-    private func emitMetrics(from builder: HKLiveWorkoutBuilder) {
+    private func emitMetrics(
+        heartRateBPM: Int?,
+        activeEnergyKilocalories: Double?,
+        elapsedTime: TimeInterval,
+        capturedAt: Date
+    ) async {
         guard let currentWorkoutID else { return }
         let metrics = LiveWorkoutMetrics(
             workoutID: currentWorkoutID,
-            heartRateBPM: Self.heartRateBPM(from: builder),
-            activeEnergyKilocalories: Self.activeEnergyKilocalories(from: builder),
-            elapsedTime: builder.elapsedTime,
-            capturedAt: Date.now
+            heartRateBPM: heartRateBPM,
+            activeEnergyKilocalories: activeEnergyKilocalories,
+            elapsedTime: elapsedTime,
+            capturedAt: capturedAt
         )
-        Task { await metricsHub.yield(metrics) }
+        await metricsHub.yield(metrics)
     }
 
     private static func heartRateBPM(from builder: HKLiveWorkoutBuilder) -> Int? {
@@ -342,18 +380,6 @@ public final class HealthKitRuntimeStore: NSObject, HealthStore, @unchecked Send
     }
     #endif
 }
-
-#if os(watchOS)
-extension HealthKitRuntimeStore: HKLiveWorkoutBuilderDelegate {
-    public func workoutBuilder(_ workoutBuilder: HKLiveWorkoutBuilder, didCollectDataOf collectedTypes: Set<HKSampleType>) {
-        emitMetrics(from: workoutBuilder)
-    }
-
-    public func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {
-        emitMetrics(from: workoutBuilder)
-    }
-}
-#endif
 #endif
 
 public struct UnavailableHealthStore: HealthStore {

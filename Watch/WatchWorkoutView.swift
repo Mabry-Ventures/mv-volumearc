@@ -28,6 +28,9 @@ final class WatchWorkoutModel: ObservableObject {
     @Published private(set) var pendingSyncCount = 0
     @Published private(set) var currentHeartRateBPM: Int?
     @Published private(set) var statusMessage = String(localized: "Watch coach standing by.", comment: "Watch default status")
+    #if DEBUG
+    @Published private(set) var liveMetricEventCount = 0
+    #endif
 
     private let coordinator: WatchConnectivityCoordinator
     private let stateStore: WatchSessionStateStore
@@ -340,12 +343,10 @@ final class WatchWorkoutModel: ObservableObject {
 
     private func startNativeWorkoutCapture(workoutID: String) async -> Bool {
         do {
-            let authorized: Bool
-            if await healthStore.isAuthorized {
-                authorized = true
-            } else {
-                authorized = try await healthStore.requestAuthorization()
+            if await healthStore.isAuthorized == false {
+                _ = try await healthStore.requestAuthorization()
             }
+            let authorized = await healthStore.isAuthorized
             guard authorized else { throw WatchHealthCaptureError.authorizationDenied }
             try await healthStore.startWorkoutSession(activityType: .strengthTraining, workoutID: workoutID)
             observeLiveWorkoutMetrics()
@@ -374,7 +375,11 @@ final class WatchWorkoutModel: ObservableObject {
         liveMetricsTask = Task { [weak self] in
             guard let self else { return }
             let stream = await self.healthStore.liveWorkoutMetrics()
-            for await metrics in stream where metrics.workoutID == self.activeWorkoutID {
+            for await metrics in stream {
+                #if DEBUG
+                self.liveMetricEventCount += 1
+                #endif
+                guard metrics.workoutID == self.activeWorkoutID else { continue }
                 if let heartRateBPM = metrics.heartRateBPM {
                     self.currentHeartRateBPM = heartRateBPM
                 }
@@ -592,7 +597,7 @@ struct WatchWorkoutView: View {
                         )
                         .accessibilityValue(
                             String(
-                                localized: "\(heartRate) beats per minute",
+                                localized: "^[\(heartRate) beat](inflect: true) per minute",
                                 comment: "Watch live heart-rate accessibility value"
                             )
                         )
