@@ -27,7 +27,7 @@ This is the granular per-feature checklist. For high-level system status, see [`
 | Onboarding flow | ✅ | `RootDashboardView` presents `OnboardingView` via `fullScreenCover` on first launch, keyed off `DashboardNavigationModel.showOnboarding`. |
 | watchOS workout UI | ✅ | Real HealthKit workout session, rest timer, coach cues, action decisions, "Vitals say" training insight, Apple Watch Ultra Action Button intents for start/log-next-set, and watchOS Double Tap primary-action set logging with haptic + spoken feedback, accessibility labels, and offline replay. |
 | Widgets (systemSmall/systemMedium/watchOS) | ✅ | `NextWorkoutWidget` and watch widgets read real shared snapshots via `PlatformSurfaceDefaultsReader`. |
-| Live Activities | ✅ | `ActiveWorkoutLiveActivity` publishes real session state with lock screen and Dynamic Island layouts. |
+| Live Activities | ✅ | `ActiveWorkoutLiveActivity` publishes real session state with lock screen, Dynamic Island, and Apple Watch supplemental layouts for active-session rest timer + set-progress presence. |
 
 ## AI & coaching
 

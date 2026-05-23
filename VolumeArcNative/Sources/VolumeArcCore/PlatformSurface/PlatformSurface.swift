@@ -19,12 +19,20 @@ public struct LiveActivityState: Sendable, Codable {
     public let workoutTitle: String
     public let activeExerciseName: String
     public let targetSummary: String
+    public let setProgressSummary: String?
     public let restSecondsRemaining: Int?
 
-    public init(workoutTitle: String, activeExerciseName: String, targetSummary: String, restSecondsRemaining: Int?) {
+    public init(
+        workoutTitle: String,
+        activeExerciseName: String,
+        targetSummary: String,
+        setProgressSummary: String? = nil,
+        restSecondsRemaining: Int?
+    ) {
         self.workoutTitle = workoutTitle
         self.activeExerciseName = activeExerciseName
         self.targetSummary = targetSummary
+        self.setProgressSummary = setProgressSummary
         self.restSecondsRemaining = restSecondsRemaining
     }
 }
@@ -42,11 +50,18 @@ public struct ActiveWorkoutAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
         public let activeExerciseName: String
         public let targetSummary: String
+        public let setProgressSummary: String?
         public let restSecondsRemaining: Int?
 
-        public init(activeExerciseName: String, targetSummary: String, restSecondsRemaining: Int?) {
+        public init(
+            activeExerciseName: String,
+            targetSummary: String,
+            setProgressSummary: String? = nil,
+            restSecondsRemaining: Int?
+        ) {
             self.activeExerciseName = activeExerciseName
             self.targetSummary = targetSummary
+            self.setProgressSummary = setProgressSummary
             self.restSecondsRemaining = restSecondsRemaining
         }
     }

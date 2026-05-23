@@ -213,7 +213,10 @@ struct VolumeArcApp: App {
         let flagGate = FlagGateTelemetry(flags: featureFlags, telemetry: telemetrySink)
         let premiumGate = PremiumGateTelemetry(telemetry: telemetrySink)
         #if canImport(ActivityKit)
-        self.liveActivityController = VolumeArcLiveActivityController(flagGate: flagGate)
+        self.liveActivityController = VolumeArcLiveActivityController(
+            flagGate: flagGate,
+            telemetrySink: telemetrySink
+        )
         #endif
         let surfaceStore = UserDefaultsPlatformSurfaceStateStore()
         #if canImport(StoreKit)

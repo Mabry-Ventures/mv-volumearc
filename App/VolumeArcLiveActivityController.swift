@@ -10,9 +10,11 @@ struct VolumeArcLiveActivityController {
     /// controller method becomes a no-op. Active sessions end on the next
     /// `end()` call; new sessions never start.
     let flagGate: FlagGateTelemetry?
+    let telemetrySink: (any TelemetrySink)?
 
-    init(flagGate: FlagGateTelemetry? = nil) {
+    init(flagGate: FlagGateTelemetry? = nil, telemetrySink: (any TelemetrySink)? = nil) {
         self.flagGate = flagGate
+        self.telemetrySink = telemetrySink
     }
 
     func restoreStoredStateIfAvailable() async {
@@ -27,6 +29,7 @@ struct VolumeArcLiveActivityController {
         let contentState = ActiveWorkoutAttributes.ContentState(
             activeExerciseName: state.activeExerciseName,
             targetSummary: state.targetSummary,
+            setProgressSummary: state.setProgressSummary,
             restSecondsRemaining: state.restSecondsRemaining
         )
 
@@ -41,6 +44,13 @@ struct VolumeArcLiveActivityController {
                 content: ActivityContent(state: contentState, staleDate: nil),
                 pushType: nil
             )
+            telemetrySink?.record(TelemetryEvent(
+                category: "watch.live_activity",
+                name: "shown",
+                severity: .info,
+                message: "Watch Live Activity requested",
+                metadata: ["workout": state.workoutTitle, "exercise": state.activeExerciseName]
+            ))
         } catch {
             return
         }

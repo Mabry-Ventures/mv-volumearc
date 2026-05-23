@@ -314,6 +314,8 @@ public final class WorkoutDashboardModel: ObservableObject {
             self.isSessionActive = true
             self.loggedSetCountThisSession = 0
 
+            publishWidgetSnapshot()
+
             telemetrySink.record(TelemetryEvent(
                 category: "workout",
                 name: "session_started",
@@ -613,6 +615,9 @@ public final class WorkoutDashboardModel: ObservableObject {
                 workoutTitle: activeWorkoutTitle ?? "Strength Session",
                 activeExerciseName: autopilot.nextExerciseName,
                 targetSummary: "\(Int(autopilot.nextTarget.weight))lb × \(autopilot.nextTarget.repRange.lowerBound)",
+                setProgressSummary: autopilot.liveActivitySetProgressSummary(
+                    loggedSetCount: loggedSetCountThisSession
+                ),
                 restSecondsRemaining: nil
             )
             PlatformSurfaceDefaultsWriter.saveLiveActivityState(state)
