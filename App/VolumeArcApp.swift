@@ -18,6 +18,17 @@ extension Notification.Name {
 /// Launch argument flags the app respects at startup. XCUITests set these
 /// to produce deterministic state.
 enum VolumeArcLaunchArguments {
+    private static func value(after flag: String) -> String? {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: flag) else { return nil }
+
+        let nextIndex = arguments.index(after: index)
+        guard nextIndex < arguments.endIndex else { return nil }
+        let value = arguments[nextIndex]
+        guard value.hasPrefix("-") == false else { return nil }
+        return value
+    }
+
     private static func flagEnabled(_ flag: String) -> Bool {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: flag) else { return false }
@@ -80,13 +91,15 @@ enum VolumeArcLaunchArguments {
     /// `completedWorkout`, or `voiceCoachToggle`. The flag is gated on `-UITestMode 1` —
     /// production app launches ignore it even if accidentally set.
     static var postFakeWatchPayloadKind: String? {
-        let arguments = ProcessInfo.processInfo.arguments
-        guard let index = arguments.firstIndex(of: "-PostFakeWatchPayload") else { return nil }
-        let nextIndex = arguments.index(after: index)
-        guard nextIndex < arguments.endIndex else { return nil }
-        let value = arguments[nextIndex]
-        guard value.hasPrefix("-") == false else { return nil }
-        return value
+        value(after: "-PostFakeWatchPayload")
+    }
+
+    /// `-OpenDeepLinkOnLaunch <url>` — VOL-141. Deterministic-mode-only
+    /// XCUITest hook that sends a VolumeArc deep link through the same
+    /// app URL handler App Intents / widgets use in production.
+    static var openDeepLinkURL: URL? {
+        guard isUITestMode, let rawValue = value(after: "-OpenDeepLinkOnLaunch") else { return nil }
+        return URL(string: rawValue)
     }
 }
 
@@ -495,6 +508,13 @@ struct VolumeArcApp: App {
                 // without needing a paired-simulator session. The full
                 // pairing path is covered by VOL-94's real-device canary.
                 Self.postSimulatedWatchPayloadIfRequested()
+
+                // VOL-141: exercise App Intent / Shortcut deep-link
+                // routing from XCUITests without invoking Siri or the
+                // Shortcuts daemon. Production launches ignore the flag
+                // because `VolumeArcLaunchArguments.openDeepLinkURL`
+                // is gated on `-UITestMode 1`.
+                await handleLaunchDeepLinkIfRequested()
             }
             // VOL-112: hidden test-only overlay surfacing the most-recent
             // received Watch payload kind. Gated on deterministic mode so
@@ -573,6 +593,16 @@ struct VolumeArcApp: App {
             }
     }
 
+    @MainActor
+    private func handleLaunchDeepLinkIfRequested() async {
+        guard let url = VolumeArcLaunchArguments.openDeepLinkURL else { return }
+        for _ in 0..<50 where dashboardModel.hasLoadedInitialData == false {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        handle(url: url)
+    }
+
+    @MainActor
     private func handle(url: URL) {
         guard let destination = VolumeArcDeepLink.destination(for: url) else { return }
 
@@ -606,12 +636,12 @@ struct VolumeArcApp: App {
         case let .action(action):
             switch action {
             case .startWorkoutSession:
-                navigation.openToday()
+                navigation.openWorkouts()
                 Task {
                     await dashboardModel.startWorkoutSession()
                 }
             case .logRecommendedSet:
-                navigation.openToday()
+                navigation.openWorkouts()
                 Task {
                     await dashboardModel.logRecommendedSet()
                 }
