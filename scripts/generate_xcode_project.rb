@@ -567,6 +567,11 @@ add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   # closes over `VolumeArcAIConfiguration.relayConfiguration` which is
   # also in this list.
   'VolumeArcAIRuntimeFactory.swift',
+  # VOL-141: `VolumeArcAIRuntimeFactory` consults DEBUG-only chaos
+  # launch flags for deterministic fallback journeys. Compile the
+  # controller into the test bundle alongside the factory so direct
+  # App-layer unit tests see the same symbols as the app target.
+  'Debug/ChaosController.swift',
   # VOL-224: `VolumeArcAppAttestCoordinatorTests` exercises the App
   # Attest coordinator + protocol mock directly. Same pattern as the
   # other App-internal types below — the App target doesn't expose a

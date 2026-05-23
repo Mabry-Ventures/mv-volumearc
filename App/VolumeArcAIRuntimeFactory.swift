@@ -55,6 +55,19 @@ enum VolumeArcAIRuntimeFactory {
             )
         }
 
+        #if DEBUG
+        if ChaosController.injectAIRelay5xx {
+            return FallbackCoachProvider(
+                primary: ChaosAICoachProvider(error: .relayRequestFailed(
+                    statusCode: 503,
+                    message: "Chaos AIRelay 5xx"
+                )),
+                fallback: LocalHeuristicAICoachProvider(),
+                telemetrySink: telemetrySink
+            )
+        }
+        #endif
+
         // VOL-162: `testCoachFirstTokenLatency` (perf suite) needs a
         // deterministic, hermetic provider — `LocalHeuristicAICoachProvider`
         // streams one word every 30ms with no network or model

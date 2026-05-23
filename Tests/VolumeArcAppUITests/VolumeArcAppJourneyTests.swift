@@ -473,6 +473,51 @@ final class VolumeArcAppJourneyTests: XCTestCase {
         )
     }
 
+    /// VOL-141: deterministic coverage for `workouts.history-scroll`.
+    /// Perf mode seeds a 50-session history pool; the journey exercises
+    /// the Workouts history surface under that longer list and asserts it
+    /// remains responsive after repeated scroll gestures.
+    func testWorkoutHistoryScrollStaysResponsiveWithLongHistory() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenWorkoutsOnLaunch", "1", "-PerfTestMode", "1"]
+        )
+        app.launch()
+        assertAppReachedForeground(app)
+
+        let root = waitForElement(
+            in: app,
+            identifier: "workouts.root",
+            timeout: 15,
+            "Workouts tab should open on launch"
+        )
+
+        let firstHistoryRow = app.descendants(matching: .any)
+            .matching(identifier: "workouts.historyRow")
+            .firstMatch
+        XCTAssertTrue(
+            firstHistoryRow.waitForExistence(timeout: 15),
+            "Perf-seeded Workouts tab should expose history rows before scrolling"
+        )
+
+        for _ in 0..<4 {
+            root.swipeUp()
+        }
+
+        let postScrollHistoryRow = app.descendants(matching: .any)
+            .matching(identifier: "workouts.historyRow")
+            .firstMatch
+        XCTAssertTrue(
+            postScrollHistoryRow.waitForExistence(timeout: 5),
+            "History rows should remain reachable after scrolling through the long list"
+        )
+
+        root.swipeDown()
+        XCTAssertTrue(
+            root.exists,
+            "Workouts root should remain stable after history scroll gestures"
+        )
+    }
+
     // MARK: - 5. Deep-link arrivals
 
     /// VOL-141: deterministic coverage for `bg.deep-link-arrival`.

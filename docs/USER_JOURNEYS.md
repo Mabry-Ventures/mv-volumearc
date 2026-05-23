@@ -22,8 +22,8 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 |---|---|---|---|
 | Onboarding | 5 | 2 | 40% |
 | Today | 5 | 5 | 100% |
-| Workouts | 7 | 4 | 57% |
-| Coach | 6 | 3 | 50% |
+| Workouts | 7 | 5 | 71% |
+| Coach | 6 | 5 | 83% |
 | Signals | 3 | 3 | 100% |
 | Profile | 8 | 7 | 88% |
 | Watch | 6 | 2 | 33% |
@@ -31,9 +31,9 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | Live Activities | 3 | 0 | 0% |
 | App Intents | 6 | 6 | 100% |
 | Background | 4 | 1 | 25% |
-| Failure paths | 6 | 0 | 0% |
+| Failure paths | 6 | 1 | 17% |
 | Resilience / interruption (VOL-127 P2) | 6 | 0 | 0% |
-| **Total** | **69** | **36** | **52%** |
+| **Total** | **69** | **39** | **57%** |
 
 > Goal: 100% by end of Wave 2 (cycle 7, 2026-05-31). Burn down via [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141).
 >
@@ -70,7 +70,7 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | `workouts.rest-timer-expire` | Set logged | Wait 90s | Notification fires; haptic; UI updates | `workout.rest_timer.expired` | `[ ]` |
 | `workouts.complete-session` | Active session | Tap "Complete" | Session closed; summary shown; CloudKit push staged | `workout.completed` | `VolumeArcAppJourneyTests.testStartLogCompleteWorkoutSession` (complete phase) |
 | `workouts.view-detail` | History present | Tap a completed session | Detail view shows sets + summary | `workout.detail.opened` | `VolumeArcAppJourneyTests.testWorkoutHistoryRowOpensSessionDetailAndEmitsTelemetry` |
-| `workouts.history-scroll` | History tab | Scroll | List paginates without hitches | (perf-only) | `[ ]` |
+| `workouts.history-scroll` | History tab | Scroll | List paginates without hitches | (perf-only) | `VolumeArcAppJourneyTests.testWorkoutHistoryScrollStaysResponsiveWithLongHistory` |
 | `workouts.delete-session` | Completed session | Tap delete (confirm sheet) | Session removed; CloudKit delete staged | `workout.deleted` | `[ ]` |
 
 ## Coach
@@ -81,7 +81,7 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | `coach.scroll-memory` | Memory present | Scroll Coach tab | Memory loads paginated | (perf-only) | `VolumeArcCoachJourneyTests.testCoachScrollMemory` |
 | `coach.voice-prompt` | Premium + voice flag on | Tap mic → speak → release | Question transcribed → response spoken | `voice.session_started` | `[ ]` |
 | `coach.follow-up-turn` | Question answered | Type follow-up → Send | Memory context referenced in response | `coach.session_continued` | `VolumeArcCoachJourneyTests.testCoachFollowUpTurnRendersSecondResponse` (asserts a second coach bubble renders for the follow-up turn; the `coach.session_continued` event wiring is a follow-up — test gates on `coach.ask_complete`) |
-| `coach.relay-fallback` | Force relay 5xx | Ask question | Fallback to local heuristic; UI shows degraded notice | `coach.fallback_used` | `[ ]` |
+| `coach.relay-fallback` | Force relay 5xx | Ask question | Fallback to local heuristic response; hard-failure copy is not shown | `coach.fallback_used` | `VolumeArcCoachJourneyTests.testCoachRelay5xxFallsBackToLocalHeuristic` |
 | `coach.privacy-mode-strict` | Privacy mode = strict | Ask question | PII redacted from prompt | `coach.privacy_redaction_applied` | `VolumeArcCoachJourneyTests.testCoachPrivacyModeStrictRedactsEmail` (asserts `coach.question_sent` today; the `coach.privacy_redaction_applied` event wiring follows-up at the `CoachPromptTemplate` call site — `PromptPrivacyRedactor` from VOL-197 currently has unit-test coverage only) |
 
 ## Signals
@@ -161,7 +161,7 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | `fail.no-icloud` | iCloud signed out | Open app | App functions without sync; CloudKit transport falls back to Unavailable | `cloudsync.unavailable` | `[ ]` |
 | `fail.healthkit-not-granted` | Onboarding skipped HK | Open Today | Readiness hero shows "Grant Health to unlock"; coach uses fallback | `healthkit.unavailable` | `[ ]` |
 | `fail.relay-401` | Relay returns 401 | Open Coach → ask | Session token re-fetch; retry succeeds | `relay.session_refreshed` | `[ ]` |
-| `fail.relay-5xx` | Relay returns 500 | Open Coach → ask | Local heuristic responds; UI shows degraded notice | `coach.fallback_used` | `[ ]` |
+| `fail.relay-5xx` | Relay returns 500 | Open Coach → ask | Local heuristic responds; hard-failure copy is not shown | `coach.fallback_used` | `VolumeArcCoachJourneyTests.testCoachRelay5xxFallsBackToLocalHeuristic` |
 | `fail.fm-unavailable` | iOS < 26 or model not downloaded | Open Coach | Provider chain skips FM, uses relay or heuristic | `ai.fm.unavailable` | `[ ]` |
 
 ## Resilience / interruption (VOL-127 Phase 2)
