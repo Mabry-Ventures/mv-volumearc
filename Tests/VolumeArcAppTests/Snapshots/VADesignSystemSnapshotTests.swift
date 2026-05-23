@@ -12,6 +12,8 @@ import XCTest
 final class VADesignSystemSnapshotTests: XCTestCase {
     private enum Metrics {
         static let width: CGFloat = 360
+        static let cardCanvasSize = CGSize(width: 392, height: 144)
+        static let toastCanvasSize = CGSize(width: 360, height: 101)
     }
 
     private enum CardFixtureStyle {
@@ -58,15 +60,17 @@ final class VADesignSystemSnapshotTests: XCTestCase {
         testName: String = #function,
         line: UInt = #line
     ) {
-        let view = card(style: style)
-            .environment(\.colorScheme, colorScheme)
-            .frame(width: Metrics.width)
-            .padding(VA.Space.lg)
-            .background(VA.Colors.surfaceGrouped)
+        let view = ZStack {
+            VA.Colors.surfaceGrouped
+            card(style: style)
+                .frame(width: Metrics.width)
+        }
+        .frame(width: Metrics.cardCanvasSize.width, height: Metrics.cardCanvasSize.height)
+        .snapshotEnvironment(colorScheme)
 
         assertVolumeArcSnapshot(
             of: view,
-            as: imageSnapshot(colorScheme: colorScheme),
+            as: imageSnapshot(colorScheme: colorScheme, size: Metrics.cardCanvasSize),
             in: self,
             testName: testName,
             line: line
@@ -84,15 +88,17 @@ final class VADesignSystemSnapshotTests: XCTestCase {
             title: "Set logged",
             message: "Bench press 185 x 5 captured."
         )
-        let view = VAToastView(toast: toast)
-            .environment(\.colorScheme, colorScheme)
-            .frame(width: Metrics.width)
-            .padding(.vertical, VA.Space.lg)
-            .background(VA.Colors.surfaceGrouped)
+        let view = ZStack {
+            VA.Colors.surfaceGrouped
+            VAToastView(toast: toast)
+                .frame(width: Metrics.width)
+        }
+        .frame(width: Metrics.toastCanvasSize.width, height: Metrics.toastCanvasSize.height)
+        .snapshotEnvironment(colorScheme)
 
         assertVolumeArcSnapshot(
             of: view,
-            as: imageSnapshot(colorScheme: colorScheme),
+            as: imageSnapshot(colorScheme: colorScheme, size: Metrics.toastCanvasSize),
             in: self,
             testName: testName,
             line: line
@@ -118,15 +124,24 @@ final class VADesignSystemSnapshotTests: XCTestCase {
     }
 
     private func imageSnapshot<Value: View>(
-        colorScheme: ColorScheme
+        colorScheme: ColorScheme,
+        size: CGSize
     ) -> Snapshotting<Value, UIImage> {
         let style: UIUserInterfaceStyle = colorScheme == .dark ? .dark : .light
         return .image(
             precision: 0.99,
             perceptualPrecision: 0.98,
-            layout: .sizeThatFits,
+            layout: .fixed(width: size.width, height: size.height),
             traits: UITraitCollection(userInterfaceStyle: style)
         )
+    }
+}
+
+private extension View {
+    func snapshotEnvironment(_ colorScheme: ColorScheme) -> some View {
+        environment(\.colorScheme, colorScheme)
+            .environment(\.dynamicTypeSize, .large)
+            .environment(\.locale, Locale(identifier: "en_US"))
     }
 }
 
