@@ -1,0 +1,14 @@
+{
+  "id": "program-recovery-upper-lower",
+  "intent": "recovery",
+  "question": "Should I keep today's lower session or move it?",
+  "contextBlock": "## Training context\n- Athlete: Sam (intermediate)\n- Readiness: 45/100 — Sleep debt and high recent effort are dragging readiness down.\n- Next up: Front Squat at 205lb x 8\n- Last 7 days: 4 sessions, avg RPE 8.6\n- Last session: 12 sets, 9800lb total, RPE 8.9\n\n## Active program\n- Program: Upper/Lower 4-day by VolumeArc\n- Position: Week 7 / 12, Day 4 / 4\n- Session: Lower Volume (Leg volume)\n- Today's prescription: Front squat 4x6-10, RDL 3x8-12, leg press 3x10-15, leg curl 3x10-15\n- Advancement: Progress compounds weekly when top sets stay under RPE 8.5; progress isolation work by reps first.\n\n## Recovery (Apple Health)\n- HRV: 44ms 7-day vs 51ms baseline (-13.7%)\n- Sleep: 43.0h over 7d vs 56.0h target — 13.0h debt\n- Training load (7d strength): 3200kJ across 295min",
+  "style": "analytical",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": true,
+    "mustMentionReadinessOrRPE": true,
+    "toneHint": "program-aware-recovery"
+  },
+  "notes": "VOL-144: Program-aware recovery ask with low readiness should preserve the weekly plan while recommending a modification."
+}

@@ -1717,7 +1717,7 @@ final class VolumeArcCloudSyncTests: XCTestCase {
     }
 
     private static func makeContainer(named name: String) throws -> ModelContainer {
-        let schema = Schema(VolumeArcSchemaV4.models)
+        let schema = Schema(VolumeArcSchemaV5.models)
         let config = ModelConfiguration(
             name,
             schema: schema,

@@ -1,5 +1,4 @@
 #if canImport(SwiftData)
-import CryptoKit
 import Foundation
 import SwiftData
 
@@ -18,18 +17,17 @@ import SwiftData
 // actually active, and every non-optional property must have a default.
 //
 // VOL-67 Copilot (fixup #23): the concrete `@Model` class definitions
-// for the syncable record types live inside `VolumeArcSchemaV4` at the
+// for the syncable record types live inside the current versioned schema at the
 // bottom of this file. The module-scope symbols below are typealiases
 // to those frozen nested classes. This mirrors how V1/V2/V3 are
 // structured (each `VersionedSchema` enum owns its own frozen `@Model`
-// types) and lets V4 stay an immutable historical shape — future V5
-// work will introduce new frozen types inside `VolumeArcSchemaV5` and
-// re-point these module-scope aliases there, leaving V4's shape
-// locked for the migration plan.
-public typealias UserProfileRecord = VolumeArcSchemaV4.UserProfileRecord
-public typealias TrainingPlanRecord = VolumeArcSchemaV4.TrainingPlanRecord
-public typealias WorkoutRecord = VolumeArcSchemaV4.WorkoutRecord
-public typealias CoachMemoryRecord = VolumeArcSchemaV4.CoachMemoryRecord
+// types) and lets historical schemas stay immutable while the aliases
+// always point at the current-version view.
+public typealias UserProfileRecord = VolumeArcSchemaV5.UserProfileRecord
+public typealias TrainingPlanRecord = VolumeArcSchemaV5.TrainingPlanRecord
+public typealias WorkoutRecord = VolumeArcSchemaV5.WorkoutRecord
+public typealias CoachMemoryRecord = VolumeArcSchemaV5.CoachMemoryRecord
+public typealias TrainingProgramRecord = VolumeArcSchemaV5.TrainingProgramRecord
 
 public enum VolumeArcSchemaV1: VersionedSchema {
     public static let versionIdentifier = Schema.Version(1, 0, 0)
@@ -506,11 +504,17 @@ public enum VolumeArcSchemaV4: VersionedSchema {
 
 public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
     public static var schemas: [any VersionedSchema.Type] {
-        [VolumeArcSchemaV1.self, VolumeArcSchemaV2.self, VolumeArcSchemaV3.self, VolumeArcSchemaV4.self]
+        [
+            VolumeArcSchemaV1.self,
+            VolumeArcSchemaV2.self,
+            VolumeArcSchemaV3.self,
+            VolumeArcSchemaV4.self,
+            VolumeArcSchemaV5.self,
+        ]
     }
 
     public static var stages: [MigrationStage] {
-        [v1ToV2, v2ToV3, v3ToV4]
+        [v1ToV2, v2ToV3, v3ToV4, v4ToV5]
     }
 
     private static let v1ToV2 = MigrationStage.custom(
@@ -544,12 +548,12 @@ public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
             // reconciliation. SHA256 over a stable `(createdAt,
             // content, theme)` triple gives the same ID on every
             // device for the same row.
-            let migratedWorkouts = try context.fetch(FetchDescriptor<WorkoutRecord>())
+            let migratedWorkouts = try context.fetch(FetchDescriptor<VolumeArcSchemaV4.WorkoutRecord>())
             for workout in migratedWorkouts {
                 workout.updatedAt = workout.completedAt ?? workout.startedAt
             }
 
-            let migratedMemories = try context.fetch(FetchDescriptor<CoachMemoryRecord>())
+            let migratedMemories = try context.fetch(FetchDescriptor<VolumeArcSchemaV4.CoachMemoryRecord>())
             for memory in migratedMemories where memory.identifier.isEmpty {
                 memory.identifier = deterministicLegacyMemoryIdentifier(
                     createdAt: memory.createdAt,
@@ -595,12 +599,12 @@ public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
             // edits retain their real timestamp via the backfill's
             // regular-encoder branch and continue propagating cross-
             // device under normal LWW semantics.
-            let migratedProfiles = try context.fetch(FetchDescriptor<UserProfileRecord>())
+            let migratedProfiles = try context.fetch(FetchDescriptor<VolumeArcSchemaV4.UserProfileRecord>())
             for profile in migratedProfiles where Self.isSeededDefaultProfile(profile) {
                 profile.updatedAt = .distantPast
             }
 
-            let migratedPlans = try context.fetch(FetchDescriptor<TrainingPlanRecord>())
+            let migratedPlans = try context.fetch(FetchDescriptor<VolumeArcSchemaV4.TrainingPlanRecord>())
             for plan in migratedPlans where Self.isSeededDefaultPlan(plan) {
                 plan.updatedAt = .distantPast
             }
@@ -623,115 +627,9 @@ public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
         }
     )
 
-    /// VOL-67 Copilot fixup #25: field-match heuristic for detecting
-    /// "untouched seeded default" `UserProfileRecord` instances during
-    /// V3→V4 migration. Returns `true` only when EVERY field matches
-    /// the current `VolumeArcProductDefaults.userProfile` values AND
-    /// `onboardingCompleted` is still false. Any divergence (custom
-    /// name, different coaching style, tweaked equipment list,
-    /// adjusted rep range, etc.) signals a real user edit and causes
-    /// the caller to preserve the migrated `updatedAt` timestamp
-    /// rather than clamping it to `.distantPast`.
-    ///
-    /// The equipment check sorts and joins the default values the
-    /// same way `seedIfNeeded` does, so the comparison is stable
-    /// regardless of how the underlying `Set`/`Array` iterates.
-    ///
-    /// VOL-67 Codex P1 fixup #26: promoted from `fileprivate` to
-    /// `public` so the post-bootstrap `OutboundQueueBackfill` can use
-    /// the same heuristic for conditional backfill clamping — both
-    /// the record-level clamp (in this file) and the queue-level
-    /// clamp (in `OutboundQueueBackfill.swift`) need to agree on
-    /// "is this a seeded default or a user edit" so they don't
-    /// disagree on whether to preserve or clamp the real timestamp.
-    public static func isSeededDefaultProfile(_ profile: UserProfileRecord) -> Bool {
-        let defaults = VolumeArcProductDefaults.userProfile
-        let defaultEquipmentCSV = defaults.availableEquipment
-            .map(\.rawValue)
-            .sorted()
-            .joined(separator: ",")
-        return profile.name == defaults.name
-            && profile.coachingStyle == defaults.coachingStyle.rawValue
-            && profile.privacyMode == defaults.privacyMode.rawValue
-            && profile.advancementLevel == defaults.advancementLevel.rawValue
-            && profile.availableEquipmentCSV == defaultEquipmentCSV
-            && profile.preferredRepRangeLower == defaults.preferredRepRangeLower
-            && profile.preferredRepRangeUpper == defaults.preferredRepRangeUpper
-            && profile.sessionTimeBudgetMinutes == defaults.sessionTimeBudgetMinutes
-            && profile.weeklyTrainingDays == defaults.weeklyTrainingDays
-            && profile.onboardingCompleted == false
-    }
-
-    /// VOL-67 Codex P1 fixup #26: companion to `isSeededDefaultProfile`
-    /// for `TrainingPlanRecord`. A plan is "untouched seeded default"
-    /// when its `workoutsJSON` exactly matches the canonical JSON
-    /// encoding of `VolumeArcProductDefaults.weeklySchedule` (both
-    /// `seedIfNeeded` and this comparison use the same
-    /// `SyncPayloadCodec` encoder, so the serialized form is
-    /// byte-stable). Used by both the V3→V4 record clamp and the
-    /// `OutboundQueueBackfill` queue clamp so they agree on which
-    /// plans can be safely demoted to `.distantPast`.
-    public static func isSeededDefaultPlan(_ plan: TrainingPlanRecord) -> Bool {
-        let defaultPlanJSON = SyncPayloadCodec.encode(VolumeArcProductDefaults.weeklySchedule) ?? "[]"
-        return plan.workoutsJSON == defaultPlanJSON
-    }
-
-    /// Produce a stable identifier for a legacy coach memory based on
-    /// its `(createdAt, content, theme)` triple. SHA256 gives the same
-    /// 64-character hex string on every device that's migrating the
-    /// same logical memory, so delete tombstones and queue
-    /// invalidation can target the same record across devices after
-    /// upgrade. VOL-67 Codex P2 (fixup #8).
-    ///
-    /// VOL-67 Codex P2 fixup #17: the hash input is length-prefixed
-    /// so that different field values always produce different
-    /// canonical strings. The original newline-delimited format was
-    /// ambiguous when content/theme contained newlines — e.g.,
-    /// `(content: "", theme: "foo\nbar")` and
-    /// `(content: "\nfoo", theme: "bar")` both serialized to
-    /// `"<millis>\n\nfoo\nbar"`, producing the same identifier for
-    /// different memories. Length-prefixed encoding (`<bytes>:<data>`)
-    /// eliminates every such collision because the parser always
-    /// knows how many bytes belong to each field, so different
-    /// inputs always produce different canonical strings.
-    ///
-    /// Also uses microsecond precision (`%.6f` format) instead of
-    /// integer milliseconds to reduce the chance that two memories
-    /// created within the same ms hash to the same identifier. The
-    /// fixed-format string avoids `Int64(Double * N)` rounding drift
-    /// that can produce different integers on different devices for
-    /// the same `Date`.
-    ///
-    /// VOL-67 Codex P2 fixup #20: `String(format:_:)` without an
-    /// explicit locale is locale-sensitive — on devices with a
-    /// non-US numeric locale (e.g., `de_DE` where the decimal
-    /// separator is `,`), the formatted timestamp becomes
-    /// `1715600000,000000` instead of `1715600000.000000`, producing
-    /// a different canonical string and thus a different identifier
-    /// for the same logical memory. Forcing the POSIX locale keeps
-    /// the output stable across every device regardless of the
-    /// user's numeric-region preference.
-    ///
-    /// This hash scheme is a BREAKING change from fixup #8's format,
-    /// but fixup #8 has never shipped to production — the migration
-    /// lives on `sprint/phase3b-cloudkit-fresh` which hasn't merged.
-    /// Both hashes land together in this PR, so no user ever sees
-    /// the old-format identifier.
-    fileprivate static func deterministicLegacyMemoryIdentifier(
-        createdAt: Date,
-        content: String,
-        theme: String
-    ) -> String {
-        let timestamp = String(
-            format: "%.6f",
-            locale: Locale(identifier: "en_US_POSIX"),
-            createdAt.timeIntervalSince1970
-        )
-        let contentBytes = content.utf8.count
-        let themeBytes = theme.utf8.count
-        let canonical = "ts=\(timestamp)|c=\(contentBytes):\(content)|t=\(themeBytes):\(theme)"
-        let digest = SHA256.hash(data: Data(canonical.utf8))
-        return "legacy-" + digest.map { String(format: "%02x", $0) }.joined()
-    }
+    private static let v4ToV5 = MigrationStage.lightweight(
+        fromVersion: VolumeArcSchemaV4.self,
+        toVersion: VolumeArcSchemaV5.self
+    )
 }
 #endif

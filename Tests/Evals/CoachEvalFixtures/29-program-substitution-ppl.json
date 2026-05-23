@@ -1,0 +1,14 @@
+{
+  "id": "program-substitution-ppl",
+  "intent": "substitution",
+  "question": "No cable station today. What should I swap for pulldowns?",
+  "contextBlock": "## Training context\n- Athlete: Sam (intermediate)\n- Readiness: 72/100 — Fine to train, keep effort controlled.\n- Next up: Lat Pulldown at 140lb x 10\n- Last 7 days: 5 sessions, avg RPE 7.9\n- Last session: 14 sets, 11200lb total, RPE 7.8\n\n## Active program\n- Program: PPL 6-day by VolumeArc\n- Position: Week 2 / 10, Day 5 / 6\n- Session: Pull B (Vertical pull and arms)\n- Today's prescription: Pulldown 4x8-12, cable row 3x8-12, face pull 3x12-20, hammer curl 3x10-15\n- Advancement: Add load when all sets land in the top half of the rep target at RPE 8 or lower.",
+  "style": "motivational",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": true,
+    "mustAnchorOnNextExercise": true,
+    "toneHint": "program-aware-substitution"
+  },
+  "notes": "VOL-144: Program-aware substitution should preserve the Pull B vertical-pull slot."
+}

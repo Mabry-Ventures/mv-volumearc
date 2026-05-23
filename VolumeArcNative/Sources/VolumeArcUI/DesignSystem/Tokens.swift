@@ -280,6 +280,9 @@ public enum VA {
         /// Compact icon badge dimension.
         public static let iconBadge: CGFloat = 30
 
+        /// Large illustration tile dimension used in CTA cards.
+        public static let ctaIllustration: CGFloat = 58
+
         /// Single-point border stroke.
         public static let border: CGFloat = 1
 

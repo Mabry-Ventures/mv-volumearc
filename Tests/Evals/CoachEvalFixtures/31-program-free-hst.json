@@ -1,0 +1,13 @@
+{
+  "id": "program-free-hst",
+  "intent": "free",
+  "question": "What matters most today?",
+  "contextBlock": "## Training context\n- Athlete: Sam (advanced)\n- Readiness: 88/100 — Peak readiness with low fatigue.\n- Next up: Machine Chest Press at 180lb x 10\n- Last 7 days: 5 sessions, avg RPE 7.1\n- Last session: 10 sets, 7600lb total, RPE 7.0\n\n## Active program\n- Program: Hypertrophy Specific Training by Bryan Haycock\n- Position: Week 6 / 8, Day 3 / 3\n- Session: HST Full Body C (Full-body pump and progression)\n- Today's prescription: Full body 1-2 sets each: leg press, chest press, row, delts; keep load moving upward\n- Advancement: Wave loads across 15s, 10s, and 5s; increase load every session while preserving full-body frequency.",
+  "style": "motivational",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": true,
+    "toneHint": "program-aware-free"
+  },
+  "notes": "VOL-144: Free-form coaching should still anchor to the active HST block."
+}

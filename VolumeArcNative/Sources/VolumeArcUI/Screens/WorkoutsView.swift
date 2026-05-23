@@ -333,18 +333,52 @@ public struct WorkoutsView: View {
     // MARK: - Idle state
 
     private var idleState: some View {
-        WorkoutIdleLibrary(
-            featuredTitle: model.nextWorkout?.title ?? String(
-                localized: "Strength Session",
-                comment: "Featured workout fallback title"
-            ),
-            featuredFocus: model.autopilot?.nextExerciseName ?? String(
-                localized: "Chest · Shoulders · Triceps",
-                comment: "Featured workout focus"
-            ),
-            startWorkout: startWorkout
-        )
+        VStack(alignment: .leading, spacing: VA.Space.xl) {
+            programsLibraryLink
+            WorkoutIdleLibrary(
+                featuredTitle: model.nextWorkout?.title ?? String(
+                    localized: "Strength Session",
+                    comment: "Featured workout fallback title"
+                ),
+                featuredFocus: model.autopilot?.nextExerciseName ?? String(
+                    localized: "Chest · Shoulders · Triceps",
+                    comment: "Featured workout focus"
+                ),
+                startWorkout: startWorkout
+            )
+        }
         .accessibilityIdentifier("workouts.emptyState")
+    }
+
+    private var programsLibraryLink: some View {
+        NavigationLink {
+            ProgramsLibraryView(model: model)
+        } label: {
+            VACard(style: .accent) {
+                HStack(alignment: .center, spacing: VA.Space.md) {
+                    WorkoutIllustrationTile(
+                        systemImage: "books.vertical.fill",
+                        size: VA.Space.ctaIllustration,
+                        accent: VA.Colors.primary
+                    )
+                    VStack(alignment: .leading, spacing: VA.Space.xs) {
+                        Text(String(localized: "Programs", comment: "Workouts programs library CTA title"))
+                            .font(VA.Typography.headline)
+                            .foregroundStyle(VA.Colors.textPrimary)
+                        Text(programsLibrarySubtitle)
+                            .font(VA.Typography.footnote)
+                            .foregroundStyle(VA.Colors.textSecondary)
+                            .lineLimit(2)
+                    }
+                    Spacer(minLength: VA.Space.sm)
+                    Image(systemName: "chevron.right")
+                        .font(VA.Typography.caption)
+                        .foregroundStyle(VA.Colors.textTertiary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("workouts.programsLibrary")
     }
 
     // MARK: - Actions
@@ -426,6 +460,19 @@ public struct WorkoutsView: View {
             return String(localized: "3 x 10 · moderate load", comment: "Active workout up next fallback target")
         }
         return "\(target.repRange.lowerBound) x \(target.repRange.upperBound) · \(Int(target.weight)) \(target.unit)"
+    }
+
+    private var programsLibrarySubtitle: String {
+        if let activeProgram = model.activeProgram {
+            return String(
+                localized: "\(activeProgram.programName) · Week \(activeProgram.weekNumber), Day \(activeProgram.dayNumber)",
+                comment: "Workouts active program CTA subtitle"
+            )
+        }
+        return String(
+            localized: "Starting Strength, 5/3/1, PPL, Upper/Lower, and HST",
+            comment: "Workouts programs library CTA subtitle"
+        )
     }
 }
 #endif
