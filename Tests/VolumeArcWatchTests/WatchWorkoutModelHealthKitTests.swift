@@ -371,6 +371,105 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
         XCTAssertEqual(startPayload.body, "workoutkit:Back Squat")
     }
 
+    func test_actionButtonStartCommandStartsSessionAndConfirmsOnWrist() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let voicePlayback = FakeWatchVoicePlayback()
+        let actionStore = InMemoryWatchActionButtonCommandStore()
+        let haptics = RecordingWatchActionButtonHaptics()
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            voicePlayback: voicePlayback,
+            actionButtonCommandStore: actionStore,
+            actionButtonHaptics: haptics
+        )
+        await actionStore.enqueue(
+            WatchActionButtonCommandRecord(
+                command: .startActiveWorkout,
+                actionName: VolumeArcActionButtonActionName.startActiveWorkout
+            )
+        )
+
+        await model.processPendingActionButtonCommands()
+
+        let sentPayloads = await transport.sent
+        let playedHaptics = await haptics.played
+        let spoken = await voicePlayback.spoken
+        XCTAssertTrue(model.sessionActive)
+        XCTAssertEqual(model.statusMessage, "Action Button started VolumeArc workout.")
+        XCTAssertEqual(sentPayloads.first?.kind, .startSession)
+        XCTAssertEqual(playedHaptics, [.acknowledged])
+        XCTAssertTrue(spoken.contains(WatchVoiceUtterance(text: "Workout started.")))
+    }
+
+    func test_actionButtonLogNextSetRequiresActiveWorkout() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let voicePlayback = FakeWatchVoicePlayback()
+        let actionStore = InMemoryWatchActionButtonCommandStore()
+        let haptics = RecordingWatchActionButtonHaptics()
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            voicePlayback: voicePlayback,
+            actionButtonCommandStore: actionStore,
+            actionButtonHaptics: haptics
+        )
+        await actionStore.enqueue(
+            WatchActionButtonCommandRecord(
+                command: .logNextSet,
+                actionName: VolumeArcActionButtonActionName.logNextSet
+            )
+        )
+
+        await model.processPendingActionButtonCommands()
+
+        let sentPayloads = await transport.sent
+        let playedHaptics = await haptics.played
+        let spoken = await voicePlayback.spoken
+        XCTAssertFalse(model.sessionActive)
+        XCTAssertEqual(model.statusMessage, "No active workout.")
+        XCTAssertTrue(sentPayloads.isEmpty)
+        XCTAssertEqual(playedHaptics, [.failed])
+        XCTAssertEqual(spoken, [WatchVoiceUtterance(text: "No active workout.")])
+    }
+
+    func test_actionButtonLogNextSetDuringSessionSyncsDecisionAndRestTimer() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let voicePlayback = FakeWatchVoicePlayback()
+        let actionStore = InMemoryWatchActionButtonCommandStore()
+        let haptics = RecordingWatchActionButtonHaptics()
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            voicePlayback: voicePlayback,
+            actionButtonCommandStore: actionStore,
+            actionButtonHaptics: haptics
+        )
+        await model.startSession()
+        await actionStore.enqueue(
+            WatchActionButtonCommandRecord(
+                command: .logNextSet,
+                actionName: VolumeArcActionButtonActionName.logNextSet
+            )
+        )
+
+        await model.processPendingActionButtonCommands()
+
+        let sentPayloads = await transport.sent
+        let playedHaptics = await haptics.played
+        let spoken = await voicePlayback.spoken
+        let sentKinds = sentPayloads.map(\.kind)
+        XCTAssertTrue(model.sessionActive)
+        XCTAssertEqual(model.statusMessage, "Set logged from Action Button.")
+        XCTAssertTrue(sentKinds.contains(.liveState))
+        XCTAssertTrue(sentKinds.contains(.restTimer))
+        XCTAssertEqual(playedHaptics, [.acknowledged])
+        XCTAssertTrue(spoken.contains(WatchVoiceUtterance(text: "Set logged.")))
+    }
+
     #if canImport(HealthKit) && canImport(WorkoutKit)
     func test_workoutKitPlanFactoryBuildsCustomStrengthWorkoutFromPrescription() throws {
         let target = WorkoutTarget(weight: 95, unit: "lb", repRange: 5...8, targetRPE: 7.5)
@@ -420,6 +519,8 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
         workoutKitScheduler: WorkoutKitScheduling = UnavailableWorkoutKitScheduler(),
         voicePlayback: WatchVoicePlayback = UnavailableWatchVoicePlayback(),
         voiceSettingsStore: WatchVoiceSettingsStore = InMemoryWatchVoiceSettingsStore(enabled: true),
+        actionButtonCommandStore: any WatchActionButtonCommandStoring = InMemoryWatchActionButtonCommandStore(),
+        actionButtonHaptics: any WatchActionButtonHapticPlaying = RecordingWatchActionButtonHaptics(),
         workoutID: String = "watch-seeded"
     ) -> WatchWorkoutModel {
         WatchWorkoutModel(
@@ -432,6 +533,8 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
             workoutKitScheduler: workoutKitScheduler,
             voicePlayback: voicePlayback,
             voiceSettingsStore: voiceSettingsStore,
+            actionButtonCommandStore: actionButtonCommandStore,
+            actionButtonHaptics: actionButtonHaptics,
             workoutID: workoutID
         )
     }
@@ -590,6 +693,27 @@ private actor InMemoryWatchVoiceSettingsStore: WatchVoiceSettingsStore {
 
     func setWatchVoiceEnabled(_ enabled: Bool) async {
         self.enabled = enabled
+    }
+}
+
+private actor InMemoryWatchActionButtonCommandStore: WatchActionButtonCommandStoring {
+    private var records: [WatchActionButtonCommandRecord] = []
+
+    func enqueue(_ record: WatchActionButtonCommandRecord) async {
+        records.append(record)
+    }
+
+    func drain() async -> [WatchActionButtonCommandRecord] {
+        defer { records.removeAll() }
+        return records
+    }
+}
+
+private actor RecordingWatchActionButtonHaptics: WatchActionButtonHapticPlaying {
+    private(set) var played: [WatchActionButtonFeedback] = []
+
+    func play(_ feedback: WatchActionButtonFeedback) async {
+        played.append(feedback)
     }
 }
 

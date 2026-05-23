@@ -25,7 +25,7 @@ This is the granular per-feature checklist. For high-level system status, see [`
 | Signals / readiness | ✅ | Readiness breakdown, volume chart, and frequency heatmap ship in the Signals surface. |
 | Profile / settings | ✅ | Profile header, training settings, edit profile flow, diagnostics entry point, and subscription gating surfaces are live. |
 | Onboarding flow | ✅ | `RootDashboardView` presents `OnboardingView` via `fullScreenCover` on first launch, keyed off `DashboardNavigationModel.showOnboarding`. |
-| watchOS workout UI | ✅ | Real HealthKit workout session, rest timer, coach cues, action decisions, "Vitals say" training insight, accessibility labels, and offline replay. |
+| watchOS workout UI | ✅ | Real HealthKit workout session, rest timer, coach cues, action decisions, "Vitals say" training insight, Apple Watch Ultra Action Button intents for start/log-next-set with haptic + spoken feedback, accessibility labels, and offline replay. |
 | Widgets (systemSmall/systemMedium/watchOS) | ✅ | `NextWorkoutWidget` and watch widgets read real shared snapshots via `PlatformSurfaceDefaultsReader`. |
 | Live Activities | ✅ | `ActiveWorkoutLiveActivity` publishes real session state with lock screen and Dynamic Island layouts. |
 

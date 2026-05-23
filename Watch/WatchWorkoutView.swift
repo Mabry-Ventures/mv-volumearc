@@ -40,6 +40,8 @@ final class WatchWorkoutModel: ObservableObject {
     private let workoutKitScheduler: WorkoutKitScheduling
     private let voicePlayback: WatchVoicePlayback
     private let voiceSettingsStore: WatchVoiceSettingsStore
+    private let actionButtonCommandStore: any WatchActionButtonCommandStoring
+    private let actionButtonHaptics: any WatchActionButtonHapticPlaying
     private var activeWorkoutID: String
     private var isLuminanceReduced = false
     private var liveMetricsTask: Task<Void, Never>?
@@ -51,6 +53,8 @@ final class WatchWorkoutModel: ObservableObject {
         workoutKitScheduler: WorkoutKitScheduling = UnavailableWorkoutKitScheduler(),
         voicePlayback: WatchVoicePlayback = UnavailableWatchVoicePlayback(),
         voiceSettingsStore: WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore(),
+        actionButtonCommandStore: any WatchActionButtonCommandStoring = UserDefaultsActionButtonCommandStore.shared,
+        actionButtonHaptics: any WatchActionButtonHapticPlaying = SystemWatchActionButtonHaptics(),
         workoutID: String = WatchWorkoutModel.makeWorkoutID()
     ) {
         let engine = ProgressionEngine()
@@ -76,6 +80,8 @@ final class WatchWorkoutModel: ObservableObject {
         self.workoutKitScheduler = workoutKitScheduler
         self.voicePlayback = voicePlayback
         self.voiceSettingsStore = voiceSettingsStore
+        self.actionButtonCommandStore = actionButtonCommandStore
+        self.actionButtonHaptics = actionButtonHaptics
         self.activeWorkoutID = workoutID
     }
 
@@ -125,6 +131,13 @@ final class WatchWorkoutModel: ObservableObject {
               let settings = WatchVoiceCoach.decodeSettingsPayload(from: payload.body)
         else { return }
         await applyWatchVoiceEnabled(settings.isEnabled, syncToPeer: false)
+    }
+
+    func processPendingActionButtonCommands() async {
+        let records = await actionButtonCommandStore.drain()
+        for record in records {
+            await handleActionButtonCommand(record)
+        }
     }
 
     private func applyWatchVoiceEnabled(_ enabled: Bool, syncToPeer: Bool) async {
@@ -490,6 +503,59 @@ final class WatchWorkoutModel: ObservableObject {
         await startSession()
     }
 
+    private func handleActionButtonCommand(_ record: WatchActionButtonCommandRecord) async {
+        switch record.command {
+        case .startActiveWorkout:
+            await handleStartActiveWorkoutActionButton()
+        case .logNextSet:
+            await handleLogNextSetActionButton()
+        }
+    }
+
+    private func handleStartActiveWorkoutActionButton() async {
+        if sessionActive {
+            await actionButtonHaptics.play(.acknowledged)
+            await speakActionButtonConfirmation(
+                String(localized: "Workout already active.", comment: "Action Button already-active spoken feedback")
+            )
+            statusMessage = String(localized: "Action Button confirmed active workout.", comment: "Action Button active status")
+            await persistState()
+            return
+        }
+
+        await startSession()
+        await actionButtonHaptics.play(.acknowledged)
+        await speakActionButtonConfirmation(
+            String(localized: "Workout started.", comment: "Action Button start workout spoken feedback")
+        )
+        statusMessage = String(
+            localized: "Action Button started VolumeArc workout.",
+            comment: "Action Button start workout status"
+        )
+        await persistState()
+    }
+
+    private func handleLogNextSetActionButton() async {
+        guard sessionActive else {
+            await actionButtonHaptics.play(.failed)
+            await speakActionButtonConfirmation(
+                String(localized: "No active workout.", comment: "Action Button no active workout spoken feedback")
+            )
+            statusMessage = String(localized: "No active workout.", comment: "Action Button no active workout status")
+            await persistState()
+            return
+        }
+
+        await choose(selectedAction)
+        await resetRestTimer()
+        await actionButtonHaptics.play(.acknowledged)
+        await speakActionButtonConfirmation(
+            String(localized: "Set logged.", comment: "Action Button set logged spoken feedback")
+        )
+        statusMessage = String(localized: "Set logged from Action Button.", comment: "Action Button set logged status")
+        await persistState()
+    }
+
     private static func makeTransport() -> WatchSessionTransport {
         #if canImport(WatchConnectivity) && (os(iOS) || os(watchOS))
         WatchConnectivitySessionTransport()
@@ -608,6 +674,11 @@ final class WatchWorkoutModel: ObservableObject {
                 comment: "Watch voice coach playback failure status"
             )
         }
+    }
+
+    private func speakActionButtonConfirmation(_ text: String) async {
+        await voicePlayback.prewarm()
+        try? await voicePlayback.speak(WatchVoiceUtterance(text: text))
     }
 
     private func syncWatchVoiceSetting(_ enabled: Bool) async {
@@ -916,6 +987,25 @@ struct WatchWorkoutView: View {
                         )
                     )
 
+                    if WatchActionButtonAvailability.shouldShowBindingHint {
+                        VStack(alignment: .leading, spacing: VA.Space.xs) {
+                            Text(String(localized: "Action Button", comment: "Watch Action Button settings label"))
+                                .font(VA.Typography.caption)
+                                .foregroundStyle(VA.Colors.textSecondary)
+                            Text(
+                                String(
+                                    localized: "Bind this in Settings → Action Button → Action → VolumeArc.",
+                                    comment: "Watch Ultra Action Button binding hint"
+                                )
+                            )
+                            .font(VA.Typography.footnote)
+                            .foregroundStyle(VA.Colors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("watch.actionButton.bindingHint")
+                    }
+
                     Divider()
 
                     Text(String(localized: "Decision", comment: "Watch decision header"))
@@ -1085,9 +1175,15 @@ struct WatchWorkoutView: View {
         .task {
             model.setLuminanceReduced(isLuminanceReduced)
             await model.loadPersistedState()
+            await model.processPendingActionButtonCommands()
         }
         .onChange(of: isLuminanceReduced) { _, newValue in
             model.setLuminanceReduced(newValue)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .volumeArcWatchActionButtonCommandQueued)) { _ in
+            Task {
+                await model.processPendingActionButtonCommands()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: WatchConnectivityNotifications.payloadDidArrive)) { notification in
             guard let payload = notification.userInfo?[WatchConnectivityNotifications.payloadUserInfoKey] as? WatchPayload else {
