@@ -2,13 +2,13 @@
 
 ## Test architecture
 
-VolumeArc currently ships with **429 test functions** across unit + integration + XCUITest journey + performance suites (audited 2026-05-18; count: `find Tests -name '*.swift' -exec grep -h 'func test' {} \; | wc -l`). The headline shapes:
+VolumeArc currently ships with **540+ test functions** across unit + integration + XCUITest journey + performance suites (audited 2026-05-22; count: `find Tests -name '*.swift' -exec grep -h 'func test' {} \; | wc -l`). The headline shapes:
 
-- 80% line-coverage gate enforced on `VolumeArcCore` (VOL-52), targeted to rise to **90%** under [VOL-140](https://linear.app/mabry-ventures/issue/VOL-140) (sharpened by [VOL-205](https://linear.app/mabry-ventures/issue/VOL-205)). New gates: `VolumeArcUI` (≥85% target, **2%** staged floor), `VolumeArcCoreWatch` (≥85% target, **25%** Phase A floor — measured baseline 28.77% from [VOL-138](https://linear.app/mabry-ventures/issue/VOL-138) Phase A; ratchets up once `WatchWorkoutModel` pure logic is extracted), Widgets (≥75% — pending [VOL-139](https://linear.app/mabry-ventures/issue/VOL-139)).
+- 80% line-coverage gate enforced on `VolumeArcCore` (VOL-52), targeted to rise to **90%** under [VOL-140](https://linear.app/mabry-ventures/issue/VOL-140) (sharpened by [VOL-205](https://linear.app/mabry-ventures/issue/VOL-205)). New gates: `VolumeArcUI` (≥85% target, **18%** staged floor after the VOL-135 snapshot ratchet), `VolumeArcCoreWatch` (≥85% target, **25%** Phase A floor — measured baseline 28.77% from [VOL-138](https://linear.app/mabry-ventures/issue/VOL-138) Phase A; ratchets up once `WatchWorkoutModel` pure logic is extracted), Widgets (≥75% target — view-layer snapshot coverage started under [VOL-139](https://linear.app/mabry-ventures/issue/VOL-139); line-coverage gate remains pending a dedicated target).
 - 6-metric performance budget (cold launch, scroll fps, scroll hitches, memory, coach P50, coach P95) tag-gated in CI (VOL-99).
 - 20-fixture coach eval matrix with hermetic template-layer assertions in CI; response-layer harness runs on nightly cron (`coach-evals-nightly.yml`) targeting `relay.volumearc.app` after VOL-223 fixed the dead default URL.
 - User-journey catalog at [`USER_JOURNEYS.md`](USER_JOURNEYS.md); current coverage **18%** (11/62), target **100%** under [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141) (sharpened by [VOL-200](https://linear.app/mabry-ventures/issue/VOL-200) — CI parser gate).
-- Visual regression: **none today** — pending [VOL-135](https://linear.app/mabry-ventures/issue/VOL-135) (pointfreeco SnapshotTesting on VAUI + paywall + onboarding + coach bubble + Live Activity).
+- Visual regression: SnapshotTesting is wired with bundled baselines for VAButton, the next-workout widget, and core VAUI card/toast surfaces; broader paywall, onboarding, coach bubble, and Live Activity matrices continue under [VOL-135](https://linear.app/mabry-ventures/issue/VOL-135).
 
 ```
 Tests/VolumeArcAppTests/
@@ -248,16 +248,16 @@ Unit tests should:
 
 ## Coverage expectations
 
-The 2026-05-01 audit established a project-level commitment to **90%+ coverage across all appropriate surfaces** (tracked in [VOL-140](https://linear.app/mabry-ventures/issue/VOL-140)). The current gate is 80% on `VolumeArcCore` only; the table below shows the in-flight target state.
+The 2026-05-01 audit established a project-level commitment to **90%+ coverage across all appropriate surfaces** (tracked in [VOL-140](https://linear.app/mabry-ventures/issue/VOL-140)). The current gates enforce staged floors on Core, UI, and Watch while the suite ratchets toward the target state.
 
 | Layer | Current | Target (post VOL-140) | Enforced |
 |-------|---------|------------------------|----------|
 | `VolumeArcCore` business logic | 80%+ | **90%+** | Yes (CI gate) |
 | `VolumeArcCore` data models | 60%+ | folded into 90% module gate | Yes (CI gate) |
-| `VolumeArcUI` design system + screens | (untracked) | **85%+** | Pending (VOL-140) |
+| `VolumeArcUI` design system + screens | 18%+ staged floor | **85%+** | Yes (CI gate; ratcheted by VOL-135 snapshots) |
 | `VolumeArcApp` host wiring | 40%+ | **75%+** | Pending (VOL-140) |
-| `VolumeArcWatch` (new test target) | 0% | **85%+** | Pending ([VOL-138](https://linear.app/mabry-ventures/issue/VOL-138)) |
-| `VolumeArcWidgets` + `WatchWidgets` | (integration only) | **75%+** | Pending ([VOL-139](https://linear.app/mabry-ventures/issue/VOL-139)) |
+| `VolumeArcWatch` (new test target) | 25%+ staged floor | **85%+** | Yes (CI gate; Phase A from [VOL-138](https://linear.app/mabry-ventures/issue/VOL-138)) |
+| `VolumeArcWidgets` + `WatchWidgets` | view-layer snapshots started | **75%+** | Pending line-coverage gate ([VOL-139](https://linear.app/mabry-ventures/issue/VOL-139)) |
 | Subsystems with new fakes (HealthKit / CloudKit) | (integration only) | **90%+** on the subsystem | Pending ([VOL-136](https://linear.app/mabry-ventures/issue/VOL-136), [VOL-137](https://linear.app/mabry-ventures/issue/VOL-137)) |
 
 ### VolumeArcCore 80% line-coverage gate (VOL-52)
