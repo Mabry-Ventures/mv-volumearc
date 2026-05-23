@@ -423,6 +423,35 @@ final class VolumeArcAppJourneyTests: XCTestCase {
         )
     }
 
+    // MARK: - 5. Background deep-link arrival
+
+    /// VOL-141: deterministic coverage for `bg.deep-link-arrival`.
+    /// The launch argument sends a valid VolumeArc URL through the same
+    /// app handler used by external link arrivals while avoiding Safari
+    /// or universal-link daemon flake in CI.
+    func testExternalDeepLinkRoutesToSignalsAndEmitsTelemetry() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenDeepLinkOnLaunch", "volumearc://signals?source=external"]
+        )
+        app.launch()
+        assertAppReachedForeground(app)
+
+        _ = waitForElement(
+            in: app,
+            identifier: "signals.root",
+            timeout: 15,
+            "External deep link should route to the Signals tab"
+        )
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "deeplink",
+            name: "received",
+            within: 10,
+            test: self
+        )
+    }
+
     private func assertAppReachedForeground(_ app: XCUIApplication) {
         XCTAssertTrue(
             app.wait(for: .runningForeground, timeout: 20),
