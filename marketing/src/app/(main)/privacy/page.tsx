@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 // feedback bundle; and expanded GDPR / CCPA-CPRA disclosures. The
 // matching code changes (strict-mode question redaction on the relay
 // path; maskAllImages) ship in the same PR.
-const EFFECTIVE_DATE = 'May 22, 2026'
+const EFFECTIVE_DATE = 'May 23, 2026'
 
 export default function PrivacyPage() {
   return (

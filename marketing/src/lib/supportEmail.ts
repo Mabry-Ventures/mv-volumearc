@@ -208,13 +208,9 @@ export async function sendSupportEmail(
   }
 
   if (!response.ok) {
-    const body = await response.text()
     throw new SupportEmailDeliveryError(
       response.status,
-      `Resend rejected the support email (${response.status}): ${body.slice(
-        0,
-        240,
-      )}`,
+      `Resend rejected the support email (${response.status})`,
     )
   }
 

@@ -11,17 +11,37 @@ export const runtime = 'nodejs'
 
 const rateLimitWindowMs = 10 * 60 * 1000
 const rateLimitMaxRequests = 5
+const rateLimitSweepIntervalMs = rateLimitWindowMs
+const rateLimitSweepThreshold = 1000
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>()
+let lastRateLimitSweep = 0
 
 function clientKey(request: Request) {
   const forwardedFor = request.headers.get('x-forwarded-for')?.split(',')[0]
   const realIp = request.headers.get('x-real-ip')
-  const userAgent = request.headers.get('user-agent') ?? 'unknown-agent'
 
-  return `${forwardedFor ?? realIp ?? 'unknown-ip'}:${userAgent.slice(0, 120)}`
+  return forwardedFor?.trim() || realIp?.trim() || 'unknown-ip'
+}
+
+function sweepExpiredRateLimitBuckets(now: number) {
+  if (
+    now - lastRateLimitSweep < rateLimitSweepIntervalMs &&
+    rateLimitBuckets.size <= rateLimitSweepThreshold
+  ) {
+    return
+  }
+
+  lastRateLimitSweep = now
+  for (const [key, bucket] of rateLimitBuckets) {
+    if (bucket.resetAt <= now) {
+      rateLimitBuckets.delete(key)
+    }
+  }
 }
 
 function isRateLimited(key: string, now = Date.now()) {
+  sweepExpiredRateLimitBuckets(now)
+
   const bucket = rateLimitBuckets.get(key)
 
   if (!bucket || bucket.resetAt <= now) {

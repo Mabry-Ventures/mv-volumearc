@@ -117,6 +117,7 @@ try {
     { name: 'category', value: 'bug-report' },
   ])
 
+  let deliveryFailure
   await assert.rejects(
     () =>
       sendSupportEmail(
@@ -138,9 +139,18 @@ try {
           return new Response('upstream failure', { status: 500 })
         },
       ),
-    (error) =>
-      error?.name === 'SupportEmailDeliveryError' && error?.status === 500,
+    (error) => {
+      deliveryFailure = error
+      return (
+        error?.name === 'SupportEmailDeliveryError' && error?.status === 500
+      )
+    },
   )
+  assert.equal(
+    deliveryFailure.message,
+    'Resend rejected the support email (500)',
+  )
+  assert.equal(deliveryFailure.message.includes('upstream failure'), false)
   assert.equal(capturedFailureRequest.url, 'https://api.resend.com/emails')
   assert.equal(capturedFailureRequest.init.method, 'POST')
   assert.equal(
