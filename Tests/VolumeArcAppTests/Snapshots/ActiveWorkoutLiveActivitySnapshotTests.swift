@@ -2,7 +2,6 @@
 // Live Activity surface. The view is pure SwiftUI and driven by the same
 // snapshot the ActivityKit widget receives at runtime.
 
-#if canImport(ActivityKit) && canImport(SnapshotTesting) && canImport(UIKit) && canImport(WidgetKit)
 import ActivityKit
 import SnapshotTesting
 import SwiftUI
@@ -15,6 +14,40 @@ import XCTest
 final class ActiveWorkoutLiveActivitySnapshotTests: XCTestCase {
     private enum Metrics {
         static let watchSmall = CGSize(width: 170, height: 80)
+        static let lockScreenRegular = CGSize(width: 393, height: 150)
+        static let lockScreenAccessibility = CGSize(width: 393, height: 214)
+    }
+
+    private enum Variant {
+        case regular
+        case accessibility
+
+        var dynamicTypeSize: DynamicTypeSize {
+            switch self {
+            case .regular:
+                return .medium
+            case .accessibility:
+                return .accessibility5
+            }
+        }
+
+        var preferredContentSizeCategory: UIContentSizeCategory {
+            switch self {
+            case .regular:
+                return .medium
+            case .accessibility:
+                return .accessibilityExtraExtraExtraLarge
+            }
+        }
+
+        var lockScreenSize: CGSize {
+            switch self {
+            case .regular:
+                return Metrics.lockScreenRegular
+            case .accessibility:
+                return Metrics.lockScreenAccessibility
+            }
+        }
     }
 
     private let countdownSnapshot = ActiveWorkoutLiveActivitySnapshot(
@@ -49,33 +82,121 @@ final class ActiveWorkoutLiveActivitySnapshotTests: XCTestCase {
         assertWatchLiveActivitySnapshot(restCompleteSnapshot, colorScheme: .dark)
     }
 
+    func testLockScreenCountdownLight() {
+        assertLockScreenLiveActivitySnapshot(countdownSnapshot, colorScheme: .light, variant: .regular)
+    }
+
+    func testLockScreenCountdownDark() {
+        assertLockScreenLiveActivitySnapshot(countdownSnapshot, colorScheme: .dark, variant: .regular)
+    }
+
+    func testLockScreenCountdownAccessibilityLight() {
+        assertLockScreenLiveActivitySnapshot(countdownSnapshot, colorScheme: .light, variant: .accessibility)
+    }
+
+    func testLockScreenCountdownAccessibilityDark() {
+        assertLockScreenLiveActivitySnapshot(countdownSnapshot, colorScheme: .dark, variant: .accessibility)
+    }
+
+    func testLockScreenRestCompleteLight() {
+        assertLockScreenLiveActivitySnapshot(restCompleteSnapshot, colorScheme: .light, variant: .regular)
+    }
+
+    func testLockScreenRestCompleteDark() {
+        assertLockScreenLiveActivitySnapshot(restCompleteSnapshot, colorScheme: .dark, variant: .regular)
+    }
+
+    func testLockScreenRestCompleteAccessibilityLight() {
+        assertLockScreenLiveActivitySnapshot(restCompleteSnapshot, colorScheme: .light, variant: .accessibility)
+    }
+
+    func testLockScreenRestCompleteAccessibilityDark() {
+        assertLockScreenLiveActivitySnapshot(restCompleteSnapshot, colorScheme: .dark, variant: .accessibility)
+    }
+
     private func assertWatchLiveActivitySnapshot(
         _ snapshot: ActiveWorkoutLiveActivitySnapshot,
         colorScheme: ColorScheme,
         testName: String = #function,
         line: UInt = #line
     ) {
-        let userInterfaceStyle: UIUserInterfaceStyle = colorScheme == .dark ? .dark : .light
         let view = ActiveWorkoutLiveActivityContentView(
             snapshot: snapshot,
             activityFamily: .small
         )
-        .environment(\.colorScheme, colorScheme)
-        .environment(\.locale, Locale(identifier: "en_US"))
+        .snapshotEnvironment(colorScheme: colorScheme, dynamicTypeSize: .medium)
         .frame(width: Metrics.watchSmall.width, height: Metrics.watchSmall.height)
 
         assertVolumeArcSnapshot(
             of: view,
-            as: .image(
-                precision: 0.99,
-                perceptualPrecision: 0.98,
-                layout: .fixed(width: Metrics.watchSmall.width, height: Metrics.watchSmall.height),
-                traits: UITraitCollection(userInterfaceStyle: userInterfaceStyle)
+            as: imageSnapshot(
+                colorScheme: colorScheme,
+                preferredContentSizeCategory: .medium,
+                size: Metrics.watchSmall
             ),
             in: self,
             testName: testName,
             line: line
         )
     }
+
+    private func assertLockScreenLiveActivitySnapshot(
+        _ snapshot: ActiveWorkoutLiveActivitySnapshot,
+        colorScheme: ColorScheme,
+        variant: Variant,
+        testName: String = #function,
+        line: UInt = #line
+    ) {
+        let view = ActiveWorkoutLiveActivityContentView(snapshot: snapshot)
+            .snapshotEnvironment(colorScheme: colorScheme, dynamicTypeSize: variant.dynamicTypeSize)
+            .frame(width: variant.lockScreenSize.width, height: variant.lockScreenSize.height)
+
+        assertVolumeArcSnapshot(
+            of: view,
+            as: imageSnapshot(
+                colorScheme: colorScheme,
+                preferredContentSizeCategory: variant.preferredContentSizeCategory,
+                size: variant.lockScreenSize
+            ),
+            in: self,
+            testName: testName,
+            line: line
+        )
+    }
+
+    private func imageSnapshot<Value: View>(
+        colorScheme: ColorScheme,
+        preferredContentSizeCategory: UIContentSizeCategory,
+        size: CGSize
+    ) -> Snapshotting<Value, UIImage> {
+        let style: UIUserInterfaceStyle = colorScheme == .dark ? .dark : .light
+        let traits = UITraitCollection { traits in
+            traits.userInterfaceStyle = style
+            traits.preferredContentSizeCategory = preferredContentSizeCategory
+            traits.layoutDirection = .leftToRight
+            traits.accessibilityContrast = .normal
+            traits.displayScale = 3
+            traits.displayGamut = .SRGB
+            traits.legibilityWeight = .regular
+            traits.userInterfaceLevel = .base
+        }
+        return .image(
+            precision: 0.99,
+            perceptualPrecision: 0.98,
+            layout: .fixed(width: size.width, height: size.height),
+            traits: traits
+        )
+    }
 }
-#endif
+
+private extension View {
+    func snapshotEnvironment(
+        colorScheme: ColorScheme,
+        dynamicTypeSize: DynamicTypeSize
+    ) -> some View {
+        environment(\.colorScheme, colorScheme)
+            .environment(\.dynamicTypeSize, dynamicTypeSize)
+            .environment(\.locale, Locale(identifier: "en_US"))
+            .environment(\.layoutDirection, .leftToRight)
+    }
+}
