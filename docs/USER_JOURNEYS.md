@@ -325,7 +325,7 @@ Each `[ ]` row above is an item to close. Sibling tickets in [VolumeArc Producti
 - [VOL-127](https://linear.app/mabry-ventures/issue/VOL-127) — onboarding HK + force-quit + WCSession journeys. **Phase 1** (PR [#159](https://github.com/Mabry-Ventures/mv-volumearc/pull/159)): four-bullet HealthKit rationale pre-prompt screen shipped. **Phase 2**: 6 new resilience/interruption rows in this catalog + 4 manual UAT scripts (HealthKit grant/deny/skip, voice/mic, force-quit at every stage, WCSession interrupt + reconnect) under [Manual UAT scripts](#manual-uat-scripts-vol-127-phase-2). End-to-end automation of those rows remains as `[ ]`.
 - [VOL-142](https://linear.app/mabry-ventures/issue/VOL-142) — paywall + StoreKit edge journeys
 - [VOL-149](https://linear.app/mabry-ventures/issue/VOL-149) — telemetry-as-UAT helper used by every journey
-- [VOL-158](https://linear.app/mabry-ventures/issue/VOL-158) — re-run every journey on iPad
+- Post-v1 iPad expansion — re-run every journey on iPad after a new product decision flips `TARGETED_DEVICE_FAMILY` to include iPad
 - [VOL-94](https://linear.app/mabry-ventures/issue/VOL-94) — re-run real-device-only journeys (CloudKit, HealthKit, BGTask, WCSession, Live Activity) on hardware
 
 When this catalog hits 100% covered, update [`PLATFORM.md`](PLATFORM.md) Implementation Status row for Testing.
