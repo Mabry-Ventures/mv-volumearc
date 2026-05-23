@@ -165,13 +165,31 @@ public final class StoreKitSubscriptionStore: ObservableObject, PremiumEntitleme
     }
 
     private var updateListenerTask: Task<Void, Never>?
+    private let allowsAutomaticProductReload: Bool
     private let telemetry: (any TelemetrySink)?
 
     public init(productIDs: [String], telemetry: (any TelemetrySink)? = nil) {
         self.productIDs = productIDs
+        self.allowsAutomaticProductReload = true
         self.telemetry = telemetry
         updateListenerTask = listenForTransactions()
         Task { await loadProducts() }
+    }
+
+    @_spi(Testing)
+    public init(
+        productIDs: [String],
+        loadingState: LoadingState,
+        lastPurchaseError: String? = nil,
+        allowsAutomaticProductReload: Bool = false,
+        telemetry: (any TelemetrySink)? = nil
+    ) {
+        self.productIDs = productIDs
+        self.allowsAutomaticProductReload = allowsAutomaticProductReload
+        self.telemetry = telemetry
+        self.loadingState = loadingState
+        self.lastPurchaseError = lastPurchaseError
+        updateListenerTask = nil
     }
 
     deinit {
@@ -181,6 +199,17 @@ public final class StoreKitSubscriptionStore: ObservableObject, PremiumEntitleme
     /// Whether the user has an active premium entitlement.
     public var isPremium: Bool {
         !purchasedProductIDs.isEmpty
+    }
+
+    /// Whether a paywall presentation should kick off product loading.
+    public var shouldLoadProductsOnPaywallAppear: Bool {
+        guard allowsAutomaticProductReload, products.isEmpty else { return false }
+        switch loadingState {
+        case .idle, .loaded, .failed:
+            return true
+        case .loading:
+            return false
+        }
     }
 
     /// Load products from the App Store.

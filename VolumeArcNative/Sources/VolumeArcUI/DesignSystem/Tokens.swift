@@ -240,6 +240,9 @@ public enum VA {
 
         /// Prominent accent fills.
         public static let prominentFill: Double = 0.86
+
+        /// Paywall hero-to-surface background wash.
+        public static let paywallBackgroundStart: Double = 0.18
     }
 
     // MARK: - Spacing (4pt grid)
