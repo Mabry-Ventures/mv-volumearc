@@ -471,11 +471,13 @@ add_swift_sources(widget_ui_tests_group, app_widget_ui_tests_target, ROOT.join('
 # VOL-138: watch-side unit tests. Sources live at
 # `Tests/VolumeArcWatchTests/` so they parallel the other test bundles.
 add_swift_sources(watch_tests_group, app_watch_tests_target, ROOT.join('Tests/VolumeArcWatchTests'))
-# VOL-234: compile the standalone AOD render contract into watch tests so
-# the inline snapshot can pin the dimmed workout surface without a host app.
+# VOL-234/VOL-233: compile the standalone AOD render contract and
+# WatchWorkoutModel into watch tests so the watch active-session surface can be
+# verified without a host app.
 add_selected_swift_sources(watch_group, app_watch_tests_target, ROOT.join('Watch'), [
   'VADesignTokens.swift',
   'WatchAlwaysOnWorkoutView.swift',
+  'WatchWorkoutView.swift',
 ])
 add_resource(ui_tests_group, app_ui_tests_target, 'VolumeArcTests.storekit')
 # VOL-142: the same StoreKit configuration powers `SKTestSession`-based

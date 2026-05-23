@@ -705,15 +705,15 @@ public extension WorkoutDashboardModel {
         }
 
         do {
-            let granted = try await healthStore.requestAuthorization()
+            let result = try await healthStore.requestAuthorization()
             isHealthAuthorized = await healthStore.isAuthorized
             telemetrySink.record(TelemetryEvent(
                 category: "health",
                 name: "auth_requested",
                 severity: .info,
-                message: "HealthKit authorization request returned granted=\(granted)."
+                message: "HealthKit authorization request returned canShareWorkouts=\(result.canShareWorkouts)."
             ))
-            return granted && isHealthAuthorized
+            return result.canShareWorkouts && isHealthAuthorized
         } catch {
             isHealthAuthorized = await healthStore.isAuthorized
             telemetrySink.record(TelemetryEvent(

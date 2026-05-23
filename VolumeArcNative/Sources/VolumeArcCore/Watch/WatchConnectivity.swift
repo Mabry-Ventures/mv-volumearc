@@ -57,18 +57,46 @@ public enum WatchConnectivityNotifications {
 }
 
 public struct WatchSessionSnapshot: Sendable, Codable {
+    public let workoutID: String
     public let selectedAction: WorkoutAction
     public let restEndsAt: Date
     public let coachPrompt: String
     public let sessionActive: Bool
     public let statusMessage: String
 
-    public init(selectedAction: WorkoutAction, restEndsAt: Date, coachPrompt: String, sessionActive: Bool, statusMessage: String) {
+    public init(
+        workoutID: String = "active-strength-session",
+        selectedAction: WorkoutAction,
+        restEndsAt: Date,
+        coachPrompt: String,
+        sessionActive: Bool,
+        statusMessage: String
+    ) {
+        self.workoutID = workoutID
         self.selectedAction = selectedAction
         self.restEndsAt = restEndsAt
         self.coachPrompt = coachPrompt
         self.sessionActive = sessionActive
         self.statusMessage = statusMessage
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case workoutID
+        case selectedAction
+        case restEndsAt
+        case coachPrompt
+        case sessionActive
+        case statusMessage
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.workoutID = try container.decodeIfPresent(String.self, forKey: .workoutID) ?? "active-strength-session"
+        self.selectedAction = try container.decode(WorkoutAction.self, forKey: .selectedAction)
+        self.restEndsAt = try container.decode(Date.self, forKey: .restEndsAt)
+        self.coachPrompt = try container.decode(String.self, forKey: .coachPrompt)
+        self.sessionActive = try container.decode(Bool.self, forKey: .sessionActive)
+        self.statusMessage = try container.decode(String.self, forKey: .statusMessage)
     }
 }
 

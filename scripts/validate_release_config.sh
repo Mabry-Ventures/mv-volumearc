@@ -144,6 +144,16 @@ if ! grep -F 'static let containerIdentifier: String = "iCloud.com.mabryventures
   exit 1
 fi
 
+# VOL-233: the watch app starts an `HKWorkoutSession` with
+# `HKLiveWorkoutDataSource`. Without workout-processing background mode,
+# live capture can pass simulator tests but stop behaving correctly on
+# a real watch as soon as the app backgrounds during an active session.
+if ! plutil -extract WKBackgroundModes xml1 -o - Watch/Info.plist 2>/dev/null |
+  grep -q '<string>workout-processing</string>'; then
+  echo "FAIL: Watch/Info.plist must declare WKBackgroundModes = workout-processing for live HealthKit workouts" >&2
+  exit 1
+fi
+
 # VOL-177: --no-build exits here. Everything above is static file/text
 # assertions that match what pre-commit can afford to run. Everything
 # below shells to xcodebuild (5-10s per call) and is CI-only.
