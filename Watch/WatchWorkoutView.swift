@@ -14,6 +14,29 @@ private enum WatchHealthCaptureError: Error {
     case authorizationDenied
 }
 
+protocol WatchDoubleTapSettingsStore: Sendable {
+    func isDoubleTapEnabled() async -> Bool
+    func setDoubleTapEnabled(_ enabled: Bool) async
+}
+
+actor UserDefaultsWatchDoubleTapSettingsStore: WatchDoubleTapSettingsStore {
+    private let defaults: UserDefaults
+    private let key = "com.mabryventures.VolumeArc.watch.doubleTap.enabled"
+
+    init(defaults: sending UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    func isDoubleTapEnabled() async -> Bool {
+        guard defaults.object(forKey: key) != nil else { return true }
+        return defaults.bool(forKey: key)
+    }
+
+    func setDoubleTapEnabled(_ enabled: Bool) async {
+        defaults.set(enabled, forKey: key)
+    }
+}
+
 @MainActor
 // swiftlint:disable:next type_body_length
 final class WatchWorkoutModel: ObservableObject {
@@ -29,6 +52,7 @@ final class WatchWorkoutModel: ObservableObject {
     @Published private(set) var pendingSyncCount = 0
     @Published private(set) var currentHeartRateBPM: Int?
     @Published private(set) var isWatchVoiceEnabled = true
+    @Published private(set) var isDoubleTapEnabled = true
     @Published private(set) var statusMessage = String(localized: "Watch coach standing by.", comment: "Watch default status")
     #if DEBUG
     @Published private(set) var liveMetricEventCount = 0
@@ -40,6 +64,8 @@ final class WatchWorkoutModel: ObservableObject {
     private let workoutKitScheduler: WorkoutKitScheduling
     private let voicePlayback: WatchVoicePlayback
     private let voiceSettingsStore: WatchVoiceSettingsStore
+    private let doubleTapSettingsStore: any WatchDoubleTapSettingsStore
+    private let doubleTapTelemetrySink: any TelemetrySink
     private let actionButtonCommandStore: any WatchActionButtonCommandStoring
     private let actionButtonHaptics: any WatchActionButtonHapticPlaying
     private let actionButtonNextActionDonor: any WatchActionButtonNextActionDonating
@@ -54,6 +80,8 @@ final class WatchWorkoutModel: ObservableObject {
         workoutKitScheduler: WorkoutKitScheduling = UnavailableWorkoutKitScheduler(),
         voicePlayback: WatchVoicePlayback = UnavailableWatchVoicePlayback(),
         voiceSettingsStore: WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore(),
+        doubleTapSettingsStore: any WatchDoubleTapSettingsStore = UserDefaultsWatchDoubleTapSettingsStore(),
+        doubleTapTelemetrySink: any TelemetrySink = UserDefaultsTelemetrySink(),
         actionButtonCommandStore: any WatchActionButtonCommandStoring = UserDefaultsActionButtonCommandStore.shared,
         actionButtonHaptics: any WatchActionButtonHapticPlaying = SystemWatchActionButtonHaptics(),
         actionButtonNextActionDonor: any WatchActionButtonNextActionDonating = AppIntentActionButtonNextActionDonor(),
@@ -82,6 +110,8 @@ final class WatchWorkoutModel: ObservableObject {
         self.workoutKitScheduler = workoutKitScheduler
         self.voicePlayback = voicePlayback
         self.voiceSettingsStore = voiceSettingsStore
+        self.doubleTapSettingsStore = doubleTapSettingsStore
+        self.doubleTapTelemetrySink = doubleTapTelemetrySink
         self.actionButtonCommandStore = actionButtonCommandStore
         self.actionButtonHaptics = actionButtonHaptics
         self.actionButtonNextActionDonor = actionButtonNextActionDonor
@@ -104,6 +134,7 @@ final class WatchWorkoutModel: ObservableObject {
 
     func loadPersistedState() async {
         isWatchVoiceEnabled = await voiceSettingsStore.isWatchVoiceEnabled()
+        isDoubleTapEnabled = await doubleTapSettingsStore.isDoubleTapEnabled()
         if isWatchVoiceEnabled {
             await voicePlayback.prewarm()
         }
@@ -128,6 +159,19 @@ final class WatchWorkoutModel: ObservableObject {
 
     func setWatchVoiceEnabled(_ enabled: Bool) async {
         await applyWatchVoiceEnabled(enabled, syncToPeer: true)
+    }
+
+    var canUseDoubleTapPrimaryAction: Bool {
+        sessionActive && isDoubleTapEnabled
+    }
+
+    func setDoubleTapEnabled(_ enabled: Bool) async {
+        isDoubleTapEnabled = enabled
+        await doubleTapSettingsStore.setDoubleTapEnabled(enabled)
+        statusMessage = enabled
+            ? String(localized: "Double Tap set logging enabled.", comment: "Watch Double Tap enabled status")
+            : String(localized: "Double Tap set logging disabled.", comment: "Watch Double Tap disabled status")
+        await persistState()
     }
 
     func applyWatchPayload(_ payload: WatchPayload) async {
@@ -185,7 +229,7 @@ final class WatchWorkoutModel: ObservableObject {
         await persistState()
     }
 
-    func resetRestTimer() async {
+    func resetRestTimer(announcesSetComplete: Bool = true) async {
         await ensureSessionStarted()
         restEndsAt = Date.now.addingTimeInterval(90)
         let payload = WatchPayload(
@@ -200,7 +244,9 @@ final class WatchWorkoutModel: ObservableObject {
         } catch {
             statusMessage = String(localized: "Rest timer updated locally. Phone sync will retry.", comment: "Watch rest timer offline status")
         }
-        await speakVoiceEvent(.setComplete(restSeconds: 90))
+        if announcesSetComplete {
+            await speakVoiceEvent(.setComplete(restSeconds: 90))
+        }
         pendingSyncCount = await coordinator.pendingPayloadCount()
         await persistState()
     }
@@ -504,6 +550,26 @@ final class WatchWorkoutModel: ObservableObject {
         }
     }
 
+    func handleDoubleTapLogNextSet() async {
+        guard isDoubleTapEnabled else { return }
+        guard sessionActive else {
+            statusMessage = String(
+                localized: "Start a session to use Double Tap.",
+                comment: "Watch Double Tap inactive-session status"
+            )
+            await persistState()
+            return
+        }
+
+        await choose(selectedAction)
+        await resetRestTimer(announcesSetComplete: false)
+        await actionButtonHaptics.play(.acknowledged)
+        await speakDoubleTapConfirmation()
+        recordDoubleTapSetLogged()
+        statusMessage = String(localized: "Set logged from Double Tap.", comment: "Watch Double Tap set logged status")
+        await persistState()
+    }
+
     private func ensureSessionStarted() async {
         guard sessionActive == false else { return }
         await startSession()
@@ -686,6 +752,31 @@ final class WatchWorkoutModel: ObservableObject {
         // Action Button confirmations intentionally ignore the voice-coach toggle; hardware presses need immediate audio feedback.
         await voicePlayback.prewarm()
         try? await voicePlayback.speak(WatchVoiceUtterance(text: text))
+    }
+
+    private func speakDoubleTapConfirmation() async {
+        guard isWatchVoiceEnabled else { return }
+        guard isLuminanceReduced == false else { return }
+        try? await voicePlayback.speak(
+            WatchVoiceUtterance(
+                text: String(
+                    localized: "Logged. Rest 90 seconds.",
+                    comment: "Watch Double Tap set logged spoken feedback"
+                )
+            )
+        )
+    }
+
+    private func recordDoubleTapSetLogged() {
+        doubleTapTelemetrySink.record(
+            TelemetryEvent(
+                category: "watch.double_tap",
+                name: "set_logged",
+                severity: .info,
+                message: "Apple Watch Double Tap logged a set.",
+                metadata: ["selectedAction": selectedAction.rawValue]
+            )
+        )
     }
 
     private func syncWatchVoiceSetting(_ enabled: Bool) async {
@@ -967,6 +1058,24 @@ struct WatchWorkoutView: View {
                             Task { await model.resetRestTimer() }
                         }
                     )
+
+                    if model.sessionActive {
+                        Button(String(localized: "Log Set", comment: "Watch Double Tap primary log-set button")) {
+                            Task {
+                                await model.handleDoubleTapLogNextSet()
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(VA.Colors.primary)
+                        .handGestureShortcut(.primaryAction, isEnabled: model.canUseDoubleTapPrimaryAction)
+                        .accessibilityIdentifier("watch.doubleTap.logSetButton")
+                        .accessibilityLabel(
+                            String(
+                                localized: "Log set with Double Tap",
+                                comment: "Watch Double Tap log-set button accessibility label"
+                            )
+                        )
+                    }
                 }
 
                     Divider()
@@ -991,6 +1100,29 @@ struct WatchWorkoutView: View {
                         String(
                             localized: "Turns spoken set cues and rest alerts on this Apple Watch on or off",
                             comment: "Watch voice coach toggle accessibility hint"
+                        )
+                    )
+
+                    Text(String(localized: "Gestures", comment: "Watch gestures settings section header"))
+                        .font(VA.Typography.caption)
+                        .foregroundStyle(VA.Colors.textSecondary)
+
+                    Toggle(
+                        String(localized: "Double Tap Logs Set", comment: "Watch Double Tap toggle label"),
+                        isOn: Binding(
+                            get: { model.isDoubleTapEnabled },
+                            set: { enabled in
+                                Task {
+                                    await model.setDoubleTapEnabled(enabled)
+                                }
+                            }
+                        )
+                    )
+                    .accessibilityIdentifier("watch.doubleTap.toggle")
+                    .accessibilityHint(
+                        String(
+                            localized: "Turns the Apple Watch Double Tap set logging action on or off",
+                            comment: "Watch Double Tap toggle accessibility hint"
                         )
                     )
 
