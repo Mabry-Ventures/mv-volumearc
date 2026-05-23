@@ -144,7 +144,7 @@ final class AppIconAssetContractTests: XCTestCase {
         let data = try Data(contentsOf: url)
         let pngSignature = [UInt8](data.prefix(8))
         XCTAssertEqual(pngSignature, [137, 80, 78, 71, 13, 10, 26, 10], "\(url.lastPathComponent) should be a PNG")
-        XCTAssertGreaterThanOrEqual(data.count, 24, "\(url.lastPathComponent) should include a PNG IHDR chunk")
+        XCTAssertGreaterThanOrEqual(data.count, 26, "\(url.lastPathComponent) should include a complete PNG IHDR chunk")
 
         return PNGMetadata(
             width: data.uint32BigEndian(at: 16),
