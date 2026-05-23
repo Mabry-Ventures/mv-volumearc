@@ -1,21 +1,18 @@
 // VOL-200 Phase 3 — Today-tab journey coverage.
 //
-// Closes 3 of the 5 `today.*` rows from `docs/USER_JOURNEYS.md`:
+// Closes 4 of the 5 `today.*` rows from `docs/USER_JOURNEYS.md`:
 //   * `today.next-workout-tap`     → workout detail opens
 //   * `today.recent-session-tap`   → session detail opens
 //   * `today.quick-action-launch`  → Ask Coach quick action opens Coach
+//   * `today.readiness-tap`        → readiness tile opens Signals
 //
 // Deferred:
 //   * `today.dashboard-view`       (existing loose-match in
 //     `testRootDashboardIdentifierExists`; full hero/cards check
 //     follows when the visual snapshot suite from VOL-201 lands its
 //     per-trait Today baseline)
-//   * `today.readiness-tap`        (product gap — Today does not
-//     currently surface a readiness hero that opens the Signals tab;
-//     `VARecoveryChip` opens a sheet, not Signals. Re-spec the row
-//     or build the Today→Signals link before the test can land.)
 //
-// All three tests rely on the seeded Today fixture (the dashboard
+// All four tests rely on the seeded Today fixture (the dashboard
 // model loads recent sessions + a next-workout recommendation on
 // launch in `-UITestMode` thanks to `VolumeArcAppUITestSupport.makeSeededApp`).
 //
@@ -33,6 +30,44 @@ import XCTest
 final class VolumeArcTodayJourneyTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
+    }
+
+    // MARK: - today.readiness-tap
+
+    /// Tap the Today readiness tile → assert the Signals tab opens and
+    /// the readiness telemetry event fires from `SignalsView.task`.
+    func testTodayReadinessTapOpensSignals() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp()
+        app.launch()
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: 20),
+            "App should reach foreground running state on cold launch"
+        )
+
+        let readiness = app.descendants(matching: .any)
+            .matching(identifier: "today.readinessTile")
+            .firstMatch
+        XCTAssertTrue(
+            readiness.waitForExistence(timeout: 15),
+            "Readiness tile should render on Today within 15s of cold launch"
+        )
+        readiness.tap()
+
+        let signalsRoot = app.descendants(matching: .any)
+            .matching(identifier: "signals.root")
+            .firstMatch
+        XCTAssertTrue(
+            signalsRoot.waitForExistence(timeout: 10),
+            "Signals should appear within 10s of tapping the Today readiness tile"
+        )
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "signals",
+            name: "readiness.opened",
+            within: 10,
+            test: self
+        )
     }
 
     // MARK: - today.next-workout-tap

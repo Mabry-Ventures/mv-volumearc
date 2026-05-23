@@ -402,13 +402,17 @@ jobs:
       # `widget.tap-deep-link` through the widget's production
       # `.widgetURL(...)` deep-link contract.
       # New total: 34/69 = 49.3% (staged threshold: 49%).
+      # VOL-141 Today readiness tranche (2026-05-23) closes
+      # `today.readiness-tap` by making the readiness tile route to
+      # Signals and asserting `signals.readiness.opened`.
+      # New total: 35/69 = 50.7% (staged threshold: 50%).
       # The platform commits to 100% by end of Wave 2 (VOL-141/VOL-200).
       # Same ratchet contract as the per-target coverage gate above:
       # any PR that adds a journey test bumps `JOURNEY_COVERAGE_THRESHOLD`
       # in lockstep so the gate is always at-or-above current coverage.
-      - name: Journey coverage gate (>= 49% staged ratchet)
+      - name: Journey coverage gate (>= 50% staged ratchet)
         env:
-          JOURNEY_COVERAGE_THRESHOLD: '49'
+          JOURNEY_COVERAGE_THRESHOLD: '50'
         run: ./scripts/check_journey_coverage.sh
 
       # VOL-97: publish the xcresult bundle so reviewers can open it in

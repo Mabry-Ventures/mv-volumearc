@@ -137,7 +137,8 @@ public struct TodayView: View {
             weeklyVolumeLoad: weeklyVolumeLoad,
             sparklineValues: weeklySparklineValues,
             trendLabel: volumeTrendLabel,
-            trendIsPositive: volumeTrendIsPositive
+            trendIsPositive: volumeTrendIsPositive,
+            onReadinessTap: { navigation.openSignals() }
         )
     }
 
