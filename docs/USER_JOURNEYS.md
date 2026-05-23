@@ -25,7 +25,7 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | Workouts | 7 | 3 | 43% |
 | Coach | 6 | 3 | 50% |
 | Signals | 3 | 3 | 100% |
-| Profile | 8 | 5 | 63% |
+| Profile | 8 | 7 | 88% |
 | Watch | 6 | 2 | 33% |
 | Widgets | 3 | 0 | 0% |
 | Live Activities | 3 | 0 | 0% |
@@ -33,7 +33,7 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | Background | 4 | 0 | 0% |
 | Failure paths | 6 | 0 | 0% |
 | Resilience / interruption (VOL-127 P2) | 6 | 0 | 0% |
-| **Total** | **69** | **23** | **33%** |
+| **Total** | **69** | **26** | **38%** |
 
 > Goal: 100% by end of Wave 2 (cycle 7, 2026-05-31). Burn down via [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141).
 >
@@ -97,8 +97,8 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | ID | Pre-conditions | Steps | Success | Telemetry | Test |
 |---|---|---|---|---|---|
 | `profile.edit-profile` | Profile tab | Tap Edit → change fields → Save | `UserProfileRecord` updated | `profile.updated` | `VolumeArcProfileJourneyTests.testProfileOpenEditAndSaveRoundTripDismissesSheet` |
-| `profile.coaching-style` | Profile tab | Change coaching style | Style saved; coach persona changes on next turn | `profile.coaching_style.changed` | `[ ]` (the row taps into the same Edit Profile sheet as `profile.edit-profile`; a dedicated test follows once the granular `profile.coaching_style.changed` event is wired at the `save()` call site — currently only `profile.updated` fires) |
-| `profile.privacy-mode` | Profile tab | Change privacy mode | Mode saved; coach prompt redaction applies | `profile.privacy_mode.changed` | `[ ]` (same shape as `profile.coaching-style`; needs `profile.privacy_mode.changed` wired at `save()`) |
+| `profile.coaching-style` | Profile tab | Change coaching style | Style saved; coach persona changes on next turn | `profile.coaching_style.changed` | `VolumeArcProfileJourneyTests.testProfileCoachingStyleChangePersistsAndEmitsTelemetry` |
+| `profile.privacy-mode` | Profile tab | Change privacy mode | Mode saved; coach prompt redaction applies | `profile.privacy_mode.changed` | `VolumeArcProfileJourneyTests.testProfilePrivacyModeChangePersistsAndEmitsTelemetry` |
 | `profile.diagnostics` | Profile tab | Open Diagnostics | Telemetry events visible; export works | `diagnostics.opened` | `VolumeArcProfileJourneyTests.testProfileDiagnosticsRowOpensView` |
 | `profile.restore-purchase` | Free tier | Tap Restore | StoreKit restore runs; entitlement updates | `subscription.restored` | `VolumeArcAppJourneyTests.testRestorePurchasesFlow` |
 | `profile.open-paywall` | Free tier | Tap Upgrade | Paywall sheet opens | `paywall.opened` | `VolumeArcAppJourneyTests.testPaywallPresentationAndDismissal` |

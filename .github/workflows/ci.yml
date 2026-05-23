@@ -404,7 +404,7 @@ jobs:
       # in lockstep so the gate is always at-or-above current coverage.
       - name: Journey coverage gate (>= 34% staged ratchet)
         env:
-          JOURNEY_COVERAGE_THRESHOLD: '34'
+          JOURNEY_COVERAGE_THRESHOLD: '37'
         run: ./scripts/check_journey_coverage.sh
 
       # VOL-97: publish the xcresult bundle so reviewers can open it in

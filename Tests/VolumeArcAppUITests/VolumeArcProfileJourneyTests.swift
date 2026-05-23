@@ -3,16 +3,11 @@
 // Closes 2 of the 5 uncovered `profile.*` rows from
 // `docs/USER_JOURNEYS.md`:
 //   * `profile.edit-profile`
+//   * `profile.coaching-style`
+//   * `profile.privacy-mode`
 //   * `profile.diagnostics`
 //
 // Deferred to follow-up PRs:
-//   * `profile.coaching-style`  — needs a dedicated
-//     `profile.coaching_style.changed` telemetry event at the
-//     `save()` call site (currently the only emitted event is the
-//     generic `profile.updated`). Wire the event + add the test in
-//     the same PR.
-//   * `profile.privacy-mode`    — same shape; needs
-//     `profile.privacy_mode.changed`.
 //   * `profile.manage-subscription` — already deferred to
 //     VOL-142 Phase 2 deep-link smoke test.
 //
@@ -99,6 +94,50 @@ final class VolumeArcProfileJourneyTests: XCTestCase {
         )
     }
 
+    // MARK: - profile.coaching-style
+
+    func testProfileCoachingStyleChangePersistsAndEmitsTelemetry() throws {
+        let app = launchProfileTab()
+
+        openEditProfile(from: app)
+        tapFormRow(labeled: "Coaching style", in: app, maxScrolls: 5)
+        tapPickerOption("Minimal", in: app)
+        tapSave(in: app)
+
+        let minimalValue = app.staticTexts["Minimal"].firstMatch
+        XCTAssertTrue(
+            minimalValue.waitForExistence(timeout: 10),
+            "Profile training row should update to Minimal after saving"
+        )
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "profile",
+            name: "coaching_style.changed",
+            within: 10,
+            test: self
+        )
+    }
+
+    // MARK: - profile.privacy-mode
+
+    func testProfilePrivacyModeChangePersistsAndEmitsTelemetry() throws {
+        let app = launchProfileTab()
+
+        openEditProfile(from: app)
+        tapFormRow(labeled: "Privacy mode", in: app, maxScrolls: 5)
+        tapPickerOption("Strict", in: app)
+        tapSave(in: app)
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "profile",
+            name: "privacy_mode.changed",
+            within: 10,
+            test: self
+        )
+    }
+
     // MARK: - profile.diagnostics
 
     /// Tap the Diagnostics row on Profile → assert DiagnosticsView
@@ -126,5 +165,97 @@ final class VolumeArcProfileJourneyTests: XCTestCase {
             diagnosticsRoot.waitForExistence(timeout: 5),
             "DiagnosticsView should appear within 5s of tapping the row"
         )
+    }
+
+    // MARK: - Helpers
+
+    private func launchProfileTab() -> XCUIApplication {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenProfileOnLaunch", "1"]
+        )
+        app.launch()
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: 20),
+            "App should reach foreground running state on cold launch"
+        )
+        return app
+    }
+
+    private func openEditProfile(from app: XCUIApplication) {
+        let row = app.descendants(matching: .any)
+            .matching(identifier: "profile.coachingStyleRow")
+            .firstMatch
+        XCTAssertTrue(
+            row.waitForExistence(timeout: 15),
+            "Coaching style row should render on Profile within 15s of cold launch"
+        )
+        row.tap()
+
+        let editRoot = app.descendants(matching: .any)
+            .matching(identifier: "editProfile.root")
+            .firstMatch
+        XCTAssertTrue(
+            editRoot.waitForExistence(timeout: 5),
+            "EditProfile sheet should appear within 5s of tapping the row"
+        )
+    }
+
+    private func tapFormRow(
+        labeled label: String,
+        in app: XCUIApplication,
+        maxScrolls: Int = 0
+    ) {
+        let editRoot = app.descendants(matching: .any)
+            .matching(identifier: "editProfile.root")
+            .firstMatch
+        let rowPredicate = NSPredicate(format: "label BEGINSWITH %@", label)
+        let row = editRoot.descendants(matching: .any).matching(rowPredicate).firstMatch
+        var scrollCount = 0
+        while (!row.exists || !isVisible(row, in: app)) && scrollCount < maxScrolls {
+            editRoot.swipeUp()
+            scrollCount += 1
+        }
+
+        XCTAssertTrue(
+            row.waitForExistence(timeout: 5),
+            "\(label) row should be reachable in Edit Profile"
+        )
+        XCTAssertTrue(
+            isVisible(row, in: app),
+            "\(label) row should be visible in Edit Profile"
+        )
+        row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+    }
+
+    private func tapPickerOption(_ label: String, in app: XCUIApplication) {
+        let option = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@", label))
+            .firstMatch
+        XCTAssertTrue(
+            option.waitForExistence(timeout: 5),
+            "\(label) picker option should appear"
+        )
+        option.tap()
+    }
+
+    private func isVisible(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+        guard element.exists else { return false }
+        let frame = element.frame
+        return frame.maxY > 0 && frame.minY < app.frame.maxY
+    }
+
+    private func tapSave(in app: XCUIApplication) {
+        let saveButton = app.descendants(matching: .any)
+            .matching(identifier: "editProfile.save")
+            .firstMatch
+        if !saveButton.waitForExistence(timeout: 2) {
+            let backToEditProfile = app.navigationBars.buttons["Edit Profile"].firstMatch
+            if backToEditProfile.exists {
+                backToEditProfile.tap()
+            }
+        }
+
+        XCTAssertTrue(saveButton.waitForExistence(timeout: 5))
+        saveButton.tap()
     }
 }

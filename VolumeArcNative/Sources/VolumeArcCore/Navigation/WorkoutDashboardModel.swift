@@ -421,6 +421,8 @@ public final class WorkoutDashboardModel: ObservableObject {
     public func updateProfile(_ defaults: UserProfileDefaults) async {
         #if canImport(SwiftData)
         guard let userProfileRepository else { return }
+        let previousCoachingStyle = athlete.coachingStyle
+        let previousPrivacyMode = athlete.privacyMode
         do {
             try userProfileRepository.upsertProfile(defaults)
             try userProfileRepository.markOnboardingComplete()
@@ -430,6 +432,11 @@ public final class WorkoutDashboardModel: ObservableObject {
                 severity: .info,
                 message: "Profile updated for \(defaults.name.isEmpty ? "athlete" : defaults.name)"
             ))
+            recordProfilePreferenceTelemetry(
+                previousCoachingStyle: previousCoachingStyle,
+                previousPrivacyMode: previousPrivacyMode,
+                defaults: defaults
+            )
             await refresh()
         } catch {
             telemetrySink.record(TelemetryEvent(
