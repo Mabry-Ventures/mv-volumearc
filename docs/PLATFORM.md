@@ -231,7 +231,7 @@ The Xcode project is **generated** -- do not edit `project.pbxproj` by hand. Run
 | `scripts/test_performance.sh` | VOL-99. Runs the `VolumeArcAppPerfTests` suite on iPhone 17 simulator and writes an xcresult bundle to `.build/perf-results.xcresult`. Tag-gated in CI |
 | `scripts/check_performance.sh` | VOL-99. Parses the perf xcresult bundle, compares each metric against `docs/performance-budgets.json`, fails on any `failThreshold` breach, and appends to `docs/performance-trend.json` |
 | `scripts/validate_release_config.sh` | Hard-fails on `ENABLE_TESTABILITY = YES` in Release, `DEBUG_INFORMATION_FORMAT` ≠ `dwarf-with-dsym`, missing entitlements, leaked demo symbols, missing privacy manifests, or unchanged `VERSION` on tag builds |
-| `scripts/archive_for_distribution.sh` | Archives and exports a signed IPA for App Store / TestFlight. Requires `DEVELOPMENT_TEAM` env var |
+| `scripts/archive_for_distribution.sh` | Archives and exports a signed IPA for App Store / TestFlight. Requires `DEVELOPMENT_TEAM` and `VOLUMEARC_RELAY_SIGNING_KEY` env vars |
 
 All build scripts call `generate_xcode_project.rb` first, so the project is always fresh.
 
@@ -241,7 +241,7 @@ GitHub Actions CI runs on the dedicated Apple Silicon self-hosted runner current
 
 **CI pipeline:** Checkout → Pre-flight (Xcode / Ruby / xcodeproj / SwiftLint / disk headroom) → Generate Xcode project → Xcode project determinism gate (regenerate twice, diff SHA256 — VOL-95) → Xcode project no-op regen gate (regenerate over committed state, fail on any drift — VOL-106) → Seed SPM lockfile → Clear stale DerivedData → Build all targets (Debug) → Run unit + integration tests → XCUITest smoke suite → Coverage gate (VolumeArcCore ≥ 80% — VOL-52) → Upload xcresult + coverage-summary artifacts → Sticky PR coverage comment → Trend-append on main push → SwiftLint hard-fail → Validate release config. The AI review gate runs in a separate workflow (`.github/workflows/ai-review-gate.yml`). **As of VOL-172, CodeRabbit Pro and Codex Code Review are both active again**: the gate posts current-head `@coderabbitai review` and `@codex review` requests, waits for both bots to signal on the current head SHA, and filters known non-review bot messages (Codex/CodeRabbit rate-limit notices, trigger acknowledgements, actions-only comments) so they cannot satisfy a required check.
 
-**TestFlight deploy:** On version tags (`v*`), a second job runs `fastlane ios beta` to archive, sign, and upload to TestFlight. Requires `DEVELOPMENT_TEAM` and `APP_STORE_CONNECT_API_KEY_PATH` secrets.
+**TestFlight deploy:** On version tags (`v*`), a second job runs `fastlane ios beta` to archive, sign, and upload to TestFlight. Requires `DEVELOPMENT_TEAM`, `APP_STORE_CONNECT_API_KEY_PATH`, and `VOLUMEARC_RELAY_SIGNING_KEY` secrets.
 
 **Fastlane:** `Gemfile` + `fastlane/Fastfile` with three lanes: `test` (run tests with coverage), `beta` (build + upload to TestFlight), `release` (submit to App Store review).
 
@@ -274,7 +274,9 @@ Every user-facing string in `VolumeArcUI/Screens/` and `Watch/` goes through `St
 ./scripts/validate_release_config.sh
 
 # Archive for App Store / TestFlight
-DEVELOPMENT_TEAM=A886EMZZW6 ./scripts/archive_for_distribution.sh
+export DEVELOPMENT_TEAM=A886EMZZW6
+export VOLUMEARC_RELAY_SIGNING_KEY=<1Password relay key>
+./scripts/archive_for_distribution.sh
 ```
 
 ## Code Conventions

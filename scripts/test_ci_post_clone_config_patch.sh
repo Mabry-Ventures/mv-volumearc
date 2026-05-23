@@ -24,6 +24,7 @@ run_patch() {
   # patching it actually asserts. Real Xcode Cloud runs never set it.
   SENTRY_DSN="https://examplePublicKey@o0.ingest.sentry.io/0" \
     VOLUMEARC_AI_RELAY_URL="$relay_url" \
+    VOLUMEARC_RELAY_SIGNING_KEY="test-relay-signing-key" \
     CI_XCODEBUILD_ACTION="$action" \
     CI_BUILD_NUMBER="$build_number" \
     SKIP_HYGIENE_GATE=1 \
@@ -60,6 +61,15 @@ assert_project_build_number() {
 run_patch "relay.volumearc.app"
 assert_plist_value "VolumeArcAIRelayURL" "https://relay.volumearc.app"
 assert_plist_value "VolumeArcSentryDSN" "https://examplePublicKey@o0.ingest.sentry.io/0"
+assert_plist_value "VolumeArcRelaySigningKey" "test-relay-signing-key"
+if ! grep -q "Patched VolumeArcRelaySigningKey into Info.plist (len=22)" "$LOG_PATH"; then
+  echo "FAIL: ci_post_clone.sh did not log the relay signing-key patch length" >&2
+  exit 1
+fi
+if grep -q "test-relay-signing-key" "$LOG_PATH"; then
+  echo "FAIL: ci_post_clone.sh leaked the relay signing-key value to logs" >&2
+  exit 1
+fi
 
 run_patch "https://relay.volumearc.app"
 assert_plist_value "VolumeArcAIRelayURL" "https://relay.volumearc.app"
@@ -73,6 +83,7 @@ fi
 
 if SENTRY_DSN="https://examplePublicKey@o0.ingest.sentry.io/0" \
   VOLUMEARC_AI_RELAY_URL="http://relay.volumearc.app" \
+  VOLUMEARC_RELAY_SIGNING_KEY="test-relay-signing-key" \
   CI_XCODEBUILD_ACTION="test" \
   SKIP_HYGIENE_GATE=1 \
   bash "$TMP_DIR/ci_scripts/ci_post_clone.sh" >"$LOG_PATH" 2>&1; then
@@ -82,10 +93,25 @@ fi
 
 if SENTRY_DSN="https://examplePublicKey@o0.ingest.sentry.io/0" \
   VOLUMEARC_AI_RELAY_URL="https://example.com" \
+  VOLUMEARC_RELAY_SIGNING_KEY="test-relay-signing-key" \
   CI_XCODEBUILD_ACTION="test" \
   SKIP_HYGIENE_GATE=1 \
   bash "$TMP_DIR/ci_scripts/ci_post_clone.sh" >"$LOG_PATH" 2>&1; then
   echo "FAIL: ci_post_clone.sh accepted a non-allowlisted relay host" >&2
+  exit 1
+fi
+
+if SENTRY_DSN="https://examplePublicKey@o0.ingest.sentry.io/0" \
+  VOLUMEARC_AI_RELAY_URL="https://relay.volumearc.app" \
+  CI_XCODEBUILD_ACTION="archive" \
+  SKIP_HYGIENE_GATE=1 \
+  PATH="$TMP_DIR/bin:$PATH" \
+  bash "$TMP_DIR/ci_scripts/ci_post_clone.sh" >"$LOG_PATH" 2>&1; then
+  echo "FAIL: ci_post_clone.sh accepted an archive relay URL without VOLUMEARC_RELAY_SIGNING_KEY" >&2
+  exit 1
+fi
+if ! grep -q "VOLUMEARC_RELAY_SIGNING_KEY is required for archive workflows" "$LOG_PATH"; then
+  echo "FAIL: ci_post_clone.sh did not explain the missing archive relay signing key" >&2
   exit 1
 fi
 
