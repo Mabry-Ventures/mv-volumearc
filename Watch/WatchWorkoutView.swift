@@ -42,6 +42,7 @@ final class WatchWorkoutModel: ObservableObject {
     private let voiceSettingsStore: WatchVoiceSettingsStore
     private let actionButtonCommandStore: any WatchActionButtonCommandStoring
     private let actionButtonHaptics: any WatchActionButtonHapticPlaying
+    private let actionButtonNextActionDonor: any WatchActionButtonNextActionDonating
     private var activeWorkoutID: String
     private var isLuminanceReduced = false
     private var liveMetricsTask: Task<Void, Never>?
@@ -55,6 +56,7 @@ final class WatchWorkoutModel: ObservableObject {
         voiceSettingsStore: WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore(),
         actionButtonCommandStore: any WatchActionButtonCommandStoring = UserDefaultsActionButtonCommandStore.shared,
         actionButtonHaptics: any WatchActionButtonHapticPlaying = SystemWatchActionButtonHaptics(),
+        actionButtonNextActionDonor: any WatchActionButtonNextActionDonating = AppIntentActionButtonNextActionDonor(),
         workoutID: String = WatchWorkoutModel.makeWorkoutID()
     ) {
         let engine = ProgressionEngine()
@@ -82,6 +84,7 @@ final class WatchWorkoutModel: ObservableObject {
         self.voiceSettingsStore = voiceSettingsStore
         self.actionButtonCommandStore = actionButtonCommandStore
         self.actionButtonHaptics = actionButtonHaptics
+        self.actionButtonNextActionDonor = actionButtonNextActionDonor
         self.activeWorkoutID = workoutID
     }
 
@@ -115,6 +118,7 @@ final class WatchWorkoutModel: ObservableObject {
         await refreshConnectivity()
         if sessionActive {
             observeLiveWorkoutMetrics()
+            await actionButtonNextActionDonor.donateLogNextSet()
         }
     }
 
@@ -303,6 +307,7 @@ final class WatchWorkoutModel: ObservableObject {
         if isWatchVoiceEnabled {
             await voicePlayback.prewarm()
         }
+        await actionButtonNextActionDonor.donateLogNextSet()
         await speakVoiceEvent(.nextSet(exerciseName: autopilot.nextExerciseName, target: autopilot.nextTarget))
         pendingSyncCount = await coordinator.pendingPayloadCount()
         await persistState()
@@ -342,6 +347,7 @@ final class WatchWorkoutModel: ObservableObject {
         if isWatchVoiceEnabled {
             await voicePlayback.prewarm()
         }
+        await actionButtonNextActionDonor.donateLogNextSet()
         await speakVoiceEvent(.nextSet(exerciseName: autopilot.nextExerciseName, target: autopilot.nextTarget))
         pendingSyncCount = await coordinator.pendingPayloadCount()
         await persistState()
@@ -677,6 +683,7 @@ final class WatchWorkoutModel: ObservableObject {
     }
 
     private func speakActionButtonConfirmation(_ text: String) async {
+        // Action Button confirmations intentionally ignore the voice-coach toggle; hardware presses need immediate audio feedback.
         await voicePlayback.prewarm()
         try? await voicePlayback.speak(WatchVoiceUtterance(text: text))
     }

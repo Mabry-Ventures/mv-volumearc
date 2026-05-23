@@ -115,6 +115,16 @@ protocol WatchActionButtonCommandStoring: Sendable {
     func drain() async -> [WatchActionButtonCommandRecord]
 }
 
+protocol WatchActionButtonNextActionDonating: Sendable {
+    func donateLogNextSet() async
+}
+
+struct AppIntentActionButtonNextActionDonor: WatchActionButtonNextActionDonating {
+    func donateLogNextSet() async {
+        _ = try? await VolumeArcLogNextSetActionButtonIntent().donate()
+    }
+}
+
 actor UserDefaultsActionButtonCommandStore: WatchActionButtonCommandStoring {
     static let shared = UserDefaultsActionButtonCommandStore()
 
@@ -232,6 +242,8 @@ extension Notification.Name {
 }
 
 enum WatchActionButtonAvailability {
+    // shouldShowBindingHint uses isLikelyUltra's "ultra" string heuristic because WatchKit
+    // does not expose a stable Ultra capability flag; revisit this if Apple renames future models.
     static var shouldShowBindingHint: Bool {
         #if canImport(WatchKit)
         isLikelyUltra(

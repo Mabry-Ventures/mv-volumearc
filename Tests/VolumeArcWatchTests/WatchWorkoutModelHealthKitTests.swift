@@ -371,6 +371,22 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
         XCTAssertEqual(startPayload.body, "workoutkit:Back Squat")
     }
 
+    func test_startSessionDonatesActionButtonLogNextSetIntent() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let donor = RecordingActionDonor()
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            actionButtonNextActionDonor: donor
+        )
+
+        await model.startSession()
+
+        let donationCount = await donor.logNextSetDonationCount
+        XCTAssertEqual(donationCount, 1)
+    }
+
     func test_actionButtonStartCommandStartsSessionAndConfirmsOnWrist() async throws {
         let transport = RecordingWatchTransport(reachable: true)
         let healthStore = FakeLiveHealthStore()
@@ -521,6 +537,7 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
         voiceSettingsStore: WatchVoiceSettingsStore = InMemoryWatchVoiceSettingsStore(enabled: true),
         actionButtonCommandStore: any WatchActionButtonCommandStoring = InMemoryWatchActionButtonCommandStore(),
         actionButtonHaptics: any WatchActionButtonHapticPlaying = RecordingWatchActionButtonHaptics(),
+        actionButtonNextActionDonor: any WatchActionButtonNextActionDonating = RecordingActionDonor(),
         workoutID: String = "watch-seeded"
     ) -> WatchWorkoutModel {
         WatchWorkoutModel(
@@ -535,6 +552,7 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
             voiceSettingsStore: voiceSettingsStore,
             actionButtonCommandStore: actionButtonCommandStore,
             actionButtonHaptics: actionButtonHaptics,
+            actionButtonNextActionDonor: actionButtonNextActionDonor,
             workoutID: workoutID
         )
     }
@@ -714,6 +732,14 @@ private actor RecordingWatchActionButtonHaptics: WatchActionButtonHapticPlaying 
 
     func play(_ feedback: WatchActionButtonFeedback) async {
         played.append(feedback)
+    }
+}
+
+private actor RecordingActionDonor: WatchActionButtonNextActionDonating {
+    private(set) var logNextSetDonationCount = 0
+
+    func donateLogNextSet() async {
+        logNextSetDonationCount += 1
     }
 }
 
