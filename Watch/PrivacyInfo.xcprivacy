@@ -24,8 +24,10 @@
 	<array>
 		<!--
 			UserDefaults: UserDefaultsWatchSessionStateStore,
-			UserDefaultsWatchPendingPayloadStore, and the shared app-group
-			snapshot reader. App functionality only.
+			UserDefaultsWatchPendingPayloadStore,
+			UserDefaultsWatchDoubleTapSettingsStore,
+			UserDefaultsTelemetrySink, and the shared app-group snapshot
+			reader. App functionality only.
 		-->
 		<dict>
 			<key>NSPrivacyAccessedAPIType</key>

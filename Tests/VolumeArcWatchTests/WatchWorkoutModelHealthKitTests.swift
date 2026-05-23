@@ -486,6 +486,123 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
         XCTAssertTrue(spoken.contains(WatchVoiceUtterance(text: "Set logged.")))
     }
 
+    func test_doubleTapSettingPersistsAndControlsPrimaryAction() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let settings = InMemoryWatchDoubleTapSettingsStore(enabled: true)
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            doubleTapSettingsStore: settings
+        )
+
+        XCTAssertTrue(model.isDoubleTapEnabled)
+        XCTAssertFalse(model.canUseDoubleTapPrimaryAction)
+
+        await model.startSession()
+        XCTAssertTrue(model.canUseDoubleTapPrimaryAction)
+
+        await model.setDoubleTapEnabled(false)
+
+        let persisted = await settings.isDoubleTapEnabled()
+        XCTAssertFalse(persisted)
+        XCTAssertFalse(model.isDoubleTapEnabled)
+        XCTAssertFalse(model.canUseDoubleTapPrimaryAction)
+        XCTAssertEqual(model.statusMessage, "Double Tap set logging disabled.")
+    }
+
+    func test_doubleTapLogNextSetDuringSessionSyncsDecisionRestTimerHapticVoiceAndTelemetry() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let voicePlayback = FakeWatchVoicePlayback()
+        let haptics = RecordingWatchActionButtonHaptics()
+        let telemetry = InMemoryTelemetrySink()
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            voicePlayback: voicePlayback,
+            doubleTapTelemetrySink: telemetry,
+            actionButtonHaptics: haptics
+        )
+
+        await model.startSession()
+        await model.handleDoubleTapLogNextSet()
+
+        let sentPayloads = await transport.sent
+        let playedHaptics = await haptics.played
+        let spoken = await voicePlayback.spoken
+        let sentKinds = sentPayloads.map(\.kind)
+        let doubleTapEvent = try XCTUnwrap(
+            telemetry.currentEvents.first { $0.category == "watch.double_tap" && $0.name == "set_logged" }
+        )
+        XCTAssertTrue(model.sessionActive)
+        XCTAssertEqual(model.statusMessage, "Set logged from Double Tap.")
+        XCTAssertTrue(sentKinds.contains(.liveState))
+        XCTAssertTrue(sentKinds.contains(.restTimer))
+        XCTAssertEqual(playedHaptics, [.acknowledged])
+        XCTAssertTrue(spoken.contains(WatchVoiceUtterance(text: "Logged. Rest 90 seconds.")))
+        XCTAssertEqual(doubleTapEvent.metadata["selectedAction"], WorkoutAction.hold.rawValue)
+    }
+
+    func test_doubleTapDisabledDoesNotRecordTelemetryButManualButtonStillLogsSet() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let haptics = RecordingWatchActionButtonHaptics()
+        let telemetry = InMemoryTelemetrySink()
+        let settings = InMemoryWatchDoubleTapSettingsStore(enabled: false)
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            doubleTapSettingsStore: settings,
+            doubleTapTelemetrySink: telemetry,
+            actionButtonHaptics: haptics
+        )
+
+        await model.loadPersistedState()
+        await model.handleDoubleTapLogNextSet()
+
+        var sentPayloads = await transport.sent
+        var playedHaptics = await haptics.played
+        XCTAssertFalse(model.isDoubleTapEnabled)
+        XCTAssertTrue(sentPayloads.isEmpty)
+        XCTAssertTrue(playedHaptics.isEmpty)
+        XCTAssertTrue(telemetry.currentEvents.isEmpty)
+
+        await model.startSession()
+        await model.logSetManually()
+
+        sentPayloads = await transport.sent
+        playedHaptics = await haptics.played
+        let sentKinds = sentPayloads.map(\.kind)
+        XCTAssertEqual(model.statusMessage, "Set logged on Watch.")
+        XCTAssertTrue(sentKinds.contains(.liveState))
+        XCTAssertTrue(sentKinds.contains(.restTimer))
+        XCTAssertEqual(playedHaptics, [.acknowledged])
+        XCTAssertTrue(telemetry.currentEvents.isEmpty)
+    }
+
+    func test_doubleTapLogNextSetRequiresActiveWorkout() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let haptics = RecordingWatchActionButtonHaptics()
+        let telemetry = InMemoryTelemetrySink()
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            doubleTapTelemetrySink: telemetry,
+            actionButtonHaptics: haptics
+        )
+
+        await model.handleDoubleTapLogNextSet()
+
+        let sentPayloads = await transport.sent
+        let playedHaptics = await haptics.played
+        XCTAssertEqual(model.statusMessage, "Start a session to log a set.")
+        XCTAssertTrue(sentPayloads.isEmpty)
+        XCTAssertTrue(playedHaptics.isEmpty)
+        XCTAssertTrue(telemetry.currentEvents.isEmpty)
+    }
+
     #if canImport(HealthKit) && canImport(WorkoutKit)
     func test_workoutKitPlanFactoryBuildsCustomStrengthWorkoutFromPrescription() throws {
         let target = WorkoutTarget(weight: 95, unit: "lb", repRange: 5...8, targetRPE: 7.5)
@@ -535,6 +652,8 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
         workoutKitScheduler: WorkoutKitScheduling = UnavailableWorkoutKitScheduler(),
         voicePlayback: WatchVoicePlayback = UnavailableWatchVoicePlayback(),
         voiceSettingsStore: WatchVoiceSettingsStore = InMemoryWatchVoiceSettingsStore(enabled: true),
+        doubleTapSettingsStore: any WatchDoubleTapSettingsStore = InMemoryWatchDoubleTapSettingsStore(enabled: true),
+        doubleTapTelemetrySink: any TelemetrySink = InMemoryTelemetrySink(),
         actionButtonCommandStore: any WatchActionButtonCommandStoring = InMemoryWatchActionButtonCommandStore(),
         actionButtonHaptics: any WatchActionButtonHapticPlaying = RecordingWatchActionButtonHaptics(),
         actionButtonNextActionDonor: any WatchActionButtonNextActionDonating = RecordingActionDonor(),
@@ -550,6 +669,8 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
             workoutKitScheduler: workoutKitScheduler,
             voicePlayback: voicePlayback,
             voiceSettingsStore: voiceSettingsStore,
+            doubleTapSettingsStore: doubleTapSettingsStore,
+            doubleTapTelemetrySink: doubleTapTelemetrySink,
             actionButtonCommandStore: actionButtonCommandStore,
             actionButtonHaptics: actionButtonHaptics,
             actionButtonNextActionDonor: actionButtonNextActionDonor,
@@ -710,6 +831,22 @@ private actor InMemoryWatchVoiceSettingsStore: WatchVoiceSettingsStore {
     }
 
     func setWatchVoiceEnabled(_ enabled: Bool) async {
+        self.enabled = enabled
+    }
+}
+
+private actor InMemoryWatchDoubleTapSettingsStore: WatchDoubleTapSettingsStore {
+    private var enabled: Bool
+
+    init(enabled: Bool) {
+        self.enabled = enabled
+    }
+
+    func isDoubleTapEnabled() async -> Bool {
+        enabled
+    }
+
+    func setDoubleTapEnabled(_ enabled: Bool) async {
         self.enabled = enabled
     }
 }
