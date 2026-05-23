@@ -17,13 +17,13 @@ public struct OnboardingView: View {
     /// to "informational only, just tap Continue to advance".
     let onRequestHealthAuthorization: (() async -> Bool)?
 
-    @State private var step: Step = .welcome
-    @State private var result = OnboardingResult()
+    @State private var step: Step
+    @State private var result: OnboardingResult
     /// VOL-109: tracked locally so the permissions step can show a
     /// "Connected" affordance after the prompt closes. Doesn't drive
     /// any business logic — Continue advances unconditionally — so a
     /// "false" value just means we don't change the button label.
-    @State private var healthAuthorizationDidComplete = false
+    @State private var healthAuthorizationDidComplete: Bool
 
     public init(
         isPresented: Binding<Bool>,
@@ -33,6 +33,25 @@ public struct OnboardingView: View {
         self._isPresented = isPresented
         self.onComplete = onComplete
         self.onRequestHealthAuthorization = onRequestHealthAuthorization
+        self._step = State(initialValue: .welcome)
+        self._result = State(initialValue: OnboardingResult())
+        self._healthAuthorizationDidComplete = State(initialValue: false)
+    }
+
+    @_spi(Testing) public init(
+        isPresented: Binding<Bool>,
+        onComplete: @escaping (OnboardingResult) -> Void,
+        onRequestHealthAuthorization: (() async -> Bool)? = nil,
+        snapshotStep: OnboardingSnapshotStep,
+        snapshotResult: OnboardingResult = OnboardingResult(),
+        snapshotHealthAuthorizationDidComplete: Bool = false
+    ) {
+        self._isPresented = isPresented
+        self.onComplete = onComplete
+        self.onRequestHealthAuthorization = onRequestHealthAuthorization
+        self._step = State(initialValue: Step(snapshotStep: snapshotStep))
+        self._result = State(initialValue: snapshotResult)
+        self._healthAuthorizationDidComplete = State(initialValue: snapshotHealthAuthorizationDidComplete)
     }
 
     public var body: some View {
@@ -548,7 +567,7 @@ public struct OnboardingView: View {
         }
     }
 
-    private enum Step: Int, CaseIterable {
+    fileprivate enum Step: Int, CaseIterable {
         case welcome = 0
         case profile = 1
         case preferences = 2
@@ -598,6 +617,34 @@ public struct OnboardingResult: Sendable {
             sessionTimeBudgetMinutes: sessionMinutes,
             weeklyTrainingDays: weeklyDays
         )
+    }
+}
+
+@_spi(Testing) public enum OnboardingSnapshotStep: Sendable {
+    case welcome
+    case profile
+    case preferences
+    case coachingStyle
+    case permissions
+    case done
+}
+
+private extension OnboardingView.Step {
+    init(snapshotStep: OnboardingSnapshotStep) {
+        switch snapshotStep {
+        case .welcome:
+            self = .welcome
+        case .profile:
+            self = .profile
+        case .preferences:
+            self = .preferences
+        case .coachingStyle:
+            self = .coachingStyle
+        case .permissions:
+            self = .permissions
+        case .done:
+            self = .done
+        }
     }
 }
 

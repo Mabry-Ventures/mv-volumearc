@@ -16,7 +16,7 @@ final class OnboardingSnapshotTests: XCTestCase {
         static let accessibility = CGSize(width: 393, height: 1100)
     }
 
-    private enum Variant {
+    private enum Variant: Equatable {
         case regular
         case accessibility
 
@@ -44,6 +44,81 @@ final class OnboardingSnapshotTests: XCTestCase {
                 return Metrics.regular
             case .accessibility:
                 return Metrics.accessibility
+            }
+        }
+
+        func snapshotName(
+            colorScheme: ColorScheme,
+            reduceTransparency: Bool
+        ) -> String {
+            let theme = colorScheme == .dark ? "dark" : "light"
+            let type = self == .accessibility ? "Accessibility" : ""
+            let transparency = reduceTransparency ? "" : "ReduceTransparencyOff"
+            return "\(theme)\(type)\(transparency)"
+        }
+    }
+
+    private enum SnapshotStep {
+        case profile
+        case preferences
+        case coachingStyle
+        case permissions
+        case done
+
+        var onboardingStep: OnboardingSnapshotStep {
+            switch self {
+            case .profile:
+                return .profile
+            case .preferences:
+                return .preferences
+            case .coachingStyle:
+                return .coachingStyle
+            case .permissions:
+                return .permissions
+            case .done:
+                return .done
+            }
+        }
+
+        var result: OnboardingResult {
+            switch self {
+            case .profile:
+                return OnboardingResult(
+                    name: "Maya",
+                    advancementLevel: .advanced,
+                    weeklyDays: 4,
+                    sessionMinutes: 60,
+                    coachingStyle: .motivational
+                )
+            case .preferences:
+                return OnboardingResult(
+                    name: "Maya",
+                    advancementLevel: .intermediate,
+                    weeklyDays: 5,
+                    sessionMinutes: 75,
+                    coachingStyle: .motivational
+                )
+            case .coachingStyle:
+                return OnboardingResult(
+                    name: "Maya",
+                    advancementLevel: .intermediate,
+                    weeklyDays: 4,
+                    sessionMinutes: 60,
+                    coachingStyle: .minimal
+                )
+            case .permissions:
+                return OnboardingResult(name: "Maya")
+            case .done:
+                return OnboardingResult(name: "Maya")
+            }
+        }
+
+        var healthAuthorizationHandler: (() async -> Bool)? {
+            switch self {
+            case .permissions:
+                return { true }
+            case .profile, .preferences, .coachingStyle, .done:
+                return nil
             }
         }
     }
@@ -125,6 +200,26 @@ final class OnboardingSnapshotTests: XCTestCase {
         )
     }
 
+    func testProfileStepSnapshots() {
+        assertOnboardingStepSnapshots(.profile)
+    }
+
+    func testPreferencesStepSnapshots() {
+        assertOnboardingStepSnapshots(.preferences)
+    }
+
+    func testCoachingStyleStepSnapshots() {
+        assertOnboardingStepSnapshots(.coachingStyle)
+    }
+
+    func testPermissionsStepSnapshots() {
+        assertOnboardingStepSnapshots(.permissions)
+    }
+
+    func testDoneStepSnapshots() {
+        assertOnboardingStepSnapshots(.done)
+    }
+
     private func assertOnboardingSnapshot(
         colorScheme: ColorScheme,
         variant: Variant,
@@ -149,6 +244,66 @@ final class OnboardingSnapshotTests: XCTestCase {
                 colorScheme: colorScheme,
                 preferredContentSizeCategory: variant.preferredContentSizeCategory,
                 size: variant.size
+            ),
+            in: self,
+            testName: testName,
+            line: line
+        )
+    }
+
+    private func assertOnboardingStepSnapshots(
+        _ step: SnapshotStep,
+        testName: String = #function,
+        line: UInt = #line
+    ) {
+        for colorScheme in [ColorScheme.light, .dark] {
+            for variant in [Variant.regular, .accessibility] {
+                for reduceTransparency in [true, false] {
+                    assertOnboardingStepSnapshot(
+                        step,
+                        colorScheme: colorScheme,
+                        variant: variant,
+                        reduceTransparency: reduceTransparency,
+                        testName: testName,
+                        line: line
+                    )
+                }
+            }
+        }
+    }
+
+    private func assertOnboardingStepSnapshot(
+        _ step: SnapshotStep,
+        colorScheme: ColorScheme,
+        variant: Variant,
+        reduceTransparency: Bool,
+        testName: String,
+        line: UInt
+    ) {
+        let view = OnboardingView(
+            isPresented: .constant(true),
+            onComplete: { _ in },
+            onRequestHealthAuthorization: step.healthAuthorizationHandler,
+            snapshotStep: step.onboardingStep,
+            snapshotResult: step.result
+        )
+        .snapshotEnvironment(
+            colorScheme: colorScheme,
+            dynamicTypeSize: variant.dynamicTypeSize
+        )
+        .vaGlassReduceTransparencyOverride(reduceTransparency)
+        .frame(width: variant.size.width, height: variant.size.height)
+
+        assertVolumeArcSnapshot(
+            of: view,
+            as: imageSnapshot(
+                colorScheme: colorScheme,
+                preferredContentSizeCategory: variant.preferredContentSizeCategory,
+                size: variant.size
+            ),
+            named: variant.snapshotName(
+                colorScheme: colorScheme,
+                reduceTransparency: reduceTransparency
             ),
             in: self,
             testName: testName,
