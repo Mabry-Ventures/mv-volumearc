@@ -187,6 +187,12 @@ public struct UserDefaultsTelemetrySink: TelemetrySink, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         defaults.removeObject(forKey: key)
+        // CI has observed stale reads immediately after clear() in
+        // testUserDefaultsTelemetrySinkPersistsAndClears. synchronize() is
+        // deprecated/unnecessary in normal app code, but this sink uses a
+        // test-isolated UserDefaults suite where the explicit flush keeps the
+        // clear/load contract deterministic across runner processes.
+        defaults.synchronize()
     }
 }
 

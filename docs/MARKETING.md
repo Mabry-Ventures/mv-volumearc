@@ -17,7 +17,7 @@ The trade-off: every iOS engineer needs Node 22 / npm to build the marketing sit
 
 | Layer | Choice | Why |
 |---|---|---|
-| Framework | Next.js 16 (App Router, RSC) | Static-first marketing, can host the dynamic `/quality` eval-trend page later |
+| Framework | Next.js 16 (App Router, RSC) | Static-first marketing, including the build-time `/quality` coach-eval trend page |
 | Styling | Tailwind CSS v4 | Matches the design discipline in the iOS app's design tokens; required by Tailwind Plus assets |
 | Components | Headless UI + Framer Motion + shadcn/ui (with Shadcnblocks registry) | Mix of Tailwind Plus templates and on-demand premium blocks |
 | Hosting | Vercel | Native Next.js, GitHub integration, preview URLs per PR, edge runtime where needed |
@@ -35,7 +35,7 @@ marketing/src/app/
 │   ├── terms/page.tsx              Terms of Service (DRAFT — VOL-124)
 │   ├── privacy/page.tsx            Privacy Policy (DRAFT — VOL-124)
 │   ├── support/page.tsx            Contact form, common issues, press
-│   └── quality/page.tsx            Public coach-quality eval-trend (scaffold — VOL-148)
+│   └── quality/page.tsx            Public coach-quality eval-trend from docs/coach-eval-trend.json
 └── not-found.tsx                   Fallback 404
 ```
 
@@ -73,7 +73,7 @@ Removed from the Pocket template:
 4. **Push to `main`** → Vercel builds and deploys to production within ~1 minute.
 5. **Open a PR** → Vercel posts a preview URL to the PR.
 
-The CI gate at [`.github/workflows/marketing.yml`](../.github/workflows/marketing.yml) runs `npm ci && npm run lint && npm run check:legal && npm run build` on every PR touching `marketing/**`. After the production build, it also runs the VOL-217 quality gates:
+The CI gate at [`.github/workflows/marketing.yml`](../.github/workflows/marketing.yml) runs `npm ci && npm run lint && npm run check:legal && npm run build` on every PR touching `marketing/**` or the public coach-eval trend file. After the production build, it also runs the VOL-217 quality gates:
 
 - `npm run check:links` — static link guard over `.next/server/app/**/*.html`; fails on dead `href="#"` anchors and unresolved internal links.
 - `npm run test:e2e` — Playwright Chromium smoke coverage for `/`, `/privacy`, `/terms`, `/support`, and `/quality`; each route must return HTTP 200, render its expected `<h1>`, and avoid console/page errors.
@@ -109,7 +109,7 @@ Reference: [`mv-design/docs/shadcnblocks.md`](../../mv-design/docs/shadcnblocks.
 | Pricing | Founder | App Store Connect StoreKit products change |
 | FAQs | Support + Engineering | New common issue surfaces in TestFlight feedback |
 | `/support` contact form | Support + Engineering | Resend sending-domain or support-routing change |
-| `/quality` page | Engineering | Auto-published from `docs/coach-eval-trend.json` (VOL-148) |
+| `/quality` page | Engineering | Auto-published from `docs/coach-eval-trend.json`, mirrored into `marketing/src/data/coach-eval-trend.json` for the Vercel build root |
 | `/terms` + `/privacy` | Legal counsel | After every material data-flow change in the app |
 
 ## Tooling notes (Next 16 + ESLint 9)

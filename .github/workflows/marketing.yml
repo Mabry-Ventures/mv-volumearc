@@ -5,10 +5,12 @@ on:
     branches: [main]
     paths:
       - 'marketing/**'
+      - 'docs/coach-eval-trend.json'
       - '.github/workflows/marketing.yml'
   pull_request:
     paths:
       - 'marketing/**'
+      - 'docs/coach-eval-trend.json'
       - '.github/workflows/marketing.yml'
 
 # Marketing site CI — Vercel performs the actual preview / production deploys

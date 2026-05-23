@@ -92,6 +92,7 @@ run_assertions() {
     local assertions_json="$2"
     local response="$3"
     local failures=()
+    ASSERTION_FAILURES_NOTE="-"
     local response_lc
     response_lc=$(normalize_lower "$response")
 
@@ -172,8 +173,14 @@ run_assertions() {
         return 0
     fi
     printf '  FAIL  %s\n' "$fixture_id"
+    ASSERTION_FAILURES_NOTE=""
     for f in "${failures[@]}"; do
         printf '        - %s\n' "$f"
+        if [[ -z "$ASSERTION_FAILURES_NOTE" ]]; then
+            ASSERTION_FAILURES_NOTE="$f"
+        else
+            ASSERTION_FAILURES_NOTE="${ASSERTION_FAILURES_NOTE}; ${f}"
+        fi
     done
     return 1
 }
@@ -209,6 +216,15 @@ for fixture_path in "${fixture_files[@]}"; do
     context_block=$(jq -r '.contextBlock' "$fixture_path")
     style=$(jq -r '.style' "$fixture_path")
     expected=$(jq -c '.expectedAssertions' "$fixture_path")
+    readiness=$(grep '^- Readiness:' <<<"$context_block" \
+        | sed -E 's/.*Readiness: ([0-9]+)\/100.*/\1/' \
+        | head -n 1 \
+        || true)
+    if [[ -n "$readiness" ]]; then
+        if [[ ! "$readiness" =~ ^[0-9]+$ ]] || (( readiness < 0 || readiness > 100 )); then
+            die "fixture '$fixture_id' has invalid readiness '$readiness' (expected 0-100)"
+        fi
+    fi
 
     # Pull the next-exercise hint out of the contextBlock for the anchor check.
     # VOL-183: the original `([^ ]+( [^ ]+)*?) at .*$` regex used `*?`
@@ -264,7 +280,7 @@ for fixture_path in "${fixture_files[@]}"; do
 
     if [[ "$http_code" != "200" ]]; then
         printf '  FAIL  %s (HTTP %s)\n' "$fixture_id" "$http_code"
-        summary_rows+=("$fixture_id|FAIL|HTTP $http_code")
+        summary_rows+=("$fixture_id|FAIL|HTTP $http_code|$intent|$style|$readiness")
         failed=$((failed + 1))
         continue
     fi
@@ -280,17 +296,17 @@ for fixture_path in "${fixture_files[@]}"; do
 
     if [[ -z "$response_text" ]]; then
         printf '  FAIL  %s (empty response)\n' "$fixture_id"
-        summary_rows+=("$fixture_id|FAIL|empty response")
+        summary_rows+=("$fixture_id|FAIL|empty response|$intent|$style|$readiness")
         failed=$((failed + 1))
         continue
     fi
 
     if run_assertions "$fixture_id" "$expected" "$response_text"; then
         passed=$((passed + 1))
-        summary_rows+=("$fixture_id|PASS|-")
+        summary_rows+=("$fixture_id|PASS|-|$intent|$style|$readiness")
     else
         failed=$((failed + 1))
-        summary_rows+=("$fixture_id|FAIL|assertion mismatch")
+        summary_rows+=("$fixture_id|FAIL|${ASSERTION_FAILURES_NOTE:-assertion mismatch}|$intent|$style|$readiness")
     fi
 done
 
@@ -301,7 +317,7 @@ printf '%-60s  %-4s  %s\n' "fixture" "pass" "note"
 printf -- '-%.0s' {1..100}
 printf '\n'
 for row in "${summary_rows[@]}"; do
-    IFS='|' read -r id verdict note <<<"$row"
+    IFS='|' read -r id verdict note _intent _style _readiness <<<"$row"
     printf '%-60s  %-4s  %s\n' "$id" "$verdict" "$note"
 done
 printf '\n%d passed, %d failed, %d total\n' "$passed" "$failed" "$total"
@@ -310,24 +326,37 @@ printf 'Per-fixture responses saved under: %s\n' "$OUTPUT_DIR"
 # Emit a machine-readable JSON summary next to the raw stream files so the
 # nightly CI workflow can parse it without scraping stdout.
 summary_json="$OUTPUT_DIR/summary.json"
-{
-    printf '{\n'
-    printf '  "timestamp": "%s",\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    printf '  "relay": "%s",\n' "$RELAY_BASE_URL"
-    printf '  "total": %d,\n' "$total"
-    printf '  "passed": %d,\n' "$passed"
-    printf '  "failed": %d,\n' "$failed"
-    printf '  "fixtures": [\n'
-    sep=""
-    for row in "${summary_rows[@]}"; do
-        IFS='|' read -r id verdict note <<<"$row"
-        printf '%s    {"id": "%s", "verdict": "%s", "note": "%s"}' \
-            "$sep" "$id" "$verdict" "$note"
-        sep=$',\n'
-    done
-    printf '\n  ]\n'
-    printf '}\n'
-} > "$summary_json"
+fixtures_tmp=$(mktemp)
+printf '[]' > "$fixtures_tmp"
+for row in "${summary_rows[@]}"; do
+    IFS='|' read -r id verdict note intent style readiness <<<"$row"
+    readiness_json="null"
+    if [[ "$readiness" =~ ^[0-9]+$ ]]; then
+        readiness_json="$readiness"
+    fi
+    tmp=$(mktemp)
+    jq \
+        --arg id "$id" \
+        --arg verdict "$verdict" \
+        --arg note "$note" \
+        --arg intent "$intent" \
+        --arg style "$style" \
+        --argjson readiness "$readiness_json" \
+        '. + [{id: $id, verdict: $verdict, note: $note, intent: $intent, style: $style, readiness: $readiness}]' \
+        "$fixtures_tmp" > "$tmp"
+    mv "$tmp" "$fixtures_tmp"
+done
+
+jq -n \
+    --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg relay "$RELAY_BASE_URL" \
+    --argjson total "$total" \
+    --argjson passed "$passed" \
+    --argjson failed "$failed" \
+    --slurpfile fixtures "$fixtures_tmp" \
+    '{timestamp: $timestamp, relay: $relay, total: $total, passed: $passed, failed: $failed, fixtures: $fixtures[0]}' \
+    > "$summary_json"
+rm -f "$fixtures_tmp"
 printf 'Summary JSON: %s\n' "$summary_json"
 
 if (( failed > 0 )); then

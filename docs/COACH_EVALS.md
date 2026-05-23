@@ -119,7 +119,7 @@ The response-layer eval harness runs on a cron at **07:00 UTC daily** via [`.git
 
 1. Pre-flights `curl` + `jq` + `openssl` on the self-hosted runner.
 2. Runs `scripts/run_coach_evals.sh` against the production relay with the `coach-eval-nightly` device principal (using the `VOLUMEARC_RELAY_SIGNING_KEY` repo secret).
-3. Parses the resulting `summary.json` and appends a `{timestamp, sha, run_id, total, passed, failed}` record to [`docs/coach-eval-trend.json`](coach-eval-trend.json) — the trend file is committed back to `main` only on cron runs (mirrors VOL-166's `docs/coverage-trend.json` pattern).
+3. Parses the resulting `summary.json` and appends a `{timestamp, sha, run_id, total, passed, failed, axes, fixtures}` record to [`docs/coach-eval-trend.json`](coach-eval-trend.json) — the trend file is committed back to `main` only on cron runs (mirrors VOL-166's `docs/coverage-trend.json` pattern). The same file is mirrored into `marketing/src/data/coach-eval-trend.json` so Vercel's `marketing/` project root can statically render `/quality`.
 4. Uploads the full per-fixture response bodies + `summary.json` as a workflow artifact (`coach-eval-results-<run_id>`), retained 30 days.
 5. Fails the job on any fixture-level regression so the cron-failure email surfaces it.
 
