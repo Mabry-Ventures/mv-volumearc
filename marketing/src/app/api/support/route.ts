@@ -9,6 +9,33 @@ import {
 
 export const runtime = 'nodejs'
 
+const rateLimitWindowMs = 10 * 60 * 1000
+const rateLimitMaxRequests = 5
+const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>()
+
+function clientKey(request: Request) {
+  const forwardedFor = request.headers.get('x-forwarded-for')?.split(',')[0]
+  const realIp = request.headers.get('x-real-ip')
+  const userAgent = request.headers.get('user-agent') ?? 'unknown-agent'
+
+  return `${forwardedFor ?? realIp ?? 'unknown-ip'}:${userAgent.slice(0, 120)}`
+}
+
+function isRateLimited(key: string, now = Date.now()) {
+  const bucket = rateLimitBuckets.get(key)
+
+  if (!bucket || bucket.resetAt <= now) {
+    rateLimitBuckets.set(key, {
+      count: 1,
+      resetAt: now + rateLimitWindowMs,
+    })
+    return false
+  }
+
+  bucket.count += 1
+  return bucket.count > rateLimitMaxRequests
+}
+
 export async function POST(request: Request) {
   let body: unknown
 
@@ -32,6 +59,19 @@ export async function POST(request: Request) {
   // Honeypot submissions get a success-shaped response without sending mail.
   if (validation.spam) {
     return NextResponse.json({ ok: true }, { status: 202 })
+  }
+
+  if (isRateLimited(clientKey(request))) {
+    console.warn('Support form rate limit exceeded')
+    return NextResponse.json(
+      {
+        ok: false,
+        errors: {
+          form: 'Too many support messages. Wait a few minutes and try again.',
+        },
+      },
+      { status: 429 },
+    )
   }
 
   try {

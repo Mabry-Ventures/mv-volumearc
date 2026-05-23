@@ -17,13 +17,15 @@ export type SupportRequest = {
 export type ValidSupportRequest = Omit<SupportRequest, 'company'>
 
 type ValidationResult =
-  | { ok: true; value: ValidSupportRequest; spam: boolean }
+  | { ok: true; spam: true }
+  | { ok: true; value: ValidSupportRequest; spam: false }
   | { ok: false; errors: Record<string, string> }
 
 type SupportEmailConfig = {
   apiKey: string
   fromEmail?: string
   toEmail?: string
+  timeoutMs?: number
 }
 
 type FetchLike = typeof fetch
@@ -68,6 +70,13 @@ function truncate(value: string, maxLength: number) {
   return value.length > maxLength ? value.slice(0, maxLength) : value
 }
 
+function singleLineField(value: unknown) {
+  return stringField(value)
+    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, '&amp;')
@@ -82,11 +91,16 @@ export function validateSupportRequest(input: unknown): ValidationResult {
     input !== null && typeof input === 'object'
       ? (input as Record<string, unknown>)
       : {}
-  const name = truncate(stringField(data.name), 80)
+  const company = stringField(data.company)
+
+  if (company.length > 0) {
+    return { ok: true, spam: true }
+  }
+
+  const name = truncate(singleLineField(data.name), 80)
   const email = truncate(stringField(data.email).toLowerCase(), 254)
   const category = stringField(data.category) as SupportCategory
   const message = truncate(stringField(data.message), 4000)
-  const company = stringField(data.company)
   const errors: Record<string, string> = {}
 
   if (!name) {
@@ -111,7 +125,7 @@ export function validateSupportRequest(input: unknown): ValidationResult {
 
   return {
     ok: true,
-    spam: company.length > 0,
+    spam: false,
     value: {
       name,
       email,
@@ -164,18 +178,34 @@ export async function sendSupportEmail(
   }
 
   const payload = buildSupportEmailPayload(request)
-  const response = await fetchImpl('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${config.apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      ...payload,
-      from: config.fromEmail || payload.from,
-      to: [config.toEmail || payload.to[0]],
-    }),
-  })
+  const controller = new AbortController()
+  const timeoutMs = Math.max(1, config.timeoutMs ?? 10_000)
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+  let response: Response
+
+  try {
+    response = await fetchImpl('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...payload,
+        from: config.fromEmail || payload.from,
+        to: [config.toEmail || payload.to[0]],
+      }),
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new SupportEmailDeliveryError(504, 'Resend request timed out')
+    }
+
+    throw error
+  } finally {
+    clearTimeout(timeoutId)
+  }
 
   if (!response.ok) {
     const body = await response.text()

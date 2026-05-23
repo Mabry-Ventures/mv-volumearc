@@ -254,7 +254,10 @@ export default function PrivacyPage() {
               we send the name, email address, topic, and message you provide
               through Resend (operated by Resend, Inc.) to deliver the request
               to our support inbox. This is transactional support email only;
-              we do not add support-form submissions to a marketing list.
+              we do not add support-form submissions to a marketing list. The
+              route uses transient in-memory rate limiting from request metadata
+              to reduce abuse; those counters are not sent to Resend and expire
+              automatically.
             </p>
 
             <h3>Microphone &amp; speech (voice input)</h3>

@@ -37,6 +37,28 @@ try {
   assert.equal(valid.value.email, 'jared@example.com')
   assert.equal(valid.value.category, 'bug-report')
 
+  const normalizedName = validateSupportRequest({
+    name: 'Jared\r\nBcc: attacker@example.com',
+    email: 'jared@example.com',
+    category: 'app-help',
+    message: 'Please help me with a support form header edge case.',
+    company: '',
+  })
+
+  assert.equal(normalizedName.ok, true)
+  assert.equal(normalizedName.value.name, 'Jared Bcc: attacker@example.com')
+
+  const spam = validateSupportRequest({
+    name: '',
+    email: 'not-an-email',
+    category: 'missing',
+    message: 'short',
+    company: 'Acme',
+  })
+
+  assert.equal(spam.ok, true)
+  assert.equal(spam.spam, true)
+
   const invalid = validateSupportRequest({
     name: '',
     email: 'not-an-email',
@@ -94,6 +116,53 @@ try {
     { name: 'source', value: 'support-form' },
     { name: 'category', value: 'bug-report' },
   ])
+
+  await assert.rejects(
+    () =>
+      sendSupportEmail(
+        valid.value,
+        { apiKey: '' },
+        async () => new Response('{}', { status: 200 }),
+      ),
+    (error) => error?.name === 'SupportEmailConfigurationError',
+  )
+
+  let capturedFailureRequest
+  await assert.rejects(
+    () =>
+      sendSupportEmail(
+        valid.value,
+        { apiKey: 're_test_key' },
+        async (url, init) => {
+          capturedFailureRequest = { url, init }
+          return new Response('upstream failure', { status: 500 })
+        },
+      ),
+    (error) =>
+      error?.name === 'SupportEmailDeliveryError' && error?.status === 500,
+  )
+  assert.equal(capturedFailureRequest.url, 'https://api.resend.com/emails')
+  assert.equal(capturedFailureRequest.init.method, 'POST')
+  assert.equal(
+    capturedFailureRequest.init.headers.Authorization,
+    'Bearer re_test_key',
+  )
+
+  await assert.rejects(
+    () =>
+      sendSupportEmail(
+        valid.value,
+        { apiKey: 're_test_key', timeoutMs: 1 },
+        async (_url, init) =>
+          new Promise((_resolve, reject) => {
+            init.signal.addEventListener('abort', () => {
+              reject(new DOMException('Aborted', 'AbortError'))
+            })
+          }),
+      ),
+    (error) =>
+      error?.name === 'SupportEmailDeliveryError' && error?.status === 504,
+  )
 } finally {
   await rm(tempDir, { recursive: true, force: true })
 }
