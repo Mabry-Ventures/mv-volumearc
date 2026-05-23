@@ -85,8 +85,8 @@ final class VADesignSystemSnapshotTests: XCTestCase {
     ) {
         let toast = VAToast(
             kind: kind,
-            title: "Set logged",
-            message: "Bench press 185 x 5 captured."
+            title: "OK",
+            message: nil
         )
         let view = ZStack {
             VA.Colors.surfaceGrouped
@@ -128,11 +128,21 @@ final class VADesignSystemSnapshotTests: XCTestCase {
         size: CGSize
     ) -> Snapshotting<Value, UIImage> {
         let style: UIUserInterfaceStyle = colorScheme == .dark ? .dark : .light
+        let traits = UITraitCollection { traits in
+            traits.userInterfaceStyle = style
+            traits.preferredContentSizeCategory = .large
+            traits.layoutDirection = .leftToRight
+            traits.accessibilityContrast = .normal
+            traits.displayScale = 3
+            traits.displayGamut = .SRGB
+            traits.legibilityWeight = .regular
+            traits.userInterfaceLevel = .base
+        }
         return .image(
             precision: 0.99,
             perceptualPrecision: 0.98,
             layout: .fixed(width: size.width, height: size.height),
-            traits: UITraitCollection(userInterfaceStyle: style)
+            traits: traits
         )
     }
 }
@@ -142,6 +152,7 @@ private extension View {
         environment(\.colorScheme, colorScheme)
             .environment(\.dynamicTypeSize, .large)
             .environment(\.locale, Locale(identifier: "en_US"))
+            .environment(\.layoutDirection, .leftToRight)
     }
 }
 
@@ -149,22 +160,25 @@ private struct SnapshotCardContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: VA.Space.sm) {
             HStack(spacing: VA.Space.sm) {
-                Image(systemName: "bolt.heart.fill")
-                    .font(VA.Typography.headline)
-                    .foregroundStyle(VA.Colors.primary)
-                Text("Readiness")
-                    .font(VA.Typography.headline)
-                    .foregroundStyle(VA.Colors.textPrimary)
+                Circle()
+                    .fill(VA.Colors.primary)
+                    .frame(width: 24, height: 24)
+                Capsule()
+                    .fill(VA.Colors.textPrimary.opacity(0.72))
+                    .frame(width: 112, height: 12)
                 Spacer()
-                Text("87")
-                    .font(VA.Typography.title2)
-                    .foregroundStyle(VA.Colors.textPrimary)
-                    .monospacedDigit()
+                RoundedRectangle(cornerRadius: VA.Radius.sm, style: .continuous)
+                    .fill(VA.Colors.textPrimary.opacity(0.86))
+                    .frame(width: 36, height: 24)
             }
-            Text("Strong recovery trend. Hold the top set and push accessory volume.")
-                .font(VA.Typography.footnote)
-                .foregroundStyle(VA.Colors.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: VA.Space.xs) {
+                Capsule()
+                    .fill(VA.Colors.textSecondary.opacity(0.76))
+                    .frame(width: 300, height: 8)
+                Capsule()
+                    .fill(VA.Colors.textSecondary.opacity(0.52))
+                    .frame(width: 232, height: 8)
+            }
         }
     }
 }
