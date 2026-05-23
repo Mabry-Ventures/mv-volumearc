@@ -392,22 +392,27 @@ app_watch_tests_target.frameworks_build_phase.add_file_reference(core_watch_targ
 widget_target.add_system_framework('WidgetKit')
 widget_target.add_system_framework('AppIntents')
 widget_target.add_system_framework('ActivityKit')
+widget_target.add_system_framework('WorkoutKit')
 app_target.add_system_framework('AppIntents')
 app_target.add_system_framework('ActivityKit')
 app_target.add_system_framework('AuthenticationServices')
 app_target.add_system_framework('AVFoundation')
 app_target.add_system_framework('Security')
 app_target.add_system_framework('Speech')
+app_target.add_system_framework('WorkoutKit')
 watch_target.add_system_framework('WatchKit')
 watch_target.add_system_framework('SwiftUI')
+watch_target.add_system_framework('WorkoutKit')
 watch_widgets_target.add_system_framework('WidgetKit')
 watch_widgets_target.add_system_framework('SwiftUI')
+watch_widgets_target.add_system_framework('WorkoutKit')
 app_tests_target.add_system_framework('XCTest')
 app_tests_target.add_system_framework('AuthenticationServices')
 app_tests_target.add_system_framework('Security')
 app_tests_target.add_system_framework('AppIntents')
 app_tests_target.add_system_framework('ActivityKit')
 app_tests_target.add_system_framework('WidgetKit')
+app_tests_target.add_system_framework('WorkoutKit')
 # VOL-142: StoreKitTest powers `SKTestSession`-based unit tests
 # (`StoreKitSubscriptionRevocationTests`) for refund / family-share /
 # grace-period coverage at the model level. UITest target already has
@@ -422,6 +427,7 @@ app_widget_ui_tests_target.add_system_framework('WidgetKit')
 # VOL-138: watch test bundle.
 app_watch_tests_target.add_system_framework('XCTest')
 app_watch_tests_target.add_system_framework('SwiftUI')
+app_watch_tests_target.add_system_framework('WorkoutKit')
 
 embed_watch_extensions_phase = watch_target.new_copy_files_build_phase('Embed Watch Extensions')
 embed_watch_extensions_phase.symbol_dst_subfolder_spec = :plug_ins

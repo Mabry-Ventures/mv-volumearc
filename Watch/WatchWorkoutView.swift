@@ -35,6 +35,7 @@ final class WatchWorkoutModel: ObservableObject {
     private let coordinator: WatchConnectivityCoordinator
     private let stateStore: WatchSessionStateStore
     private let healthStore: HealthStore
+    private let workoutKitScheduler: WorkoutKitScheduling
     private var activeWorkoutID: String
     private var liveMetricsTask: Task<Void, Never>?
 
@@ -42,6 +43,7 @@ final class WatchWorkoutModel: ObservableObject {
         coordinator: WatchConnectivityCoordinator,
         stateStore: WatchSessionStateStore,
         healthStore: HealthStore = UnavailableHealthStore(),
+        workoutKitScheduler: WorkoutKitScheduling = UnavailableWorkoutKitScheduler(),
         workoutID: String = WatchWorkoutModel.makeWorkoutID()
     ) {
         let engine = ProgressionEngine()
@@ -64,6 +66,7 @@ final class WatchWorkoutModel: ObservableObject {
         self.coordinator = coordinator
         self.stateStore = stateStore
         self.healthStore = healthStore
+        self.workoutKitScheduler = workoutKitScheduler
         self.activeWorkoutID = workoutID
     }
 
@@ -74,7 +77,8 @@ final class WatchWorkoutModel: ObservableObject {
                 payloadStore: Self.makePendingPayloadStore()
             ),
             stateStore: Self.makeStateStore(),
-            healthStore: Self.makeHealthStore()
+            healthStore: Self.makeHealthStore(),
+            workoutKitScheduler: Self.makeWorkoutKitScheduler()
         )
     }
 
@@ -199,6 +203,80 @@ final class WatchWorkoutModel: ObservableObject {
             sessionActive = true
         }
         pendingSyncCount = await coordinator.pendingPayloadCount()
+        await persistState()
+    }
+
+    func startWorkoutKitHandoff(workoutID: String) async {
+        guard sessionActive == false else { return }
+        activeWorkoutID = workoutID
+        let healthCaptureStarted = await startNativeWorkoutCapture(workoutID: activeWorkoutID)
+        let payload = WatchPayload(
+            kind: .startSession,
+            workoutID: activeWorkoutID,
+            body: "workoutkit:\(autopilot.nextExerciseName)"
+        )
+
+        do {
+            try await coordinator.send(payload)
+            statusMessage = healthCaptureStarted
+                ? String(localized: "Apple Workouts session linked to VolumeArc.", comment: "WorkoutKit handoff start status")
+                : String(
+                    localized: "Apple Workouts session linked. Health capture unavailable.",
+                    comment: "WorkoutKit handoff start status when native HealthKit capture is unavailable"
+                )
+        } catch {
+            statusMessage = healthCaptureStarted
+                ? String(
+                    localized: "Apple Workouts session linked locally. Phone sync will retry.",
+                    comment: "WorkoutKit handoff offline start status"
+                )
+                : String(
+                    localized: "Apple Workouts session linked locally. Health capture unavailable; phone sync will retry.",
+                    comment: "WorkoutKit handoff offline start status when native HealthKit capture is unavailable"
+                )
+        }
+
+        sessionActive = true
+        pendingSyncCount = await coordinator.pendingPayloadCount()
+        await persistState()
+    }
+
+    func scheduleRecommendedWorkoutInAppleWorkouts(at date: Date = .now) async {
+        let prescription = workoutKitPrescription(workoutID: activeWorkoutID)
+        let state = await workoutKitScheduler.authorizationState()
+        let authorizedState = state == .notDetermined
+            ? await workoutKitScheduler.requestAuthorization()
+            : state
+
+        guard authorizedState == .authorized else {
+            statusMessage = authorizedState == .unavailable
+                ? String(
+                    localized: "Apple Workouts scheduling is unavailable on this watch.",
+                    comment: "WorkoutKit unavailable scheduling status"
+                )
+                : String(
+                    localized: "Apple Workouts permission not granted.",
+                    comment: "WorkoutKit authorization denied scheduling status"
+                )
+            await persistState()
+            return
+        }
+
+        do {
+            try await workoutKitScheduler.schedule(
+                prescription,
+                at: Self.scheduleDateComponents(from: date)
+            )
+            statusMessage = String(
+                localized: "Added \(prescription.exerciseName) to Apple Workouts.",
+                comment: "WorkoutKit successful schedule status"
+            )
+        } catch {
+            statusMessage = String(
+                localized: "Could not add this workout to Apple Workouts.",
+                comment: "WorkoutKit failed schedule status"
+            )
+        }
         await persistState()
     }
 
@@ -340,8 +418,31 @@ final class WatchWorkoutModel: ObservableObject {
         #endif
     }
 
+    private static func makeWorkoutKitScheduler() -> WorkoutKitScheduling {
+        #if canImport(WorkoutKit)
+        if #available(iOS 17.0, watchOS 10.0, *) {
+            return SystemWorkoutKitScheduler()
+        }
+        #endif
+        return UnavailableWorkoutKitScheduler()
+    }
+
     private static func makeWorkoutID() -> String {
         "watch-\(UUID().uuidString)"
+    }
+
+    private static func scheduleDateComponents(from date: Date) -> DateComponents {
+        Calendar.current.dateComponents(
+            [.calendar, .timeZone, .year, .month, .day, .hour, .minute],
+            from: date.addingTimeInterval(60)
+        )
+    }
+
+    private func workoutKitPrescription(workoutID: String) -> WorkoutKitPrescription {
+        WorkoutKitPrescription(
+            autopilot: autopilot,
+            workoutID: workoutID
+        )
     }
 
     private func startNativeWorkoutCapture(workoutID: String) async -> Bool {
@@ -581,6 +682,25 @@ struct WatchWorkoutView: View {
                                 localized: "Begins a live watch workout and notifies the phone",
                                 comment: "Watch start session button accessibility hint"
                             )
+                    )
+
+                    Button(String(localized: "Add to Workouts", comment: "Watch WorkoutKit schedule button")) {
+                        Task {
+                            await model.scheduleRecommendedWorkoutInAppleWorkouts()
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel(
+                        String(
+                            localized: "Add recommended workout to Apple Workouts",
+                            comment: "Watch WorkoutKit schedule button accessibility label"
+                        )
+                    )
+                    .accessibilityHint(
+                        String(
+                            localized: "Schedules the current VolumeArc prescription in Apple's Workouts app",
+                            comment: "Watch WorkoutKit schedule button accessibility hint"
+                        )
                     )
 
                     if let heartRate = model.currentHeartRateBPM {

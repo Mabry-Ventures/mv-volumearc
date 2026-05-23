@@ -1,6 +1,10 @@
 import Foundation
 import XCTest
 @testable import VolumeArcCore
+#if canImport(HealthKit) && canImport(WorkoutKit)
+import HealthKit
+import WorkoutKit
+#endif
 
 @MainActor
 final class WatchWorkoutModelHealthKitTests: XCTestCase {
@@ -165,10 +169,132 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
         XCTAssertEqual(summary.workoutID, workoutID)
     }
 
+    func test_scheduleRecommendedWorkoutRequestsAuthorizationAndSchedulesStructuralPrescription() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let scheduler = FakeWorkoutKitScheduler()
+        await scheduler.setAuthorizationState(.notDetermined, requestResult: .authorized)
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            workoutKitScheduler: scheduler,
+            workoutID: "watch-workoutkit"
+        )
+        let scheduledAt = Date(timeIntervalSinceReferenceDate: 700)
+
+        await model.scheduleRecommendedWorkoutInAppleWorkouts(at: scheduledAt)
+
+        let didRequestAuthorization = await scheduler.didRequestAuthorization
+        XCTAssertTrue(didRequestAuthorization)
+
+        let scheduled = await scheduler.scheduled
+        let call = try XCTUnwrap(scheduled.first)
+        XCTAssertEqual(call.prescription.workoutID, "watch-workoutkit")
+        XCTAssertEqual(call.prescription.exerciseID, VolumeArcExerciseCatalog.backSquat.id)
+        XCTAssertEqual(call.prescription.exerciseName, VolumeArcExerciseCatalog.backSquat.name)
+        XCTAssertEqual(call.prescription.activityType, .strengthTraining)
+        XCTAssertEqual(call.prescription.target.repRange, 5...8)
+        XCTAssertEqual(call.prescription.setCount, WorkoutKitPrescription.defaultSetCount)
+        XCTAssertEqual(call.prescription.restDuration, WorkoutKitPrescription.defaultRestDuration)
+        XCTAssertEqual(
+            call.date.minute,
+            Calendar.current.component(.minute, from: scheduledAt.addingTimeInterval(60))
+        )
+        XCTAssertEqual(model.statusMessage, "Added Back Squat to Apple Workouts.")
+
+        let exportedScope = WorkoutKitPrescription.dataScope.joined(separator: " ").lowercased()
+        XCTAssertFalse(exportedScope.contains("coach"))
+        XCTAssertFalse(exportedScope.contains("athlete"))
+        XCTAssertFalse(exportedScope.contains("profile"))
+        XCTAssertFalse(exportedScope.contains("readiness"))
+    }
+
+    func test_scheduleRecommendedWorkoutDoesNotScheduleWhenWorkoutKitAuthorizationIsDenied() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let scheduler = FakeWorkoutKitScheduler()
+        await scheduler.setAuthorizationState(.denied, requestResult: .denied)
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            workoutKitScheduler: scheduler
+        )
+
+        await model.scheduleRecommendedWorkoutInAppleWorkouts()
+
+        let scheduled = await scheduler.scheduled
+        XCTAssertTrue(scheduled.isEmpty)
+        XCTAssertEqual(model.statusMessage, "Apple Workouts permission not granted.")
+    }
+
+    func test_startWorkoutKitHandoffLinksAppleWorkoutsStartToVolumeArcSession() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let model = makeModel(transport: transport, healthStore: healthStore)
+
+        await model.startWorkoutKitHandoff(workoutID: "workoutkit-started")
+
+        let calls = await healthStore.calls
+        let startCall = try XCTUnwrap(calls.firstStart)
+        XCTAssertEqual(startCall.workoutID, "workoutkit-started")
+        XCTAssertEqual(startCall.activityType, .strengthTraining)
+        XCTAssertTrue(model.sessionActive)
+
+        let sentPayloads = await transport.sent
+        let startPayload = try XCTUnwrap(sentPayloads.first)
+        XCTAssertEqual(startPayload.kind, .startSession)
+        XCTAssertEqual(startPayload.workoutID, "workoutkit-started")
+        XCTAssertEqual(startPayload.body, "workoutkit:Back Squat")
+    }
+
+    #if canImport(HealthKit) && canImport(WorkoutKit)
+    func test_workoutKitPlanFactoryBuildsCustomStrengthWorkoutFromPrescription() throws {
+        let target = WorkoutTarget(weight: 95, unit: "lb", repRange: 5...8, targetRPE: 7.5)
+        let prescription = WorkoutKitPrescription(
+            workoutID: "watch-fixed-plan",
+            exerciseID: VolumeArcExerciseCatalog.backSquat.id,
+            exerciseName: VolumeArcExerciseCatalog.backSquat.name,
+            activityType: .strengthTraining,
+            target: target,
+            setCount: 4,
+            restDuration: 120
+        )
+
+        let plan = VolumeArcWorkoutKitPlanFactory.workoutPlan(for: prescription)
+        XCTAssertEqual(plan.id, WorkoutKitPrescription.stablePlanID(for: "watch-fixed-plan"))
+
+        guard case let .custom(workout) = plan.workout else {
+            return XCTFail("Expected a custom WorkoutKit workout")
+        }
+
+        XCTAssertEqual(workout.activity, HKWorkoutActivityType.traditionalStrengthTraining)
+        XCTAssertEqual(workout.location, .indoor)
+        XCTAssertEqual(workout.displayName, "VolumeArc Back Squat")
+        XCTAssertEqual(workout.blocks.count, 1)
+
+        let block = try XCTUnwrap(workout.blocks.first)
+        XCTAssertEqual(block.iterations, 4)
+        XCTAssertEqual(block.steps.count, 2)
+        XCTAssertEqual(block.steps[0].purpose, .work)
+        XCTAssertEqual(block.steps[0].step.displayName, "Back Squat 95lb x 5-8")
+        XCTAssertEqual(block.steps[0].step.goal, .open)
+        XCTAssertEqual(block.steps[1].purpose, .recovery)
+        XCTAssertEqual(block.steps[1].step.displayName, "Rest 120 seconds")
+
+        guard case let .time(restDuration, restUnit) = block.steps[1].step.goal else {
+            return XCTFail("Expected the recovery step to carry a time goal")
+        }
+        XCTAssertEqual(restDuration, 120)
+        XCTAssertEqual(restUnit, .seconds)
+    }
+    #endif
+
     private func makeModel(
         transport: RecordingWatchTransport,
         stateStore: InMemoryWatchSessionStateStore = InMemoryWatchSessionStateStore(),
-        healthStore: FakeLiveHealthStore
+        healthStore: FakeLiveHealthStore,
+        workoutKitScheduler: WorkoutKitScheduling = UnavailableWorkoutKitScheduler(),
+        workoutID: String = "watch-seeded"
     ) -> WatchWorkoutModel {
         WatchWorkoutModel(
             coordinator: WatchConnectivityCoordinator(
@@ -177,7 +303,8 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
             ),
             stateStore: stateStore,
             healthStore: healthStore,
-            workoutID: "watch-seeded"
+            workoutKitScheduler: workoutKitScheduler,
+            workoutID: workoutID
         )
     }
 
@@ -267,6 +394,40 @@ private actor FakeLiveHealthStore: HealthStore {
 
     private func setContinuation(_ continuation: AsyncStream<LiveWorkoutMetrics>.Continuation) {
         self.continuation = continuation
+    }
+}
+
+private struct WorkoutKitScheduleCall: Sendable {
+    let prescription: WorkoutKitPrescription
+    let date: DateComponents
+}
+
+private actor FakeWorkoutKitScheduler: WorkoutKitScheduling {
+    private(set) var didRequestAuthorization = false
+    private(set) var scheduled: [WorkoutKitScheduleCall] = []
+    private var state: WorkoutKitScheduleAuthorization = .authorized
+    private var requestResult: WorkoutKitScheduleAuthorization = .authorized
+
+    func setAuthorizationState(
+        _ state: WorkoutKitScheduleAuthorization,
+        requestResult: WorkoutKitScheduleAuthorization
+    ) {
+        self.state = state
+        self.requestResult = requestResult
+    }
+
+    func authorizationState() async -> WorkoutKitScheduleAuthorization {
+        state
+    }
+
+    func requestAuthorization() async -> WorkoutKitScheduleAuthorization {
+        didRequestAuthorization = true
+        state = requestResult
+        return requestResult
+    }
+
+    func schedule(_ prescription: WorkoutKitPrescription, at date: DateComponents) async throws {
+        scheduled.append(WorkoutKitScheduleCall(prescription: prescription, date: date))
     }
 }
 
