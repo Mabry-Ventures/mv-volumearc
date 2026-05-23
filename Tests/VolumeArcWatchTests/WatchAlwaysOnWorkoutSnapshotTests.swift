@@ -80,6 +80,44 @@ final class WatchAlwaysOnWorkoutSnapshotTests: XCTestCase {
         )
     }
 
+    func test_aodSnapshot_usesSingularRestAccessibilityValueAtOneSecond() throws {
+        let now = Date(timeIntervalSinceReferenceDate: 1_000)
+        let snapshot = WatchAlwaysOnWorkoutSnapshot.make(
+            autopilot: WorkoutAutopilotState(
+                nextExerciseID: "bench-press",
+                nextExerciseName: "Bench Press",
+                nextTarget: WorkoutTarget(weight: 185, unit: "lb", repRange: 5...5, targetRPE: 8),
+                bestCue: "Drive through the bar path.",
+                recommendationReason: "Hit the top set clean.",
+                suggestedAction: .hold
+            ),
+            restEndsAt: now.addingTimeInterval(1),
+            now: now,
+            heartRateBPM: nil
+        )
+
+        try assertInlineJSONSnapshot(
+            of: snapshot,
+            matches:
+            """
+            {
+              "animationPolicy" : "disabled",
+              "interactiveControlsVisible" : false,
+              "palette" : [
+                "black",
+                "white",
+                "gray",
+                "brandPrimary@0.22"
+              ],
+              "restAccessibilityLabel" : "Rest timer",
+              "restAccessibilityValue" : "1 second remaining",
+              "restTimerText" : "1s",
+              "setLine" : "Bench Press - 185lb x 5-5"
+            }
+            """
+        )
+    }
+
     private func assertInlineJSONSnapshot(
         of value: some Encodable,
         matches expected: String,
