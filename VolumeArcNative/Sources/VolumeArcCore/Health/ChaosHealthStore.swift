@@ -46,7 +46,7 @@ public final class ChaosHealthStore: HealthStore, @unchecked Sendable {
         get async { await wrapped.isAuthorized }
     }
 
-    public func requestAuthorization() async throws -> Bool {
+    public func requestAuthorization() async throws -> HealthAuthorizationResult {
         if let nextFailure {
             throw ChaosError(failure: nextFailure)
         }

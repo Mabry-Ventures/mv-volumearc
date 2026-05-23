@@ -660,7 +660,8 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         let authorized = await store.isAuthorized
         XCTAssertFalse(authorized)
         let result = try await store.requestAuthorization()
-        XCTAssertFalse(result)
+        XCTAssertFalse(result.canShareWorkouts)
+        XCTAssertTrue(result.requestedReadIdentifiers.isEmpty)
         // Session start/end are no-ops on the unavailable store.
         try await store.startWorkoutSession(activityType: .strengthTraining)
         try await store.endWorkoutSession()

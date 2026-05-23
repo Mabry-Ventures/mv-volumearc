@@ -2,9 +2,13 @@ import Foundation
 
 public protocol HealthStore: Sendable {
     /// Request authorization for workout tracking.
-    func requestAuthorization() async throws -> Bool
+    ///
+    /// HealthKit exposes authorization status for write/share types, but not
+    /// for read types. The returned result reports the inspectable workout
+    /// sharing status and the platform read scopes that were requested.
+    func requestAuthorization() async throws -> HealthAuthorizationResult
 
-    /// Whether HealthKit is available and authorized on this device.
+    /// Whether HealthKit is available and authorized to share workouts on this device.
     var isAuthorized: Bool { get async }
 
     /// Start a HealthKit workout session (watchOS only on real devices).
@@ -29,6 +33,16 @@ public extension HealthStore {
         AsyncStream { continuation in
             continuation.finish()
         }
+    }
+}
+
+public struct HealthAuthorizationResult: Sendable, Equatable {
+    public let canShareWorkouts: Bool
+    public let requestedReadIdentifiers: Set<String>
+
+    public init(canShareWorkouts: Bool, requestedReadIdentifiers: Set<String>) {
+        self.canShareWorkouts = canShareWorkouts
+        self.requestedReadIdentifiers = requestedReadIdentifiers
     }
 }
 
@@ -203,8 +217,10 @@ public actor HealthKitRuntimeStore: HealthStore {
         }
     }
 
-    public func requestAuthorization() async throws -> Bool {
-        guard HKHealthStore.isHealthDataAvailable() else { return false }
+    public func requestAuthorization() async throws -> HealthAuthorizationResult {
+        guard HKHealthStore.isHealthDataAvailable() else {
+            return HealthAuthorizationResult(canShareWorkouts: false, requestedReadIdentifiers: [])
+        }
 
         // VOL-80: HealthKit read scope is least-privilege per platform.
         //
@@ -230,12 +246,17 @@ public actor HealthKitRuntimeStore: HealthStore {
         let typesToShare: Set<HKSampleType> = [HKObjectType.workoutType()]
         #if os(watchOS)
         let typesToRead = Self.watchReadTypes()
+        let requestedReadIdentifiers = HealthKitAuthorizationScope.watchReadIdentifiers
         #else
         let typesToRead = Self.phoneReadTypes()
+        let requestedReadIdentifiers = HealthKitAuthorizationScope.phoneReadIdentifiers
         #endif
 
         try await healthStore.requestAuthorization(toShare: typesToShare, read: typesToRead)
-        return await isAuthorized
+        return HealthAuthorizationResult(
+            canShareWorkouts: await isAuthorized,
+            requestedReadIdentifiers: requestedReadIdentifiers
+        )
     }
 
     static func phoneReadTypes() -> Set<HKObjectType> {
@@ -389,7 +410,9 @@ public struct UnavailableHealthStore: HealthStore {
         get async { false }
     }
 
-    public func requestAuthorization() async throws -> Bool { false }
+    public func requestAuthorization() async throws -> HealthAuthorizationResult {
+        HealthAuthorizationResult(canShareWorkouts: false, requestedReadIdentifiers: [])
+    }
     public func startWorkoutSession(activityType: WorkoutActivityType) async throws {}
     public func endWorkoutSession() async throws {}
 }

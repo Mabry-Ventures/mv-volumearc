@@ -76,6 +76,60 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
         try await waitUntil { model.currentHeartRateBPM == 123 }
     }
 
+    func test_loadPersistedStateResumesLiveMetricsForActiveWorkout() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let stateStore = InMemoryWatchSessionStateStore()
+        let workoutID = "watch-restored"
+        await stateStore.save(
+            WatchSessionSnapshot(
+                workoutID: workoutID,
+                selectedAction: .hold,
+                restEndsAt: Date(timeIntervalSinceReferenceDate: 300),
+                coachPrompt: "Fallback?",
+                sessionActive: true,
+                statusMessage: "Restored"
+            )
+        )
+        let model = makeModel(transport: transport, stateStore: stateStore, healthStore: healthStore)
+
+        await model.loadPersistedState()
+        await healthStore.waitForSubscriber()
+        await healthStore.emit(
+            LiveWorkoutMetrics(
+                workoutID: workoutID,
+                heartRateBPM: 111,
+                activeEnergyKilocalories: 4,
+                elapsedTime: 18,
+                capturedAt: Date(timeIntervalSinceReferenceDate: 320)
+            )
+        )
+
+        try await waitUntil { model.currentHeartRateBPM == 111 }
+    }
+
+    func test_loadPersistedStateDoesNotObserveMetricsForInactiveWorkout() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let stateStore = InMemoryWatchSessionStateStore()
+        await stateStore.save(
+            WatchSessionSnapshot(
+                workoutID: "watch-inactive",
+                selectedAction: .hold,
+                restEndsAt: Date(timeIntervalSinceReferenceDate: 400),
+                coachPrompt: "Fallback?",
+                sessionActive: false,
+                statusMessage: "Restored"
+            )
+        )
+        let model = makeModel(transport: transport, stateStore: stateStore, healthStore: healthStore)
+
+        await model.loadPersistedState()
+
+        let hasSubscriber = await healthStore.hasSubscriber
+        XCTAssertFalse(hasSubscriber)
+    }
+
     func test_completeWorkoutFinishesNativeHealthSessionAndLinksSummaryPayload() async throws {
         let transport = RecordingWatchTransport(reachable: true)
         let healthStore = FakeLiveHealthStore()
@@ -113,6 +167,7 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
 
     private func makeModel(
         transport: RecordingWatchTransport,
+        stateStore: InMemoryWatchSessionStateStore = InMemoryWatchSessionStateStore(),
         healthStore: FakeLiveHealthStore
     ) -> WatchWorkoutModel {
         WatchWorkoutModel(
@@ -120,7 +175,7 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
                 transport: transport,
                 payloadStore: InMemoryPendingPayloadStore()
             ),
-            stateStore: InMemoryWatchSessionStateStore(),
+            stateStore: stateStore,
             healthStore: healthStore,
             workoutID: "watch-seeded"
         )
@@ -165,9 +220,13 @@ private actor FakeLiveHealthStore: HealthStore {
         get async { authorized }
     }
 
-    func requestAuthorization() async throws -> Bool {
+    var hasSubscriber: Bool {
+        continuation != nil
+    }
+
+    func requestAuthorization() async throws -> HealthAuthorizationResult {
         calls.append(.requestAuthorization)
-        return true
+        return HealthAuthorizationResult(canShareWorkouts: authorized, requestedReadIdentifiers: [])
     }
 
     func startWorkoutSession(activityType: WorkoutActivityType) async throws {

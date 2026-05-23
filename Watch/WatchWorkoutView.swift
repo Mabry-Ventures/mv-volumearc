@@ -88,6 +88,9 @@ final class WatchWorkoutModel: ObservableObject {
             statusMessage = snapshot.statusMessage
         }
         await refreshConnectivity()
+        if sessionActive {
+            observeLiveWorkoutMetrics()
+        }
     }
 
     func refreshConnectivity() async {
@@ -344,7 +347,8 @@ final class WatchWorkoutModel: ObservableObject {
     private func startNativeWorkoutCapture(workoutID: String) async -> Bool {
         do {
             if await healthStore.isAuthorized == false {
-                _ = try await healthStore.requestAuthorization()
+                let result = try await healthStore.requestAuthorization()
+                guard result.canShareWorkouts else { throw WatchHealthCaptureError.authorizationDenied }
             }
             let authorized = await healthStore.isAuthorized
             guard authorized else { throw WatchHealthCaptureError.authorizationDenied }
