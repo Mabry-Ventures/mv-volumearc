@@ -432,11 +432,31 @@ public struct HealthKitRecoverySampleSource: RecoverySampleSource {
     // MARK: - Strength load
 
     public func strengthLoad(overDays days: Int, now: Date) async throws -> RecoveryStrengthLoad? {
+        let workouts = try await strengthWorkouts(overDays: days, now: now)
+        guard !workouts.isEmpty else {
+            return nil
+        }
+        // Modern API: HKWorkout.statistics(for:) — works on
+        // iOS 16+ and replaces the deprecated
+        // `totalEnergyBurned` accessor. Sum across workouts.
+        let energyType = HKQuantityType(.activeEnergyBurned)
+        let totalKcal: Double = workouts.reduce(0.0) { acc, workout in
+            let kcal = workout.statistics(for: energyType)?
+                .sumQuantity()?
+                .doubleValue(for: .kilocalorie()) ?? 0
+            return acc + kcal
+        }
+        let totalMinutes = workouts.reduce(0.0) { acc, workout in
+            acc + (workout.duration / 60.0)
+        }
+        // 1 kcal = 4.184 kJ (Apple Health convention).
+        let totalKJ = totalKcal * 4.184
+        return RecoveryStrengthLoad(kj: totalKJ, minutes: totalMinutes)
+    }
+
+    private func strengthWorkouts(overDays days: Int, now: Date) async throws -> [HKWorkout] {
         let workoutType = HKObjectType.workoutType()
-        let start = Calendar.current.date(byAdding: .day, value: -days, to: now) ?? now
-        let datePredicate = HKQuery.predicateForSamples(withStart: start, end: now, options: .strictStartDate)
-        let activityPredicate = HKQuery.predicateForWorkouts(with: strengthActivityType)
-        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [datePredicate, activityPredicate])
+        let predicate = strengthWorkoutPredicate(overDays: days, now: now)
 
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKSampleQuery(
@@ -449,26 +469,7 @@ public struct HealthKitRecoverySampleSource: RecoverySampleSource {
                     continuation.resume(throwing: error)
                     return
                 }
-                guard let workouts = samples as? [HKWorkout], !workouts.isEmpty else {
-                    continuation.resume(returning: nil)
-                    return
-                }
-                // Modern API: HKWorkout.statistics(for:) — works on
-                // iOS 16+ and replaces the deprecated
-                // `totalEnergyBurned` accessor. Sum across workouts.
-                let energyType = HKQuantityType(.activeEnergyBurned)
-                let totalKcal: Double = workouts.reduce(0.0) { acc, workout in
-                    let kcal = workout.statistics(for: energyType)?
-                        .sumQuantity()?
-                        .doubleValue(for: .kilocalorie()) ?? 0
-                    return acc + kcal
-                }
-                let totalMinutes = workouts.reduce(0.0) { acc, workout in
-                    acc + (workout.duration / 60.0)
-                }
-                // 1 kcal = 4.184 kJ (Apple Health convention).
-                let totalKJ = totalKcal * 4.184
-                continuation.resume(returning: RecoveryStrengthLoad(kj: totalKJ, minutes: totalMinutes))
+                continuation.resume(returning: samples as? [HKWorkout] ?? [])
             }
             healthStore.execute(query)
         }
@@ -477,28 +478,25 @@ public struct HealthKitRecoverySampleSource: RecoverySampleSource {
     // MARK: - Apple Workout Effort
 
     public func workoutEffort(overDays days: Int, now: Date) async throws -> RecoveryWorkoutEffort? {
-        let explicitScore: Double?
-        let explicitError: Error?
         do {
-            explicitScore = try await workoutEffortAverageViaRelationships(overDays: days, now: now)
-            explicitError = nil
+            return try await workoutEffortViaRelationships(overDays: days, now: now)
         } catch {
-            explicitScore = nil
-            explicitError = error
+            let relationshipError = error
+            let estimatedScore: Double?
+            do {
+                estimatedScore = try await estimatedWorkoutEffortAverageInStrengthWorkoutWindows(
+                    overDays: days,
+                    now: now
+                )
+            } catch {
+                throw relationshipError
+            }
+            return try Self.makeWorkoutEffortSummary(
+                explicitScore: nil,
+                explicitError: relationshipError,
+                estimatedScore: estimatedScore
+            )
         }
-
-        let estimatedScore = try await averageQuantitySample(
-            identifier: .estimatedWorkoutEffortScore,
-            unit: .appleEffortScore(),
-            overDays: days,
-            now: now
-        )
-
-        return try Self.makeWorkoutEffortSummary(
-            explicitScore: explicitScore,
-            explicitError: explicitError,
-            estimatedScore: estimatedScore
-        )
     }
 
     static func makeWorkoutEffortSummary(
@@ -508,6 +506,15 @@ public struct HealthKitRecoverySampleSource: RecoverySampleSource {
     ) throws -> RecoveryWorkoutEffort? {
         guard explicitScore != nil || estimatedScore != nil else {
             if let explicitError { throw explicitError }
+            return nil
+        }
+        return RecoveryWorkoutEffort(workoutScore: explicitScore, estimatedScore: estimatedScore)
+    }
+
+    static func makeWorkoutEffortSummary(from samples: [HKSample]) -> RecoveryWorkoutEffort? {
+        let explicitScore = averageEffortSamples(in: samples, matching: .workoutEffortScore)
+        let estimatedScore = averageEffortSamples(in: samples, matching: .estimatedWorkoutEffortScore)
+        guard explicitScore != nil || estimatedScore != nil else {
             return nil
         }
         return RecoveryWorkoutEffort(workoutScore: explicitScore, estimatedScore: estimatedScore)
@@ -565,11 +572,8 @@ public struct HealthKitRecoverySampleSource: RecoverySampleSource {
         }
     }
 
-    private func workoutEffortAverageViaRelationships(overDays days: Int, now: Date) async throws -> Double? {
-        let start = Calendar.current.date(byAdding: .day, value: -days, to: now) ?? now
-        let datePredicate = HKQuery.predicateForSamples(withStart: start, end: now, options: .strictStartDate)
-        let activityPredicate = HKQuery.predicateForWorkouts(with: strengthActivityType)
-        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [datePredicate, activityPredicate])
+    private func workoutEffortViaRelationships(overDays days: Int, now: Date) async throws -> RecoveryWorkoutEffort? {
+        let predicate = strengthWorkoutPredicate(overDays: days, now: now)
 
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKWorkoutEffortRelationshipQuery(
@@ -582,22 +586,55 @@ public struct HealthKitRecoverySampleSource: RecoverySampleSource {
                     continuation.resume(throwing: error)
                     return
                 }
-                let scores = relationships?
-                    .flatMap { $0.samples ?? [] }
-                    .compactMap { sample -> Double? in
-                        guard let quantitySample = sample as? HKQuantitySample,
-                              quantitySample.quantityType == HKQuantityType(.workoutEffortScore)
-                        else { return nil }
-                        return quantitySample.quantity.doubleValue(for: .appleEffortScore())
-                    } ?? []
-                guard scores.isEmpty == false else {
-                    continuation.resume(returning: nil)
-                    return
-                }
-                continuation.resume(returning: scores.reduce(0, +) / Double(scores.count))
+                let samples = relationships?.flatMap { $0.samples ?? [] } ?? []
+                continuation.resume(returning: Self.makeWorkoutEffortSummary(from: samples))
             }
             healthStore.execute(query)
         }
+    }
+
+    private func estimatedWorkoutEffortAverageInStrengthWorkoutWindows(
+        overDays days: Int,
+        now: Date
+    ) async throws -> Double? {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .estimatedWorkoutEffortScore) else {
+            return nil
+        }
+        let workouts = try await strengthWorkouts(overDays: days, now: now)
+        let predicates = workouts.map {
+            HKQuery.predicateForSamples(withStart: $0.startDate, end: $0.endDate, options: .strictStartDate)
+        }
+        guard !predicates.isEmpty else {
+            return nil
+        }
+        let predicate = NSCompoundPredicate(orPredicateWithSubpredicates: predicates)
+        return try await meanQuantity(type: type, unit: .appleEffortScore(), predicate: predicate)
+    }
+
+    private func strengthWorkoutPredicate(overDays days: Int, now: Date) -> NSPredicate {
+        let start = Calendar.current.date(byAdding: .day, value: -days, to: now) ?? now
+        let datePredicate = HKQuery.predicateForSamples(withStart: start, end: now, options: .strictStartDate)
+        let activityPredicate = HKQuery.predicateForWorkouts(with: strengthActivityType)
+        return NSCompoundPredicate(andPredicateWithSubpredicates: [datePredicate, activityPredicate])
+    }
+
+    private static func averageEffortSamples(
+        in samples: [HKSample],
+        matching identifier: HKQuantityTypeIdentifier
+    ) -> Double? {
+        guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else {
+            return nil
+        }
+        let values = samples.compactMap { sample -> Double? in
+            guard let quantitySample = sample as? HKQuantitySample,
+                  quantitySample.quantityType == type
+            else { return nil }
+            return quantitySample.quantity.doubleValue(for: .appleEffortScore())
+        }
+        guard !values.isEmpty else {
+            return nil
+        }
+        return values.reduce(0, +) / Double(values.count)
     }
 }
 

@@ -1,4 +1,5 @@
 #if canImport(HealthKit)
+import HealthKit
 import XCTest
 import VolumeArcCore
 
@@ -72,6 +73,28 @@ final class HealthKitRecoveryReaderTests: XCTestCase {
                 estimatedScore: nil
             )
         )
+    }
+
+    func testWorkoutEffortSummarySplitsRelatedExplicitAndEstimatedSamples() throws {
+        let explicitA = try makeEffortSample(identifier: .workoutEffortScore, value: 7.0)
+        let explicitB = try makeEffortSample(identifier: .workoutEffortScore, value: 9.0)
+        let estimated = try makeEffortSample(identifier: .estimatedWorkoutEffortScore, value: 6.5)
+        let hrv = try XCTUnwrap(HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN))
+        let unrelated = HKQuantitySample(
+            type: hrv,
+            quantity: HKQuantity(unit: HKUnit.secondUnit(with: .milli), doubleValue: 54),
+            start: .now,
+            end: .now
+        )
+
+        let summary = try XCTUnwrap(
+            HealthKitRecoverySampleSource.makeWorkoutEffortSummary(
+                from: [explicitA, estimated, unrelated, explicitB]
+            )
+        )
+
+        XCTAssertEqual(summary.workoutScore, 8.0)
+        XCTAssertEqual(summary.estimatedScore, 6.5)
     }
 
     func testPositiveHRVDeltaWhenRecentAboveBaseline() async {
@@ -191,5 +214,16 @@ final class HealthKitRecoveryReaderTests: XCTestCase {
 
 private enum SampleHealthKitError: Error {
     case queryFailed
+}
+
+private func makeEffortSample(identifier: HKQuantityTypeIdentifier, value: Double) throws -> HKQuantitySample {
+    let type = try XCTUnwrap(HKQuantityType.quantityType(forIdentifier: identifier))
+    let now = Date()
+    return HKQuantitySample(
+        type: type,
+        quantity: HKQuantity(unit: .appleEffortScore(), doubleValue: value),
+        start: now,
+        end: now
+    )
 }
 #endif
