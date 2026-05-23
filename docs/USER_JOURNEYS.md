@@ -30,10 +30,10 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | Widgets | 3 | 0 | 0% |
 | Live Activities | 3 | 0 | 0% |
 | App Intents | 6 | 6 | 100% |
-| Background | 4 | 0 | 0% |
+| Background | 4 | 1 | 25% |
 | Failure paths | 6 | 0 | 0% |
 | Resilience / interruption (VOL-127 P2) | 6 | 0 | 0% |
-| **Total** | **69** | **32** | **46%** |
+| **Total** | **69** | **33** | **48%** |
 
 > Goal: 100% by end of Wave 2 (cycle 7, 2026-05-31). Burn down via [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141).
 >
@@ -151,7 +151,7 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | `bg.app-refresh` | BGTask scheduled | iOS triggers `appRefresh` | Sync runs; widget snapshots updated | `bg.app_refresh.fired` | `[ ]` |
 | `bg.processing` | BGTask scheduled | iOS triggers `appProcessing` | Longer work runs | `bg.processing.fired` | `[ ]` |
 | `bg.push-notification` | Notification arrives | Tap notification | App opens to deep-link | `notification.tapped` | `[ ]` |
-| `bg.deep-link-arrival` | Universal link tapped externally | Tap link | App opens to correct destination | `deeplink.received` | `[ ]` |
+| `bg.deep-link-arrival` | Universal link tapped externally | Tap link | App opens to correct destination | `deeplink.received` | `VolumeArcAppJourneyTests.testExternalDeepLinkRoutesToSignalsAndEmitsTelemetry` |
 
 ## Failure paths
 

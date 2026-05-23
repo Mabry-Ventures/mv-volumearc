@@ -395,13 +395,16 @@ jobs:
       # VOL-141 App Intent tranche (2026-05-23) covers all 6
       # `intent.*` rows through deterministic deep-link XCUITests.
       # New total: 32/69 = 46%.
+      # VOL-141 background deep-link tranche (2026-05-23) covers
+      # `bg.deep-link-arrival` with privacy-safe deeplink telemetry.
+      # New total: 33/69 = 47.8% (staged threshold: 47%).
       # The platform commits to 100% by end of Wave 2 (VOL-141/VOL-200).
       # Same ratchet contract as the per-target coverage gate above:
       # any PR that adds a journey test bumps `JOURNEY_COVERAGE_THRESHOLD`
       # in lockstep so the gate is always at-or-above current coverage.
-      - name: Journey coverage gate (>= 46% staged ratchet)
+      - name: Journey coverage gate (>= 47% staged ratchet)
         env:
-          JOURNEY_COVERAGE_THRESHOLD: '46'
+          JOURNEY_COVERAGE_THRESHOLD: '47'
         run: ./scripts/check_journey_coverage.sh
 
       # VOL-97: publish the xcresult bundle so reviewers can open it in
