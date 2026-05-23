@@ -83,14 +83,9 @@ final class VADesignSystemSnapshotTests: XCTestCase {
         testName: String = #function,
         line: UInt = #line
     ) {
-        let toast = VAToast(
-            kind: kind,
-            title: "OK",
-            message: nil
-        )
         let view = ZStack {
             VA.Colors.surfaceGrouped
-            VAToastView(toast: toast)
+            SnapshotToastChrome(kind: kind)
                 .frame(width: Metrics.width)
         }
         .frame(width: Metrics.toastCanvasSize.width, height: Metrics.toastCanvasSize.height)
@@ -179,6 +174,55 @@ private struct SnapshotCardContent: View {
                     .fill(VA.Colors.textSecondary.opacity(0.52))
                     .frame(width: 232, height: 8)
             }
+        }
+    }
+}
+
+// Keep the toast fixture on deterministic chrome; Liquid Glass compositing is
+// not pixel-stable across local and Xcode Cloud renderers.
+private struct SnapshotToastChrome: View {
+    let kind: VAToast.Kind
+
+    var body: some View {
+        HStack(alignment: .center, spacing: VA.Space.md) {
+            Circle()
+                .fill(tint)
+                .frame(width: 20, height: 20)
+                .overlay(
+                    Circle()
+                        .stroke(tint.opacity(0.28), lineWidth: 4)
+                )
+
+            VStack(alignment: .leading, spacing: VA.Space.xs) {
+                Capsule()
+                    .fill(VA.Colors.textPrimary.opacity(0.78))
+                    .frame(width: 72, height: 10)
+                Capsule()
+                    .fill(VA.Colors.textSecondary.opacity(0.52))
+                    .frame(width: 188, height: 8)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(VA.Space.md)
+        .background(
+            VA.Colors.surfacePrimary,
+            in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous)
+                .stroke(tint.opacity(0.3), lineWidth: 1)
+        )
+        .vaShadow(.md)
+        .padding(.horizontal, VA.Space.lg)
+    }
+
+    private var tint: Color {
+        switch kind {
+        case .success: return VA.Colors.success
+        case .info: return VA.Colors.info
+        case .warning: return VA.Colors.warning
+        case .error: return VA.Colors.error
         }
     }
 }
