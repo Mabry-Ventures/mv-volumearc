@@ -377,7 +377,7 @@ The gate (`scripts/check_journey_coverage.sh`, VOL-200 Phase 1) runs in CI after
 
 - Every VAUI design-system component (`VAButton`, `VACard`, `VACoachBubble`, `VAToast`, metric displays, `VAReadinessHero`)
 - Critical screens: `OnboardingView`, `PaywallView`, `RootDashboardView` (each tab), `ActiveWorkoutLiveActivity` lock-screen + Dynamic Island
-- Widgets (3 sizes × 2 themes)
+- Widgets (all supported next-workout families × 2 themes)
 - Variants per surface: light + dark × default + `.accessibility5` Dynamic Type × reduce-transparency on/off
 
 ### Per-trait `assertSnapshot` pattern
@@ -438,6 +438,6 @@ Recording new baselines without committing them fails CI because compare mode us
 
 Current bundled baseline families: `VAButtonSnapshotTests`, `VADesignSystemSnapshotTests`, `NextWorkoutWidgetSnapshotTests`, `ActiveWorkoutLiveActivitySnapshotTests`, `VACoachBubbleSnapshotTests`, `PaywallSnapshotTests`, and `OnboardingSnapshotTests`.
 
-`PaywallSnapshotTests` and `OnboardingSnapshotTests` are enforced locally and on the self-hosted runner, but skip inside Xcode Cloud's `TestProducts.xctestproducts` runtime because XC renders those SwiftUI surfaces differently from the same bundled references.
+`PaywallSnapshotTests`, `OnboardingSnapshotTests`, and the `NextWorkoutWidgetSnapshotTests` accessory-rectangular cases are enforced locally and on the self-hosted runner, but skip inside Xcode Cloud's `TestProducts.xctestproducts` runtime because XC renders those SwiftUI/WidgetKit surfaces differently from the same bundled references.
 
 CI failures from snapshot diffs block merge on the same gate as unit tests.
