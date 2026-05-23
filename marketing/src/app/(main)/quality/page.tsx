@@ -127,6 +127,9 @@ function normalizeAxisBuckets(value: unknown, field: string) {
       total === null ||
       passed === null ||
       failed === null ||
+      !Number.isInteger(total) ||
+      !Number.isInteger(passed) ||
+      !Number.isInteger(failed) ||
       total < 0 ||
       passed < 0 ||
       failed < 0 ||
@@ -213,6 +216,9 @@ function normalizeTrendRecord(
     total === null ||
     passed === null ||
     failed === null ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(passed) ||
+    !Number.isInteger(failed) ||
     total <= 0 ||
     passed < 0 ||
     failed < 0 ||

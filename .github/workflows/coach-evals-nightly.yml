@@ -247,6 +247,7 @@ jobs:
         # checks) doesn't commit. Mirrors VOL-166's coverage-trend
         # commit pattern.
         if: |
+          always() &&
           github.event_name == 'schedule' &&
           github.ref == 'refs/heads/main'
         run: |

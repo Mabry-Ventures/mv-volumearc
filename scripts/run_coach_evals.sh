@@ -220,8 +220,10 @@ for fixture_path in "${fixture_files[@]}"; do
         | sed -E 's/.*Readiness: ([0-9]+)\/100.*/\1/' \
         | head -n 1 \
         || true)
-    if [[ ! "$readiness" =~ ^[0-9]+$ ]]; then
-        readiness=""
+    if [[ -n "$readiness" ]]; then
+        if [[ ! "$readiness" =~ ^[0-9]+$ ]] || (( readiness < 0 || readiness > 100 )); then
+            die "fixture '$fixture_id' has invalid readiness '$readiness' (expected 0-100)"
+        fi
     fi
 
     # Pull the next-exercise hint out of the contextBlock for the anchor check.
