@@ -356,7 +356,11 @@ public struct WorkoutsView: View {
         } label: {
             VACard(style: .accent) {
                 HStack(alignment: .center, spacing: VA.Space.md) {
-                    WorkoutIllustrationTile(systemImage: "books.vertical.fill", size: 58, accent: VA.Colors.primary)
+                    WorkoutIllustrationTile(
+                        systemImage: "books.vertical.fill",
+                        size: VA.Space.ctaIllustration,
+                        accent: VA.Colors.primary
+                    )
                     VStack(alignment: .leading, spacing: VA.Space.xs) {
                         Text(String(localized: "Programs", comment: "Workouts programs library CTA title"))
                             .font(VA.Typography.headline)

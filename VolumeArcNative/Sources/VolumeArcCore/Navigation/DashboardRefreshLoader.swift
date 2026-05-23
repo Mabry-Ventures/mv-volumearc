@@ -221,19 +221,23 @@ public actor DashboardRefreshLoader {
     }
 
     private func loadTrainingPrograms(in context: ModelContext) throws -> [TrainingProgramDefinition] {
-        let records = try context.fetch(FetchDescriptor<TrainingProgramRecord>())
-        let programs = records.compactMap(TrainingProgramDefinition.init(record:))
-        guard !programs.isEmpty else {
-            return TrainingProgramCatalog.curated
+        let records = try context.fetch(FetchDescriptor<TrainingProgramRecord>(
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        ))
+        var persistedByID: [String: TrainingProgramDefinition] = [:]
+        for definition in records.compactMap(TrainingProgramDefinition.init(record:)) where persistedByID[definition.id] == nil {
+            persistedByID[definition.id] = definition
         }
-        return programs.sorted { lhs, rhs in
-            let lhsIndex = TrainingProgramCatalog.curated.firstIndex { $0.id == lhs.id } ?? Int.max
-            let rhsIndex = TrainingProgramCatalog.curated.firstIndex { $0.id == rhs.id } ?? Int.max
-            if lhsIndex != rhsIndex {
-                return lhsIndex < rhsIndex
-            }
-            return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+
+        let curatedIDs = Set(TrainingProgramCatalog.curated.map(\.id))
+        let curatedAndPersisted = TrainingProgramCatalog.curated.map { curated in
+            persistedByID[curated.id] ?? curated
         }
+        let persistedOnly = persistedByID.values
+            .filter { !curatedIDs.contains($0.id) }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+
+        return curatedAndPersisted + persistedOnly
     }
 
     private func loadActiveProgramContext(in context: ModelContext) throws -> ActiveTrainingProgramContext? {

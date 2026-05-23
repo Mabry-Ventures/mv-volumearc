@@ -7,9 +7,12 @@ public enum TrainingProgramDifficulty: String, Codable, Sendable, CaseIterable {
 
     public var displayName: String {
         switch self {
-        case .novice: return "Novice"
-        case .intermediate: return "Intermediate"
-        case .advanced: return "Advanced"
+        case .novice:
+            return String(localized: "Novice", comment: "Training program difficulty for beginner lifters")
+        case .intermediate:
+            return String(localized: "Intermediate", comment: "Training program difficulty for experienced lifters")
+        case .advanced:
+            return String(localized: "Advanced", comment: "Training program difficulty for advanced lifters")
         }
     }
 }
@@ -21,9 +24,12 @@ public enum TrainingProgramEquipmentRequirement: String, Codable, Sendable, Case
 
     public var displayName: String {
         switch self {
-        case .barbell: return "Barbell"
-        case .barbellAndBodyweight: return "Barbell + bodyweight"
-        case .fullGym: return "Full gym"
+        case .barbell:
+            return String(localized: "Barbell", comment: "Training program equipment requirement")
+        case .barbellAndBodyweight:
+            return String(localized: "Barbell + bodyweight", comment: "Training program equipment requirement")
+        case .fullGym:
+            return String(localized: "Full gym", comment: "Training program equipment requirement")
         }
     }
 }
@@ -75,15 +81,32 @@ public struct TrainingProgramDefinition: Sendable, Equatable, Identifiable {
         equipmentRequirement: TrainingProgramEquipmentRequirement,
         sessions: [TrainingProgramSessionTemplate]
     ) {
+        let resolvedSessionsPerWeek = sessionsPerWeek ?? sessions.count
+        precondition(weeks > 0, "Training program weeks must be greater than zero")
+        precondition((1...7).contains(resolvedSessionsPerWeek), "Training program sessionsPerWeek must be 1...7")
+        precondition(sessions.count == resolvedSessionsPerWeek, "Training program sessions must match sessionsPerWeek")
+        precondition(sessions.allSatisfy { (1...7).contains($0.dayOfWeek) }, "Training program days must be 1...7")
+        precondition(
+            Set(sessions.map(\.dayOfWeek)).count == sessions.count,
+            "Training program sessions must have unique days"
+        )
         self.id = id
         self.name = name
         self.author = author
         self.weeks = weeks
-        self.sessionsPerWeek = sessionsPerWeek ?? sessions.count
+        self.sessionsPerWeek = resolvedSessionsPerWeek
         self.advancementCriteria = advancementCriteria
         self.difficulty = difficulty
         self.equipmentRequirement = equipmentRequirement
         self.sessions = sessions.sorted { $0.dayOfWeek < $1.dayOfWeek }
+    }
+
+    static func isValid(weeks: Int, sessionsPerWeek: Int, sessions: [TrainingProgramSessionTemplate]) -> Bool {
+        weeks > 0
+            && (1...7).contains(sessionsPerWeek)
+            && sessions.count == sessionsPerWeek
+            && sessions.allSatisfy { (1...7).contains($0.dayOfWeek) }
+            && Set(sessions.map(\.dayOfWeek)).count == sessions.count
     }
 
     public func weeklyWorkouts(startingOn startDate: Date = .now, calendar: Calendar = .current) -> [WeeklyWorkout] {
@@ -125,8 +148,7 @@ public struct TrainingProgramDefinition: Sendable, Equatable, Identifiable {
             return nil
         }
 
-        let rollsIntoNextWeek = next.shiftedWeekday < todayWeekday
-        let rawWeek = (elapsedDays / 7) + 1 + (rollsIntoNextWeek ? 1 : 0)
+        let rawWeek = (elapsedDays / 7) + 1
         let weekNumber = min(max(1, rawWeek), max(1, weeks))
 
         return ActiveTrainingProgramContext(
@@ -211,6 +233,13 @@ public struct ActiveTrainingProgramContext: Sendable, Equatable {
 }
 
 public enum TrainingProgramCatalog {
+    private static func localizedCatalogText(
+        _ value: String.LocalizationValue,
+        comment: StaticString
+    ) -> String {
+        String(localized: value, comment: comment)
+    }
+
     public static let curated: [TrainingProgramDefinition] = [
         startingStrength,
         strongLifts5x5,
@@ -226,256 +255,448 @@ public enum TrainingProgramCatalog {
 
     public static let startingStrength = TrainingProgramDefinition(
         id: "starting-strength",
-        name: "Starting Strength",
-        author: "Mark Rippetoe",
+        name: localizedCatalogText("Starting Strength", comment: "Training program name"),
+        author: localizedCatalogText("Mark Rippetoe", comment: "Training program author"),
         weeks: 12,
-        advancementCriteria: "Add 5 lb to upper-body lifts and 10 lb to squat/deadlift when all prescribed reps are completed.",
+        advancementCriteria: localizedCatalogText(
+            "Add 5 lb to upper-body lifts and 10 lb to squat/deadlift when all prescribed reps are completed.",
+            comment: "Training program progression rule"
+        ),
         difficulty: .novice,
         equipmentRequirement: .barbell,
         sessions: [
             TrainingProgramSessionTemplate(
                 id: "starting-strength-a",
                 dayOfWeek: 1,
-                title: "Starting Strength A",
-                focus: "Squat, press, deadlift",
-                exerciseNames: ["Back Squat", "Bench Press", "Deadlift"],
-                prescription: "Squat 3x5, bench press 3x5, deadlift 1x5"
+                title: localizedCatalogText("Starting Strength A", comment: "Training program session title"),
+                focus: localizedCatalogText("Squat, press, deadlift", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Back Squat", comment: "Exercise name in training program"),
+                    localizedCatalogText("Bench Press", comment: "Exercise name in training program"),
+                    localizedCatalogText("Deadlift", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "Squat 3x5, bench press 3x5, deadlift 1x5",
+                    comment: "Training program prescription"
+                )
             ),
             TrainingProgramSessionTemplate(
                 id: "starting-strength-b",
                 dayOfWeek: 3,
-                title: "Starting Strength B",
-                focus: "Squat, press, power pull",
-                exerciseNames: ["Back Squat", "Overhead Press", "Power Clean"],
-                prescription: "Squat 3x5, overhead press 3x5, power clean 5x3"
+                title: localizedCatalogText("Starting Strength B", comment: "Training program session title"),
+                focus: localizedCatalogText("Squat, press, power pull", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Back Squat", comment: "Exercise name in training program"),
+                    localizedCatalogText("Overhead Press", comment: "Exercise name in training program"),
+                    localizedCatalogText("Power Clean", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "Squat 3x5, overhead press 3x5, power clean 5x3",
+                    comment: "Training program prescription"
+                )
             ),
             TrainingProgramSessionTemplate(
                 id: "starting-strength-a2",
                 dayOfWeek: 5,
-                title: "Starting Strength A",
-                focus: "Squat, press, deadlift",
-                exerciseNames: ["Back Squat", "Bench Press", "Deadlift"],
-                prescription: "Repeat Workout A and alternate A/B each session"
+                title: localizedCatalogText("Starting Strength A", comment: "Training program session title"),
+                focus: localizedCatalogText("Squat, press, deadlift", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Back Squat", comment: "Exercise name in training program"),
+                    localizedCatalogText("Bench Press", comment: "Exercise name in training program"),
+                    localizedCatalogText("Deadlift", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "Repeat Workout A and alternate A/B each session",
+                    comment: "Training program prescription"
+                )
             ),
         ]
     )
 
     public static let strongLifts5x5 = TrainingProgramDefinition(
         id: "stronglifts-5x5",
-        name: "StrongLifts 5x5",
-        author: "Mehdi Hadim",
+        name: localizedCatalogText("StrongLifts 5x5", comment: "Training program name"),
+        author: localizedCatalogText("Mehdi Hadim", comment: "Training program author"),
         weeks: 12,
-        advancementCriteria: "Add 5 lb next time when every 5x5 set is completed; deload after repeated misses.",
+        advancementCriteria: localizedCatalogText(
+            "Add 5 lb next time when every 5x5 set is completed; deload after repeated misses.",
+            comment: "Training program progression rule"
+        ),
         difficulty: .novice,
         equipmentRequirement: .barbell,
         sessions: [
             TrainingProgramSessionTemplate(
                 id: "stronglifts-a",
                 dayOfWeek: 1,
-                title: "StrongLifts A",
-                focus: "Squat, bench, row",
-                exerciseNames: ["Back Squat", "Bench Press", "Barbell Row"],
-                prescription: "Squat 5x5, bench press 5x5, barbell row 5x5"
+                title: localizedCatalogText("StrongLifts A", comment: "Training program session title"),
+                focus: localizedCatalogText("Squat, bench, row", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Back Squat", comment: "Exercise name in training program"),
+                    localizedCatalogText("Bench Press", comment: "Exercise name in training program"),
+                    localizedCatalogText("Barbell Row", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "Squat 5x5, bench press 5x5, barbell row 5x5",
+                    comment: "Training program prescription"
+                )
             ),
             TrainingProgramSessionTemplate(
                 id: "stronglifts-b",
                 dayOfWeek: 3,
-                title: "StrongLifts B",
-                focus: "Squat, press, deadlift",
-                exerciseNames: ["Back Squat", "Overhead Press", "Deadlift"],
-                prescription: "Squat 5x5, overhead press 5x5, deadlift 1x5"
+                title: localizedCatalogText("StrongLifts B", comment: "Training program session title"),
+                focus: localizedCatalogText("Squat, press, deadlift", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Back Squat", comment: "Exercise name in training program"),
+                    localizedCatalogText("Overhead Press", comment: "Exercise name in training program"),
+                    localizedCatalogText("Deadlift", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "Squat 5x5, overhead press 5x5, deadlift 1x5",
+                    comment: "Training program prescription"
+                )
             ),
             TrainingProgramSessionTemplate(
                 id: "stronglifts-a2",
                 dayOfWeek: 5,
-                title: "StrongLifts A",
-                focus: "Squat, bench, row",
-                exerciseNames: ["Back Squat", "Bench Press", "Barbell Row"],
-                prescription: "Repeat Workout A and alternate A/B each session"
+                title: localizedCatalogText("StrongLifts A", comment: "Training program session title"),
+                focus: localizedCatalogText("Squat, bench, row", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Back Squat", comment: "Exercise name in training program"),
+                    localizedCatalogText("Bench Press", comment: "Exercise name in training program"),
+                    localizedCatalogText("Barbell Row", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "Repeat Workout A and alternate A/B each session",
+                    comment: "Training program prescription"
+                )
             ),
         ]
     )
 
     public static let fiveThreeOneBBB = TrainingProgramDefinition(
         id: "531-bbb",
-        name: "5/3/1 BBB",
-        author: "Jim Wendler",
+        name: localizedCatalogText("5/3/1 BBB", comment: "Training program name"),
+        author: localizedCatalogText("Jim Wendler", comment: "Training program author"),
         weeks: 16,
-        advancementCriteria: "Advance training maxes after each 4-week wave: +5 lb upper body, +10 lb lower body.",
+        advancementCriteria: localizedCatalogText(
+            "Advance training maxes after each 4-week wave: +5 lb upper body, +10 lb lower body.",
+            comment: "Training program progression rule"
+        ),
         difficulty: .intermediate,
         equipmentRequirement: .barbell,
         sessions: [
             TrainingProgramSessionTemplate(
                 id: "531-press",
                 dayOfWeek: 1,
-                title: "5/3/1 Press",
-                focus: "Press plus BBB volume",
-                exerciseNames: ["Overhead Press", "Pull-Up", "Dumbbell Row"],
-                prescription: "5/3/1 overhead press, 5x10 press at BBB load, 50-100 pulls"
+                title: localizedCatalogText("5/3/1 Press", comment: "Training program session title"),
+                focus: localizedCatalogText("Press plus BBB volume", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Overhead Press", comment: "Exercise name in training program"),
+                    localizedCatalogText("Pull-Up", comment: "Exercise name in training program"),
+                    localizedCatalogText("Dumbbell Row", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "5/3/1 overhead press, 5x10 press at BBB load, 50-100 pulls",
+                    comment: "Training program prescription"
+                )
             ),
             TrainingProgramSessionTemplate(
                 id: "531-deadlift",
                 dayOfWeek: 2,
-                title: "5/3/1 Deadlift",
-                focus: "Deadlift plus posterior chain",
-                exerciseNames: ["Deadlift", "Romanian Deadlift", "Hanging Leg Raise"],
-                prescription: "5/3/1 deadlift, 5x10 deadlift at BBB load, trunk work"
+                title: localizedCatalogText("5/3/1 Deadlift", comment: "Training program session title"),
+                focus: localizedCatalogText("Deadlift plus posterior chain", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Deadlift", comment: "Exercise name in training program"),
+                    localizedCatalogText("Romanian Deadlift", comment: "Exercise name in training program"),
+                    localizedCatalogText("Hanging Leg Raise", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "5/3/1 deadlift, 5x10 deadlift at BBB load, trunk work",
+                    comment: "Training program prescription"
+                )
             ),
             TrainingProgramSessionTemplate(
                 id: "531-bench",
                 dayOfWeek: 4,
-                title: "5/3/1 Bench",
-                focus: "Bench plus upper volume",
-                exerciseNames: ["Bench Press", "Dumbbell Bench Press", "Barbell Row"],
-                prescription: "5/3/1 bench, 5x10 bench at BBB load, 50-100 rows"
+                title: localizedCatalogText("5/3/1 Bench", comment: "Training program session title"),
+                focus: localizedCatalogText("Bench plus upper volume", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Bench Press", comment: "Exercise name in training program"),
+                    localizedCatalogText("Dumbbell Bench Press", comment: "Exercise name in training program"),
+                    localizedCatalogText("Barbell Row", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "5/3/1 bench, 5x10 bench at BBB load, 50-100 rows",
+                    comment: "Training program prescription"
+                )
             ),
             TrainingProgramSessionTemplate(
                 id: "531-squat",
                 dayOfWeek: 5,
-                title: "5/3/1 Squat",
-                focus: "Squat plus lower volume",
-                exerciseNames: ["Back Squat", "Front Squat", "Back Extension"],
-                prescription: "5/3/1 squat, 5x10 squat at BBB load, single-leg or trunk assistance"
+                title: localizedCatalogText("5/3/1 Squat", comment: "Training program session title"),
+                focus: localizedCatalogText("Squat plus lower volume", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Back Squat", comment: "Exercise name in training program"),
+                    localizedCatalogText("Front Squat", comment: "Exercise name in training program"),
+                    localizedCatalogText("Back Extension", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "5/3/1 squat, 5x10 squat at BBB load, single-leg or trunk assistance",
+                    comment: "Training program prescription"
+                )
             ),
         ]
     )
 
     public static let pushPullLegs6Day = TrainingProgramDefinition(
         id: "ppl-6-day",
-        name: "PPL 6-day",
-        author: "VolumeArc",
+        name: localizedCatalogText("PPL 6-day", comment: "Training program name"),
+        author: localizedCatalogText("VolumeArc", comment: "Training program author"),
         weeks: 10,
-        advancementCriteria: "Add load when all sets land in the top half of the rep target at RPE 8 or lower.",
+        advancementCriteria: localizedCatalogText(
+            "Add load when all sets land in the top half of the rep target at RPE 8 or lower.",
+            comment: "Training program progression rule"
+        ),
         difficulty: .intermediate,
         equipmentRequirement: .fullGym,
         sessions: [
             TrainingProgramSessionTemplate(
                 id: "ppl-push-a",
                 dayOfWeek: 1,
-                title: "Push A",
-                focus: "Chest, shoulders, triceps",
-                exerciseNames: ["Bench Press", "Overhead Press", "Cable Fly", "Triceps Pushdown"],
-                prescription: "Bench 4x6-8, overhead press 3x6-8, fly 3x10-15, triceps 3x10-15"
+                title: localizedCatalogText("Push A", comment: "Training program session title"),
+                focus: localizedCatalogText("Chest, shoulders, triceps", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Bench Press", comment: "Exercise name in training program"),
+                    localizedCatalogText("Overhead Press", comment: "Exercise name in training program"),
+                    localizedCatalogText("Cable Fly", comment: "Exercise name in training program"),
+                    localizedCatalogText("Triceps Pushdown", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "Bench 4x6-8, overhead press 3x6-8, fly 3x10-15, triceps 3x10-15",
+                    comment: "Training program prescription"
+                )
             ),
             TrainingProgramSessionTemplate(
                 id: "ppl-pull-a",
                 dayOfWeek: 2,
-                title: "Pull A",
-                focus: "Back, rear delts, biceps",
-                exerciseNames: ["Barbell Row", "Pull-Up", "Rear Delt Fly", "Barbell Curl"],
-                prescription: "Row 4x6-8, pull-up 4x6-10, rear delt 3x12-20, curls 3x8-12"
+                title: localizedCatalogText("Pull A", comment: "Training program session title"),
+                focus: localizedCatalogText("Back, rear delts, biceps", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Barbell Row", comment: "Exercise name in training program"),
+                    localizedCatalogText("Pull-Up", comment: "Exercise name in training program"),
+                    localizedCatalogText("Rear Delt Fly", comment: "Exercise name in training program"),
+                    localizedCatalogText("Barbell Curl", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "Row 4x6-8, pull-up 4x6-10, rear delt 3x12-20, curls 3x8-12",
+                    comment: "Training program prescription"
+                )
             ),
             TrainingProgramSessionTemplate(
                 id: "ppl-legs-a",
                 dayOfWeek: 3,
-                title: "Legs A",
-                focus: "Squat emphasis",
-                exerciseNames: ["Back Squat", "Romanian Deadlift", "Leg Press", "Calf Raise"],
-                prescription: "Squat 4x5-8, RDL 3x8-10, leg press 3x10-15, calves 4x8-15"
+                title: localizedCatalogText("Legs A", comment: "Training program session title"),
+                focus: localizedCatalogText("Squat emphasis", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Back Squat", comment: "Exercise name in training program"),
+                    localizedCatalogText("Romanian Deadlift", comment: "Exercise name in training program"),
+                    localizedCatalogText("Leg Press", comment: "Exercise name in training program"),
+                    localizedCatalogText("Calf Raise", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "Squat 4x5-8, RDL 3x8-10, leg press 3x10-15, calves 4x8-15",
+                    comment: "Training program prescription"
+                )
             ),
             TrainingProgramSessionTemplate(
                 id: "ppl-push-b",
                 dayOfWeek: 4,
-                title: "Push B",
-                focus: "Incline and delts",
-                exerciseNames: ["Incline Dumbbell Press", "Lateral Raise", "Machine Chest Press", "Skullcrusher"],
-                prescription: "Incline press 4x8-10, laterals 4x12-20, machine press 3x10-12, skullcrusher 3x10-15"
+                title: localizedCatalogText("Push B", comment: "Training program session title"),
+                focus: localizedCatalogText("Incline and delts", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Incline Dumbbell Press", comment: "Exercise name in training program"),
+                    localizedCatalogText("Lateral Raise", comment: "Exercise name in training program"),
+                    localizedCatalogText("Machine Chest Press", comment: "Exercise name in training program"),
+                    localizedCatalogText("Skullcrusher", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "Incline press 4x8-10, laterals 4x12-20, machine press 3x10-12, skullcrusher 3x10-15",
+                    comment: "Training program prescription"
+                )
             ),
             TrainingProgramSessionTemplate(
                 id: "ppl-pull-b",
                 dayOfWeek: 5,
-                title: "Pull B",
-                focus: "Vertical pull and arms",
-                exerciseNames: ["Lat Pulldown", "Seated Cable Row", "Face Pull", "Hammer Curl"],
-                prescription: "Pulldown 4x8-12, cable row 3x8-12, face pull 3x12-20, hammer curl 3x10-15"
+                title: localizedCatalogText("Pull B", comment: "Training program session title"),
+                focus: localizedCatalogText("Vertical pull and arms", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Lat Pulldown", comment: "Exercise name in training program"),
+                    localizedCatalogText("Seated Cable Row", comment: "Exercise name in training program"),
+                    localizedCatalogText("Face Pull", comment: "Exercise name in training program"),
+                    localizedCatalogText("Hammer Curl", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "Pulldown 4x8-12, cable row 3x8-12, face pull 3x12-20, hammer curl 3x10-15",
+                    comment: "Training program prescription"
+                )
             ),
             TrainingProgramSessionTemplate(
                 id: "ppl-legs-b",
                 dayOfWeek: 6,
-                title: "Legs B",
-                focus: "Hinge and quad volume",
-                exerciseNames: ["Deadlift", "Front Squat", "Leg Curl", "Calf Raise"],
-                prescription: "Deadlift 3x3-5, front squat 3x6-8, leg curl 4x10-15, calves 4x10-15"
+                title: localizedCatalogText("Legs B", comment: "Training program session title"),
+                focus: localizedCatalogText("Hinge and quad volume", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Deadlift", comment: "Exercise name in training program"),
+                    localizedCatalogText("Front Squat", comment: "Exercise name in training program"),
+                    localizedCatalogText("Leg Curl", comment: "Exercise name in training program"),
+                    localizedCatalogText("Calf Raise", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "Deadlift 3x3-5, front squat 3x6-8, leg curl 4x10-15, calves 4x10-15",
+                    comment: "Training program prescription"
+                )
             ),
         ]
     )
 
     public static let upperLower4Day = TrainingProgramDefinition(
         id: "upper-lower-4-day",
-        name: "Upper/Lower 4-day",
-        author: "VolumeArc",
+        name: localizedCatalogText("Upper/Lower 4-day", comment: "Training program name"),
+        author: localizedCatalogText("VolumeArc", comment: "Training program author"),
         weeks: 12,
-        advancementCriteria: "Progress compounds weekly when top sets stay under RPE 8.5; progress isolation work by reps first.",
+        advancementCriteria: localizedCatalogText(
+            "Progress compounds weekly when top sets stay under RPE 8.5; progress isolation work by reps first.",
+            comment: "Training program progression rule"
+        ),
         difficulty: .intermediate,
         equipmentRequirement: .fullGym,
         sessions: [
             TrainingProgramSessionTemplate(
                 id: "upper-lower-upper-strength",
                 dayOfWeek: 1,
-                title: "Upper Strength",
-                focus: "Heavy press and pull",
-                exerciseNames: ["Bench Press", "Barbell Row", "Overhead Press", "Pull-Up"],
-                prescription: "Bench 4x4-6, row 4x5-8, press 3x5-8, pull-up 3x6-10"
+                title: localizedCatalogText("Upper Strength", comment: "Training program session title"),
+                focus: localizedCatalogText("Heavy press and pull", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Bench Press", comment: "Exercise name in training program"),
+                    localizedCatalogText("Barbell Row", comment: "Exercise name in training program"),
+                    localizedCatalogText("Overhead Press", comment: "Exercise name in training program"),
+                    localizedCatalogText("Pull-Up", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "Bench 4x4-6, row 4x5-8, press 3x5-8, pull-up 3x6-10",
+                    comment: "Training program prescription"
+                )
             ),
             TrainingProgramSessionTemplate(
                 id: "upper-lower-lower-strength",
                 dayOfWeek: 2,
-                title: "Lower Strength",
-                focus: "Squat and hinge strength",
-                exerciseNames: ["Back Squat", "Deadlift", "Bulgarian Split Squat", "Calf Raise"],
-                prescription: "Squat 4x4-6, deadlift 3x3-5, split squat 3x8-10, calves 4x8-12"
+                title: localizedCatalogText("Lower Strength", comment: "Training program session title"),
+                focus: localizedCatalogText("Squat and hinge strength", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Back Squat", comment: "Exercise name in training program"),
+                    localizedCatalogText("Deadlift", comment: "Exercise name in training program"),
+                    localizedCatalogText("Bulgarian Split Squat", comment: "Exercise name in training program"),
+                    localizedCatalogText("Calf Raise", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "Squat 4x4-6, deadlift 3x3-5, split squat 3x8-10, calves 4x8-12",
+                    comment: "Training program prescription"
+                )
             ),
             TrainingProgramSessionTemplate(
                 id: "upper-lower-upper-volume",
                 dayOfWeek: 4,
-                title: "Upper Volume",
-                focus: "Hypertrophy press and pull",
-                exerciseNames: ["Incline Dumbbell Press", "Lat Pulldown", "Lateral Raise", "Cable Curl"],
-                prescription: "Incline 4x8-12, pulldown 4x8-12, laterals 4x12-20, curls 3x10-15"
+                title: localizedCatalogText("Upper Volume", comment: "Training program session title"),
+                focus: localizedCatalogText("Hypertrophy press and pull", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Incline Dumbbell Press", comment: "Exercise name in training program"),
+                    localizedCatalogText("Lat Pulldown", comment: "Exercise name in training program"),
+                    localizedCatalogText("Lateral Raise", comment: "Exercise name in training program"),
+                    localizedCatalogText("Cable Curl", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "Incline 4x8-12, pulldown 4x8-12, laterals 4x12-20, curls 3x10-15",
+                    comment: "Training program prescription"
+                )
             ),
             TrainingProgramSessionTemplate(
                 id: "upper-lower-lower-volume",
                 dayOfWeek: 5,
-                title: "Lower Volume",
-                focus: "Leg volume",
-                exerciseNames: ["Front Squat", "Romanian Deadlift", "Leg Press", "Leg Curl"],
-                prescription: "Front squat 4x6-10, RDL 3x8-12, leg press 3x10-15, leg curl 3x10-15"
+                title: localizedCatalogText("Lower Volume", comment: "Training program session title"),
+                focus: localizedCatalogText("Leg volume", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Front Squat", comment: "Exercise name in training program"),
+                    localizedCatalogText("Romanian Deadlift", comment: "Exercise name in training program"),
+                    localizedCatalogText("Leg Press", comment: "Exercise name in training program"),
+                    localizedCatalogText("Leg Curl", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "Front squat 4x6-10, RDL 3x8-12, leg press 3x10-15, leg curl 3x10-15",
+                    comment: "Training program prescription"
+                )
             ),
         ]
     )
 
     public static let hypertrophySpecificTraining = TrainingProgramDefinition(
         id: "hst",
-        name: "Hypertrophy Specific Training",
-        author: "Bryan Haycock",
+        name: localizedCatalogText("Hypertrophy Specific Training", comment: "Training program name"),
+        author: localizedCatalogText("Bryan Haycock", comment: "Training program author"),
         weeks: 8,
-        advancementCriteria: "Wave loads across 15s, 10s, and 5s; increase load every session while preserving full-body frequency.",
+        advancementCriteria: localizedCatalogText(
+            "Wave loads across 15s, 10s, and 5s; increase load every session while preserving full-body frequency.",
+            comment: "Training program progression rule"
+        ),
         difficulty: .advanced,
         equipmentRequirement: .fullGym,
         sessions: [
             TrainingProgramSessionTemplate(
                 id: "hst-a",
                 dayOfWeek: 1,
-                title: "HST Full Body A",
-                focus: "Full-body 15s/10s/5s wave",
-                exerciseNames: ["Back Squat", "Bench Press", "Barbell Row", "Romanian Deadlift"],
-                prescription: "Full body 1-2 sets each: squat, bench, row, hinge; wave reps by block"
+                title: localizedCatalogText("HST Full Body A", comment: "Training program session title"),
+                focus: localizedCatalogText("Full-body 15s/10s/5s wave", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Back Squat", comment: "Exercise name in training program"),
+                    localizedCatalogText("Bench Press", comment: "Exercise name in training program"),
+                    localizedCatalogText("Barbell Row", comment: "Exercise name in training program"),
+                    localizedCatalogText("Romanian Deadlift", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "Full body 1-2 sets each: squat, bench, row, hinge; wave reps by block",
+                    comment: "Training program prescription"
+                )
             ),
             TrainingProgramSessionTemplate(
                 id: "hst-b",
                 dayOfWeek: 3,
-                title: "HST Full Body B",
-                focus: "Full-body alternate angles",
-                exerciseNames: ["Front Squat", "Incline Dumbbell Press", "Lat Pulldown", "Leg Curl"],
-                prescription: "Full body 1-2 sets each: quad, incline press, vertical pull, hamstring curl"
+                title: localizedCatalogText("HST Full Body B", comment: "Training program session title"),
+                focus: localizedCatalogText("Full-body alternate angles", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Front Squat", comment: "Exercise name in training program"),
+                    localizedCatalogText("Incline Dumbbell Press", comment: "Exercise name in training program"),
+                    localizedCatalogText("Lat Pulldown", comment: "Exercise name in training program"),
+                    localizedCatalogText("Leg Curl", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "Full body 1-2 sets each: quad, incline press, vertical pull, hamstring curl",
+                    comment: "Training program prescription"
+                )
             ),
             TrainingProgramSessionTemplate(
                 id: "hst-c",
                 dayOfWeek: 5,
-                title: "HST Full Body C",
-                focus: "Full-body pump and progression",
-                exerciseNames: ["Leg Press", "Machine Chest Press", "Seated Cable Row", "Lateral Raise"],
-                prescription: "Full body 1-2 sets each: leg press, chest press, row, delts; keep load moving upward"
+                title: localizedCatalogText("HST Full Body C", comment: "Training program session title"),
+                focus: localizedCatalogText("Full-body pump and progression", comment: "Training program session focus"),
+                exerciseNames: [
+                    localizedCatalogText("Leg Press", comment: "Exercise name in training program"),
+                    localizedCatalogText("Machine Chest Press", comment: "Exercise name in training program"),
+                    localizedCatalogText("Seated Cable Row", comment: "Exercise name in training program"),
+                    localizedCatalogText("Lateral Raise", comment: "Exercise name in training program"),
+                ],
+                prescription: localizedCatalogText(
+                    "Full body 1-2 sets each: leg press, chest press, row, delts; keep load moving upward",
+                    comment: "Training program prescription"
+                )
             ),
         ]
     )

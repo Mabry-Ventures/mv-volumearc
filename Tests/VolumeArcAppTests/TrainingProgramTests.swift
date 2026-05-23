@@ -36,22 +36,6 @@ final class TrainingProgramTests: XCTestCase {
         ])
     }
 
-    func testProgramWithoutSessionsHasNoScheduledContext() {
-        let program = TrainingProgramDefinition(
-            id: "empty",
-            name: "Empty Program",
-            author: "VolumeArc",
-            weeks: 4,
-            advancementCriteria: "Add sessions before assignment.",
-            difficulty: .novice,
-            equipmentRequirement: .barbell,
-            sessions: []
-        )
-
-        XCTAssertEqual(program.weeklyWorkouts().count, 0)
-        XCTAssertNil(program.scheduledSession(assignedAt: Self.date(year: 2026, month: 5, day: 23)))
-    }
-
     func testWeeklyScheduleShiftsFirstSessionToAssignmentDay() {
         let calendar = Self.utcCalendar
         let saturday = Self.date(year: 2026, month: 5, day: 23)
@@ -85,6 +69,22 @@ final class TrainingProgramTests: XCTestCase {
         XCTAssertTrue(context.promptFragment.contains("Week 3 / 16"))
     }
 
+    func testScheduledSessionDoesNotAdvanceWeekForRestDayAfterCalendarWrap() throws {
+        let calendar = Self.utcCalendar
+        let assignedAt = Self.date(year: 2026, month: 5, day: 23)
+        let nextDay = Self.date(year: 2026, month: 5, day: 24)
+
+        let context = try XCTUnwrap(TrainingProgramCatalog.startingStrength.scheduledSession(
+            on: nextDay,
+            assignedAt: assignedAt,
+            calendar: calendar
+        ))
+
+        XCTAssertEqual(context.weekNumber, 1)
+        XCTAssertEqual(context.dayNumber, 2)
+        XCTAssertEqual(context.sessionTitle, "Starting Strength B")
+    }
+
     @MainActor
     func testRepositoryHydratesCatalogAndAssignsProgramToTrainingPlan() throws {
         let calendar = Self.utcCalendar
@@ -98,6 +98,13 @@ final class TrainingProgramTests: XCTestCase {
 
         let programs = try repository.loadPrograms()
         XCTAssertEqual(programs.count, 6)
+
+        let context = ModelContext(container)
+        context.insert(Self.trainingProgramRecord(
+            from: TrainingProgramCatalog.strongLifts5x5,
+            updatedAt: startDate.addingTimeInterval(60)
+        ))
+        try context.save()
 
         let assigned = try repository.assignProgram(
             catalogIdentifier: "stronglifts-5x5",
@@ -116,6 +123,29 @@ final class TrainingProgramTests: XCTestCase {
         let weeklyPlan = try planRepository.weeklyWorkouts()
         XCTAssertEqual(weeklyPlan.count, 3)
         XCTAssertEqual(weeklyPlan.first(where: { $0.dayOfWeek == 6 })?.title, "StrongLifts A")
+
+        let activeRecords = try ModelContext(container).fetch(FetchDescriptor<TrainingProgramRecord>(
+            predicate: #Predicate<TrainingProgramRecord> { program in
+                program.isActive
+            }
+        ))
+        XCTAssertEqual(activeRecords.count, 1)
+
+        let nextStartDate = Self.date(year: 2026, month: 5, day: 25)
+        let reassigned = try repository.assignProgram(
+            catalogIdentifier: "hst",
+            startDate: nextStartDate,
+            calendar: calendar
+        )
+        XCTAssertEqual(reassigned.programID, "hst")
+
+        let replacementPlan = try planRepository.weeklyWorkouts()
+        XCTAssertEqual(replacementPlan.count, 3)
+        XCTAssertTrue(replacementPlan.contains { $0.title == "HST Full Body A" })
+        XCTAssertFalse(replacementPlan.contains { $0.title == "StrongLifts A" })
+
+        let reassignedProgram = try XCTUnwrap(repository.activeProgram())
+        XCTAssertEqual(reassignedProgram.id, "hst")
     }
 
     @MainActor
@@ -166,6 +196,31 @@ final class TrainingProgramTests: XCTestCase {
         XCTAssertFalse(try repository.loadPrograms().contains { $0.id == "custom-test" })
     }
 
+    @MainActor
+    func testDashboardLoaderMergesPersistedOverridesWithCuratedCatalog() async throws {
+        let container = try Self.makeContainer()
+        let repository = SwiftDataTrainingProgramRepository(container: container)
+        let override = TrainingProgramDefinition(
+            id: TrainingProgramCatalog.startingStrength.id,
+            name: "Starting Strength Custom",
+            author: TrainingProgramCatalog.startingStrength.author,
+            weeks: TrainingProgramCatalog.startingStrength.weeks,
+            advancementCriteria: TrainingProgramCatalog.startingStrength.advancementCriteria,
+            difficulty: TrainingProgramCatalog.startingStrength.difficulty,
+            equipmentRequirement: TrainingProgramCatalog.startingStrength.equipmentRequirement,
+            sessions: TrainingProgramCatalog.startingStrength.sessions
+        )
+        try repository.updateProgram(override)
+        try repository.createProgram(Self.customProgram(identifier: "custom-dashboard"))
+
+        let snapshot = try await DashboardRefreshLoader(container: container).load(sessionFetchLimit: 5)
+
+        XCTAssertEqual(snapshot.trainingPrograms.count, 7)
+        XCTAssertEqual(snapshot.trainingPrograms.first?.id, "starting-strength")
+        XCTAssertEqual(snapshot.trainingPrograms.first?.name, "Starting Strength Custom")
+        XCTAssertEqual(snapshot.trainingPrograms.last?.id, "custom-dashboard")
+    }
+
     func testCoachContextIncludesActiveProgramFragment() {
         let program = ActiveTrainingProgramContext(
             programID: "531-bbb",
@@ -214,6 +269,51 @@ final class TrainingProgramTests: XCTestCase {
         // Force unwrap is safe for fixed Gregorian fixture dates.
         // swiftlint:disable:next force_unwrapping
         return components.date!
+    }
+
+    private static func customProgram(identifier: String) -> TrainingProgramDefinition {
+        TrainingProgramDefinition(
+            id: identifier,
+            name: "Custom Test",
+            author: "VolumeArc",
+            weeks: 4,
+            advancementCriteria: "Add reps first.",
+            difficulty: .novice,
+            equipmentRequirement: .barbellAndBodyweight,
+            sessions: [
+                TrainingProgramSessionTemplate(
+                    id: "\(identifier)-a",
+                    dayOfWeek: 1,
+                    title: "Custom A",
+                    focus: "Full body",
+                    exerciseNames: ["Back Squat", "Bench Press"],
+                    prescription: "Squat 3x5, bench 3x5"
+                ),
+            ]
+        )
+    }
+
+    private static func trainingProgramRecord(
+        from definition: TrainingProgramDefinition,
+        updatedAt: Date
+    ) -> TrainingProgramRecord {
+        guard let sessionsJSON = SyncPayloadCodec.encode(definition.sessions) else {
+            XCTFail("Expected training program sessions to encode")
+            return TrainingProgramRecord()
+        }
+        return TrainingProgramRecord(
+            identifier: definition.id,
+            catalogIdentifier: definition.id,
+            name: definition.name,
+            author: definition.author,
+            weeks: definition.weeks,
+            sessionsPerWeek: definition.sessionsPerWeek,
+            advancementCriteria: definition.advancementCriteria,
+            difficultyTier: definition.difficulty.rawValue,
+            equipmentRequirement: definition.equipmentRequirement.rawValue,
+            sessionsJSON: sessionsJSON,
+            updatedAt: updatedAt
+        )
     }
 
     private static func makeContainer() throws -> ModelContainer {

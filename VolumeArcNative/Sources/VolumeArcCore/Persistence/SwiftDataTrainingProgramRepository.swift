@@ -70,17 +70,19 @@ public struct SwiftDataTrainingProgramRepository: Sendable {
             throw TrainingProgramRepositoryError.programNotFound(catalogIdentifier)
         }
 
+        let selectedModelID = selected.persistentModelID
         let records = try fetchProgramRecords(in: context)
         for record in records {
-            record.isActive = record.identifier == selected.identifier
-            record.assignedAt = record.identifier == selected.identifier ? startDate : record.assignedAt
-            record.currentWeek = record.identifier == selected.identifier ? activeContext.weekNumber : record.currentWeek
-            record.currentDay = record.identifier == selected.identifier ? activeContext.dayNumber : record.currentDay
+            let isSelected = record.persistentModelID == selectedModelID
+            record.isActive = isSelected
+            record.assignedAt = isSelected ? startDate : record.assignedAt
+            record.currentWeek = isSelected ? activeContext.weekNumber : record.currentWeek
+            record.currentDay = isSelected ? activeContext.dayNumber : record.currentDay
             record.updatedAt = .now
         }
-        try context.save()
 
-        try trainingPlanRepository?.upsertPlan(definition.weeklyWorkouts(startingOn: startDate, calendar: calendar))
+        try trainingPlanRepository?.upsertPlan(definition.weeklyWorkouts(startingOn: startDate, calendar: calendar), in: context)
+        try context.save()
         return activeContext
     }
 
@@ -121,7 +123,9 @@ public struct SwiftDataTrainingProgramRepository: Sendable {
 
     @MainActor
     private func fetchProgramRecords(in context: ModelContext) throws -> [TrainingProgramRecord] {
-        try context.fetch(FetchDescriptor<TrainingProgramRecord>())
+        try context.fetch(FetchDescriptor<TrainingProgramRecord>(
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        ))
     }
 
     @MainActor
@@ -153,7 +157,12 @@ extension TrainingProgramDefinition {
     init?(record: TrainingProgramRecord) {
         guard let sessions = SyncPayloadCodec.decode([TrainingProgramSessionTemplate].self, from: record.sessionsJSON),
               let difficulty = TrainingProgramDifficulty(rawValue: record.difficultyTier),
-              let equipment = TrainingProgramEquipmentRequirement(rawValue: record.equipmentRequirement)
+              let equipment = TrainingProgramEquipmentRequirement(rawValue: record.equipmentRequirement),
+              TrainingProgramDefinition.isValid(
+                weeks: record.weeks,
+                sessionsPerWeek: record.sessionsPerWeek,
+                sessions: sessions
+              )
         else {
             return nil
         }

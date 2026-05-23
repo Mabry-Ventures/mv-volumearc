@@ -55,7 +55,7 @@ public struct ProgramsLibraryView: View {
                 HStack(alignment: .top, spacing: VA.Space.md) {
                     WorkoutIllustrationTile(
                         systemImage: programIcon(for: program),
-                        size: 58,
+                        size: VA.Space.ctaIllustration,
                         accent: isActive ? VA.Colors.primary : VA.Colors.textSecondary
                     )
                     VStack(alignment: .leading, spacing: VA.Space.xs) {
@@ -112,11 +112,14 @@ public struct ProgramsLibraryView: View {
     @ViewBuilder
     private func metaChips(for program: TrainingProgramDefinition) -> some View {
         WorkoutChip(
-            text: String(localized: "\(program.weeks) weeks", comment: "Program duration chip"),
+            text: String(localized: "^[\(program.weeks) week](inflect: true)", comment: "Program duration chip"),
             tone: .neutral
         )
         WorkoutChip(
-            text: String(localized: "\(program.sessionsPerWeek)x/week", comment: "Program weekly frequency chip"),
+            text: String(
+                localized: "^[\(program.sessionsPerWeek) session](inflect: true)/week",
+                comment: "Program weekly frequency chip"
+            ),
             tone: .neutral
         )
         WorkoutChip(text: program.difficulty.displayName, tone: .primary)

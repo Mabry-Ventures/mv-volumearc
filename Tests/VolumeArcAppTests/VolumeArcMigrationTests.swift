@@ -908,6 +908,10 @@ final class VolumeArcMigrationTests: XCTestCase {
     func testCanInsertAndFetchTrainingProgramRecord() throws {
         let container = try makeInMemoryContainer()
         let context = ModelContext(container)
+        guard let sessionsJSON = SyncPayloadCodec.encode(TrainingProgramCatalog.startingStrength.sessions) else {
+            XCTFail("Expected starting strength sessions to encode")
+            return
+        }
 
         let program = TrainingProgramRecord(
             identifier: "test-program",
@@ -919,7 +923,7 @@ final class VolumeArcMigrationTests: XCTestCase {
             advancementCriteria: "Add reps before load.",
             difficultyTier: TrainingProgramDifficulty.novice.rawValue,
             equipmentRequirement: TrainingProgramEquipmentRequirement.barbell.rawValue,
-            sessionsJSON: SyncPayloadCodec.encode(TrainingProgramCatalog.startingStrength.sessions) ?? "[]"
+            sessionsJSON: sessionsJSON
         )
         context.insert(program)
         try context.save()
