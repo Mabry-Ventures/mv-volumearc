@@ -141,6 +141,7 @@ final class WatchPayloadCodecTests: XCTestCase {
 
     func test_session_snapshot_codable_roundtrip_preserves_every_field() throws {
         let original = WatchSessionSnapshot(
+            workoutID: "watch-stable-id",
             selectedAction: .increase,
             restEndsAt: Date(timeIntervalSince1970: 1_700_000_300),
             coachPrompt: "Drive the next set hard.",
@@ -151,6 +152,7 @@ final class WatchPayloadCodecTests: XCTestCase {
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(WatchSessionSnapshot.self, from: data)
 
+        XCTAssertEqual(decoded.workoutID, original.workoutID)
         XCTAssertEqual(decoded.selectedAction, original.selectedAction)
         XCTAssertEqual(decoded.coachPrompt, original.coachPrompt)
         XCTAssertEqual(decoded.sessionActive, original.sessionActive)
@@ -160,6 +162,26 @@ final class WatchPayloadCodecTests: XCTestCase {
             original.restEndsAt.timeIntervalSince1970,
             accuracy: 0.001
         )
+    }
+
+    func test_session_snapshot_legacy_payload_defaults_workoutID() throws {
+        let json = """
+        {
+          "selectedAction": "hold",
+          "restEndsAt": 700000000,
+          "coachPrompt": "Fallback?",
+          "sessionActive": true,
+          "statusMessage": "Queued"
+        }
+        """
+
+        let data = try XCTUnwrap(json.data(using: .utf8))
+        let decoded = try JSONDecoder().decode(WatchSessionSnapshot.self, from: data)
+
+        XCTAssertEqual(decoded.workoutID, "active-strength-session")
+        XCTAssertEqual(decoded.selectedAction, .hold)
+        XCTAssertEqual(decoded.coachPrompt, "Fallback?")
+        XCTAssertTrue(decoded.sessionActive)
     }
 
     func test_session_snapshot_handles_every_workout_action() throws {

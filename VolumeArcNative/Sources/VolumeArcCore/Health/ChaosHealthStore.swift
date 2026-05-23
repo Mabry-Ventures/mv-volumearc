@@ -57,8 +57,16 @@ public final class ChaosHealthStore: HealthStore, @unchecked Sendable {
         try await wrapped.startWorkoutSession(activityType: activityType)
     }
 
+    public func startWorkoutSession(activityType: WorkoutActivityType, workoutID: String) async throws {
+        try await wrapped.startWorkoutSession(activityType: activityType, workoutID: workoutID)
+    }
+
     public func endWorkoutSession() async throws {
         try await wrapped.endWorkoutSession()
+    }
+
+    public func liveWorkoutMetrics() async -> AsyncStream<LiveWorkoutMetrics> {
+        await wrapped.liveWorkoutMetrics()
     }
 }
 

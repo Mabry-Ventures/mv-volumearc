@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import SwiftUI
 import VolumeArcCore
 
@@ -7,6 +8,10 @@ private struct WatchLiveStatePayload: Codable, Sendable {
     let targetWeight: Int
     let targetUnit: String
     let targetRepLower: Int
+}
+
+private enum WatchHealthCaptureError: Error {
+    case authorizationDenied
 }
 
 @MainActor
@@ -26,10 +31,15 @@ final class WatchWorkoutModel: ObservableObject {
 
     private let coordinator: WatchConnectivityCoordinator
     private let stateStore: WatchSessionStateStore
+    private let healthStore: HealthStore
+    private var activeWorkoutID: String
+    private var liveMetricsTask: Task<Void, Never>?
 
     init(
         coordinator: WatchConnectivityCoordinator,
-        stateStore: WatchSessionStateStore
+        stateStore: WatchSessionStateStore,
+        healthStore: HealthStore = UnavailableHealthStore(),
+        workoutID: String = WatchWorkoutModel.makeWorkoutID()
     ) {
         let engine = ProgressionEngine()
         let starterSessions = VolumeArcProductDefaults.starterRecentSessions
@@ -50,6 +60,8 @@ final class WatchWorkoutModel: ObservableObject {
         )
         self.coordinator = coordinator
         self.stateStore = stateStore
+        self.healthStore = healthStore
+        self.activeWorkoutID = workoutID
     }
 
     static func live() -> WatchWorkoutModel {
@@ -58,12 +70,14 @@ final class WatchWorkoutModel: ObservableObject {
                 transport: Self.makeTransport(),
                 payloadStore: Self.makePendingPayloadStore()
             ),
-            stateStore: Self.makeStateStore()
+            stateStore: Self.makeStateStore(),
+            healthStore: Self.makeHealthStore()
         )
     }
 
     func loadPersistedState() async {
         if let snapshot = await stateStore.load() {
+            activeWorkoutID = snapshot.workoutID
             selectedAction = snapshot.selectedAction
             restEndsAt = snapshot.restEndsAt
             coachPrompt = snapshot.coachPrompt
@@ -99,7 +113,7 @@ final class WatchWorkoutModel: ObservableObject {
         restEndsAt = Date.now.addingTimeInterval(90)
         let payload = WatchPayload(
             kind: .restTimer,
-            workoutID: "active-strength-session",
+            workoutID: activeWorkoutID,
             body: "reset:90"
         )
 
@@ -122,7 +136,7 @@ final class WatchWorkoutModel: ObservableObject {
         selectedAction = action
         let payload = WatchPayload(
             kind: .liveState,
-            workoutID: "active-strength-session",
+            workoutID: activeWorkoutID,
             body: SyncPayloadCodec.encode(
                 WatchLiveStatePayload(
                     action: action.rawValue,
@@ -149,18 +163,33 @@ final class WatchWorkoutModel: ObservableObject {
 
     func startSession() async {
         guard sessionActive == false else { return }
+        activeWorkoutID = Self.makeWorkoutID()
+        let healthCaptureStarted = await startNativeWorkoutCapture(workoutID: activeWorkoutID)
         let payload = WatchPayload(
             kind: .startSession,
-            workoutID: "active-strength-session",
+            workoutID: activeWorkoutID,
             body: autopilot.nextExerciseName
         )
 
         do {
             try await coordinator.send(payload)
             sessionActive = true
-            statusMessage = String(localized: "Live session started on watch.", comment: "Watch session start status")
+            statusMessage = healthCaptureStarted
+                ? String(localized: "Live session started on watch.", comment: "Watch session start status")
+                : String(
+                    localized: "Live session started. Health capture unavailable.",
+                    comment: "Watch session start status when native HealthKit capture is unavailable"
+                )
         } catch {
-            statusMessage = String(localized: "Watch session started locally. Phone sync will retry.", comment: "Watch session start offline")
+            statusMessage = healthCaptureStarted
+                ? String(
+                    localized: "Watch session started locally. Phone sync will retry.",
+                    comment: "Watch session start offline"
+                )
+                : String(
+                    localized: "Watch session started locally. Health capture unavailable; phone sync will retry.",
+                    comment: "Watch session start offline when native HealthKit capture is unavailable"
+                )
             sessionActive = true
         }
         pendingSyncCount = await coordinator.pendingPayloadCount()
@@ -171,7 +200,7 @@ final class WatchWorkoutModel: ObservableObject {
         guard sessionActive else { return }
         let payload = WatchPayload(
             kind: .endSession,
-            workoutID: "active-strength-session",
+            workoutID: activeWorkoutID,
             body: "completed"
         )
 
@@ -181,7 +210,9 @@ final class WatchWorkoutModel: ObservableObject {
         } catch {
             statusMessage = String(localized: "Watch ended the session. Phone sync will retry.", comment: "Watch session end offline")
         }
+        await stopNativeWorkoutCapture()
         sessionActive = false
+        activeWorkoutID = Self.makeWorkoutID()
         pendingSyncCount = await coordinator.pendingPayloadCount()
         await stateStore.clear()
     }
@@ -190,7 +221,7 @@ final class WatchWorkoutModel: ObservableObject {
         await ensureSessionStarted()
         let payload = WatchPayload(
             kind: .coachCue,
-            workoutID: "active-strength-session",
+            workoutID: activeWorkoutID,
             body: coachPrompt
         )
 
@@ -210,6 +241,7 @@ final class WatchWorkoutModel: ObservableObject {
     func completeWorkout() async {
         await ensureSessionStarted()
         let completedAt = Date.now
+        let workoutID = activeWorkoutID
         let summaryLine = String(
             localized: "\(autopilot.nextExerciseName) wrapped with \(selectedAction.rawValue) recommendation.",
             comment: """
@@ -220,7 +252,7 @@ final class WatchWorkoutModel: ObservableObject {
         )
         let payloadBody = SyncPayloadCodec.encode(
             WatchWorkoutSyncPayload(
-                workoutID: "active-strength-session",
+                workoutID: workoutID,
                 receivedAt: completedAt,
                 title: String(
                     localized: "Watch Strength Session",
@@ -242,7 +274,7 @@ final class WatchWorkoutModel: ObservableObject {
         ) ?? summaryLine
         let payload = WatchPayload(
             kind: .completedWorkout,
-            workoutID: "active-strength-session",
+            workoutID: workoutID,
             createdAt: completedAt,
             body: payloadBody
         )
@@ -253,7 +285,9 @@ final class WatchWorkoutModel: ObservableObject {
         } catch {
             statusMessage = String(localized: "Workout summary queued for the phone.", comment: "Workout complete offline status")
         }
+        await stopNativeWorkoutCapture()
         sessionActive = false
+        activeWorkoutID = Self.makeWorkoutID()
         pendingSyncCount = await coordinator.pendingPayloadCount()
         await stateStore.clear()
     }
@@ -292,9 +326,66 @@ final class WatchWorkoutModel: ObservableObject {
         UserDefaultsWatchPendingPayloadStore()
     }
 
+    private static func makeHealthStore() -> HealthStore {
+        #if canImport(HealthKit)
+        HealthKitRuntimeStore()
+        #else
+        UnavailableHealthStore()
+        #endif
+    }
+
+    private static func makeWorkoutID() -> String {
+        "watch-\(UUID().uuidString)"
+    }
+
+    private func startNativeWorkoutCapture(workoutID: String) async -> Bool {
+        do {
+            let authorized: Bool
+            if await healthStore.isAuthorized {
+                authorized = true
+            } else {
+                authorized = try await healthStore.requestAuthorization()
+            }
+            guard authorized else { throw WatchHealthCaptureError.authorizationDenied }
+            try await healthStore.startWorkoutSession(activityType: .strengthTraining, workoutID: workoutID)
+            observeLiveWorkoutMetrics()
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func stopNativeWorkoutCapture() async {
+        liveMetricsTask?.cancel()
+        liveMetricsTask = nil
+        do {
+            try await healthStore.endWorkoutSession()
+        } catch {
+            statusMessage = String(
+                localized: "Workout ended, but Apple Health save failed.",
+                comment: "Watch HealthKit workout finish failure status"
+            )
+        }
+        currentHeartRateBPM = nil
+    }
+
+    private func observeLiveWorkoutMetrics() {
+        liveMetricsTask?.cancel()
+        liveMetricsTask = Task { [weak self] in
+            guard let self else { return }
+            let stream = await self.healthStore.liveWorkoutMetrics()
+            for await metrics in stream where metrics.workoutID == self.activeWorkoutID {
+                if let heartRateBPM = metrics.heartRateBPM {
+                    self.currentHeartRateBPM = heartRateBPM
+                }
+            }
+        }
+    }
+
     private func persistState() async {
         await stateStore.save(
             WatchSessionSnapshot(
+                workoutID: activeWorkoutID,
                 selectedAction: selectedAction,
                 restEndsAt: restEndsAt,
                 coachPrompt: coachPrompt,
@@ -482,6 +573,30 @@ struct WatchWorkoutView: View {
                                 comment: "Watch start session button accessibility hint"
                             )
                     )
+
+                    if let heartRate = model.currentHeartRateBPM {
+                        Text(
+                            String(
+                                localized: "Live HR \(heartRate) bpm",
+                                comment: "Watch live heart-rate label; placeholder is beats per minute"
+                            )
+                        )
+                        .font(VA.Typography.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(VA.Colors.textSecondary)
+                        .accessibilityLabel(
+                            String(
+                                localized: "Live heart rate",
+                                comment: "Watch live heart-rate accessibility label"
+                            )
+                        )
+                        .accessibilityValue(
+                            String(
+                                localized: "\(heartRate) beats per minute",
+                                comment: "Watch live heart-rate accessibility value"
+                            )
+                        )
+                    }
 
                     Divider()
 
@@ -702,3 +817,4 @@ struct WatchWorkoutView: View {
         }
     }
 }
+// swiftlint:enable file_length

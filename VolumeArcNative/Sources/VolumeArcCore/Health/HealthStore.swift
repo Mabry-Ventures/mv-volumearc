@@ -10,8 +10,26 @@ public protocol HealthStore: Sendable {
     /// Start a HealthKit workout session (watchOS only on real devices).
     func startWorkoutSession(activityType: WorkoutActivityType) async throws
 
+    /// Start a HealthKit workout session linked to the app's stable workout id.
+    func startWorkoutSession(activityType: WorkoutActivityType, workoutID: String) async throws
+
     /// End the current workout session and save to HealthKit.
     func endWorkoutSession() async throws
+
+    /// Stream live workout metrics produced by the active watchOS workout.
+    func liveWorkoutMetrics() async -> AsyncStream<LiveWorkoutMetrics>
+}
+
+public extension HealthStore {
+    func startWorkoutSession(activityType: WorkoutActivityType, workoutID: String) async throws {
+        try await startWorkoutSession(activityType: activityType)
+    }
+
+    func liveWorkoutMetrics() async -> AsyncStream<LiveWorkoutMetrics> {
+        AsyncStream { continuation in
+            continuation.finish()
+        }
+    }
 }
 
 public enum WorkoutActivityType: String, Sendable {
@@ -19,6 +37,32 @@ public enum WorkoutActivityType: String, Sendable {
     case functionalStrengthTraining
     case coreTraining
     case mixedCardio
+}
+
+public struct LiveWorkoutMetrics: Sendable, Equatable {
+    public let workoutID: String
+    public let heartRateBPM: Int?
+    public let activeEnergyKilocalories: Double?
+    public let elapsedTime: TimeInterval
+    public let capturedAt: Date
+
+    public init(
+        workoutID: String,
+        heartRateBPM: Int?,
+        activeEnergyKilocalories: Double?,
+        elapsedTime: TimeInterval,
+        capturedAt: Date
+    ) {
+        self.workoutID = workoutID
+        self.heartRateBPM = heartRateBPM
+        self.activeEnergyKilocalories = activeEnergyKilocalories
+        self.elapsedTime = elapsedTime
+        self.capturedAt = capturedAt
+    }
+}
+
+public enum HealthWorkoutMetadata {
+    public static let volumeArcWorkoutIDKey = "VolumeArcWorkoutID"
 }
 
 /// The set of HealthKit types the app asks authorization for, expressed as
@@ -61,14 +105,62 @@ public enum HealthKitAuthorizationScope {
 #if canImport(HealthKit)
 import HealthKit
 
-public final class HealthKitRuntimeStore: HealthStore, @unchecked Sendable {
+public extension HealthWorkoutMetadata {
+    static func healthKitMetadata(for workoutID: String) -> [String: Any] {
+        [
+            HKMetadataKeyExternalUUID: workoutID,
+            volumeArcWorkoutIDKey: workoutID,
+        ]
+    }
+}
+
+#if os(watchOS)
+private actor LiveWorkoutMetricsHub {
+    private var continuations: [UUID: AsyncStream<LiveWorkoutMetrics>.Continuation] = [:]
+
+    func stream() -> AsyncStream<LiveWorkoutMetrics> {
+        AsyncStream { continuation in
+            let id = UUID()
+            Task { self.register(continuation, id: id) }
+            continuation.onTermination = { @Sendable _ in
+                Task { await self.unregister(id) }
+            }
+        }
+    }
+
+    func yield(_ metrics: LiveWorkoutMetrics) {
+        for continuation in continuations.values {
+            continuation.yield(metrics)
+        }
+    }
+
+    func finish() {
+        for continuation in continuations.values {
+            continuation.finish()
+        }
+        continuations.removeAll()
+    }
+
+    private func register(_ continuation: AsyncStream<LiveWorkoutMetrics>.Continuation, id: UUID) {
+        continuations[id] = continuation
+    }
+
+    private func unregister(_ id: UUID) {
+        continuations[id] = nil
+    }
+}
+#endif
+
+public final class HealthKitRuntimeStore: NSObject, HealthStore, @unchecked Sendable {
     private let healthStore = HKHealthStore()
     #if os(watchOS)
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
+    private let metricsHub = LiveWorkoutMetricsHub()
+    private var currentWorkoutID: String?
     #endif
 
-    public init() {}
+    override public init() {}
 
     public var isAuthorized: Bool {
         get async {
@@ -141,7 +233,12 @@ public final class HealthKitRuntimeStore: HealthStore, @unchecked Sendable {
     }
 
     public func startWorkoutSession(activityType: WorkoutActivityType) async throws {
+        try await startWorkoutSession(activityType: activityType, workoutID: UUID().uuidString)
+    }
+
+    public func startWorkoutSession(activityType: WorkoutActivityType, workoutID: String) async throws {
         #if os(watchOS)
+        let startDate = Date.now
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = mapActivityType(activityType)
         configuration.locationType = .indoor
@@ -149,23 +246,52 @@ public final class HealthKitRuntimeStore: HealthStore, @unchecked Sendable {
         let session = try HKWorkoutSession(healthStore: healthStore, configuration: configuration)
         let builder = session.associatedWorkoutBuilder()
         builder.dataSource = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: configuration)
+        builder.delegate = self
 
         self.session = session
         self.builder = builder
+        self.currentWorkoutID = workoutID
 
-        session.startActivity(with: Date.now)
-        try await builder.beginCollection(at: Date.now)
+        do {
+            session.startActivity(with: startDate)
+            try await builder.beginCollection(at: startDate)
+            try await builder.addMetadata(HealthWorkoutMetadata.healthKitMetadata(for: workoutID))
+        } catch {
+            session.end()
+            builder.delegate = nil
+            self.session = nil
+            self.builder = nil
+            self.currentWorkoutID = nil
+            throw error
+        }
         #endif
     }
 
     public func endWorkoutSession() async throws {
         #if os(watchOS)
         guard let session, let builder else { return }
+        let endDate = Date.now
         session.end()
-        try await builder.endCollection(at: Date.now)
-        _ = try await builder.finishWorkout()
-        self.session = nil
-        self.builder = nil
+        do {
+            try await builder.endCollection(at: endDate)
+            _ = try await builder.finishWorkout()
+            clearWorkoutSession(builder: builder)
+            await metricsHub.finish()
+        } catch {
+            clearWorkoutSession(builder: builder)
+            await metricsHub.finish()
+            throw error
+        }
+        #endif
+    }
+
+    public func liveWorkoutMetrics() async -> AsyncStream<LiveWorkoutMetrics> {
+        #if os(watchOS)
+        await metricsHub.stream()
+        #else
+        AsyncStream { continuation in
+            continuation.finish()
+        }
         #endif
     }
 
@@ -178,8 +304,56 @@ public final class HealthKitRuntimeStore: HealthStore, @unchecked Sendable {
         case .mixedCardio: return .mixedCardio
         }
     }
+
+    private func emitMetrics(from builder: HKLiveWorkoutBuilder) {
+        guard let currentWorkoutID else { return }
+        let metrics = LiveWorkoutMetrics(
+            workoutID: currentWorkoutID,
+            heartRateBPM: Self.heartRateBPM(from: builder),
+            activeEnergyKilocalories: Self.activeEnergyKilocalories(from: builder),
+            elapsedTime: builder.elapsedTime,
+            capturedAt: Date.now
+        )
+        Task { await metricsHub.yield(metrics) }
+    }
+
+    private static func heartRateBPM(from builder: HKLiveWorkoutBuilder) -> Int? {
+        guard let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate),
+              let quantity = builder.statistics(for: heartRateType)?.mostRecentQuantity()
+        else { return nil }
+
+        let unit = HKUnit.count().unitDivided(by: .minute())
+        return Int(quantity.doubleValue(for: unit).rounded())
+    }
+
+    private static func activeEnergyKilocalories(from builder: HKLiveWorkoutBuilder) -> Double? {
+        guard let energyType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned),
+              let quantity = builder.statistics(for: energyType)?.sumQuantity()
+        else { return nil }
+
+        return quantity.doubleValue(for: .kilocalorie())
+    }
+
+    private func clearWorkoutSession(builder: HKLiveWorkoutBuilder) {
+        builder.delegate = nil
+        self.session = nil
+        self.builder = nil
+        self.currentWorkoutID = nil
+    }
     #endif
 }
+
+#if os(watchOS)
+extension HealthKitRuntimeStore: HKLiveWorkoutBuilderDelegate {
+    public func workoutBuilder(_ workoutBuilder: HKLiveWorkoutBuilder, didCollectDataOf collectedTypes: Set<HKSampleType>) {
+        emitMetrics(from: workoutBuilder)
+    }
+
+    public func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {
+        emitMetrics(from: workoutBuilder)
+    }
+}
+#endif
 #endif
 
 public struct UnavailableHealthStore: HealthStore {
