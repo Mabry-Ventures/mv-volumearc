@@ -22,7 +22,7 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 |---|---|---|---|
 | Onboarding | 5 | 2 | 40% |
 | Today | 5 | 5 | 100% |
-| Workouts | 7 | 3 | 43% |
+| Workouts | 7 | 4 | 57% |
 | Coach | 6 | 3 | 50% |
 | Signals | 3 | 3 | 100% |
 | Profile | 8 | 7 | 88% |
@@ -33,7 +33,7 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | Background | 4 | 1 | 25% |
 | Failure paths | 6 | 0 | 0% |
 | Resilience / interruption (VOL-127 P2) | 6 | 0 | 0% |
-| **Total** | **69** | **35** | **51%** |
+| **Total** | **69** | **36** | **52%** |
 
 > Goal: 100% by end of Wave 2 (cycle 7, 2026-05-31). Burn down via [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141).
 >
@@ -69,7 +69,7 @@ VOL-141 Phase 1 (2026-05-13): audited the actual `Tests/VolumeArcAppUITests/` me
 | `workouts.log-set` | Active session | Tap "Log set" → enter rep/weight/RPE → confirm | `WorkoutSet` appended; aggregate updated | `workout.set_logged` | `VolumeArcAppJourneyTests.testStartLogCompleteWorkoutSession` (log phase) |
 | `workouts.rest-timer-expire` | Set logged | Wait 90s | Notification fires; haptic; UI updates | `workout.rest_timer.expired` | `[ ]` |
 | `workouts.complete-session` | Active session | Tap "Complete" | Session closed; summary shown; CloudKit push staged | `workout.completed` | `VolumeArcAppJourneyTests.testStartLogCompleteWorkoutSession` (complete phase) |
-| `workouts.view-detail` | History present | Tap a completed session | Detail view shows sets + summary | `workout.detail.opened` | `[ ]` |
+| `workouts.view-detail` | History present | Tap a completed session | Detail view shows sets + summary | `workout.detail.opened` | `VolumeArcAppJourneyTests.testWorkoutHistoryRowOpensSessionDetailAndEmitsTelemetry` |
 | `workouts.history-scroll` | History tab | Scroll | List paginates without hitches | (perf-only) | `[ ]` |
 | `workouts.delete-session` | Completed session | Tap delete (confirm sheet) | Session removed; CloudKit delete staged | `workout.deleted` | `[ ]` |
 

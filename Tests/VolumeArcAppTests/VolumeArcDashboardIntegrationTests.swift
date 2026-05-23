@@ -508,6 +508,29 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         )
     }
 
+    func testRecordWorkoutDetailOpenedEmitsCatalogEventWithSessionMetadata() throws {
+        let telemetry = InMemoryTelemetrySink()
+        let model = makeDashboardModel(telemetrySink: telemetry)
+        let session = RecentSession(
+            date: Date(timeIntervalSince1970: 1_720_000_000),
+            durationMinutes: 52,
+            exerciseIDs: ["back-squat", "bench-press"],
+            totalVolumeLoad: 12_345,
+            averageRPE: 7.5,
+            completedSetCount: 9
+        )
+
+        model.recordWorkoutDetailOpened(session: session)
+
+        let event = try XCTUnwrap(
+            telemetry.currentEvents.first { $0.category == "workout" && $0.name == "detail.opened" }
+        )
+        XCTAssertEqual(event.severity, .info)
+        XCTAssertEqual(event.metadata["sets"], "9")
+        XCTAssertEqual(event.metadata["durationMinutes"], "52")
+        XCTAssertEqual(event.metadata["volumeLoad"], "12345")
+    }
+
     func testHandleWatchVoiceTogglePayloadPersistsMirroredSetting() async throws {
         let settings = DashboardTestWatchVoiceSettingsStore(enabled: true)
         let model = makeDashboardModel(watchVoiceSettingsStore: settings)
