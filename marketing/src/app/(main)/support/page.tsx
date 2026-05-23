@@ -1,6 +1,7 @@
 import { type Metadata } from 'next'
 
 import { Container } from '@/components/Container'
+import { SupportForm } from '@/components/SupportForm'
 
 export const metadata: Metadata = {
   title: 'Support',
@@ -12,12 +13,15 @@ const supportSections = [
   {
     heading: 'Contact',
     body: (
-      <p>
-        For app questions or bug reports, the fastest path is in-app: open{' '}
-        <strong>Profile → Help → Send feedback</strong>. The form attaches a
-        redacted diagnostic bundle so we can reproduce the issue without seeing
-        your personal data.
-      </p>
+      <>
+        <p>
+          For app questions or bug reports, the fastest path is in-app: open{' '}
+          <strong>Profile → Help → Send feedback</strong>. The form attaches a
+          redacted diagnostic bundle so we can reproduce the issue without
+          seeing your personal data.
+        </p>
+        <SupportForm />
+      </>
     ),
   },
   {
@@ -26,8 +30,8 @@ const supportSections = [
       <ul className="space-y-2">
         <li>
           General support:{' '}
-          <a className="underline" href="mailto:support@volumearc.com">
-            support@volumearc.com
+          <a className="underline" href="mailto:support@mabryventures.com">
+            support@mabryventures.com
           </a>
         </li>
         <li>

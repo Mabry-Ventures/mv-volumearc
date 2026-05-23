@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 // feedback bundle; and expanded GDPR / CCPA-CPRA disclosures. The
 // matching code changes (strict-mode question redaction on the relay
 // path; maskAllImages) ship in the same PR.
-const EFFECTIVE_DATE = 'May 22, 2026'
+const EFFECTIVE_DATE = 'May 23, 2026'
 
 export default function PrivacyPage() {
   return (
@@ -248,6 +248,18 @@ export default function PrivacyPage() {
               <a href="mailto:privacy@volumearc.com">privacy@volumearc.com</a>.
             </p>
 
+            <h3>Support form email (sent through Resend)</h3>
+            <p>
+              If you use the support form on <code>volumearc.app/support</code>,
+              we send the name, email address, topic, and message you provide
+              through Resend (operated by Resend, Inc.) to deliver the request
+              to our support inbox. This is transactional support email only;
+              we do not add support-form submissions to a marketing list. The
+              route uses transient in-memory rate limiting from request metadata
+              to reduce abuse; those counters are not sent to Resend and expire
+              automatically.
+            </p>
+
             <h3>Microphone &amp; speech (voice input)</h3>
             <p>
               If you ask the coach a question by voice, the App requests
@@ -341,6 +353,10 @@ export default function PrivacyPage() {
                 <strong>Functional Software, Inc. (Sentry)</strong> — crash and
                 diagnostics reporting.
               </li>
+              <li>
+                <strong>Resend, Inc.</strong> — transactional support-form email
+                delivery from the marketing website.
+              </li>
             </ul>
             <p>
               <strong>International transfers.</strong> If you are outside the
@@ -355,7 +371,8 @@ export default function PrivacyPage() {
               relay does not retain prompt content; the rate-limit identifier
               counters expire automatically within minutes. Sentry events are
               retained for Sentry&rsquo;s default period (about 90 days) and
-              then deleted.
+              then deleted. Support-form emails are retained in the support
+              inbox only as long as needed to answer and audit the request.
             </p>
 
             <h2>6. GDPR (EEA &amp; UK)</h2>
