@@ -157,7 +157,7 @@ require_dir "$WATCH_WIDGET_BUNDLE" "embedded watch widget extension"
 
 require_plist_value "VolumeArcAIRelayURL" "$EXPECTED_RELAY_URL" "$APP_BUNDLE/Info.plist"
 
-# VOL-196: if the relay URL is configured (release builds always have
+# VOL-182: if the relay URL is configured (release builds always have
 # it set), the signing key must also be configured. Without the key,
 # `AIRelayCoachProvider` installs but every coach request throws
 # `relayUnavailable`, silently degrading cloud AI and live voice in
@@ -167,7 +167,7 @@ require_plist_value "VolumeArcAIRelayURL" "$EXPECTED_RELAY_URL" "$APP_BUNDLE/Inf
 if [[ -n "$EXPECTED_RELAY_URL" ]]; then
   signing_key_value=$(plutil -extract VolumeArcRelaySigningKey raw -o - "$APP_BUNDLE/Info.plist" 2>/dev/null || true)
   if [[ -z "$signing_key_value" || "$signing_key_value" == "\$(VOLUMEARC_RELAY_SIGNING_KEY)" ]]; then
-    echo "FAIL: VolumeArcRelaySigningKey is missing or unresolved in $APP_BUNDLE/Info.plist. Release builds must inject VOLUMEARC_RELAY_SIGNING_KEY before archive; without it, cloud AI and live voice silently degrade for every user. See ci_scripts/ci_post_clone.sh (VOL-196)." >&2
+    echo "FAIL: VolumeArcRelaySigningKey is missing or unresolved in $APP_BUNDLE/Info.plist. Release builds must inject VOLUMEARC_RELAY_SIGNING_KEY before archive; without it, cloud AI and live voice silently degrade for every user. See ci_scripts/ci_post_clone.sh and docs/RELEASE.md (VOL-182)." >&2
     exit 1
   fi
 fi

@@ -119,7 +119,14 @@ VOLUMEARC_RELAY_SIGNING_KEY = <contents of relay/.secrets/relay_signing_key.txt>
 
 ### For Release / TestFlight
 
-Inject via xcconfig or a build phase script that writes Info.plist values from a secrets file. The signing key itself must not live in git.
+Xcode Cloud injects the relay URL and signing key from workflow environment variables in `ci_scripts/ci_post_clone.sh` before archive:
+
+```bash
+VOLUMEARC_AI_RELAY_URL = https://relay.volumearc.app
+VOLUMEARC_RELAY_SIGNING_KEY = <same value as Worker RELAY_SIGNING_KEY>
+```
+
+`VOLUMEARC_RELAY_SIGNING_KEY` must be marked secret in Xcode Cloud and must never live in git. Local release tooling (`fastlane ios beta` and `scripts/archive_for_distribution.sh`) reads the same env var, patches `App/Info.plist` only for the duration of the archive, then restores the source file.
 
 ## Promoting to `relay.volumearc.app`
 
