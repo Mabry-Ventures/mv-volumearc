@@ -467,7 +467,8 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         aiProvider: any AICoachProvider = LocalHeuristicAICoachProvider(),
         recoveryReader: any RecoveryReader = UnavailableRecoveryReader(),
         telemetrySink: any TelemetrySink = InMemoryTelemetrySink(),
-        watchVoiceSettingsStore: any WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore()
+        watchVoiceSettingsStore: any WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore(),
+        watchConnectivityCoordinator: WatchConnectivityCoordinator? = nil
     ) -> WorkoutDashboardModel {
         WorkoutDashboardModel(
             aiProvider: aiProvider,
@@ -492,7 +493,8 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
                 transport: AIRelayVoiceTransport(provider: aiProvider)
             ),
             recoveryReader: recoveryReader,
-            watchVoiceSettingsStore: watchVoiceSettingsStore
+            watchVoiceSettingsStore: watchVoiceSettingsStore,
+            watchConnectivityCoordinator: watchConnectivityCoordinator
         )
     }
 
@@ -557,6 +559,151 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
 
         let enabled = await settings.isWatchVoiceEnabled()
         XCTAssertFalse(enabled)
+    }
+
+    func testHandleWatchFormCheckStartAndStopDriveRemoteCaptureState() async throws {
+        let model = makeDashboardModel()
+        let request = WatchFormCheckStartPayload(
+            sessionID: "form-session",
+            exerciseID: FormCheckExercise.squat.rawValue,
+            exerciseName: "Back Squat",
+            setNumber: 1
+        )
+
+        await model.handleWatchPayload(
+            WatchPayload(
+                kind: .formCheckStart,
+                workoutID: "watch",
+                body: WatchFormCheckStartPayload.encode(request)
+            )
+        )
+
+        XCTAssertEqual(model.activeWatchFormCheckRequest, request)
+        XCTAssertNil(model.watchFormCheckStopToken)
+
+        await model.handleWatchPayload(
+            WatchPayload(
+                kind: .formCheckStop,
+                workoutID: "watch",
+                body: WatchFormCheckStopPayload.encode(WatchFormCheckStopPayload(sessionID: request.sessionID))
+            )
+        )
+
+        XCTAssertNotNil(model.watchFormCheckStopToken)
+    }
+
+    func testCompleteWatchFormCheckSendsResultPayloadToWatch() async throws {
+        let transport = RecordingDashboardWatchTransport(reachable: true)
+        let coordinator = WatchConnectivityCoordinator(
+            transport: transport,
+            payloadStore: DashboardInMemoryPendingPayloadStore()
+        )
+        let model = makeDashboardModel(watchConnectivityCoordinator: coordinator)
+        let request = WatchFormCheckStartPayload(
+            sessionID: "form-session",
+            exerciseID: FormCheckExercise.squat.rawValue,
+            exerciseName: "Back Squat",
+            setNumber: 1
+        )
+        let analysis = FormCheckAnalysis(
+            exercise: .squat,
+            capturedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            duration: 18,
+            frameCount: 120,
+            poseFrameCount: 120,
+            averageConfidence: 0.92,
+            reps: [],
+            maxLateralDrift: 0.02,
+            flags: [],
+            verdict: .solid,
+            hapticCode: .solid,
+            cueText: "Clean reps."
+        )
+
+        await model.handleWatchPayload(
+            WatchPayload(
+                kind: .formCheckStart,
+                workoutID: "watch",
+                body: WatchFormCheckStartPayload.encode(request)
+            )
+        )
+        await model.completeWatchFormCheck(analysis, sessionID: "form-session")
+
+        XCTAssertNil(model.activeWatchFormCheckRequest)
+        XCTAssertNil(model.watchFormCheckStopToken)
+        let sent = await transport.sent
+        let payload = try XCTUnwrap(sent.first { $0.kind == .formCheckResult })
+        let result = try XCTUnwrap(WatchFormCheckResultPayload.decode(from: payload.body))
+        XCTAssertEqual(result.sessionID, "form-session")
+        XCTAssertEqual(result.verdict, .solid)
+        XCTAssertEqual(result.cueText, "Clean reps.")
+    }
+
+    func testDismissWatchFormCheckSendsStoppedPayloadToWatch() async throws {
+        let transport = RecordingDashboardWatchTransport(reachable: true)
+        let coordinator = WatchConnectivityCoordinator(
+            transport: transport,
+            payloadStore: DashboardInMemoryPendingPayloadStore()
+        )
+        let model = makeDashboardModel(watchConnectivityCoordinator: coordinator)
+        let request = WatchFormCheckStartPayload(
+            sessionID: "form-dismissed",
+            exerciseID: FormCheckExercise.squat.rawValue,
+            exerciseName: "Back Squat",
+            setNumber: 1
+        )
+
+        await model.handleWatchPayload(
+            WatchPayload(
+                kind: .formCheckStart,
+                workoutID: "watch",
+                body: WatchFormCheckStartPayload.encode(request)
+            )
+        )
+        await model.dismissWatchFormCheckRequest(sessionID: request.sessionID)
+
+        XCTAssertNil(model.activeWatchFormCheckRequest)
+        XCTAssertNil(model.watchFormCheckStopToken)
+        let sent = await transport.sent
+        let payload = try XCTUnwrap(sent.first { $0.kind == .formCheckStopped })
+        let stopped = try XCTUnwrap(WatchFormCheckStoppedPayload.decode(from: payload.body))
+        XCTAssertEqual(stopped.sessionID, request.sessionID)
+        XCTAssertEqual(stopped.reason, .userDismissed)
+    }
+
+    func testRejectWatchFormCheckSendsUnavailableStoppedPayloadToWatch() async throws {
+        let transport = RecordingDashboardWatchTransport(reachable: true)
+        let coordinator = WatchConnectivityCoordinator(
+            transport: transport,
+            payloadStore: DashboardInMemoryPendingPayloadStore()
+        )
+        let model = makeDashboardModel(watchConnectivityCoordinator: coordinator)
+        let request = WatchFormCheckStartPayload(
+            sessionID: "form-unavailable",
+            exerciseID: "unsupported-lift",
+            exerciseName: "Unsupported Lift",
+            setNumber: 1
+        )
+
+        await model.handleWatchPayload(
+            WatchPayload(
+                kind: .formCheckStart,
+                workoutID: "watch",
+                body: WatchFormCheckStartPayload.encode(request)
+            )
+        )
+        await model.rejectWatchFormCheckRequest(
+            sessionID: request.sessionID,
+            message: "This lift is not supported for camera form check yet."
+        )
+
+        XCTAssertNil(model.activeWatchFormCheckRequest)
+        XCTAssertNil(model.watchFormCheckStopToken)
+        let sent = await transport.sent
+        let payload = try XCTUnwrap(sent.first { $0.kind == .formCheckStopped })
+        let stopped = try XCTUnwrap(WatchFormCheckStoppedPayload.decode(from: payload.body))
+        XCTAssertEqual(stopped.sessionID, request.sessionID)
+        XCTAssertEqual(stopped.reason, .unavailable)
     }
 
     // MARK: - VOL-181 recovery wiring
@@ -680,6 +827,43 @@ private actor DashboardTestWatchVoiceSettingsStore: WatchVoiceSettingsStore {
 
     func setWatchVoiceEnabled(_ enabled: Bool) async {
         self.enabled = enabled
+    }
+}
+
+private actor DashboardInMemoryPendingPayloadStore: WatchPendingPayloadStore {
+    private var payloads: [WatchPayload] = []
+
+    func enqueue(_ payload: WatchPayload) async {
+        payloads.append(payload)
+    }
+
+    func dequeueAll() async -> [WatchPayload] {
+        defer { payloads.removeAll() }
+        return payloads
+    }
+
+    func count() async -> Int {
+        payloads.count
+    }
+}
+
+private actor RecordingDashboardWatchTransport: WatchSessionTransport {
+    private(set) var sent: [WatchPayload] = []
+    private let reachable: Bool
+
+    init(reachable: Bool) {
+        self.reachable = reachable
+    }
+
+    func activate() async {}
+
+    func isReachable() async -> Bool {
+        reachable
+    }
+
+    func send(_ payload: WatchPayload) async throws {
+        guard reachable else { throw WatchTransportError.notReachable }
+        sent.append(payload)
     }
 }
 #endif

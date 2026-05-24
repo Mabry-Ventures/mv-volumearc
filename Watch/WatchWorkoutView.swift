@@ -1,6 +1,9 @@
 // swiftlint:disable file_length
 import SwiftUI
 import VolumeArcCore
+#if canImport(WatchKit)
+import WatchKit
+#endif
 
 private struct WatchLiveStatePayload: Codable, Sendable {
     let action: String
@@ -54,6 +57,9 @@ final class WatchWorkoutModel: ObservableObject {
     @Published private(set) var isWatchVoiceEnabled = true
     @Published private(set) var isDoubleTapEnabled = true
     @Published private(set) var statusMessage = String(localized: "Watch coach standing by.", comment: "Watch default status")
+    @Published private(set) var activeFormCheckSessionID: String?
+    @Published private(set) var isFormCheckAnalyzing = false
+    @Published private(set) var formCheckResultSummary: String?
     #if DEBUG
     @Published private(set) var liveMetricEventCount = 0
     #endif
@@ -69,8 +75,11 @@ final class WatchWorkoutModel: ObservableObject {
     private let actionButtonCommandStore: any WatchActionButtonCommandStoring
     private let actionButtonHaptics: any WatchActionButtonHapticPlaying
     private let actionButtonNextActionDonor: any WatchActionButtonNextActionDonating
+    private let formCheckAnalyzeTimeoutNanoseconds: UInt64
     private var activeWorkoutID: String
     private var isLuminanceReduced = false
+    private var loggedSetCountThisSession = 0
+    private var formCheckAnalyzeTimeoutTask: Task<Void, Never>?
     private var liveMetricsTask: Task<Void, Never>?
 
     init(
@@ -85,6 +94,7 @@ final class WatchWorkoutModel: ObservableObject {
         actionButtonCommandStore: any WatchActionButtonCommandStoring = UserDefaultsActionButtonCommandStore.shared,
         actionButtonHaptics: any WatchActionButtonHapticPlaying = SystemWatchActionButtonHaptics(),
         actionButtonNextActionDonor: any WatchActionButtonNextActionDonating = AppIntentActionButtonNextActionDonor(),
+        formCheckAnalyzeTimeoutNanoseconds: UInt64 = 45_000_000_000,
         workoutID: String = WatchWorkoutModel.makeWorkoutID()
     ) {
         let engine = ProgressionEngine()
@@ -115,6 +125,7 @@ final class WatchWorkoutModel: ObservableObject {
         self.actionButtonCommandStore = actionButtonCommandStore
         self.actionButtonHaptics = actionButtonHaptics
         self.actionButtonNextActionDonor = actionButtonNextActionDonor
+        self.formCheckAnalyzeTimeoutNanoseconds = formCheckAnalyzeTimeoutNanoseconds
         self.activeWorkoutID = workoutID
     }
 
@@ -145,9 +156,11 @@ final class WatchWorkoutModel: ObservableObject {
             coachPrompt = snapshot.coachPrompt
             sessionActive = snapshot.sessionActive
             statusMessage = snapshot.statusMessage
+            loggedSetCountThisSession = snapshot.loggedSetCount
         }
         await refreshConnectivity()
         if sessionActive {
+            enableBatteryMonitoringIfNeeded()
             observeLiveWorkoutMetrics()
             await actionButtonNextActionDonor.donateLogNextSet()
         }
@@ -165,6 +178,10 @@ final class WatchWorkoutModel: ObservableObject {
         sessionActive && isDoubleTapEnabled
     }
 
+    private var loggedSetNumberForFormCheck: Int {
+        max(loggedSetCountThisSession + 1, 1)
+    }
+
     func setDoubleTapEnabled(_ enabled: Bool) async {
         isDoubleTapEnabled = enabled
         await doubleTapSettingsStore.setDoubleTapEnabled(enabled)
@@ -175,10 +192,19 @@ final class WatchWorkoutModel: ObservableObject {
     }
 
     func applyWatchPayload(_ payload: WatchPayload) async {
-        guard payload.kind == .voiceCoachToggle,
-              let settings = WatchVoiceCoach.decodeSettingsPayload(from: payload.body)
-        else { return }
-        await applyWatchVoiceEnabled(settings.isEnabled, syncToPeer: false)
+        switch payload.kind {
+        case .voiceCoachToggle:
+            guard let settings = WatchVoiceCoach.decodeSettingsPayload(from: payload.body) else { return }
+            await applyWatchVoiceEnabled(settings.isEnabled, syncToPeer: false)
+        case .formCheckResult:
+            guard let result = WatchFormCheckResultPayload.decode(from: payload.body) else { return }
+            await applyFormCheckResult(result)
+        case .formCheckStopped:
+            guard let stopped = WatchFormCheckStoppedPayload.decode(from: payload.body) else { return }
+            await applyFormCheckStopped(stopped)
+        default:
+            return
+        }
     }
 
     func processPendingActionButtonCommands() async {
@@ -210,15 +236,19 @@ final class WatchWorkoutModel: ObservableObject {
 
     func refreshConnectivity() async {
         let reachable = await coordinator.isReachable()
+        let pendingBeforeFlush = await coordinator.pendingPayloadCount()
         if reachable {
             try? await coordinator.flushPendingIfReachable()
         }
         pendingSyncCount = await coordinator.pendingPayloadCount()
+        if reachable, pendingBeforeFlush > 0, activeFormCheckSessionID != nil {
+            await actionButtonHaptics.play(.resultPending)
+        }
         statusMessage = reachable
-            ? (pendingSyncCount == 0
+            ? (pendingBeforeFlush == 0
                 ? String(localized: "Connected to iPhone for live coaching.", comment: "Watch connected status")
                 : String(
-                    localized: "Connected again. Replayed ^[\(pendingSyncCount) queued update](inflect: true).",
+                    localized: "Connected again. Replayed ^[\(pendingBeforeFlush) queued update](inflect: true).",
                     comment: """
                         Watch reconnect status showing how many queued \
                         updates were replayed. Uses automatic grammar \
@@ -322,6 +352,8 @@ final class WatchWorkoutModel: ObservableObject {
     func startSession() async {
         guard sessionActive == false else { return }
         activeWorkoutID = Self.makeWorkoutID()
+        loggedSetCountThisSession = 0
+        enableBatteryMonitoringIfNeeded()
         let healthCaptureStarted = await startNativeWorkoutCapture(workoutID: activeWorkoutID)
         let payload = WatchPayload(
             kind: .startSession,
@@ -362,6 +394,8 @@ final class WatchWorkoutModel: ObservableObject {
     func startWorkoutKitHandoff(workoutID: String) async {
         guard sessionActive == false else { return }
         activeWorkoutID = workoutID
+        loggedSetCountThisSession = 0
+        enableBatteryMonitoringIfNeeded()
         let healthCaptureStarted = await startNativeWorkoutCapture(workoutID: activeWorkoutID)
         let payload = WatchPayload(
             kind: .startSession,
@@ -482,8 +516,106 @@ final class WatchWorkoutModel: ObservableObject {
         await persistState()
     }
 
+    func startFormCheckCapture() async {
+        await ensureSessionStarted()
+        guard activeFormCheckSessionID == nil else { return }
+        cancelFormCheckAnalyzeTimeout()
+        guard let exercise = FormCheckExercise.infer(
+            exerciseID: autopilot.nextExerciseID,
+            name: autopilot.nextExerciseName
+        ) else {
+            statusMessage = String(localized: "Form check is not available for this lift.", comment: "Unsupported watch form check status")
+            await actionButtonHaptics.play(.failed)
+            await persistState()
+            return
+        }
+
+        let sessionID = "watch-form-\(UUID().uuidString)"
+        activeFormCheckSessionID = sessionID
+        isFormCheckAnalyzing = false
+        formCheckResultSummary = nil
+        enableBatteryMonitoringIfNeeded()
+        let request = WatchFormCheckStartPayload(
+            sessionID: sessionID,
+            exerciseID: exercise.rawValue,
+            exerciseName: autopilot.nextExerciseName,
+            setNumber: loggedSetNumberForFormCheck
+        )
+        let payload = WatchPayload(
+            kind: .formCheckStart,
+            workoutID: activeWorkoutID,
+            body: WatchFormCheckStartPayload.encode(request)
+        )
+
+        let peerReachable = await coordinator.isReachable()
+        do {
+            try await coordinator.send(payload)
+            if peerReachable {
+                statusMessage = String(localized: "iPhone capture armed.", comment: "Watch form-check capture started status")
+                await actionButtonHaptics.play(.acknowledged)
+            } else {
+                statusMessage = String(localized: "Capture request queued until iPhone reconnects.", comment: "Watch form-check queued start status")
+                await actionButtonHaptics.play(.resultPending)
+            }
+        } catch {
+            statusMessage = String(localized: "Capture request queued until iPhone reconnects.", comment: "Watch form-check queued start status")
+            await actionButtonHaptics.play(.resultPending)
+        }
+        pendingSyncCount = await coordinator.pendingPayloadCount()
+        await persistState()
+    }
+
+    func stopFormCheckCapture() async {
+        guard let sessionID = activeFormCheckSessionID else {
+            statusMessage = String(localized: "Start capture first.", comment: "Watch form-check stop without start status")
+            await actionButtonHaptics.play(.failed)
+            await persistState()
+            return
+        }
+
+        isFormCheckAnalyzing = true
+        let payload = WatchPayload(
+            kind: .formCheckStop,
+            workoutID: activeWorkoutID,
+            body: WatchFormCheckStopPayload.encode(WatchFormCheckStopPayload(sessionID: sessionID))
+        )
+
+        let peerReachable = await coordinator.isReachable()
+        do {
+            try await coordinator.send(payload)
+            if peerReachable {
+                statusMessage = String(localized: "Analyzing form on iPhone.", comment: "Watch form-check analyzing status")
+                scheduleFormCheckAnalyzeTimeout(sessionID: sessionID)
+            } else {
+                cancelFormCheckAnalyzeTimeout()
+                isFormCheckAnalyzing = false
+                statusMessage = String(localized: "Stop queued. Result pending.", comment: "Watch form-check queued stop status")
+                await actionButtonHaptics.play(.resultPending)
+            }
+        } catch {
+            cancelFormCheckAnalyzeTimeout()
+            isFormCheckAnalyzing = false
+            statusMessage = String(localized: "Stop queued. Result pending.", comment: "Watch form-check queued stop status")
+            await actionButtonHaptics.play(.resultPending)
+        }
+        pendingSyncCount = await coordinator.pendingPayloadCount()
+        await persistState()
+    }
+
+    func cancelFormCheckAnalyzing() async {
+        guard isFormCheckAnalyzing else { return }
+        cancelFormCheckAnalyzeTimeout()
+        activeFormCheckSessionID = nil
+        isFormCheckAnalyzing = false
+        formCheckResultSummary = nil
+        statusMessage = String(localized: "Form check canceled.", comment: "Watch form-check cancel status")
+        await actionButtonHaptics.play(.failed)
+        await persistState()
+    }
+
     func completeWorkout() async {
         await ensureSessionStarted()
+        cancelFormCheckAnalyzeTimeout()
         let completedAt = Date.now
         let workoutID = activeWorkoutID
         let summaryLine = String(
@@ -545,8 +677,6 @@ final class WatchWorkoutModel: ObservableObject {
             return String(localized: "Hold the load and own the next set.", comment: "Hold weight coaching cue")
         case .decrease:
             return String(localized: "Trim the jump and keep technique sharp.", comment: "Decrease weight coaching cue")
-        default:
-            return autopilot.recommendationReason
         }
     }
 
@@ -576,6 +706,7 @@ final class WatchWorkoutModel: ObservableObject {
 
         await choose(selectedAction)
         await resetRestTimer(announcesSetComplete: false)
+        loggedSetCountThisSession += 1
         await actionButtonHaptics.play(.acknowledged)
         switch source {
         case .doubleTap:
@@ -587,6 +718,95 @@ final class WatchWorkoutModel: ObservableObject {
             statusMessage = String(localized: "Set logged on Watch.", comment: "Watch manual set logged status")
         }
         await persistState()
+    }
+
+    private func applyFormCheckResult(_ result: WatchFormCheckResultPayload) async {
+        guard activeFormCheckSessionID == nil || activeFormCheckSessionID == result.sessionID else { return }
+        cancelFormCheckAnalyzeTimeout()
+        activeFormCheckSessionID = nil
+        isFormCheckAnalyzing = false
+        formCheckResultSummary = result.shortSummary
+        statusMessage = result.shortSummary
+        await actionButtonHaptics.play(feedback(for: result.hapticCode))
+        await speakFormCheckResult(result)
+        await persistState()
+    }
+
+    private func applyFormCheckStopped(_ stopped: WatchFormCheckStoppedPayload) async {
+        guard activeFormCheckSessionID == nil || activeFormCheckSessionID == stopped.sessionID else { return }
+        cancelFormCheckAnalyzeTimeout()
+        activeFormCheckSessionID = nil
+        isFormCheckAnalyzing = false
+        formCheckResultSummary = nil
+        statusMessage = stopped.message
+        await actionButtonHaptics.play(.failed)
+        await persistState()
+    }
+
+    private func feedback(for hapticCode: FormCheckHapticCode) -> WatchActionButtonFeedback {
+        switch hapticCode {
+        case .solid:
+            return .formSolid
+        case .review:
+            return .formReview
+        case .inconclusive:
+            return .formInconclusive
+        }
+    }
+
+    private func scheduleFormCheckAnalyzeTimeout(sessionID: String) {
+        cancelFormCheckAnalyzeTimeout()
+        let timeout = formCheckAnalyzeTimeoutNanoseconds
+        formCheckAnalyzeTimeoutTask = Task { [weak self, timeout] in
+            do {
+                try await Task.sleep(nanoseconds: timeout)
+            } catch {
+                return
+            }
+            await self?.handleFormCheckAnalyzeTimeout(sessionID: sessionID)
+        }
+    }
+
+    private func cancelFormCheckAnalyzeTimeout() {
+        formCheckAnalyzeTimeoutTask?.cancel()
+        formCheckAnalyzeTimeoutTask = nil
+    }
+
+    private func handleFormCheckAnalyzeTimeout(sessionID: String) async {
+        guard activeFormCheckSessionID == sessionID, isFormCheckAnalyzing else { return }
+        formCheckAnalyzeTimeoutTask = nil
+        activeFormCheckSessionID = nil
+        isFormCheckAnalyzing = false
+        formCheckResultSummary = nil
+        statusMessage = String(localized: "Form check timed out. Try again.", comment: "Watch form-check timeout status")
+        await actionButtonHaptics.play(.failed)
+        await persistState()
+    }
+
+    private func speakFormCheckResult(_ result: WatchFormCheckResultPayload) async {
+        guard isWatchVoiceEnabled, isWatchBatteryCritical == false else { return }
+        guard isLuminanceReduced == false else { return }
+        try? await voicePlayback.speak(WatchVoiceUtterance(text: result.cueText))
+    }
+
+    private var isWatchBatteryCritical: Bool {
+        #if canImport(WatchKit)
+        let device = WKInterfaceDevice.current()
+        let level = device.batteryLevel
+        guard level >= 0 else { return false }
+        return level < 0.15
+        #else
+        return false
+        #endif
+    }
+
+    private func enableBatteryMonitoringIfNeeded() {
+        #if canImport(WatchKit)
+        let device = WKInterfaceDevice.current()
+        if device.isBatteryMonitoringEnabled == false {
+            device.isBatteryMonitoringEnabled = true
+        }
+        #endif
     }
 
     private func ensureSessionStarted() async {
@@ -639,6 +859,7 @@ final class WatchWorkoutModel: ObservableObject {
 
         await choose(selectedAction)
         await resetRestTimer()
+        loggedSetCountThisSession += 1
         await actionButtonHaptics.play(.acknowledged)
         await speakActionButtonConfirmation(
             String(localized: "Set logged.", comment: "Action Button set logged spoken feedback")
@@ -816,7 +1037,8 @@ final class WatchWorkoutModel: ObservableObject {
                 restEndsAt: restEndsAt,
                 coachPrompt: coachPrompt,
                 sessionActive: sessionActive,
-                statusMessage: statusMessage
+                statusMessage: statusMessage,
+                loggedSetCount: loggedSetCountThisSession
             )
         )
     }
@@ -1110,6 +1332,10 @@ struct WatchWorkoutView: View {
                             .opacity(0.01)
                             .accessibilityHidden(true)
                         }
+                    }
+
+                    if model.sessionActive {
+                        WatchFormCheckControls(model: model)
                     }
                 }
 
@@ -1432,8 +1658,6 @@ struct WatchWorkoutView: View {
             return String(localized: "Hold weight", comment: "Watch hold button accessibility label")
         case .decrease:
             return String(localized: "Decrease weight", comment: "Watch down button accessibility label")
-        default:
-            return action.rawValue
         }
     }
 
@@ -1454,9 +1678,71 @@ struct WatchWorkoutView: View {
                 localized: "Reduce the load for the next set",
                 comment: "Watch down button accessibility hint"
             )
-        default:
-            return ""
         }
+    }
+}
+
+private struct WatchFormCheckControls: View {
+    @ObservedObject var model: WatchWorkoutModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: VA.Space.sm) {
+            Text(String(localized: "Form check", comment: "Watch form check section header"))
+                .font(VA.Typography.caption)
+                .foregroundStyle(VA.Colors.textSecondary)
+
+            if model.isFormCheckAnalyzing {
+                ProgressView()
+                    .accessibilityLabel(String(localized: "Analyzing form", comment: "Watch form check progress accessibility"))
+                Button(String(localized: "Cancel", comment: "Watch cancel form check analysis button title")) {
+                    Task {
+                        await model.cancelFormCheckAnalyzing()
+                    }
+                }
+                .buttonStyle(.bordered)
+                .tint(VA.Colors.warning)
+                .accessibilityIdentifier("watch.formCheck.cancel")
+            }
+
+            Button(buttonTitle) {
+                Task {
+                    if model.activeFormCheckSessionID == nil {
+                        await model.startFormCheckCapture()
+                    } else {
+                        await model.stopFormCheckCapture()
+                    }
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(model.activeFormCheckSessionID == nil ? VA.Colors.secondary : VA.Colors.warning)
+            .disabled(model.isFormCheckAnalyzing)
+            .accessibilityIdentifier("watch.formCheck.button")
+            .accessibilityLabel(buttonAccessibilityLabel)
+
+            if let summary = model.formCheckResultSummary {
+                Text(summary)
+                    .font(VA.Typography.footnote)
+                    .foregroundStyle(VA.Colors.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var buttonTitle: String {
+        if model.isFormCheckAnalyzing {
+            return String(localized: "Analyzing", comment: "Watch form check analyzing button title")
+        }
+        if model.activeFormCheckSessionID == nil {
+            return String(localized: "Capture Form", comment: "Watch start form check button title")
+        }
+        return String(localized: "Stop & Analyze", comment: "Watch stop form check button title")
+    }
+
+    private var buttonAccessibilityLabel: String {
+        if model.activeFormCheckSessionID == nil {
+            return String(localized: "Capture form on iPhone", comment: "Watch start form check accessibility label")
+        }
+        return String(localized: "Stop form capture and analyze", comment: "Watch stop form check accessibility label")
     }
 }
 // swiftlint:enable file_length

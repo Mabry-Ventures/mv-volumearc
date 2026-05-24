@@ -76,6 +76,20 @@ extension VolumeArcApp {
         #endif
     }
 
+    static func makeWatchConnectivityCoordinator() -> WatchConnectivityCoordinator {
+        let transport: WatchSessionTransport = {
+            #if canImport(WatchConnectivity) && (os(iOS) || os(watchOS))
+            WatchConnectivitySessionTransport()
+            #else
+            UnavailableWatchSessionTransport()
+            #endif
+        }()
+        return WatchConnectivityCoordinator(
+            transport: transport,
+            payloadStore: UserDefaultsWatchPendingPayloadStore()
+        )
+    }
+
     static func makeAccountSessionStore() -> AccountSessionStore {
         UserDefaultsAccountSessionStore()
     }
@@ -313,7 +327,7 @@ extension VolumeArcApp {
     /// silently no-op rather than fabricate a watch event. Pairs with
     /// the `WatchPayloadKind` enum: `restTimer`, `liveState`,
     /// `startSession`, `endSession`, `coachCue`, `completedWorkout`,
-    /// `voiceCoachToggle`. An
+    /// `voiceCoachToggle`, and the form-check payload kinds. An
     /// unrecognized kind is silently ignored (returns without posting)
     /// rather than crashing — the test owns choosing a valid kind.
     static func postSimulatedWatchPayloadIfRequested() {
