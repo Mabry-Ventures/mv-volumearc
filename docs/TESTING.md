@@ -7,8 +7,9 @@ VolumeArc currently ships with **540+ test functions** across unit + integration
 - 80% line-coverage gate enforced on `VolumeArcCore` (VOL-52), targeted to rise to **90%** under [VOL-140](https://linear.app/mabry-ventures/issue/VOL-140) (sharpened by [VOL-205](https://linear.app/mabry-ventures/issue/VOL-205)). New gates: `VolumeArcUI` (≥85% target, **18%** staged floor after the VOL-135 snapshot ratchet), `VolumeArcCoreWatch` (≥85% target, **25%** Phase A floor — measured baseline 28.77% from [VOL-138](https://linear.app/mabry-ventures/issue/VOL-138) Phase A; ratchets up once `WatchWorkoutModel` pure logic is extracted), Widgets (≥75% target — view-layer snapshot coverage started under [VOL-139](https://linear.app/mabry-ventures/issue/VOL-139); line-coverage gate remains pending a dedicated target).
 - 6-metric performance budget (cold launch, scroll fps, scroll hitches, memory, coach P50, coach P95) tag-gated in CI (VOL-99).
 - 20-fixture coach eval matrix with hermetic template-layer assertions in CI; response-layer harness runs on nightly cron (`coach-evals-nightly.yml`) targeting `relay.volumearc.app` after VOL-223 fixed the dead default URL.
-- User-journey catalog at [`USER_JOURNEYS.md`](USER_JOURNEYS.md); current coverage **18%** (11/62), target **100%** under [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141) (sharpened by [VOL-200](https://linear.app/mabry-ventures/issue/VOL-200) — CI parser gate).
-- Visual regression: SnapshotTesting is wired with bundled baselines for VAButton, the next-workout widget, and core VAUI card/toast surfaces; broader paywall, onboarding, coach bubble, and Live Activity matrices continue under [VOL-135](https://linear.app/mabry-ventures/issue/VOL-135).
+- User-journey catalog at [`USER_JOURNEYS.md`](USER_JOURNEYS.md); current coverage **56%** (39/69), target **100%** under [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141) (sharpened by [VOL-200](https://linear.app/mabry-ventures/issue/VOL-200) — CI parser gate).
+- Visual regression: SnapshotTesting is wired with bundled baselines for VAButton, the next-workout widget, core VAUI card/toast surfaces, the active-workout Live Activity lock-screen/banner and watch surfaces, coach transcript bubbles, the Premium paywall loaded-empty/failure shell, and the full onboarding flow; RootDashboard tab and remaining Live Activity matrices continue under [VOL-135](https://linear.app/mabry-ventures/issue/VOL-135).
+- Exploratory UAT: [`UAT_AGENT.md`](UAT_AGENT.md) documents the nightly LLM-driven XCUITest bridge from [VOL-169](https://linear.app/mabry-ventures/issue/VOL-169). It reads screenshots + accessibility trees, executes bounded safe actions, uploads transcripts, and posts a GitHub issue report.
 
 ```
 Tests/VolumeArcAppTests/
@@ -92,7 +93,7 @@ The UI test target runs as four shards instead of one mega-invocation. Each shar
 
 | Shard                       | Classes                                                                                                                                                          | Why                                                                                                                                |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `smoke`                     | `VolumeArcAppUITests`, `VolumeArcTelemetryProbeMatcherTests`                                                                                                     | Fast regression detection; matcher parsing isolated from full-app journeys                                                         |
+| `smoke`                     | `VolumeArcAppUITests`, `VolumeArcTelemetryProbeMatcherTests`, `VolumeArcExploratoryUATAgentTests`                                                                | Fast regression detection; matcher parsing isolated from full-app journeys; VOL-169 compiles here but skips unless nightly-enabled |
 | `journeys-core`             | `VolumeArcAppJourneyTests`, `VolumeArcCoachJourneyTests`, `VolumeArcTodayJourneyTests`                                                                           | Heaviest user-flow journeys; isolating them keeps a single hang from the parent journey suite from poisoning lighter shards        |
 | `journeys-aux`              | `VolumeArcProfileJourneyTests`, `VolumeArcFeedbackJourneyTests`, `VolumeArcSignalsJourneyTests`, `VolumeArcHealthKitPermissionJourneyTests`, `VolumeArcWatchSimulationJourneyTests`, `VolumeArcChaosJourneyTests` | Mid-cost flows + permission-dialog interrupts + chaos / watch-simulation                                                          |
 | `accessibility-screenshots` | `VolumeArcAccessibilityJourneyTests`, `VolumeArcScreenshotTests`                                                                                                 | Known AX-daemon wedge cause (`accessibility5` + `NSDoubleLocalizedStrings`); when the daemon dies, the wedge stays inside this shard |
@@ -165,6 +166,12 @@ This was the root cause behind VOL-175's "probe flakes when chaos journey is in 
 
 [`docs/CHAOS.md`](CHAOS.md) is the source of truth. The short version: every chaos flag is a `-CHAOS_*` launch argument that the `ChaosController` (`App/Debug/`) reads, which causes `VolumeArcAppFactories` to wrap the matching subsystem in a fault-injecting decorator. Paired journeys in `VolumeArcChaosJourneyTests` exercise the fault and assert graceful degradation — including the diagnostic telemetry event via VOL-149's `assertTelemetryFired` helper. The wiring is `#if DEBUG`-gated everywhere so Release builds compile every chaos check down to `return false`. Phase 1 ships the HealthKit-auth-denied flag + journey; Phase 2 extends to WatchConnectivity / StoreKit / BGTaskScheduler / AIRelay.
 
+## Exploratory UAT agent (VOL-169)
+
+[`docs/UAT_AGENT.md`](UAT_AGENT.md) is the source of truth. The short version: `scripts/run_uat_agent.sh` launches the app through a gated XCUITest, sends screenshots + accessibility trees to the OpenAI Responses API, executes one bounded action at a time, and writes a JSON/Markdown anomaly report. The workflow runs nightly in `.github/workflows/uat-agent-nightly.yml`, uploads the xcresult/report artifacts, and posts to a GitHub issue named `Nightly exploratory UAT report`.
+
+The test class is mapped to the `smoke` shard only so the shard-coverage verifier knows about it. It calls `XCTSkip` unless `UAT_AGENT_ENABLED=1`, so normal PR and Xcode Cloud suites do not inherit the nightly model loop.
+
 ## StoreKit edge cases (VOL-142)
 
 Apple's IAP reviewers stress the unhappy paths — refund, family sharing, grace period, billing retry, ask-to-buy. Happy-path purchase tests (`testPremiumPurchaseFlowWithStoreKitTest` in `VolumeArcAppJourneyTests`) pass before submission and fail at review.
@@ -212,7 +219,7 @@ Visual regression coverage for VAUI components and the critical screens (Onboard
 
 - **Phase 1 (this PR's introduction):** `pointfreeco/swift-snapshot-testing` v1.19 wired into the `VolumeArcAppTests` target. `Tests/VolumeArcAppTests/Snapshots/` is the canonical home; one infrastructure smoke test (`VolumeArcSnapshotInfrastructureTests`) proves the dependency links and the directory layout works. No baseline PNGs yet.
 
-- **Phase 2+ (follow-up PRs):** the first pilot baseline covers `VAButton` primary in light + dark. Each additional component / screen should land in its own PR with its baseline PNG committed under `Tests/VolumeArcAppTests/Snapshots/__Snapshots__/`. The generated project copies that folder into the `VolumeArcAppTests` bundle so Xcode Cloud can compare snapshots even when the source checkout is not mounted during the test phase. See VOL-135's acceptance criteria for the full matrix (light + dark, `.medium` + `.accessibility5` Dynamic Type, reduce-transparency on/off).
+- **Phase 2+ (follow-up PRs):** active bundled baselines cover `VAButton` primary, the next-workout widget, core VAUI card/toast surfaces, the active-workout Live Activity lock-screen/banner and watch surfaces, `VACoachBubble` transcript states in light/dark plus accessibility Dynamic Type, the Premium paywall loaded-empty/failure shell, and every onboarding step. Each additional component / screen should land in its own PR with its baseline PNG committed under `Tests/VolumeArcAppTests/Snapshots/__Snapshots__/`. The generated project copies that folder into the `VolumeArcAppTests` bundle so Xcode Cloud can compare snapshots even when the source checkout is not mounted during the test phase. See VOL-135's acceptance criteria for the full matrix (light + dark, `.medium` + `.accessibility5` Dynamic Type, reduce-transparency on/off).
 
 ### Recording a new snapshot
 
@@ -377,7 +384,7 @@ The gate (`scripts/check_journey_coverage.sh`, VOL-200 Phase 1) runs in CI after
 
 - Every VAUI design-system component (`VAButton`, `VACard`, `VACoachBubble`, `VAToast`, metric displays, `VAReadinessHero`)
 - Critical screens: `OnboardingView`, `PaywallView`, `RootDashboardView` (each tab), `ActiveWorkoutLiveActivity` lock-screen + Dynamic Island
-- Widgets (3 sizes × 2 themes)
+- Widgets (all supported next-workout families × 2 themes)
 - Variants per surface: light + dark × default + `.accessibility5` Dynamic Type × reduce-transparency on/off
 
 ### Per-trait `assertSnapshot` pattern
@@ -435,5 +442,9 @@ pointfreeco SnapshotTesting captures pixel-identical baselines that **drift betw
 5. CI runs with default (non-recording) mode and asserts.
 
 Recording new baselines without committing them fails CI because compare mode uses `.never` and reads the bundled reference directory. Always commit the PNG in the same PR.
+
+Current bundled baseline families: `VAButtonSnapshotTests`, `VADesignSystemSnapshotTests`, `NextWorkoutWidgetSnapshotTests`, `ActiveWorkoutLiveActivitySnapshotTests`, `VACoachBubbleSnapshotTests`, `PaywallSnapshotTests`, and `OnboardingSnapshotTests`.
+
+`PaywallSnapshotTests`, `OnboardingSnapshotTests`, and the `NextWorkoutWidgetSnapshotTests` accessory-rectangular cases are enforced locally and on the self-hosted runner, but skip inside Xcode Cloud's `TestProducts.xctestproducts` runtime because XC renders those SwiftUI/WidgetKit surfaces differently from the same bundled references.
 
 CI failures from snapshot diffs block merge on the same gate as unit tests.

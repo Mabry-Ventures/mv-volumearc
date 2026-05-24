@@ -1,6 +1,6 @@
 # AI Relay (`volumearc-ai-relay`)
 
-A Cloudflare Worker that proxies iOS coach requests to Google's Gemini API with SSE streaming, HMAC-signed bearer auth, and per-device rate limiting.
+A Cloudflare Worker that proxies iOS coach requests to Google's Gemini API with SSE streaming, App Attest validation, HMAC transition fallback, and per-device rate limiting.
 
 - **Worker name:** `volumearc-ai-relay`
 - **Live endpoint (production):** `https://relay.volumearc.app` — custom domain configured via the `relay/wrangler.toml` route binding. Live since VOL-110.
@@ -39,24 +39,61 @@ Request body:
 }
 ```
 
-Auth header:
+Phase B auth headers:
 
-```
+```http
 Authorization: Bearer <device_id>.<hmac_sha256_hex>
+X-VA-Attest-Key-ID: <keyID>
+X-VA-Attest-Assertion: <base64 CBOR assertion>
+X-VA-Attest-Nonce: <base64 relay challenge>
 ```
 
 Where `hmac_sha256_hex = HMAC-SHA256(RELAY_SIGNING_KEY, device_id)` rendered as lowercase hex.
 
+During the VOL-225/VOL-226 transition, `Authorization` remains present on all iOS requests. Capable devices also send the `X-VA-Attest-*` headers. If those headers validate, the Worker authenticates via App Attest; if they are absent, the Worker uses the HMAC fallback unless `REQUIRE_APP_ATTEST=true`. If any App Attest header is present but invalid or incomplete, the Worker returns 401 and does not downgrade to HMAC. Once `REQUIRE_APP_ATTEST=true`, HMAC-only coach requests return 410 so retired clients can distinguish cutover from bad credentials.
+
+### `POST /v1/attest/challenge`
+
+Returns `{ challenge, expiresAt }` for HMAC-authenticated installs. Challenges are random 32-byte base64 values, stored with a 5-minute TTL, tied to the issuing device ID, and consumed on first use.
+
+### `POST /v1/attest/bootstrap`
+
+Validates the first-run App Attest attestation object and stores the install's public key/counter.
+
+Request body:
+
+```json
+{
+  "keyID": "<base64 App Attest key ID>",
+  "attestationObject": "<base64 CBOR attestation object>",
+  "challenge": "<challenge from /v1/attest/challenge>"
+}
+```
+
+Success response:
+
+```json
+{ "ok": true, "attestedAt": "2026-05-24T00:00:00.000Z", "environment": "production" }
+```
+
 ## Auth model
 
-Each iOS install generates a stable UUID at first launch (persisted to Keychain), then HMAC-signs it with the shared `RELAY_SIGNING_KEY` that lives in Worker secrets + the iOS Keychain. The Worker verifies the signature before forwarding to Gemini.
+Each iOS install generates a stable UUID at first launch (persisted to Keychain), then HMAC-signs it with the shared `RELAY_SIGNING_KEY` that lives in Worker secrets + the iOS Keychain. That legacy credential remains the bootstrap/fallback channel during Phase B.
 
-**Threat model (current):**
+For App Attest-capable devices, the app:
+
+1. Fetches a relay challenge with the HMAC header.
+2. Generates/attests a `DCAppAttestService` key, posts the attestation object to `/v1/attest/bootstrap`, and stores the relay-confirmed key ID.
+3. For each coach request, fetches a fresh challenge and sends an assertion over `SHA256(requestBody || challenge)`.
+
+The Worker validates the Apple App Attestation Root CA chain, pins the root hash, verifies the nonce extension, checks the app ID hash (`APPLE_TEAM_ID.APPLE_BUNDLE_ID`), verifies the credential ID/key ID binding, stores the public key + counter in the `APP_ATTEST_STATE` Durable Object, and requires counters to increase for assertions. The Durable Object transaction atomically consumes each challenge and advances the counter, avoiding KV's eventual-consistency replay gap.
+
+**Threat model (Phase B):**
 - ✅ Protects the Gemini API key (never leaves the Worker)
-- ✅ Rate limits by device so a single extracted token can't DOS the relay
-- ⚠️ A determined attacker who reverse-engineers a TestFlight IPA can extract the signing key and mint arbitrary bearer tokens. The 30-req/10-min-per-device KV rate limit is our only defense in depth.
-
-**Production hardening (future follow-up):** migrate to Apple's [App Attest](https://developer.apple.com/documentation/devicecheck) so the Worker validates each request is from a genuine VolumeArc build. At that point we can drop the shared signing key entirely. Not yet ticketed — file a new Linear ticket under the VolumeArc team when it's sprint-worthy.
+- ✅ Rate limits by stable install ID
+- ✅ Valid App Attest assertions prove the request came from a genuine VolumeArc build on Apple hardware
+- ✅ Tampered App Attest headers fail closed instead of falling back
+- ⚠️ HMAC-only clients still work during the Phase B grace period, so a determined attacker who reverse-engineers a TestFlight IPA can still mint fallback tokens until VOL-226 flips `REQUIRE_APP_ATTEST=true`.
 
 ## Rate limiting
 
@@ -93,28 +130,38 @@ Secrets (only set once, stored server-side encrypted):
 
 ```bash
 npx wrangler secret put GEMINI_API_KEY      # Google AI Studio key
-npx wrangler secret put RELAY_SIGNING_KEY   # 32-byte random, openssl rand -base64 32
+npx wrangler secret put RELAY_SIGNING_KEY   # 32-byte random, openssl rand -base64 32; Phase B bootstrap/fallback
 ```
 
 Env vars (non-secret, live in `wrangler.toml`):
 - `MODEL_DEFAULT`, `MODEL_PREMIUM`, `MAX_OUTPUT_TOKENS`, `REQUEST_TIMEOUT_MS`, `RATE_LIMIT_MAX_REQUESTS`, `RATE_LIMIT_WINDOW_SECONDS`
+- `APPLE_TEAM_ID`, `APPLE_BUNDLE_ID` (or a full `APPLE_APP_ID`) for App Attest app-ID hash validation
+- `REQUIRE_APP_ATTEST` (`false` in Phase B, `true` in Phase C)
+
+Optional KV bindings:
+- `ATTEST_KEYS` — legacy/local fallback App Attest public-key/counter store
+- `ATTEST_CHALLENGES` — legacy/local fallback one-time challenge store
+
+Production binds `APP_ATTEST_STATE` as a Durable Object and uses it for App Attest state. If that binding is absent, the Worker falls back to `ATTEST_KEYS` / `ATTEST_CHALLENGES`, or to `RATE_LIMIT` with `attest:*` prefixes, for local tests and emergency rollback builds.
 
 ## Wiring the iOS side
 
-The iOS client reads two pieces of config at launch:
+The iOS client reads three pieces of config at launch:
 
 1. **Base URL** — from `VOLUMEARC_AI_RELAY_URL` env var (Xcode scheme for dev) OR `VolumeArcAIRelayURL` Info.plist key (release). Must be an HTTPS URL whose host is in the allowlist (`App/VolumeArcAIConfiguration.swift`).
 2. **Signing key** — from `VOLUMEARC_RELAY_SIGNING_KEY` env var OR `VolumeArcRelaySigningKey` Info.plist key. Must match the Worker's `RELAY_SIGNING_KEY` secret exactly.
+3. **Relay auth mode** — from `VOLUMEARC_RELAY_AUTH_MODE` env var OR `VolumeArcRelayAuthMode` Info.plist key. Default: `appAttestPreferHMACFallback`.
 
-Both are bootstrapped into Keychain at first launch and read from there on subsequent launches. Rotating a secret requires an iOS release (acceptable — neither is a per-request credential).
+The base URL and signing key are bootstrapped into Keychain at first launch and read from there on subsequent launches. The auth mode remains an env/Info.plist switch. Rotating the signing key requires an iOS release while HMAC fallback remains active.
 
 ### For local development
 
 Xcode scheme env vars (Edit Scheme → Run → Arguments → Environment Variables):
 
-```
-VOLUMEARC_AI_RELAY_URL  = https://volumearc-ai-relay.jared-b6b.workers.dev
+```bash
+VOLUMEARC_AI_RELAY_URL  = https://relay.volumearc.app
 VOLUMEARC_RELAY_SIGNING_KEY = <contents of relay/.secrets/relay_signing_key.txt>
+VOLUMEARC_RELAY_AUTH_MODE = appAttestPreferHMACFallback
 ```
 
 ### For Release / TestFlight

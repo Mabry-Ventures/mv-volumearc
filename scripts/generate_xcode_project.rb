@@ -208,17 +208,15 @@ configure_target(ui_target, extra: {
 })
 configure_target(app_target, bundle_id: 'com.mabryventures.VolumeArc', extra: {
   'PRODUCT_NAME' => 'VolumeArc',
-  # VOL-131: iPhone-only for v1.0 TestFlight. iPad support deferred
-  # until VOL-158 completes its UX-audit pass against the iPad form
-  # factor. The TestFlight-eligible matrix is the iPhone family (1);
-  # iPad lands as a separate explicit decision once the audit signs
-  # off on the experience. Snapfile + CI test matrix are already
-  # iPhone-only — this change brings the entitlement / device-family
-  # declaration in line with the shipped surface.
+  # VOL-131: iPhone-only for v1.0 TestFlight. The TestFlight-eligible
+  # matrix is the iPhone family (1); iPad is a post-v1 product
+  # expansion that requires a fresh UX audit, Snapfile update, and App
+  # Store metadata change before this flips to 1,2.
   'TARGETED_DEVICE_FAMILY' => '1',
   'INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents' => 'YES',
-  'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc reads your completed workouts, heart-rate variability, and sleep from Apple Health to show your training history, calculate readiness, and let the AI coach reference your recovery trend (HRV vs baseline, sleep debt, weekly strength load).',
+  'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc reads your completed workouts, heart-rate variability, sleep, Workout Effort, wrist temperature, and respiratory rate from Apple Health to show your training history, calculate readiness, and let the AI coach reference your recovery trend (HRV vs baseline, sleep debt, weekly strength load, Vitals trends, and Training Load).',
   'INFOPLIST_KEY_NSHealthUpdateUsageDescription' => 'VolumeArc writes completed workouts so your training history stays in sync with Apple Health.',
+  'INFOPLIST_KEY_NSCameraUsageDescription' => 'VolumeArc uses the rear camera for on-device form-check analysis. Video frames are processed locally and are not uploaded.',
   'INFOPLIST_KEY_NSMicrophoneUsageDescription' => 'VolumeArc uses the microphone for voice coaching requests and voice workout logging.',
   'INFOPLIST_KEY_NSSpeechRecognitionUsageDescription' => 'VolumeArc uses speech recognition to understand live coaching requests and voice workout notes.',
   # Export-compliance declaration. Without this, every TestFlight upload
@@ -245,6 +243,10 @@ configure_target(app_target, bundle_id: 'com.mabryventures.VolumeArc', extra: {
   # — `scripts/validate_exported_ipa_contract.sh` fails the archive
   # if URL is present but key is missing.
   'VOLUMEARC_RELAY_SIGNING_KEY' => '',
+  # VOL-225: Phase B prefers App Attest when supported, but keeps the
+  # HMAC bearer as a transition fallback until VOL-226 cutover telemetry
+  # proves the attested path is safe to require.
+  'VOLUMEARC_RELAY_AUTH_MODE' => 'appAttestPreferHMACFallback',
   # VOL-55: `VolumeArcCloudKitContainer` used to live in the Info.plist
   # for runtime lookup. `INFOPLIST_KEY_*` silently drops custom
   # (non-Apple-recognized) keys, so the bundle never had it. It now
@@ -392,22 +394,29 @@ app_watch_tests_target.frameworks_build_phase.add_file_reference(core_watch_targ
 widget_target.add_system_framework('WidgetKit')
 widget_target.add_system_framework('AppIntents')
 widget_target.add_system_framework('ActivityKit')
+widget_target.add_system_framework('WorkoutKit')
 app_target.add_system_framework('AppIntents')
 app_target.add_system_framework('ActivityKit')
 app_target.add_system_framework('AuthenticationServices')
 app_target.add_system_framework('AVFoundation')
 app_target.add_system_framework('Security')
 app_target.add_system_framework('Speech')
+app_target.add_system_framework('WorkoutKit')
+watch_target.add_system_framework('AppIntents')
 watch_target.add_system_framework('WatchKit')
 watch_target.add_system_framework('SwiftUI')
+watch_target.add_system_framework('WorkoutKit')
+watch_target.add_system_framework('AVFoundation')
 watch_widgets_target.add_system_framework('WidgetKit')
 watch_widgets_target.add_system_framework('SwiftUI')
+watch_widgets_target.add_system_framework('WorkoutKit')
 app_tests_target.add_system_framework('XCTest')
 app_tests_target.add_system_framework('AuthenticationServices')
 app_tests_target.add_system_framework('Security')
 app_tests_target.add_system_framework('AppIntents')
 app_tests_target.add_system_framework('ActivityKit')
 app_tests_target.add_system_framework('WidgetKit')
+app_tests_target.add_system_framework('WorkoutKit')
 # VOL-142: StoreKitTest powers `SKTestSession`-based unit tests
 # (`StoreKitSubscriptionRevocationTests`) for refund / family-share /
 # grace-period coverage at the model level. UITest target already has
@@ -421,6 +430,11 @@ app_widget_ui_tests_target.add_system_framework('XCTest')
 app_widget_ui_tests_target.add_system_framework('WidgetKit')
 # VOL-138: watch test bundle.
 app_watch_tests_target.add_system_framework('XCTest')
+app_watch_tests_target.add_system_framework('AppIntents')
+app_watch_tests_target.add_system_framework('WatchKit')
+app_watch_tests_target.add_system_framework('SwiftUI')
+app_watch_tests_target.add_system_framework('WorkoutKit')
+app_watch_tests_target.add_system_framework('AVFoundation')
 
 embed_watch_extensions_phase = watch_target.new_copy_files_build_phase('Embed Watch Extensions')
 embed_watch_extensions_phase.symbol_dst_subfolder_spec = :plug_ins
@@ -470,6 +484,16 @@ add_swift_sources(widget_ui_tests_group, app_widget_ui_tests_target, ROOT.join('
 # VOL-138: watch-side unit tests. Sources live at
 # `Tests/VolumeArcWatchTests/` so they parallel the other test bundles.
 add_swift_sources(watch_tests_group, app_watch_tests_target, ROOT.join('Tests/VolumeArcWatchTests'))
+# VOL-234/VOL-233: compile the standalone AOD render contract and
+# WatchWorkoutModel into watch tests so the watch active-session surface can be
+# verified without a host app.
+add_selected_swift_sources(watch_group, app_watch_tests_target, ROOT.join('Watch'), [
+  'VADesignTokens.swift',
+  'WatchActionButtonIntents.swift',
+  'WatchAlwaysOnWorkoutView.swift',
+  'WatchVoicePlayback.swift',
+  'WatchWorkoutView.swift',
+])
 add_resource(ui_tests_group, app_ui_tests_target, 'VolumeArcTests.storekit')
 # VOL-142: the same StoreKit configuration powers `SKTestSession`-based
 # unit tests under `Tests/VolumeArcAppTests/`. Reuse the existing
@@ -545,12 +569,18 @@ add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   # closes over `VolumeArcAIConfiguration.relayConfiguration` which is
   # also in this list.
   'VolumeArcAIRuntimeFactory.swift',
+  # VOL-141: `VolumeArcAIRuntimeFactory` consults DEBUG-only chaos
+  # launch flags for deterministic fallback journeys. Compile the
+  # controller into the test bundle alongside the factory so direct
+  # App-layer unit tests see the same symbols as the app target.
+  'Debug/ChaosController.swift',
   # VOL-224: `VolumeArcAppAttestCoordinatorTests` exercises the App
   # Attest coordinator + protocol mock directly. Same pattern as the
   # other App-internal types below — the App target doesn't expose a
   # Swift module testable from outside, so the source is compiled into
   # the test bundle. Pure additive; production wiring lands in Phase B.
   'VolumeArcAppAttestService.swift',
+  'VolumeArcAppAttestRelaySessionProvider.swift',
   'VolumeArcCloudConfiguration.swift',
   'VolumeArcLiveActivityController.swift',
   'VolumeArcPersistenceController.swift',

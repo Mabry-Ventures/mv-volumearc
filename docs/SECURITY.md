@@ -8,8 +8,9 @@
 
 | Asset | Adversary | Mitigation |
 |---|---|---|
-| User HealthKit data — raw samples (workouts, HR, active energy on watch, HRV, sleep stages) | Network attacker, third-party process running on the device, malicious shared device | Reads gated behind Apple's system HealthKit prompt. **Raw HealthKit samples stay on-device** — no raw workout records, no raw HRV readings, no raw sleep-stage timelines, no raw HR series are uploaded to VolumeArc-owned servers. Per-platform read scope is least-privilege (iOS reads workouts + HRV + sleep + active energy for recovery context; watchOS reads workouts + HR + active energy because `HKLiveWorkoutDataSource` collects them during the session). See `HealthKitAuthorizationScope` in `VolumeArcCore/Health/HealthStore.swift`. |
-| User HealthKit data — **computed aggregates** (HRV mean / sleep duration / strength-load summary used as recovery context for the coach) | Coach-relay middleman, Gemini operator | VOL-209: When the user asks the coach a question and cloud AI is enabled, the rendered prompt may include numeric aggregates derived from HealthKit (e.g. "7d HRV mean: 52 ms; last-night sleep: 6h 40m; 7d strength load: 18,200 kg-reps"). These aggregates are health-derived data and DO leave the device by way of the relay → Gemini. They are not raw samples. The user controls the upstream HealthKit grant; revoking it removes the aggregates from subsequent prompts. Strict privacy mode (VOL-197 follow-up) governs whether the user's free-text question is redacted before egress; the recovery aggregates themselves are not treated as PII in any mode because the App Store privacy questionnaire and `App/PrivacyInfo.xcprivacy` declare HealthKit as a tracked data type. See `RecoveryContext.asPromptBullets` in `VolumeArcCore/AI/RecoveryContext.swift`. |
+| User HealthKit data — raw samples (workouts, HR, active energy on watch, HRV, sleep stages, Workout Effort, wrist temperature, respiratory rate) | Network attacker, third-party process running on the device, malicious shared device | Reads gated behind Apple's system HealthKit prompt. **Raw HealthKit samples stay on-device** — no raw workout records, no raw HRV readings, no raw sleep-stage timelines, no raw HR series, no raw Workout Effort samples, no raw wrist-temperature samples, and no raw respiratory-rate samples are uploaded to VolumeArc-owned servers. Per-platform read scope is least-privilege (iOS reads workouts + HRV + sleep + Workout Effort + wrist temperature + respiratory rate for recovery context; watchOS reads workouts + HR + active energy because `HKLiveWorkoutDataSource` collects them during the session). See `HealthKitAuthorizationScope` in `VolumeArcCore/Health/HealthStore.swift`. |
+| User HealthKit data — **computed aggregates** (HRV mean / sleep duration / strength-load summary / Workout Effort / wrist-temperature trend / respiratory-rate trend used as recovery context for the coach) | Coach-relay middleman, Gemini operator | VOL-209 / VOL-154: When the user asks the coach a question and cloud AI is enabled, the rendered prompt may include numeric aggregates derived from HealthKit (e.g. "7d HRV mean: 52 ms; last-night sleep: 6h 40m; 7d strength load: 18,200 kg-reps; 7d Workout Effort: 7.2/10; wrist temperature: +0.18°C; respiratory rate: +0.6 br/min"). These aggregates are health-derived data and DO leave the device by way of the relay → Gemini. They are not raw samples. The user controls the upstream HealthKit grant; revoking it removes the aggregates from subsequent prompts. Strict privacy mode (VOL-197 follow-up) governs whether the user's free-text question is redacted before egress; the recovery aggregates themselves are not treated as PII in any mode because the App Store privacy questionnaire and `App/PrivacyInfo.xcprivacy` declare HealthKit as a tracked data type. See `RecoveryContext.asPromptBullets` in `VolumeArcCore/AI/RecoveryContext.swift`. |
+| Camera frames for Vision form checks | Network attacker, coach-relay middleman, Sentry operator, local app compromise | VOL-155: Camera access is user-initiated from an active workout and gated by iOS camera permission. Video frames are processed in memory on-device via Vision body-pose detection, are not written to disk, are not uploaded to VolumeArc, Cloudflare, Gemini, Sentry, iCloud, or Apple Health, and are discarded after analysis. The only downstream artifact is a derived form-check summary (exercise, rep count, tempo, lateral drift, verdict, cue, haptic code); when the user later asks the cloud coach a question, those derived metrics may be included in the coach prompt context. |
 | User workouts persisted by VolumeArc | Same | SwiftData → CloudKit private database. CloudKit's private DB is per-user, encrypted in transit and at rest by Apple, accessible only to the signed-in iCloud account. VolumeArc operators have **zero access** to the contents. |
 | Coach prompts (free text the user types or speaks) | Coach-relay middleman, Gemini operator | TLS to `relay.volumearc.app` (Cloudflare Worker), TLS from the Worker to `generativelanguage.googleapis.com`. Prompts are forwarded; the Worker logs the request shape (path, status code, latency) but does NOT log prompt content or response bodies — see `relay/src/worker.ts`. Privacy-mode setting (`profile.privacy-mode`) controls a redaction layer that scrubs PII before the prompt leaves the device. |
 | Crash reports + breadcrumbs (Sentry) | Sentry employee with database access; Sentry security incident | `VolumeArcSentryPIIScrubber` (VOL-72) strips known-PII fields (user name, email, HealthKit values, exercise notes) from every `Event` and `Breadcrumb` before send. Session Replay is off by default in v1.0; if/when enabled (post VOL-171 review), the masking config must be re-audited against this threat model. |
@@ -23,27 +24,32 @@ VolumeArc talks to exactly these hosts:
 
 | Host | Purpose | Auth | TLS |
 |---|---|---|---|
-| `relay.volumearc.app` | Coach prompt forwarding to Gemini | Session token rotated per launch (HMAC-derived; see `VolumeArcRelaySessionProvider`) | TLS 1.2+ pinned to Cloudflare's chain |
+| `relay.volumearc.app` | Coach prompt forwarding to Gemini | App Attest assertion when supported; HMAC bootstrap/fallback during VOL-225/VOL-226 transition | TLS 1.2+ pinned to Cloudflare's chain |
 | `o*.ingest.us.sentry.io` | Crash + telemetry events | Sentry DSN (publishable; no secret in client) | TLS 1.2+ |
 | Apple-owned (HealthKit, CloudKit, App Store, Sign in with Apple, APNs, Universal Links) | OS-level integration | OS-managed | OS-managed |
 
 No third-party analytics SDK, no ad SDK, no remote-config service (feature flags are local — `LocalFeatureFlagProvider`). Any new network egress requires an explicit audit pass through this doc + the privacy manifest (`App/PrivacyInfo.xcprivacy`) + the App Store privacy questionnaire.
 
-## HMAC signing for the coach relay
+## App Attest + HMAC transition for the coach relay
 
-The Cloudflare Worker (`relay/`) requires every coach request to carry an `Authorization: Bearer <session-token>` header. The session token is HMAC-derived per-launch from a device-scoped identity stored in the Keychain. Specifically:
+The Cloudflare Worker (`relay/`) validates App Attest assertions for capable iPhone installs and keeps the existing HMAC credential as a bootstrap/fallback path until VOL-226 cuts over.
 
-1. On first launch, `VolumeArcRelaySessionProvider` generates a random 32-byte device-identity and stores it in the Keychain via `VolumeArcSecureStore`.
-2. On each launch, the provider derives a fresh session token by HMAC-SHA256 of `(device-identity, current-day-bucket)` so a captured token expires within 24 hours.
-3. The Worker validates the HMAC server-side; failed validation returns 401 and the app rotates / re-fetches.
+1. On first launch, `VolumeArcRelaySessionProvider` generates a stable install-scoped device ID and stores it in Keychain via `VolumeArcSecureStore`.
+2. The provider signs that device ID with `RELAY_SIGNING_KEY` and sends `Authorization: Bearer <device-id>.<hmac-hex>`.
+3. `VolumeArcAppAttestRelaySessionProvider` uses that HMAC header to fetch short-lived relay challenges and bootstrap a `DCAppAttestService` key.
+4. Each App Attest-capable coach request sends `X-VA-Attest-Key-ID`, `X-VA-Attest-Assertion`, and `X-VA-Attest-Nonce` headers. The assertion covers `SHA256(requestBody || nonce)`.
+5. The relay stores App Attest keys, challenges, and counters in the `APP_ATTEST_STATE` Durable Object so nonce consumption and counter advancement happen in one strongly consistent transaction.
+6. The Worker validates the Apple certificate chain, app ID hash, credential ID/key ID binding, assertion signature, and monotonic counter before forwarding to Gemini.
 
-The shared HMAC secret is configured as a Cloudflare Worker secret (set via `wrangler secret put`), never committed to the repo. The client-side device identity never leaves the device.
+If App Attest is unsupported, missing, or temporarily unavailable during Phase B, the default `appAttestPreferHMACFallback` client mode records telemetry and sends the HMAC-only request. If any App Attest header is present but invalid, the Worker fails closed with 401 instead of falling back. Phase C flips `REQUIRE_APP_ATTEST=true` in the Worker after production telemetry shows the fallback is no longer needed; HMAC-only coach requests then return 410.
+
+The shared HMAC secret is configured as a Cloudflare Worker secret (set via `wrangler secret put`) and Xcode Cloud secret, never committed to the repo. The client-side device ID never leaves the device except as the HMAC bearer token's public prefix.
 
 ## Keychain vs UserDefaults
 
 **Keychain (via `VolumeArcSecureStore`)** for secrets that need durability across reinstalls or that grant access to network resources:
 
-- Relay session-token derivation seed (`device-identity`).
+- Relay bootstrap/fallback auth material (`deviceID`, HMAC signing key, relay-confirmed App Attest key ID).
 - StoreKit's own entitlement cache (managed by `StoreKit 2`; we don't store this directly).
 
 **UserDefaults** for non-secret app state that's safe to leak in a backup:
@@ -62,22 +68,24 @@ The dividing line: if it's a secret OR if its leakage would let an attacker make
 - User profile (name, age, training years, body weight if entered) — `UserProfileRepository` / SwiftData
 - Coach memory (free text the user typed) — `CoachMemoryRepository`
 - Workout notes (free text per session) — `WorkoutRecord.notes`
-- HealthKit-sourced data (workouts, HR, active energy)
+- HealthKit-sourced data (workouts, HR, active energy, HRV, sleep, Workout Effort, wrist temperature, respiratory rate)
+- Camera frames during a Vision form check are ephemeral on-device data; derived form-check metrics (rep count, tempo, lateral drift, verdict/cue) may be cached in app memory for the coach context.
 
 **Where PII may travel off-device:**
 
 | Destination | Allowed PII | Mitigation |
 |---|---|---|
-| `relay.volumearc.app` → Gemini | Coach prompt body (free text the user typed) AND computed HealthKit aggregates (HRV mean, sleep duration, strength load summary) embedded as recovery context in the rendered prompt | Privacy-mode setting controls redaction of the free-text portion (VOL-197 follow-up). Computed HealthKit aggregates flow regardless of privacy mode because they are declared as a tracked data type in `App/PrivacyInfo.xcprivacy`. The relay logs request *shape* only (path / status / latency), never bodies. Gemini's data-handling per its API terms. Raw HealthKit samples are NOT sent — only the derived numeric aggregates produced by `RecoveryContext`. |
+| `relay.volumearc.app` → Gemini | Coach prompt body (free text the user typed), computed HealthKit aggregates (HRV mean, sleep duration, strength load summary, Workout Effort, wrist-temperature trend, respiratory-rate trend), and latest derived form-check metrics when present (rep count, tempo, lateral drift, verdict/cue) embedded in the rendered prompt | Privacy-mode setting controls redaction of the free-text portion (VOL-197 follow-up). Computed HealthKit aggregates flow regardless of privacy mode because they are declared as a tracked data type in `App/PrivacyInfo.xcprivacy`. Derived form-check metrics may flow when the user captured a form check and then uses the cloud coach. The relay logs request *shape* only (path / status / latency), never bodies. Gemini's data-handling per its API terms. Raw HealthKit samples and camera frames are NOT sent — only derived numeric/contextual summaries produced by `RecoveryContext` and `FormCheckAnalysis`. |
 | Sentry | Stack frames, breadcrumb trail, OS+device metadata | `VolumeArcSentryPIIScrubber` strips known PII fields from every Event / Breadcrumb before send (VOL-72). Session Replay is **off** in v1.0. |
 | CloudKit private DB | Full workout records + profile + coach memory | Apple-managed encryption in transit and at rest; per-user private; VolumeArc operators have zero access. |
-| Apple Health | Workouts (read + write); on watchOS also HR + active energy reads | User controls the grant; revocable via Settings → Privacy → Health. |
+| Apple Health | Workouts (read + write); iOS recovery reads HRV, sleep, Workout Effort, wrist temperature, and respiratory rate; on watchOS also HR + active energy reads | User controls the grant; revocable via Settings → Privacy → Health. |
 | Apple's IAP / receipts | Transaction metadata (no user content) | OS-managed. |
 
 **PII NEVER travels to:**
 - VolumeArc-owned analytics (we don't have an analytics SDK)
 - Third-party ad networks (none)
 - Remote config / experimentation services (none)
+- Any processor as raw form-check video, photos, or camera frames
 
 ## Vulnerability disclosure
 

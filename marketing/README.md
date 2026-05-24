@@ -37,7 +37,7 @@ npm run build
 /terms                  Terms of Service (DRAFT — pending legal review, VOL-124)
 /privacy                Privacy Policy (DRAFT — pending legal review, VOL-124)
 /support                Support, Resend-backed contact form, common issues, press
-/quality                Public coach-quality eval-trend (scaffold — VOL-148)
+/quality                Public coach-quality eval-trend from docs/coach-eval-trend.json
 ```
 
 The `LegalLinks` Swift wrapper in the iOS app (`App/LegalLinks.swift`) routes to `/terms` and `/privacy` on this site. Keep both in sync.
@@ -84,7 +84,7 @@ CI build smoke (no deploy) runs in [`.github/workflows/marketing.yml`](../.githu
 | Feature descriptions | Engineering + Marketing | `docs/FEATURES.md` is canonical for feature status |
 | Pricing | Founder | App Store Connect StoreKit products |
 | FAQs | Support + Engineering | This repo |
-| Coach quality (`/quality`) | Engineering | `docs/coach-eval-trend.json` (auto-published, VOL-148) |
+| Coach quality (`/quality`) | Engineering | `docs/coach-eval-trend.json`, mirrored into `src/data/coach-eval-trend.json` for Vercel builds |
 | Terms / Privacy | Legal counsel | This repo (after legal review, VOL-124) |
 
 When a feature ships or its scope changes, update `docs/FEATURES.md` first; this site reflects the canonical doc.

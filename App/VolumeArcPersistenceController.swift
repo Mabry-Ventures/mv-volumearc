@@ -29,7 +29,7 @@ final class VolumeArcPersistenceController {
     let bootstrapStatus: BootstrapStatus
 
     private init() {
-        let schema = Schema(VolumeArcSchemaV4.models)
+        let schema = Schema(VolumeArcSchemaV5.models)
         let bootstrap = Self.makeContainer(for: schema)
         container = bootstrap.container
         bootstrapStatus = bootstrap.status
@@ -369,6 +369,7 @@ final class VolumeArcPersistenceController {
             TrainingPlanRecord.self,
             WorkoutRecord.self,
             CoachMemoryRecord.self,
+            TrainingProgramRecord.self,
         ])
     }
 

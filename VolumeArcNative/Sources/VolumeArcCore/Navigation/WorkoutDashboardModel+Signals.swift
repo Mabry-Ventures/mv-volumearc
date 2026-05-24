@@ -41,4 +41,21 @@ public extension WorkoutDashboardModel {
             message: "Signals frequency heatmap viewed"
         ))
     }
+
+    /// Emit the journey-catalog event for opening a historical workout
+    /// detail view from the Workouts tab.
+    @MainActor
+    func recordWorkoutDetailOpened(session: RecentSession) {
+        telemetrySink.record(TelemetryEvent(
+            category: "workout",
+            name: "detail.opened",
+            severity: .info,
+            message: "Workout detail opened",
+            metadata: [
+                "sets": "\(session.completedSetCount)",
+                "durationMinutes": "\(session.durationMinutes)",
+                "volumeLoad": "\(Int(session.totalVolumeLoad))",
+            ]
+        ))
+    }
 }

@@ -8,9 +8,9 @@
 // The four paths under test:
 //   1. `shouldSurfacePermissionPrompts == false` → silent short-
 //      circuit, records `health.auth_skipped`, returns false.
-//   2. `requestAuthorization` returns true and `isAuthorized` is
+//   2. `requestAuthorization` reports canShareWorkouts and `isAuthorized` is
 //      true → returns true, records `health.auth_requested`.
-//   3. `requestAuthorization` returns false (user denied) → returns
+//   3. `requestAuthorization` reports canShareWorkouts=false (user denied) → returns
 //      false, records `health.auth_requested`.
 //   4. `requestAuthorization` throws → returns false, records
 //      `health.auth_failed`.
@@ -44,7 +44,7 @@ final class HealthKitAuthorizationTests: XCTestCase {
     private var savedSimulatePermissionPrompts: Bool!
 
     override func setUp() async throws {
-        let schema = Schema(VolumeArcSchemaV4.models)
+        let schema = Schema(VolumeArcSchemaV5.models)
         let config = ModelConfiguration(
             "HealthKitAuthTests-\(UUID().uuidString)",
             schema: schema,

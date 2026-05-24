@@ -10,6 +10,9 @@
 // process-wide standard suite is never mutated.
 import XCTest
 import VolumeArcCore
+#if canImport(HealthKit)
+import HealthKit
+#endif
 
 final class VolumeArcCoreCoverageTests: XCTestCase {
 
@@ -168,12 +171,14 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
             restEndsAt: Date(timeIntervalSince1970: 1_730_000_000),
             coachPrompt: "Hold",
             sessionActive: false,
-            statusMessage: "Paused"
+            statusMessage: "Paused",
+            loggedSetCount: 3
         )
         await store.save(snap)
         let loaded = await store.load()
         XCTAssertEqual(loaded?.selectedAction, .hold)
         XCTAssertEqual(loaded?.coachPrompt, "Hold")
+        XCTAssertEqual(loaded?.loggedSetCount, 3)
 
         await store.clear()
         let cleared = await store.load()
@@ -231,6 +236,131 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         }
         let count = await payloadStore.count()
         XCTAssertEqual(count, 1, "Failed flush must put the payload back on the queue")
+    }
+
+    // MARK: - Watch voice + WorkoutKit value contracts
+
+    func testWatchVoiceCoachUtterancesClampAndPluralize() {
+        let oneRepTarget = WorkoutTarget(weight: 225, unit: "lb", repRange: 1...1, targetRPE: 8)
+
+        XCTAssertEqual(
+            WatchVoiceCoach.utterance(for: .setComplete(restSeconds: -10)).text,
+            "Set complete, rest 0 seconds"
+        )
+        XCTAssertEqual(
+            WatchVoiceCoach.utterance(for: .restRemaining(seconds: 1)).text,
+            "1 second remaining"
+        )
+        XCTAssertEqual(
+            WatchVoiceCoach.utterance(
+                for: .nextSet(exerciseName: "Bench press", target: oneRepTarget)
+            ).text,
+            "Next set: 1 rep at 225"
+        )
+
+        let cue = WatchVoiceCoach.utterance(for: .coachCue("Brace hard"))
+        XCTAssertEqual(cue, WatchVoiceUtterance(text: "Brace hard"))
+        XCTAssertEqual(cue.delivery, .textToSpeech)
+    }
+
+    func testUserDefaultsWatchVoiceSettingsStoreDefaultsTrueAndPersists() async {
+        let values = await Task.detached { () async -> [Bool] in
+            let suite = "VOL-52.watch.voice.\(UUID().uuidString)"
+            let defaults = UserDefaults(suiteName: suite) ?? .standard
+            defaults.removePersistentDomain(forName: suite)
+            let store = UserDefaultsWatchVoiceSettingsStore(defaults: defaults)
+
+            let initial = await store.isWatchVoiceEnabled()
+            await store.setWatchVoiceEnabled(false)
+            let disabled = await store.isWatchVoiceEnabled()
+            await store.setWatchVoiceEnabled(true)
+            let enabled = await store.isWatchVoiceEnabled()
+            return [initial, disabled, enabled]
+        }.value
+
+        XCTAssertEqual(values, [true, false, true])
+    }
+
+    func testWorkoutKitPrescriptionSanitizesInputsAndDerivesDisplayNames() {
+        let target = WorkoutTarget(weight: 135.5, unit: "lb", repRange: 6...8, targetRPE: 7.5)
+        let prescription = WorkoutKitPrescription(
+            workoutID: "workout-1",
+            exerciseID: "bench-press",
+            exerciseName: "Bench press",
+            activityType: .strengthTraining,
+            target: target,
+            setCount: 0,
+            restDuration: -5
+        )
+
+        XCTAssertEqual(prescription.setCount, 1)
+        XCTAssertEqual(prescription.restDuration, 0)
+        XCTAssertEqual(prescription.workStepDisplayName, "Bench press 135.5lb x 6-8")
+        XCTAssertEqual(prescription.recoveryStepDisplayName, "Rest 0 seconds")
+        XCTAssertEqual(
+            WorkoutKitPrescription.stablePlanID(for: "workout-1"),
+            WorkoutKitPrescription.stablePlanID(for: "workout-1")
+        )
+    }
+
+    func testWorkoutKitPrescriptionAutopilotUsesCatalogActivityAndDefaults() {
+        let autopilot = WorkoutAutopilotState(
+            nextExerciseID: "plank",
+            nextExerciseName: "Plank",
+            nextTarget: WorkoutTarget(weight: 0, unit: "lb", repRange: 1...1, targetRPE: 8),
+            bestCue: "Brace",
+            recommendationReason: "Core block"
+        )
+        let prescription = WorkoutKitPrescription(autopilot: autopilot, workoutID: "core-day")
+
+        XCTAssertEqual(prescription.exerciseID, "plank")
+        XCTAssertEqual(prescription.activityType, .coreTraining)
+        XCTAssertEqual(prescription.setCount, WorkoutKitPrescription.defaultSetCount)
+        XCTAssertEqual(prescription.restDuration, WorkoutKitPrescription.defaultRestDuration)
+        XCTAssertEqual(prescription.planID, WorkoutKitPrescription.stablePlanID(for: "core-day"))
+    }
+
+    func testWorkoutKitSchedulingFallbacksReturnUnavailableAndThrowUnsupported() async {
+        let scheduler = UnavailableWorkoutKitScheduler()
+        let target = WorkoutTarget(weight: 100, unit: "lb", repRange: 5...5, targetRPE: 7)
+        let prescription = WorkoutKitPrescription(
+            workoutID: "unsupported",
+            exerciseID: "deadlift",
+            exerciseName: "Deadlift",
+            activityType: .strengthTraining,
+            target: target
+        )
+
+        let authorizationState = await scheduler.authorizationState()
+        let requestState = await scheduler.requestAuthorization()
+        XCTAssertEqual(authorizationState, .unavailable)
+        XCTAssertEqual(requestState, .unavailable)
+        do {
+            try await scheduler.schedule(prescription, at: DateComponents())
+            XCTFail("Unavailable scheduler should reject scheduling")
+        } catch {
+            XCTAssertEqual(error as? WorkoutKitSchedulingError, .unsupported)
+        }
+        do {
+            try await scheduler.openInWorkoutApp(prescription)
+            XCTFail("Unavailable scheduler should reject opening Workout app")
+        } catch {
+            XCTAssertEqual(error as? WorkoutKitSchedulingError, .unsupported)
+        }
+        XCTAssertEqual(
+            WorkoutKitSchedulingError.unsupported.errorDescription,
+            "WorkoutKit scheduling is unavailable on this device."
+        )
+        XCTAssertEqual(
+            WorkoutKitSchedulingError.authorizationDenied(.denied).errorDescription,
+            "WorkoutKit scheduling authorization is denied."
+        )
+    }
+
+    func testWorkoutActivityTypeMappingsCoverCatalogBuckets() {
+        XCTAssertEqual(HKActivityTypeMapping.traditional.workoutActivityType, .strengthTraining)
+        XCTAssertEqual(HKActivityTypeMapping.functional.workoutActivityType, .functionalStrengthTraining)
+        XCTAssertEqual(HKActivityTypeMapping.core.workoutActivityType, .coreTraining)
     }
 
     // MARK: - Telemetry sinks
@@ -587,6 +717,7 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
             workoutTitle: "Squat",
             activeExerciseName: "Back Squat",
             targetSummary: "225 x 5",
+            setProgressSummary: "Set 3/5 · 225 lb",
             restSecondsRemaining: 90
         )
         let data = try JSONEncoder().encode(state)
@@ -594,6 +725,7 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         XCTAssertEqual(decoded.workoutTitle, "Squat")
         XCTAssertEqual(decoded.activeExerciseName, "Back Squat")
         XCTAssertEqual(decoded.targetSummary, "225 x 5")
+        XCTAssertEqual(decoded.setProgressSummary, "Set 3/5 · 225 lb")
         XCTAssertEqual(decoded.restSecondsRemaining, 90)
 
         let withoutRest = LiveActivityState(
@@ -604,6 +736,7 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         )
         let data2 = try JSONEncoder().encode(withoutRest)
         let decoded2 = try JSONDecoder().decode(LiveActivityState.self, from: data2)
+        XCTAssertNil(decoded2.setProgressSummary)
         XCTAssertNil(decoded2.restSecondsRemaining)
     }
 
@@ -660,7 +793,8 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         let authorized = await store.isAuthorized
         XCTAssertFalse(authorized)
         let result = try await store.requestAuthorization()
-        XCTAssertFalse(result)
+        XCTAssertFalse(result.canShareWorkouts)
+        XCTAssertTrue(result.requestedReadIdentifiers.isEmpty)
         // Session start/end are no-ops on the unavailable store.
         try await store.startWorkoutSession(activityType: .strengthTraining)
         try await store.endWorkoutSession()
@@ -675,8 +809,9 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         // VOL-227 fix: phone and watch read scopes are disjoint
         // extensions of the shared `HKWorkoutTypeIdentifier`, not a
         // subset relationship.
-        //   * Phone adds HRV-SDNN + Sleep Analysis (VOL-181 recovery
-        //     reader), which the watch doesn't need.
+        //   * Phone adds HRV-SDNN, Sleep Analysis, Apple Workout Effort,
+        //     wrist temperature, and respiratory rate (recovery reader),
+        //     which the watch doesn't need.
         //   * Watch adds Heart Rate + Active Energy (live workout
         //     data source), which the phone doesn't need.
         // The original VOL-80 comment + `isSubset` assertion
@@ -693,6 +828,26 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
             HealthKitAuthorizationScope.phoneReadIdentifiers
                 .contains("HKQuantityTypeIdentifierHeartRateVariabilitySDNN"),
             "Phone read scope should include HRV-SDNN for VOL-181 recovery analysis"
+        )
+        XCTAssertTrue(
+            HealthKitAuthorizationScope.phoneReadIdentifiers
+                .contains("HKQuantityTypeIdentifierWorkoutEffortScore"),
+            "Phone read scope should include Apple Workout Effort for VOL-154 training load"
+        )
+        XCTAssertTrue(
+            HealthKitAuthorizationScope.phoneReadIdentifiers
+                .contains("HKQuantityTypeIdentifierEstimatedWorkoutEffortScore"),
+            "Phone read scope should include estimated Workout Effort for VOL-154 training load fallback"
+        )
+        XCTAssertTrue(
+            HealthKitAuthorizationScope.phoneReadIdentifiers
+                .contains("HKQuantityTypeIdentifierAppleSleepingWristTemperature"),
+            "Phone read scope should include wrist temperature for VOL-154 Vitals trends"
+        )
+        XCTAssertTrue(
+            HealthKitAuthorizationScope.phoneReadIdentifiers
+                .contains("HKQuantityTypeIdentifierRespiratoryRate"),
+            "Phone read scope should include respiratory rate for VOL-154 Vitals trends"
         )
         XCTAssertFalse(
             HealthKitAuthorizationScope.watchReadIdentifiers
@@ -962,6 +1117,73 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         XCTAssertEqual(empty.averageRPE, 0)
     }
 
+    func testWorkoutSyncPayloadAndAthleteInitialsExposeStableValues() throws {
+        let completedAt = Date(timeIntervalSince1970: 1_760_000_000)
+        let set = WorkoutSetPerformance(weight: 205, reps: 5, rpe: 8.5, completedAt: completedAt)
+        let payload = WatchWorkoutSyncPayload(
+            workoutID: "watch-1",
+            receivedAt: completedAt,
+            title: "Lower",
+            exerciseID: "back-squat",
+            exerciseName: "Back Squat",
+            set: set,
+            recommendedAction: .increase,
+            durationMinutes: 47,
+            completionRate: 0.82,
+            summary: "Strong top set"
+        )
+
+        XCTAssertEqual(payload.workoutID, "watch-1")
+        XCTAssertEqual(payload.recommendedAction, "increase")
+        XCTAssertEqual(payload.set, set)
+        XCTAssertEqual(payload.durationMinutes, 47)
+
+        let decoded = try JSONDecoder().decode(
+            WatchWorkoutSyncPayload.self,
+            from: try JSONEncoder().encode(payload)
+        )
+        XCTAssertEqual(decoded.exerciseName, "Back Squat")
+        XCTAssertEqual(decoded.completionRate, 0.82, accuracy: 0.001)
+
+        XCTAssertEqual(AthleteProfile(name: "Ada Lovelace").initials, "AL")
+        XCTAssertEqual(AthleteProfile(name: "Prince").initials, "P")
+        XCTAssertEqual(AthleteProfile(name: "   ").initials, "VA")
+    }
+
+    func testHealthValueTypesAndDefaultMetricStream() async {
+        let result = HealthAuthorizationResult(
+            canShareWorkouts: true,
+            requestedReadIdentifiers: HealthKitAuthorizationScope.phoneReadIdentifiers
+        )
+        XCTAssertTrue(result.canShareWorkouts)
+        XCTAssertTrue(result.requestedReadIdentifiers.contains("HKWorkoutTypeIdentifier"))
+
+        let capturedAt = Date(timeIntervalSince1970: 1_770_000_000)
+        let metrics = LiveWorkoutMetrics(
+            workoutID: "live-1",
+            heartRateBPM: 142,
+            activeEnergyKilocalories: 88.4,
+            elapsedTime: 312,
+            capturedAt: capturedAt
+        )
+        XCTAssertEqual(metrics.workoutID, "live-1")
+        XCTAssertEqual(metrics.heartRateBPM, 142)
+        XCTAssertEqual(metrics.activeEnergyKilocalories, 88.4)
+        XCTAssertEqual(metrics.elapsedTime, 312)
+        XCTAssertEqual(metrics.capturedAt, capturedAt)
+
+        let stream = await DefaultMetricStreamHealthStore().liveWorkoutMetrics()
+        for await _ in stream {
+            XCTFail("Default HealthStore metric stream should finish without values")
+        }
+
+        #if canImport(HealthKit)
+        let metadata = HealthWorkoutMetadata.healthKitMetadata(for: "hk-1")
+        XCTAssertEqual(metadata[HealthWorkoutMetadata.volumeArcWorkoutIDKey] as? String, "hk-1")
+        XCTAssertEqual(metadata[HKMetadataKeyExternalUUID] as? String, "hk-1")
+        #endif
+    }
+
     func testCoachMemoryMostRecentLimitsToFive() {
         let base = Date()
         let entries = (0..<10).map { idx in
@@ -1024,6 +1246,20 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
 }
 
 // MARK: - Test doubles
+
+private struct DefaultMetricStreamHealthStore: HealthStore {
+    func requestAuthorization() async throws -> HealthAuthorizationResult {
+        HealthAuthorizationResult(canShareWorkouts: false, requestedReadIdentifiers: [])
+    }
+
+    var isAuthorized: Bool { get async { false } }
+
+    func startWorkoutSession(activityType: WorkoutActivityType) async throws {
+        _ = activityType
+    }
+
+    func endWorkoutSession() async throws {}
+}
 
 private actor ScriptedWatchTransport: WatchSessionTransport {
     private(set) var sentPayloads: [WatchPayload] = []

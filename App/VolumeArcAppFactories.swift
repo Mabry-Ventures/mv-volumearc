@@ -46,13 +46,14 @@ extension VolumeArcApp {
         return underlying
     }
 
-    /// VOL-181 Phase 1B: HealthKit-backed recovery reader. Returns
+    /// VOL-181 / VOL-154: HealthKit-backed recovery reader. Returns
     /// `HealthKitRecoveryReader` on iOS (which uses `HKHealthStore`
-    /// to derive HRV trend, sleep debt, and weekly strength load) and
-    /// `UnavailableRecoveryReader` everywhere else (macOS previews,
-    /// SwiftUI canvas, test hosts). The dashboard's `refresh()` calls
-    /// `currentRecovery()` and caches the result for the coach prompt
-    /// + Today-tab chip.
+    /// to derive HRV trend, sleep debt, weekly strength load, Apple
+    /// Workout Effort, wrist-temperature trend, and respiratory-rate
+    /// trend) and `UnavailableRecoveryReader` everywhere else (macOS
+    /// previews, SwiftUI canvas, test hosts). The dashboard's `refresh()`
+    /// calls `currentRecovery()` and caches the result for the coach
+    /// prompt + Today-tab chip.
     static func makeRecoveryReader(telemetrySink: (any TelemetrySink)? = nil) -> RecoveryReader {
         #if canImport(HealthKit)
         // VOL-203: pass the telemetry sink so the reader emits
@@ -73,6 +74,20 @@ extension VolumeArcApp {
         #else
         UnavailableVoicePermissionStore()
         #endif
+    }
+
+    static func makeWatchConnectivityCoordinator() -> WatchConnectivityCoordinator {
+        let transport: WatchSessionTransport = {
+            #if canImport(WatchConnectivity) && (os(iOS) || os(watchOS))
+            WatchConnectivitySessionTransport()
+            #else
+            UnavailableWatchSessionTransport()
+            #endif
+        }()
+        return WatchConnectivityCoordinator(
+            transport: transport,
+            payloadStore: UserDefaultsWatchPendingPayloadStore()
+        )
     }
 
     static func makeAccountSessionStore() -> AccountSessionStore {
@@ -311,7 +326,8 @@ extension VolumeArcApp {
     /// build accidentally received the launch arg, this helper would
     /// silently no-op rather than fabricate a watch event. Pairs with
     /// the `WatchPayloadKind` enum: `restTimer`, `liveState`,
-    /// `startSession`, `endSession`, `coachCue`, `completedWorkout`. An
+    /// `startSession`, `endSession`, `coachCue`, `completedWorkout`,
+    /// `voiceCoachToggle`, and the form-check payload kinds. An
     /// unrecognized kind is silently ignored (returns without posting)
     /// rather than crashing — the test owns choosing a valid kind.
     static func postSimulatedWatchPayloadIfRequested() {

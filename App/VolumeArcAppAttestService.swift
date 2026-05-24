@@ -5,12 +5,10 @@
 // repackaged binary, by anchoring the request to a key generated inside
 // the Secure Enclave and attested by Apple's servers.
 //
-// This file is the client-side surface only. Phase B (VOL-225) implements
-// server-side validation in the relay; Phase C (VOL-226) cuts over the
-// production HMAC-only path to App-Attest-required. Until Phase B ships,
-// this service is dormant in production callers — the helpers below
-// produce attestation/assertion blobs that consumers can attach as advisory
-// headers, but the relay still treats them as ignorable.
+// Phase B (VOL-225) validates App Attest in the relay while retaining HMAC
+// as the transition fallback. Phase C (VOL-226) cuts over the production
+// fallback path to App-Attest-required once telemetry says the capable
+// device cohort is stable.
 //
 // ## Lifecycle
 //
@@ -218,6 +216,7 @@ actor VolumeArcAppAttestCoordinator {
     private let service: AppAttestServiceProtocol
     private let secureStore: VolumeArcSecureStore
     private let keyIDKey = "ai.relay.appattest.keyID"
+    private let attestationObjectKey = "ai.relay.appattest.attestationObject"
 
     /// In-memory cache for the attestation object. The size is ~1-3 KB
     /// CBOR (per Apple's published example), so retaining it for the
@@ -230,6 +229,17 @@ actor VolumeArcAppAttestCoordinator {
     ) {
         self.service = service
         self.secureStore = secureStore
+    }
+
+    func supportsAppAttest() -> Bool {
+        service.isSupported
+    }
+
+    func cachedKeyID() -> String? {
+        guard let keyID = try? secureStore.load(keyIDKey), keyID.isEmpty == false else {
+            return nil
+        }
+        return keyID
     }
 
     /// Lazily bootstrap a key (generate + attest) if one isn't already
@@ -253,6 +263,7 @@ actor VolumeArcAppAttestCoordinator {
 
         do {
             try secureStore.save(keyID, for: keyIDKey)
+            try secureStore.save(attestation.base64EncodedString(), for: attestationObjectKey)
         } catch {
             // The key still works for the current session even if Keychain
             // failed — Phase B's server-side flow will re-bootstrap on a
@@ -266,11 +277,20 @@ actor VolumeArcAppAttestCoordinator {
     }
 
     /// Returns the cached attestation object if one was produced in the
-    /// current session. `nil` if `bootstrapKeyIfNeeded` hasn't run yet —
-    /// the keyID alone isn't enough for the relay; Phase B will need this
-    /// CBOR blob the first time the relay sees a new device.
+    /// current session or a prior unconfirmed session. `nil` means the
+    /// keyID alone isn't enough for the relay; the caller should reset and
+    /// re-bootstrap so it can hand Phase B's server the CBOR blob.
     func cachedAttestation() -> Data? {
-        attestationCache
+        if let attestationCache {
+            return attestationCache
+        }
+        guard let encoded = try? secureStore.load(attestationObjectKey),
+              encoded.isEmpty == false,
+              let data = Data(base64Encoded: encoded) else {
+            return nil
+        }
+        attestationCache = data
+        return data
     }
 
     /// Produce an assertion over the given request body. The relay (in
@@ -309,6 +329,7 @@ actor VolumeArcAppAttestCoordinator {
     func reset() {
         attestationCache = nil
         try? secureStore.save("", for: keyIDKey)
+        try? secureStore.save("", for: attestationObjectKey)
     }
 }
 

@@ -377,8 +377,8 @@ fi
 #   smoke                     → fast smoke + telemetry-probe matcher
 #   journeys-core             → heaviest user-flow journeys
 #   journeys-aux              → auxiliary journeys (profile, feedback,
-#                                signals, healthkit perms, watch sim,
-#                                chaos)
+#                                signals, app intents, healthkit perms,
+#                                watch sim, chaos)
 #   accessibility-screenshots → AX-stress (known daemon wedge cause)
 #                                + screenshot capture
 #
@@ -398,6 +398,7 @@ ui_shard_classes() {
       cat <<'EOF'
 VolumeArcAppUITests
 VolumeArcTelemetryProbeMatcherTests
+VolumeArcExploratoryUATAgentTests
 EOF
       ;;
     journeys-core)
@@ -412,6 +413,7 @@ EOF
 VolumeArcProfileJourneyTests
 VolumeArcFeedbackJourneyTests
 VolumeArcSignalsJourneyTests
+VolumeArcIntentJourneyTests
 VolumeArcHealthKitPermissionJourneyTests
 VolumeArcWatchSimulationJourneyTests
 VolumeArcChaosJourneyTests

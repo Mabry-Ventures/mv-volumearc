@@ -22,6 +22,14 @@ custom_domain = true
 binding = "RATE_LIMIT"
 id = "efcd4b67b0984a219559ffa37c65ceed"
 
+[[durable_objects.bindings]]
+name = "APP_ATTEST_STATE"
+class_name = "AppAttestState"
+
+[[migrations]]
+tag = "v1_app_attest_state"
+new_sqlite_classes = ["AppAttestState"]
+
 [observability]
 enabled = true
 
@@ -30,6 +38,11 @@ enabled = true
 #   RELAY_SIGNING_KEY  — 32+ byte random string used to HMAC-sign device
 #                        bearer tokens. Rotating invalidates every iOS
 #                        client session until they refresh.
+#
+# App Attest Phase B stores attested keys/challenges in the APP_ATTEST_STATE
+# Durable Object so challenge consume + assertion counter updates are
+# strongly consistent. The Worker still has KV fallback code for local tests
+# and emergency rollback builds that omit the Durable Object binding.
 
 [vars]
 # Model selection. Can be overridden per-request via X-Coach-Tier header
@@ -45,3 +58,10 @@ MAX_OUTPUT_TOKENS = "800"
 REQUEST_TIMEOUT_MS = "60000"
 RATE_LIMIT_MAX_REQUESTS = "30"
 RATE_LIMIT_WINDOW_SECONDS = "600"
+
+# App Attest validation. Keep REQUIRE_APP_ATTEST false through Phase B so
+# older clients and unsupported devices retain the HMAC fallback; VOL-226
+# owns the production cutover.
+APPLE_TEAM_ID = "A886EMZZW6"
+APPLE_BUNDLE_ID = "com.mabryventures.VolumeArc"
+REQUIRE_APP_ATTEST = "false"

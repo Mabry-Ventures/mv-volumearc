@@ -109,6 +109,27 @@ export default function PrivacyPage() {
               Security → Health → VolumeArc).
             </p>
 
+            <h3>Camera form check</h3>
+            <p>
+              If you start a form check during an active workout, the App asks
+              for camera permission and uses the rear camera to run Apple&rsquo;s
+              on-device Vision pose detection. Camera frames are processed in
+              memory on your device only. We do not save, upload, or transmit
+              form-check video, photos, or camera frames to VolumeArc,
+              Cloudflare, Google Gemini, Sentry, iCloud, or Apple Health.
+              Starting or stopping capture from Apple Watch sends only a
+              WatchConnectivity control message; it does not move camera frames
+              off the iPhone.
+            </p>
+            <p>
+              The App keeps only derived form-check metrics such as exercise,
+              rep count, tempo, lateral drift, verdict, and coaching cue. If
+              you later ask the cloud AI coach a question, those derived
+              metrics may be included in the structured coach context so the
+              coach can reference the latest form check. The camera frames
+              themselves are never included.
+            </p>
+
             <h3>CloudKit (your private container)</h3>
             <p>
               Your training history (workouts, sets, RPE, training plans,
@@ -159,7 +180,8 @@ export default function PrivacyPage() {
               In the default (<strong>Standard</strong>) mode, the prompt
               includes: the free-text question you typed or spoke; the coach
               intent category; a system persona; the recovery aggregates
-              described above; and a structured context block that{' '}
+              described above; latest derived form-check metrics when present;
+              and a structured context block that{' '}
               <strong>
                 includes your profile name, recent session summaries, and your
                 most recent coaching notes
@@ -294,6 +316,10 @@ export default function PrivacyPage() {
                 running the App for you.
               </li>
               <li>We do not read your contacts, photos, or location.</li>
+              <li>
+                We do not upload or store form-check video, photos, or camera
+                frames.
+              </li>
             </ul>
             <p>
               The marketing website at <code>volumearc.app</code> uses
