@@ -8,15 +8,17 @@
 #
 # Intentionally NOT wired into `scripts/test_apple_targets.sh` — this burns
 # Gemini API budget and is model-dependent. Target audience: nightly CI
-# workflow (follow-up ticket) + on-demand local sanity checks.
+# workflow + on-demand local sanity checks.
 #
 # Requires:
 #   - `VOLUMEARC_RELAY_SIGNING_KEY`  HMAC signing key (same value the iOS
 #                                    app reads from env or Info.plist).
-#   - `VOLUMEARC_EVAL_DEVICE_ID`     stable device ID to sign with. Defaults
-#                                    to `coach-eval-harness` so the relay's
-#                                    device-ID → principal mapping stays
-#                                    consistent across runs.
+#   - `VOLUMEARC_EVAL_DEVICE_ID`     device ID prefix to sign with. Defaults
+#                                    to `coach-eval-harness`; the harness
+#                                    shards fixtures across deterministic
+#                                    suffixes so suites larger than the
+#                                    production per-device window do not
+#                                    self-rate-limit.
 #   - `VOLUMEARC_RELAY_BASE_URL`     override the relay endpoint (default:
 #                                    `https://relay.volumearc.app`). VOL-223:
 #                                    legacy `workers.dev` default was dead and
@@ -33,7 +35,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FIXTURES_DIR="$ROOT/Tests/Evals/CoachEvalFixtures"
 RELAY_BASE_URL="${VOLUMEARC_RELAY_BASE_URL:-https://relay.volumearc.app}"
-DEVICE_ID="${VOLUMEARC_EVAL_DEVICE_ID:-coach-eval-harness}"
+DEVICE_ID_BASE="${VOLUMEARC_EVAL_DEVICE_ID:-coach-eval-harness}"
+DEVICE_SHARD_SIZE="${VOLUMEARC_EVAL_DEVICE_SHARD_SIZE:-20}"
 OUTPUT_DIR="${VOLUMEARC_EVAL_OUTPUT_DIR:-$ROOT/.build/coach-evals/$(date -u +%Y%m%dT%H%M%SZ)}"
 
 # --- preflight ---------------------------------------------------------------
@@ -53,6 +56,10 @@ fi
 
 if [[ -z "${VOLUMEARC_RELAY_SIGNING_KEY:-}" ]]; then
     die "VOLUMEARC_RELAY_SIGNING_KEY is not set — same value the iOS app reads"
+fi
+
+if [[ ! "$DEVICE_SHARD_SIZE" =~ ^[0-9]+$ ]] || (( DEVICE_SHARD_SIZE < 1 )); then
+    die "VOLUMEARC_EVAL_DEVICE_SHARD_SIZE must be a positive integer"
 fi
 
 mkdir -p "$OUTPUT_DIR"
@@ -197,18 +204,17 @@ if (( total == 0 )); then
     die "no fixture files found under $FIXTURES_DIR"
 fi
 
-signature=$(compute_signature "$DEVICE_ID" "$VOLUMEARC_RELAY_SIGNING_KEY")
-auth_header="Authorization: Bearer ${DEVICE_ID}.${signature}"
-
 printf 'Running %d coach eval fixture(s) against %s\n' "$total" "$RELAY_BASE_URL"
-printf 'Device ID: %s  (signature %s...)\n' "$DEVICE_ID" "${signature:0:12}"
+printf 'Device ID base: %s  (shard size: %s fixture(s))\n' "$DEVICE_ID_BASE" "$DEVICE_SHARD_SIZE"
 printf 'Output dir: %s\n\n' "$OUTPUT_DIR"
 
 passed=0
 failed=0
 summary_rows=()
+fixture_index=0
 
 for fixture_path in "${fixture_files[@]}"; do
+    fixture_index=$((fixture_index + 1))
     fixture_name=$(basename "$fixture_path" .json)
     fixture_id=$(jq -r '.id' "$fixture_path")
     intent=$(jq -r '.intent' "$fixture_path")
@@ -265,6 +271,10 @@ for fixture_path in "${fixture_files[@]}"; do
     # don't time out on slow models. We capture the full stream to a file
     # and post-process to extract `data: {"text": "..."}` frames.
     raw_stream_path="$OUTPUT_DIR/${fixture_name}.stream"
+    shard=$(( (fixture_index - 1) / DEVICE_SHARD_SIZE + 1 ))
+    fixture_device_id="${DEVICE_ID_BASE}-${shard}"
+    signature=$(compute_signature "$fixture_device_id" "$VOLUMEARC_RELAY_SIGNING_KEY")
+    auth_header="Authorization: Bearer ${fixture_device_id}.${signature}"
     http_code=$(curl -sS -N --no-buffer \
         -o "$raw_stream_path" \
         -w '%{http_code}' \
