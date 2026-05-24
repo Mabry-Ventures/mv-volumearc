@@ -9,6 +9,7 @@ public struct WorkoutsView: View {
     @State private var restEndsAt: Date = .now.addingTimeInterval(90)
     @State private var restActive: Bool = false
     @State private var summary: CompletedSessionSnapshot?
+    @State private var formCheckPayload: FormCheckCapturePayload?
 
     public init(model: WorkoutDashboardModel) {
         self.model = model
@@ -53,6 +54,14 @@ public struct WorkoutsView: View {
                 summary = nil
             }
         }
+        .fullScreenCover(item: $formCheckPayload) { payload in
+            FormCheckCaptureView(
+                exercise: payload.exercise,
+                exerciseName: payload.exerciseName
+            ) { analysis in
+                completeFormCheck(analysis)
+            }
+        }
     }
 
     /// Captured snapshot of the session state at completion time.
@@ -65,6 +74,12 @@ public struct WorkoutsView: View {
         let duration: Int
         let averageRPE: Double
         let primaryLift: String
+    }
+
+    struct FormCheckCapturePayload: Identifiable {
+        let id = UUID()
+        let exercise: FormCheckExercise
+        let exerciseName: String
     }
 
     // MARK: - Header
@@ -197,26 +212,39 @@ public struct WorkoutsView: View {
     }
 
     private var activeActions: some View {
-        HStack(spacing: VA.Space.md) {
-            if !restActive {
+        VStack(spacing: VA.Space.md) {
+            HStack(spacing: VA.Space.md) {
+                if !restActive {
+                    VAButton(
+                        String(localized: "Start Rest", comment: "Button to start rest timer"),
+                        icon: "timer",
+                        style: .secondary,
+                        accessibilityIdentifier: "workouts.startRest"
+                    ) {
+                        restEndsAt = .now.addingTimeInterval(90)
+                        restActive = true
+                        VAHaptics.tap()
+                    }
+                }
                 VAButton(
-                    String(localized: "Start Rest", comment: "Button to start rest timer"),
-                    icon: "timer",
+                    String(localized: "Complete Workout", comment: "Button to finish the current workout session"),
+                    icon: "flag.checkered",
                     style: .secondary,
-                    accessibilityIdentifier: "workouts.startRest"
+                    accessibilityIdentifier: "workouts.completeWorkout"
                 ) {
-                    restEndsAt = .now.addingTimeInterval(90)
-                    restActive = true
-                    VAHaptics.tap()
+                    completeWorkout()
                 }
             }
-            VAButton(
-                String(localized: "Complete Workout", comment: "Button to finish the current workout session"),
-                icon: "flag.checkered",
-                style: .secondary,
-                accessibilityIdentifier: "workouts.completeWorkout"
-            ) {
-                completeWorkout()
+            if formCheckExercise != nil {
+                VAButton(
+                    String(localized: "Form Check", comment: "Button to start Vision form check"),
+                    icon: "camera.viewfinder",
+                    style: .primary,
+                    accessibilityIdentifier: "workouts.formCheck"
+                ) {
+                    VAHaptics.tap()
+                    openFormCheck()
+                }
             }
         }
     }
@@ -437,6 +465,34 @@ public struct WorkoutsView: View {
         }
     }
 
+    private func completeFormCheck(_ analysis: FormCheckAnalysis) {
+        model.recordFormCheckAnalysis(analysis)
+        toastPresenter.show(VAToast(
+            kind: toastKind(for: analysis.verdict),
+            title: String(localized: "Form check saved", comment: "Toast after form check capture"),
+            message: analysis.summaryLine
+        ))
+    }
+
+    private func openFormCheck() {
+        guard let exercise = formCheckExercise else { return }
+        formCheckPayload = FormCheckCapturePayload(
+            exercise: exercise,
+            exerciseName: model.autopilot?.nextExerciseName ?? LocalizedLabels.formCheckExerciseDisplayName(exercise)
+        )
+    }
+
+    private func toastKind(for verdict: FormCheckVerdict) -> VAToast.Kind {
+        switch verdict {
+        case .solid:
+            return .success
+        case .review:
+            return .warning
+        case .inconclusive:
+            return .info
+        }
+    }
+
     // MARK: - Derived display values
 
     private var activeWorkoutTitle: String {
@@ -458,6 +514,14 @@ public struct WorkoutsView: View {
             return String(localized: "Target pending", comment: "Fallback active workout set target")
         }
         return "\(Int(target.weight)) x \(target.repRange.lowerBound)"
+    }
+
+    private var formCheckExercise: FormCheckExercise? {
+        guard let autopilot = model.autopilot else { return nil }
+        return FormCheckExercise.infer(
+            exerciseID: autopilot.nextExerciseID,
+            name: autopilot.nextExerciseName
+        )
     }
 
     private var nextExercisePreview: String {

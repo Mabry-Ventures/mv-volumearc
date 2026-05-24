@@ -61,6 +61,7 @@ extension WorkoutDashboardModel {
             lastSessionSummary: lastSessionSummary,
             recentMemories: memories,
             program: activeProgram,
+            formCheck: latestFormCheckAnalysis,
             // VOL-181 Phase 1B: cached recovery snapshot fed into the
             // coach prompt. `RecoveryContext.hasAnyData` gates the
             // section so empty contexts render as no-op.

@@ -127,6 +127,10 @@ public extension PrivacyMode {
 /// localization APIs by design); the UI maps each case to a `String(localized:)`
 /// here so translators see every enum-derived label in one file.
 public enum LocalizedLabels {
+    public static func formCheckExerciseDisplayName(_ exercise: FormCheckExercise) -> String {
+        exercise.displayName
+    }
+
     public static func feedbackCategoryDisplayName(_ category: FeedbackBundle.Category) -> String {
         switch category {
         case .bug:

@@ -53,6 +53,8 @@ public enum VA {
         public static let surfaceSecondary = Color(.secondarySystemBackground)
         public static let surfaceTertiary = Color(.tertiarySystemBackground)
         public static let surfaceGrouped = Color(.systemGroupedBackground)
+        public static let cameraSurface = Color.black
+        public static let cameraForeground = Color.white
 
         // Text
         public static let textPrimary = Color(.label)
@@ -116,6 +118,12 @@ public enum VA {
 
         /// Large onboarding glyphs. Fixed by design so SF Symbols keep a stable visual anchor.
         public static let onboardingIcon = Font.system(size: 88, weight: .semibold)
+
+        /// Compact camera chrome glyphs.
+        public static let cameraChromeIcon = Font.system(size: 15, weight: .semibold)
+
+        /// Large camera unavailable glyph.
+        public static let cameraUnavailableIcon = Font.system(size: 44, weight: .semibold)
 
         // MARK: Widget / Live Activity scale
         //
@@ -243,6 +251,24 @@ public enum VA {
 
         /// Paywall hero-to-surface background wash.
         public static let paywallBackgroundStart: Double = 0.18
+
+        /// Dark camera chrome backing.
+        public static let cameraChrome: Double = 0.42
+
+        /// Camera panel surface over live preview.
+        public static let cameraPanel: Double = 0.94
+
+        /// Camera panel hairline stroke.
+        public static let cameraPanelStroke: Double = 0.14
+
+        /// Skeleton line opacity over camera preview.
+        public static let cameraSkeleton: Double = 0.72
+
+        /// Primary camera overlay copy.
+        public static let cameraTextPrimary: Double = 0.84
+
+        /// Secondary camera overlay copy.
+        public static let cameraTextSecondary: Double = 0.78
     }
 
     // MARK: - Spacing (4pt grid)
@@ -291,6 +317,15 @@ public enum VA {
 
         /// Half-point hairline stroke.
         public static let hairline: CGFloat = 0.5
+
+        /// Camera overlay close button and title pill height.
+        public static let cameraChromeControl: CGFloat = 38
+
+        /// Camera pose skeleton line width.
+        public static let cameraSkeletonStroke: CGFloat = 3
+
+        /// Camera pose joint marker diameter.
+        public static let cameraJointMarker: CGFloat = 8
 
         // MARK: Widget scale
         //
