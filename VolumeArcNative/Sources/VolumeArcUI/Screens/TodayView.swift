@@ -154,7 +154,7 @@ public struct TodayView: View {
             let targetLine = targetLine(for: autopilot)
             NavigationLink {
                 WorkoutDetailView(
-                    title: workoutTitle,
+                    title: workoutTitle, exerciseID: autopilot.nextExerciseID,
                     exerciseName: autopilot.nextExerciseName,
                     target: targetLine,
                     cue: autopilot.bestCue,

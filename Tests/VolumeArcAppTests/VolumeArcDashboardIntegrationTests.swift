@@ -403,6 +403,19 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertTrue(memory.entries.first?.summary.contains("squat") ?? false)
     }
 
+    func testManualCoachMemorySaveRefreshesPublishedMemory() async {
+        let model = makeDashboardModel()
+        let saved = await model.appendCoachMemory(
+            content: "Keep deadlift cues focused on wedge and patience.",
+            theme: "deadlift"
+        )
+
+        XCTAssertTrue(saved)
+        XCTAssertEqual(model.coachMemory.entries.count, 1)
+        XCTAssertEqual(model.coachMemory.entries.first?.theme, "deadlift")
+        XCTAssertTrue(model.coachMemory.entries.first?.summary.contains("wedge") ?? false)
+    }
+
     // MARK: - Training plan
 
     func testTrainingPlanUpsertAndQuery() throws {
