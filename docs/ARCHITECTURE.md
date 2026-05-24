@@ -115,7 +115,7 @@ Every integration point (AI provider, health store, sync transport, telemetry si
 `VolumeArcApp.makeHealthStore()`, `makeVoicePermissionStore()`, `makeSyncTransport()` etc. choose between real and stub implementations based on `#if canImport()` checks and runtime configuration.
 
 ### Actor isolation for mutable shared state
-Network-bound types (`VolumeArcRelaySessionProvider`, `VolumeArcVoicePermissionStore`) use Swift actors. The `WorkoutDashboardModel` is `@MainActor` because all SwiftUI observation happens on the main thread.
+Network-bound types (`VolumeArcAppAttestRelaySessionProvider`, `VolumeArcVoicePermissionStore`) use Swift actors. The `WorkoutDashboardModel` is `@MainActor` because all SwiftUI observation happens on the main thread.
 
 ### Cascading persistence fallback
 `VolumeArcPersistenceController` tries: CloudKit → local file → in-memory → unavailable. Each tier records its failure metadata for telemetry.

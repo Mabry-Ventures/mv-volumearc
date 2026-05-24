@@ -104,18 +104,5 @@
 	<string>$(SENTRY_DSN)</string>
 	<key>VolumeArcAIRelayURL</key>
 	<string>$(VOLUMEARC_AI_RELAY_URL)</string>
-	<!--
-	  VOL-196: relay signing key. Build setting substituted by
-	  `ci_scripts/ci_post_clone.sh` from VOLUMEARC_RELAY_SIGNING_KEY at
-	  archive time. `scripts/validate_exported_ipa_contract.sh` fails the
-	  archive when the URL is configured but this key is missing/empty,
-	  preventing release builds that would silently degrade cloud AI and
-	  live voice. VOL-225 runs App Attest in prefer-with-HMAC-fallback mode
-	  until production telemetry proves the attested path can be required.
-	-->
-	<key>VolumeArcRelaySigningKey</key>
-	<string>$(VOLUMEARC_RELAY_SIGNING_KEY)</string>
-	<key>VolumeArcRelayAuthMode</key>
-	<string>$(VOLUMEARC_RELAY_AUTH_MODE)</string>
 	</dict>
 </plist>

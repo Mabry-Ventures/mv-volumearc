@@ -5,10 +5,9 @@
 // repackaged binary, by anchoring the request to a key generated inside
 // the Secure Enclave and attested by Apple's servers.
 //
-// Phase B (VOL-225) validates App Attest in the relay while retaining HMAC
-// as the transition fallback. Phase C (VOL-226) cuts over the production
-// fallback path to App-Attest-required once telemetry says the capable
-// device cohort is stable.
+// Phase B (VOL-225) validates App Attest in the relay. Phase C (VOL-226)
+// retired the shared client HMAC fallback; cloud-coach relay requests now
+// require App Attest.
 //
 // ## Lifecycle
 //
@@ -16,14 +15,14 @@
 //      a key inside Secure Enclave via `DCAppAttestService.generateKey`,
 //      persists the resulting keyID in Keychain, then attests the key with
 //      `DCAppAttestService.attestKey(_:clientDataHash:)`. The attestation
-//      object (CBOR-encoded) is held in memory plus persisted so Phase B's
-//      server can be told about the key once.
+//      object (CBOR-encoded) is held in memory plus persisted so the server
+//      can be told about the key once.
 //
 //   2. **Per request**: caller invokes `assertion(over:)` with a hash of
 //      the request body. The service produces a small CBOR-encoded
 //      assertion via `DCAppAttestService.generateAssertion(_:clientDataHash:)`
 //      that the server can verify against the previously-attested public
-//      key (Phase B).
+//      key.
 //
 // ## Availability + simulator behavior
 //
@@ -33,16 +32,14 @@
 //   - macOS, including Mac Catalyst.
 //
 // On unsupported devices, this service surfaces
-// `VolumeArcAppAttestError.notSupported` and callers MUST fall back to the
-// HMAC path. The relay's tier-1 anti-abuse posture (rate limits, request
-// signing) covers the unsupported-device cohort.
+// `VolumeArcAppAttestError.notSupported` and callers fall back to the local
+// heuristic coach rather than using the relay.
 //
 // ## Determinstic / UI test mode
 //
 // In `-UITestMode 1` (deterministic) we short-circuit to
 // `.notSupported` regardless of platform so journey tests don't depend
-// on the simulator's flaky App Attest daemon. The HMAC path stays the
-// single source of truth for tests.
+// on the simulator's flaky App Attest daemon.
 
 #if canImport(DeviceCheck)
 import DeviceCheck
@@ -56,8 +53,8 @@ import VolumeArcCore
 /// failure mode in `DCAppAttestService` plus the two synthetic states
 /// (`notSupported`, `disabledForTests`) that callers must handle.
 enum VolumeArcAppAttestError: Error, LocalizedError {
-    /// `DCAppAttestService.isSupported == false` for this device. Caller
-    /// must fall back to HMAC. Surfaced once on first use and cached.
+    /// `DCAppAttestService.isSupported == false` for this device. Surfaced
+    /// once on first use and cached.
     case notSupported
     /// Service is intentionally disabled — UI test mode or feature flag
     /// off. Distinct from `notSupported` so telemetry can tell the
@@ -68,7 +65,7 @@ enum VolumeArcAppAttestError: Error, LocalizedError {
     case generateKeyFailed(underlying: Error)
     /// `DCAppAttestService.attestKey` failed. Persistent (key was
     /// generated but Apple's attestation servers refused). Caller may
-    /// re-bootstrap with a fresh key OR fall back to HMAC.
+    /// re-bootstrap with a fresh key.
     case attestationFailed(underlying: Error)
     /// `DCAppAttestService.generateAssertion` failed. Almost always
     /// transient (network) or temporary (Secure Enclave busy). Caller
@@ -245,8 +242,7 @@ actor VolumeArcAppAttestCoordinator {
     /// Lazily bootstrap a key (generate + attest) if one isn't already
     /// persisted. Returns the keyID, which callers MUST use for all
     /// subsequent assertion calls. Failures surface as
-    /// `VolumeArcAppAttestError` and the caller decides whether to
-    /// fall back to the HMAC path.
+    /// `VolumeArcAppAttestError`.
     func bootstrapKeyIfNeeded(challenge: Data) async throws -> String {
         guard service.isSupported else {
             throw VolumeArcAppAttestError.notSupported
@@ -266,7 +262,7 @@ actor VolumeArcAppAttestCoordinator {
             try secureStore.save(attestation.base64EncodedString(), for: attestationObjectKey)
         } catch {
             // The key still works for the current session even if Keychain
-            // failed — Phase B's server-side flow will re-bootstrap on a
+            // failed — the server-side flow will re-bootstrap on a
             // fresh keyID on next launch. We surface the error so the
             // telemetry sink records it but the assertion path can
             // continue.
@@ -279,7 +275,7 @@ actor VolumeArcAppAttestCoordinator {
     /// Returns the cached attestation object if one was produced in the
     /// current session or a prior unconfirmed session. `nil` means the
     /// keyID alone isn't enough for the relay; the caller should reset and
-    /// re-bootstrap so it can hand Phase B's server the CBOR blob.
+    /// re-bootstrap so it can hand the server the CBOR blob.
     func cachedAttestation() -> Data? {
         if let attestationCache {
             return attestationCache
@@ -293,9 +289,9 @@ actor VolumeArcAppAttestCoordinator {
         return data
     }
 
-    /// Produce an assertion over the given request body. The relay (in
-    /// Phase B) will verify it against the previously-attested public
-    /// key for this keyID. `requestBody` is hashed inside this method so
+    /// Produce an assertion over the given request body. The relay verifies
+    /// it against the previously-attested public key for this keyID.
+    /// `requestBody` is hashed inside this method so
     /// callers don't have to think about the hash domain.
     func assertion(over requestBody: Data, nonce: Data) async throws -> AppAttestAssertion {
         guard service.isSupported else {
@@ -304,13 +300,12 @@ actor VolumeArcAppAttestCoordinator {
 
         guard let keyID = try? secureStore.load(keyIDKey), keyID.isEmpty == false else {
             // No bootstrapped key — caller has to call
-            // `bootstrapKeyIfNeeded` first. Surfacing as `notSupported`
-            // lets the HMAC fallback kick in without a new error case.
+            // `bootstrapKeyIfNeeded` first.
             throw VolumeArcAppAttestError.notSupported
         }
 
         // clientDataHash = SHA256(requestBody || nonce). The nonce
-        // makes the assertion replay-resistant — Phase B's server will
+        // makes the assertion replay-resistant — the server will
         // hand out short-lived nonces and verify each assertion against
         // exactly one.
         var clientData = Data()

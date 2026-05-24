@@ -16,8 +16,7 @@ import XCTest
 // VOL-224: the App target's internals (`AppAttestServiceProtocol`,
 // `VolumeArcAppAttestCoordinator`, `LiveAppAttestService`) are reachable
 // to `VolumeArcAppTests` without `@testable import VolumeArc` — the
-// test target compiles against the App target's product, same pattern
-// as `VolumeArcRelaySessionTests` for `VolumeArcRelaySessionProvider`.
+// test target compiles against the App target's product.
 
 private actor MockAppAttestService: AppAttestServiceProtocol {
     nonisolated let isSupported: Bool

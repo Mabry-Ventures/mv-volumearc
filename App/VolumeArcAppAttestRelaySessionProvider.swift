@@ -1,26 +1,6 @@
 import Foundation
 import VolumeArcCore
 
-enum VolumeArcRelayAuthMode: String, Sendable {
-    case hmac
-    case appAttest
-    case appAttestPreferHMACFallback
-
-    static func current() -> VolumeArcRelayAuthMode {
-        let configured = ProcessInfo.processInfo.environment["VOLUMEARC_RELAY_AUTH_MODE"]
-            ?? Bundle.main.object(forInfoDictionaryKey: "VolumeArcRelayAuthMode") as? String
-        guard let configured,
-              let mode = VolumeArcRelayAuthMode(rawValue: configured) else {
-            return .appAttestPreferHMACFallback
-        }
-        return mode
-    }
-
-    var allowsHMACFallback: Bool {
-        self == .appAttestPreferHMACFallback
-    }
-}
-
 actor VolumeArcAppAttestRelaySessionProvider: AIRelayCredentialsProviding {
     private struct ChallengeResponse: Decodable {
         let challenge: String
@@ -46,8 +26,6 @@ actor VolumeArcAppAttestRelaySessionProvider: AIRelayCredentialsProviding {
     }
 
     private let baseURL: URL
-    private let mode: VolumeArcRelayAuthMode
-    private let fallbackProvider: any AIRelayCredentialsProviding
     private let coordinator: VolumeArcAppAttestCoordinator
     private let telemetrySink: (any TelemetrySink)?
     private let session: URLSession
@@ -59,16 +37,12 @@ actor VolumeArcAppAttestRelaySessionProvider: AIRelayCredentialsProviding {
 
     init(
         baseURL: URL,
-        mode: VolumeArcRelayAuthMode = .current(),
-        fallbackProvider: any AIRelayCredentialsProviding,
         coordinator: VolumeArcAppAttestCoordinator = VolumeArcAppAttestCoordinator(),
         telemetrySink: (any TelemetrySink)? = nil,
         session: URLSession = .shared,
         secureStore: VolumeArcSecureStore = VolumeArcSecureStore()
     ) {
         self.baseURL = baseURL
-        self.mode = mode
-        self.fallbackProvider = fallbackProvider
         self.coordinator = coordinator
         self.telemetrySink = telemetrySink
         self.session = session
@@ -77,25 +51,21 @@ actor VolumeArcAppAttestRelaySessionProvider: AIRelayCredentialsProviding {
     }
 
     func authorizationHeaderValue() async throws -> String {
-        try await fallbackProvider.authorizationHeaderValue()
+        throw AIRuntimeIntegrationError.relayUnavailable(
+            reason: "App Attest relay auth requires a signed request body."
+        )
     }
 
     func authenticationHeaders(for requestBody: Data) async throws -> [String: String] {
-        let fallbackHeader = try await fallbackProvider.authorizationHeaderValue()
-        guard mode != .hmac else {
-            return ["Authorization": fallbackHeader]
-        }
-
         do {
             guard await coordinator.supportsAppAttest() else {
                 throw VolumeArcAppAttestError.notSupported
             }
-            let keyID = try await ensureBootstrapped(fallbackHeader: fallbackHeader)
-            let challenge = try await fetchChallenge(fallbackHeader: fallbackHeader)
+            let keyID = try await ensureBootstrapped()
+            let challenge = try await fetchChallenge()
             let assertion = try await coordinator.assertion(over: requestBody, nonce: challenge.data)
             record(name: "app_attest_succeeded", severity: .info)
             return [
-                "Authorization": fallbackHeader,
                 "X-VA-Attest-Key-ID": keyID,
                 "X-VA-Attest-Assertion": assertion.assertion.base64EncodedString(),
                 "X-VA-Attest-Nonce": challenge.encoded
@@ -104,17 +74,13 @@ actor VolumeArcAppAttestRelaySessionProvider: AIRelayCredentialsProviding {
             record(name: "app_attest_failed", severity: .warning, metadata: [
                 "reason": Self.reason(for: error)
             ])
-            guard mode.allowsHMACFallback else {
-                throw AIRuntimeIntegrationError.relayUnavailable(
-                    reason: "App Attest relay auth failed without HMAC fallback: \(error.localizedDescription)"
-                )
-            }
-            record(name: "hmac_fallback_used", severity: .warning)
-            return ["Authorization": fallbackHeader]
+            throw AIRuntimeIntegrationError.relayUnavailable(
+                reason: "App Attest relay auth failed: \(error.localizedDescription)"
+            )
         }
     }
 
-    private func ensureBootstrapped(fallbackHeader: String) async throws -> String {
+    private func ensureBootstrapped() async throws -> String {
         if let keyID = await coordinator.cachedKeyID(),
            (try? secureStore.load(confirmedKeyIDKey)) == keyID {
             return keyID
@@ -127,8 +93,7 @@ actor VolumeArcAppAttestRelaySessionProvider: AIRelayCredentialsProviding {
                 try await postBootstrap(
                     keyID: keyID,
                     attestation: attestation,
-                    challenge: pendingChallenge,
-                    fallbackHeader: fallbackHeader
+                    challenge: pendingChallenge
                 )
                 markBootstrapConfirmed(keyID: keyID)
                 return keyID
@@ -143,7 +108,7 @@ actor VolumeArcAppAttestRelaySessionProvider: AIRelayCredentialsProviding {
 
         clearPendingBootstrap()
         await coordinator.reset()
-        let bootstrapChallenge = try await fetchChallenge(fallbackHeader: fallbackHeader)
+        let bootstrapChallenge = try await fetchChallenge()
         let keyID = try await coordinator.bootstrapKeyIfNeeded(challenge: bootstrapChallenge.data)
         let attestation = await coordinator.cachedAttestation()
         savePendingBootstrap(challenge: bootstrapChallenge.encoded, expiresAt: bootstrapChallenge.expiresAt)
@@ -152,8 +117,7 @@ actor VolumeArcAppAttestRelaySessionProvider: AIRelayCredentialsProviding {
             try await postBootstrap(
                 keyID: keyID,
                 attestation: try Self.unwrapAttestation(attestation),
-                challenge: bootstrapChallenge.encoded,
-                fallbackHeader: fallbackHeader
+                challenge: bootstrapChallenge.encoded
             )
             markBootstrapConfirmed(keyID: keyID)
         } catch {
@@ -166,10 +130,9 @@ actor VolumeArcAppAttestRelaySessionProvider: AIRelayCredentialsProviding {
         return keyID
     }
 
-    private func fetchChallenge(fallbackHeader: String) async throws -> Challenge {
+    private func fetchChallenge() async throws -> Challenge {
         var request = URLRequest(url: baseURL.appending(path: "v1/attest/challenge"))
         request.httpMethod = "POST"
-        request.setValue(fallbackHeader, forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 15
 
@@ -196,12 +159,10 @@ actor VolumeArcAppAttestRelaySessionProvider: AIRelayCredentialsProviding {
     private func postBootstrap(
         keyID: String,
         attestation: Data,
-        challenge: String,
-        fallbackHeader: String
+        challenge: String
     ) async throws {
         var request = URLRequest(url: baseURL.appending(path: "v1/attest/bootstrap"))
         request.httpMethod = "POST"
-        request.setValue(fallbackHeader, forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 20

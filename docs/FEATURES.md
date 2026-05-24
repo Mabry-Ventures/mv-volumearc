@@ -46,7 +46,7 @@ This is the granular per-feature checklist. For high-level system status, see [`
 | Voice transport | ✅ | `AIRelayVoiceTransport` is live for single-turn voice → text → spoken response. Live duplex/WebRTC audio remains future work. |
 | Coach memory | ✅ | `CoachMemoryRepository` persists recent context and is appended during coaching turns. |
 | Streaming response UX | ✅ | `AIRelayCoachProvider.streamCoachResponse` consumes `text/event-stream` from the `volumearc-ai-relay` Cloudflare Worker, parses `data: {"text":"..."}` frames, and yields Gemini tokens as they arrive. Non-streaming callers join the stream to a single string. Synthetic word-chunking is kept as the default-impl fallback for providers without native streaming. |
-| Evaluation harness | ✅ | Template-layer hermetic `CoachEvalTests` asserts marker, system prompt persona, intent envelope, and context preservation against 31 fixtures under `Tests/Evals/CoachEvalFixtures/`. Response-layer `scripts/run_coach_evals.sh` runs those fixtures against the production relay with a signing key, and the nightly CI workflow publishes trend/artifact output (VOL-100 / VOL-147). |
+| Evaluation harness | ✅ | Template-layer hermetic `CoachEvalTests` asserts marker, system prompt persona, intent envelope, and context preservation against 31 fixtures under `Tests/Evals/CoachEvalFixtures/`. Response-layer live relay evals are paused after the VOL-226 App Attest-only cutover until a real-device App Attest signer is available. |
 | Privacy mode enforcement | 📋 | Privacy mode is modeled and surfaced in UI, but strict-mode prompt enforcement is not yet consistently applied in the dashboard coach path. |
 
 ## Data & progression

@@ -33,7 +33,7 @@ Tests/VolumeArcAppTests/
 ├── VolumeArcPersistenceTests.swift               # 10 tests, real VolumeArcPersistenceController
 ├── VolumeArcProgressionTests.swift               # 8 tests
 ├── VolumeArcReadinessTests.swift                 # 6 tests
-├── VolumeArcRelaySessionTests.swift              # 8 tests, real VolumeArcRelaySessionProvider
+├── VolumeArcRelaySessionTests.swift              # secure-store and relay error-description coverage
 ├── VolumeArcRelayURLValidationTests.swift        # 17 tests
 ├── VolumeArcSecureStoreFallbackTests.swift       # 5 tests
 └── VolumeArcSentryPIIScrubberTests.swift         # 33 tests (VOL-72)

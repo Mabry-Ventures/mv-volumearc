@@ -166,12 +166,12 @@ export default function PrivacyPage() {
             </p>
             <p>
               <strong>Rate-limiting identifier.</strong> To prevent abuse, the
-              Worker authenticates each request with a pseudonymous per-install
-              identifier and keeps a short-lived count of recent requests for
-              that identifier in Cloudflare&rsquo;s edge key-value store. That
-              identifier is not your name, email, or Apple ID, is not forwarded
-              to Google, and the counter entries expire automatically. It lets
-              us enforce per-user rate limits without an account system.
+              Worker authenticates each request with Apple App Attest and keeps
+              a short-lived count of recent requests for the attested app key in
+              Cloudflare&rsquo;s edge key-value store. That key is not your name,
+              email, or Apple ID, is not forwarded to Google, and the counter
+              entries expire automatically. It lets us enforce rate limits
+              without an account system.
             </p>
             <p>
               <strong>

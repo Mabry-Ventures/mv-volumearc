@@ -24,32 +24,29 @@ VolumeArc talks to exactly these hosts:
 
 | Host | Purpose | Auth | TLS |
 |---|---|---|---|
-| `relay.volumearc.app` | Coach prompt forwarding to Gemini | App Attest assertion when supported; HMAC bootstrap/fallback during VOL-225/VOL-226 transition | TLS 1.2+ pinned to Cloudflare's chain |
+| `relay.volumearc.app` | Coach prompt forwarding to Gemini | App Attest assertion required | TLS 1.2+ pinned to Cloudflare's chain |
 | `o*.ingest.us.sentry.io` | Crash + telemetry events | Sentry DSN (publishable; no secret in client) | TLS 1.2+ |
 | Apple-owned (HealthKit, CloudKit, App Store, Sign in with Apple, APNs, Universal Links) | OS-level integration | OS-managed | OS-managed |
 
 No third-party analytics SDK, no ad SDK, no remote-config service (feature flags are local — `LocalFeatureFlagProvider`). Any new network egress requires an explicit audit pass through this doc + the privacy manifest (`App/PrivacyInfo.xcprivacy`) + the App Store privacy questionnaire.
 
-## App Attest + HMAC transition for the coach relay
+## App Attest auth for the coach relay
 
-The Cloudflare Worker (`relay/`) validates App Attest assertions for capable iPhone installs and keeps the existing HMAC credential as a bootstrap/fallback path until VOL-226 cuts over.
+The Cloudflare Worker (`relay/`) validates App Attest assertions for iPhone installs before forwarding any coach request to Gemini.
 
-1. On first launch, `VolumeArcRelaySessionProvider` generates a stable install-scoped device ID and stores it in Keychain via `VolumeArcSecureStore`.
-2. The provider signs that device ID with `RELAY_SIGNING_KEY` and sends `Authorization: Bearer <device-id>.<hmac-hex>`.
-3. `VolumeArcAppAttestRelaySessionProvider` uses that HMAC header to fetch short-lived relay challenges and bootstrap a `DCAppAttestService` key.
-4. Each App Attest-capable coach request sends `X-VA-Attest-Key-ID`, `X-VA-Attest-Assertion`, and `X-VA-Attest-Nonce` headers. The assertion covers `SHA256(requestBody || nonce)`.
-5. The relay stores App Attest keys, challenges, and counters in the `APP_ATTEST_STATE` Durable Object so nonce consumption and counter advancement happen in one strongly consistent transaction.
-6. The Worker validates the Apple certificate chain, app ID hash, credential ID/key ID binding, assertion signature, and monotonic counter before forwarding to Gemini.
+1. On first cloud-coach use, `VolumeArcAppAttestRelaySessionProvider` fetches a short-lived relay challenge and bootstraps a `DCAppAttestService` key.
+2. The bootstrap call posts the App Attest key ID, attestation object, and challenge to `/v1/attest/bootstrap`.
+3. Each coach request sends `X-VA-Attest-Key-ID`, `X-VA-Attest-Assertion`, and `X-VA-Attest-Nonce` headers. The assertion covers `SHA256(requestBody || nonce)`.
+4. The relay stores App Attest keys, challenges, and counters in the `APP_ATTEST_STATE` Durable Object so nonce consumption and counter advancement happen in one strongly consistent transaction.
+5. The Worker validates the Apple certificate chain, app ID hash, credential ID/key ID binding, assertion signature, and monotonic counter before forwarding to Gemini.
 
-If App Attest is unsupported, missing, or temporarily unavailable during Phase B, the default `appAttestPreferHMACFallback` client mode records telemetry and sends the HMAC-only request. If any App Attest header is present but invalid, the Worker fails closed with 401 instead of falling back. Phase C flips `REQUIRE_APP_ATTEST=true` in the Worker after production telemetry shows the fallback is no longer needed; HMAC-only coach requests then return 410.
-
-The shared HMAC secret is configured as a Cloudflare Worker secret (set via `wrangler secret put`) and Xcode Cloud secret, never committed to the repo. The client-side device ID never leaves the device except as the HMAC bearer token's public prefix.
+Missing App Attest headers return 410 (`app_attest_required`). Invalid or incomplete App Attest headers return 401 and never downgrade to a legacy shared-secret path.
 
 ## Keychain vs UserDefaults
 
 **Keychain (via `VolumeArcSecureStore`)** for secrets that need durability across reinstalls or that grant access to network resources:
 
-- Relay bootstrap/fallback auth material (`deviceID`, HMAC signing key, relay-confirmed App Attest key ID).
+- Relay-confirmed App Attest key ID and pending bootstrap challenge metadata.
 - StoreKit's own entitlement cache (managed by `StoreKit 2`; we don't store this directly).
 
 **UserDefaults** for non-secret app state that's safe to leak in a backup:

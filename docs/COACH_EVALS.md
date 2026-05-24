@@ -5,9 +5,9 @@ Regression protection for the AI coach's prompt quality. Two layers:
 | Layer | Where | When it runs | What it catches |
 |-------|-------|--------------|-----------------|
 | Template-layer (hermetic) | `Tests/VolumeArcAppTests/Evals/CoachEvalTests.swift` | Every PR via `scripts/test_apple_targets.sh` | Any regression that bypasses `CoachPromptTemplate.render`, drops the template marker, changes intent envelopes, strips the system prompt persona, or mutates the renderer's determinism. No network, no model call, no Gemini budget burned. |
-| Response-layer (manual / nightly) | `scripts/run_coach_evals.sh` | On-demand + nightly workflow (follow-up) | Drift in the actual model output — sentence budget, numeric grounding, banned phrases, pain-signal flagging, next-exercise anchoring. Requires `VOLUMEARC_RELAY_SIGNING_KEY`. |
+| Response-layer (paused after VOL-226) | `scripts/run_coach_evals.sh` | Skipped artifact only | The live relay now requires real App Attest assertions. A generic shell runner cannot mint those, so response-layer model-output checks need a real-device App Attest signer before they can resume. |
 
-Fixtures are the single source of truth for both layers. They live at `Tests/Evals/CoachEvalFixtures/*.json`, get bundled into the iOS test target as a folder reference, and are read directly off disk by the shell script.
+Fixtures remain the single source of truth. They live at `Tests/Evals/CoachEvalFixtures/*.json` and get bundled into the iOS test target as a folder reference. The shell script no longer POSTs them to the live relay until the App Attest signer exists.
 
 ## Methodology
 
@@ -35,9 +35,11 @@ Each fixture gets fed through `CoachPromptTemplate.render(intent:contextBlock:qu
 
 A coverage sweep also asserts that every `CoachIntent`, every `CoachingStyle`, every readiness bucket from `{45, 60, 72, 82, 88}`, and every session-history tier from `{0, 1, 5+}` still has at least one fixture. If a future edit trims the suite below the coverage floor, the test fails loudly.
 
-### Response-layer assertions (manual / nightly)
+### Response-layer assertions (paused)
 
-`scripts/run_coach_evals.sh` POSTs each fixture to the live relay at `https://relay.volumearc.app/v1/coach` using the same HMAC signing scheme the iOS app uses (`VolumeArcRelaySessionProvider.authorizationHeaderValue`). Responses arrive as `text/event-stream` frames, get joined, and then checked against the fixture's `expectedAssertions`:
+Before VOL-226, `scripts/run_coach_evals.sh` POSTed each fixture to the live relay and checked the streamed model response against `expectedAssertions`. That path used the retired shared client HMAC credential. After the App Attest-only cutover, the relay correctly rejects non-attested shell requests with 410, so live response assertions are paused until a real-device signer can supply valid `X-VA-Attest-*` headers.
+
+The response-layer assertion contract remains:
 
 - `maxSentences` — hard upper bound on sentence count (with a +1 tokenizer grace).
 - `mustContainNumericContext` — the response cites at least one number.
@@ -61,19 +63,15 @@ Included in the default iOS test run:
 
 The `CoachEvalTests` class runs as part of `VolumeArcAppTests`. Failure surfaces the fixture ID and the specific invariant that broke.
 
-### Response layer (manual)
+### Response layer
 
 ```bash
-export VOLUMEARC_RELAY_SIGNING_KEY="<same key the iOS app uses>"
-# Optional:
-#   export VOLUMEARC_EVAL_DEVICE_ID="coach-eval-harness"  # default
-#   export VOLUMEARC_RELAY_BASE_URL="https://relay.volumearc.app"  # default
 #   export VOLUMEARC_EVAL_OUTPUT_DIR=".build/coach-evals/manual-run"
 
 ./scripts/run_coach_evals.sh
 ```
 
-The script writes per-fixture response bodies + a `summary.json` under `$VOLUMEARC_EVAL_OUTPUT_DIR` and exits non-zero on any failure. The nightly CI workflow uploads that machine-readable summary and the raw per-fixture responses as its `coach-eval-results-<run_id>` artifact.
+The script currently writes a skipped `summary.json` under `$VOLUMEARC_EVAL_OUTPUT_DIR` and exits successfully. Re-enable live calls only after the harness can mint real App Attest assertions from a signed VolumeArc build.
 
 ## Fixture inventory
 
@@ -111,7 +109,7 @@ The script writes per-fixture response bodies + a `summary.json` under `$VOLUMEA
 | 30 | `program-recovery-upper-lower` | 45 | recovery | 4 | analytical | Program-aware recovery should preserve the weekly plan while modifying today. | pending | pending |
 | 31 | `program-free-hst` | 88 | free | 5 | motivational | Free-form coaching should still anchor to the active HST block. | pending | pending |
 
-The `Last template-run` and `Last response-run` columns are hand-updated when you run the harness. The template-layer column flips to `PASS` on every green CI run against the branch. The response-layer column is only updated after a manual or nightly `scripts/run_coach_evals.sh` invocation — the summary JSON under `$VOLUMEARC_EVAL_OUTPUT_DIR/summary.json` is the machine-readable source of truth for that column.
+The `Last template-run` and `Last response-run` columns are hand-updated when you run the harness. The template-layer column flips to `PASS` on every green CI run against the branch. The response-layer column should stay `paused` until the App Attest signer follow-up lands.
 
 ## Adding a new fixture
 
@@ -122,22 +120,22 @@ The `Last template-run` and `Last response-run` columns are hand-updated when yo
 
 ## Why fixtures live at `Tests/Evals/` not `Tests/VolumeArcAppTests/Evals/`
 
-One directory feeds two consumers. The XCTest bundle reads them as a bundled folder reference (`Bundle(for:).url(forResource: "CoachEvalFixtures")`), and `scripts/run_coach_evals.sh` reads them directly from the repo. A top-level `Tests/Evals/` location keeps them out of the platform-specific test bundle path without orphaning them from the rest of the Tests tree. The Xcode project generator wires the folder in as a test-target resource so changes to the fixtures are always part of the build graph.
+The XCTest bundle reads fixtures as a bundled folder reference (`Bundle(for:).url(forResource: "CoachEvalFixtures")`). A top-level `Tests/Evals/` location keeps them out of the platform-specific test bundle path without orphaning them from the rest of the Tests tree. The Xcode project generator wires the folder in as a test-target resource so changes to the fixtures are always part of the build graph.
 
 ## Nightly CI (VOL-147)
 
-The response-layer eval harness runs on a cron at **07:00 UTC daily** via [`.github/workflows/coach-evals-nightly.yml`](../.github/workflows/coach-evals-nightly.yml). The job:
+The response-layer eval workflow still runs on a cron at **07:00 UTC daily** via [`.github/workflows/coach-evals-nightly.yml`](../.github/workflows/coach-evals-nightly.yml), but after VOL-226 it publishes an explicit skipped artifact until a real-device App Attest signer exists. The job:
 
-1. Pre-flights `curl` + `jq` + `openssl` on the self-hosted runner.
-2. Runs `scripts/run_coach_evals.sh` against the production relay with a run-scoped `coach-eval-<run_id>-<attempt>` device prefix (using the `VOLUMEARC_RELAY_SIGNING_KEY` repo secret). The script shards that prefix across deterministic suffixes so the suite can exceed one normal per-device rate-limit window without producing a self-inflicted 429.
+1. Pre-flights `jq` on the self-hosted runner.
+2. Runs `scripts/run_coach_evals.sh`, which writes a skipped summary explaining that App Attest-only relay auth needs a real-device signer.
 3. Parses the resulting `summary.json` and appends a `{timestamp, sha, run_id, total, passed, failed, axes, fixtures}` record to [`docs/coach-eval-trend.json`](coach-eval-trend.json) — the trend file is committed back to `main` only on cron runs (mirrors VOL-166's `docs/coverage-trend.json` pattern). The same file is mirrored into `marketing/src/data/coach-eval-trend.json` so Vercel's `marketing/` project root can statically render `/quality`.
-4. Uploads the full per-fixture response bodies + `summary.json` as a workflow artifact (`coach-eval-results-<run_id>`), retained 30 days.
-5. Fails the job on any fixture-level regression so the cron-failure email surfaces it.
+4. Uploads the skipped `summary.json` as a workflow artifact (`coach-eval-results-<run_id>`), retained 30 days.
 
 Manual operator runs use `workflow_dispatch` with an optional `relay_url` input to point at staging. Manual dispatch runs **do not** commit to the trend file.
 
 ### Future work
 
-- **Linear regression ticket on fixture failure** — currently the cron-failure email is the only signal. Once Slack notifications land (VOL-177 Phase 2B), wire a Slack webhook for the same regression channel, and open a `coach-eval-regression`-labeled Linear ticket on first failure of a given fixture so drift is owned.
+- **Real-device App Attest signer** — run a signed VolumeArc build on a physical device, request relay challenges, mint valid App Attest assertions, and hand those headers to the response-layer harness without exporting private key material.
+- **Linear regression ticket on fixture failure** — once live response evals resume, wire a Slack webhook for the regression channel, and open a `coach-eval-regression`-labeled Linear ticket on first failure of a given fixture so drift is owned.
 - **Response-quality golden replay** — record a reference response per fixture once the prompt is locked, run a semantic-similarity check against it on each nightly run, and flag drift above a threshold. Needs a cheap embedding pipeline that doesn't round-trip to Gemini.
 - **Multi-tier evals** — the current suite hits only the `flash-lite` tier. Add a flag to the shell script to run the same fixtures against `pro` so pricing-model-budget trade-offs are visible.

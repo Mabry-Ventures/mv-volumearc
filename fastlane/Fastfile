@@ -1,60 +1,10 @@
 require "fileutils"
-require "base64"
-require "cgi"
 require "shellwords"
 
 default_platform(:ios)
 
 before_all do
   sh("ruby", "../scripts/generate_xcode_project.rb")
-end
-
-def replace_plist_string(path:, key:, value:)
-  escaped_key = CGI.escapeHTML(key)
-  escaped_value = CGI.escapeHTML(value)
-  xml = File.read(path)
-  pattern = %r{(<key>#{Regexp.escape(key)}</key>\s*<string>)(.*?)(</string>)}m
-
-  if xml.match?(pattern)
-    xml = xml.sub(pattern) { "#{Regexp.last_match(1)}#{escaped_value}#{Regexp.last_match(3)}" }
-  else
-    insert = "\n\t<key>#{escaped_key}</key>\n\t<string>#{escaped_value}</string>\n"
-    xml = xml.sub(%r{\n</dict>}, "#{insert}</dict>")
-  end
-
-  File.write(path, xml)
-end
-
-def with_relay_signing_key_plist_patch
-  signing_key = ENV.fetch("VOLUMEARC_RELAY_SIGNING_KEY", "")
-  if signing_key.empty?
-    UI.user_error!(
-      "VOLUMEARC_RELAY_SIGNING_KEY is required for local TestFlight archives; " \
-        "export it from 1Password before running `fastlane ios beta`."
-    )
-  end
-  begin
-    decoded_signing_key = Base64.strict_decode64(signing_key)
-  rescue ArgumentError
-    UI.user_error!("VOLUMEARC_RELAY_SIGNING_KEY must be valid standard base64.")
-  end
-  if signing_key.match?(/\s/) || decoded_signing_key.bytesize < 32
-    UI.user_error!(
-      "VOLUMEARC_RELAY_SIGNING_KEY must be a single base64 value that decodes to at least 32 bytes."
-    )
-  end
-
-  plist_path = File.expand_path("../App/Info.plist", __dir__)
-  original_plist = File.binread(plist_path)
-  replace_plist_string(
-    path: plist_path,
-    key: "VolumeArcRelaySigningKey",
-    value: signing_key
-  )
-  UI.message("VOL-182: patched VolumeArcRelaySigningKey for local archive (len=#{signing_key.length})")
-  yield
-ensure
-  File.binwrite(plist_path, original_plist) if original_plist
 end
 
 # VOL-150: tester-facing What-To-Test note for `upload_to_testflight`.
@@ -162,20 +112,18 @@ platform :ios do
     # before sentry-cli or upload_to_testflight even runs). The
     # `DEVELOPMENT_TEAM` env var comes from the GitHub Actions secret
     # of the same name in the deploy-testflight job.
-    with_relay_signing_key_plist_patch do
-      build_app(
-        project: "VolumeArcApple.xcodeproj",
-        scheme: "VolumeArcApp",
-        configuration: "Release",
-        export_method: "app-store",
-        export_team_id: ENV.fetch("DEVELOPMENT_TEAM"),
-        output_directory: "build/export",
-        output_name: "VolumeArc.ipa",
-        include_symbols: true,
-        include_bitcode: false,
-        xcargs: "CODE_SIGNING_ALLOWED=YES"
-      )
-    end
+    build_app(
+      project: "VolumeArcApple.xcodeproj",
+      scheme: "VolumeArcApp",
+      configuration: "Release",
+      export_method: "app-store",
+      export_team_id: ENV.fetch("DEVELOPMENT_TEAM"),
+      output_directory: "build/export",
+      output_name: "VolumeArc.ipa",
+      include_symbols: true,
+      include_bitcode: false,
+      xcargs: "CODE_SIGNING_ALLOWED=YES"
+    )
 
     # VOL-92: validate signed entitlements on the archived bundle before
     # uploading. gym populates Actions.lane_context[SharedValues::XCODEBUILD_ARCHIVE]

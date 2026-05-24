@@ -217,28 +217,7 @@ if [[ -f "$INFO_PLIST" ]]; then
   else
     echo "VOLUMEARC_AI_RELAY_URL env var unset; leaving Info.plist placeholder"
   fi
-  # VOL-196: relay signing key release-time injection. Without this,
-  # release builds carry a relay URL but no auth material, and the
-  # `AIRelayCoachProvider` factory installs the relay path while the
-  # provider throws `relayUnavailable` on every request — cloud AI
-  # and live voice silently degrade in TestFlight/App Store builds.
-  # The companion validator at `scripts/validate_exported_ipa_contract.sh`
-  # fails the archive if the URL is present but the signing key is
-  # missing, so a release build can't ship with this configuration
-  # error undetected. The medium-term plan (VOL-206) is App Attest —
-  # see this PR's `App/VolumeArcAppAttestSessionProvider.swift` for the
-  # Phase A scaffolding that runs alongside the HMAC path during rollout.
-  if [[ -n "${VOLUMEARC_RELAY_SIGNING_KEY:-}" ]]; then
-    validate_relay_signing_key_env "VOLUMEARC_RELAY_SIGNING_KEY"
-    replace_plist_string_from_env "VolumeArcRelaySigningKey" "VOLUMEARC_RELAY_SIGNING_KEY" "$INFO_PLIST"
-    echo "Patched VolumeArcRelaySigningKey into Info.plist (len=${#VOLUMEARC_RELAY_SIGNING_KEY})"
-  else
-    echo "VOLUMEARC_RELAY_SIGNING_KEY env var unset; leaving Info.plist placeholder. Release builds without this set will fail validate_exported_ipa_contract.sh."
-    if [[ "${CI_XCODEBUILD_ACTION:-}" == "archive" && -n "${VOLUMEARC_AI_RELAY_URL:-}" ]]; then
-      echo "::error::VOLUMEARC_RELAY_SIGNING_KEY is required for archive workflows when VOLUMEARC_AI_RELAY_URL is configured; otherwise TestFlight coach relay auth returns 401."
-      exit 1
-    fi
-  fi
+  echo "Relay auth uses App Attest only; no client HMAC signing key is injected."
 else
   echo "WARNING: Info.plist not found at $INFO_PLIST — runtime config not patched"
 fi

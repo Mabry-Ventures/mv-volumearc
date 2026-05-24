@@ -5,7 +5,6 @@ import worker from "../src/worker";
 
 type RelayEnv = Parameters<typeof worker.fetch>[1];
 
-const RELAY_SIGNING_KEY = "test-relay-signing-key";
 const APP_ID = "A886EMZZW6.com.mabryventures.VolumeArc";
 const COACH_BODY = JSON.stringify({
   intent: "progression",
@@ -42,7 +41,6 @@ class InMemoryKV {
 function makeEnv(overrides: Partial<RelayEnv> = {}): RelayEnv {
   return {
     GEMINI_API_KEY: "gemini-test-key",
-    RELAY_SIGNING_KEY,
     RATE_LIMIT: new InMemoryKV() as unknown as KVNamespace,
     MODEL_DEFAULT: "gemini-test-flash",
     MODEL_PREMIUM: "gemini-test-pro",
@@ -52,21 +50,6 @@ function makeEnv(overrides: Partial<RelayEnv> = {}): RelayEnv {
     RATE_LIMIT_WINDOW_SECONDS: "600",
     ...overrides,
   };
-}
-
-async function hmacAuthHeader(deviceId = "device-a", secret = RELAY_SIGNING_KEY): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(deviceId));
-  const hex = Array.from(new Uint8Array(signature))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-  return `Bearer ${deviceId}.${hex}`;
 }
 
 function coachRequest(headers: HeadersInit = {}, body: string = COACH_BODY): Request {
@@ -116,16 +99,46 @@ function concatBytes(...chunks: Uint8Array[]): Uint8Array {
   return result;
 }
 
-async function requestChallenge(env: RelayEnv, authorization: string): Promise<string> {
+async function requestChallenge(env: RelayEnv): Promise<string> {
   const response = await worker.fetch(
     new Request("https://relay.test/v1/attest/challenge", {
       method: "POST",
-      headers: { Authorization: authorization },
     }),
     env,
   );
   expect(response.status).toBe(200);
   return (await json(response)).challenge as string;
+}
+
+async function appAttestAuthHeaders(
+  env: RelayEnv,
+  body: string = COACH_BODY,
+  counter = 1,
+): Promise<HeadersInit> {
+  const keyPair = await crypto.subtle.generateKey(
+    { name: "ECDSA", namedCurve: "P-256" },
+    true,
+    ["sign", "verify"],
+  );
+  const publicKeyRaw = new Uint8Array(await crypto.subtle.exportKey("raw", keyPair.publicKey));
+  const publicKeyJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
+  const keyId = base64(await sha256(publicKeyRaw));
+
+  await env.RATE_LIMIT.put(`attest:key:${keyId}`, JSON.stringify({
+    deviceId: keyId,
+    publicKeyJwk,
+    counter: 0,
+    attestedAt: "2026-05-24T00:00:00.000Z",
+    environment: "development",
+  }));
+
+  const challenge = await requestChallenge(env);
+  const assertion = await signedAssertion(keyPair.privateKey, body, challenge, counter);
+  return {
+    "X-VA-Attest-Key-ID": keyId,
+    "X-VA-Attest-Assertion": assertion,
+    "X-VA-Attest-Nonce": challenge,
+  };
 }
 
 async function signedAssertion(
@@ -183,41 +196,72 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("volumearc-ai-relay App Attest transition", () => {
-  it("issues App Attest challenges only to HMAC-authenticated installs", async () => {
+describe("volumearc-ai-relay App Attest auth", () => {
+  it("issues App Attest challenges without legacy HMAC auth", async () => {
     const env = makeEnv();
-    const unauthenticated = await worker.fetch(
-      new Request("https://relay.test/v1/attest/challenge", { method: "POST" }),
-      env,
-    );
-    expect(unauthenticated.status).toBe(401);
-
-    const authenticated = await worker.fetch(
-      new Request("https://relay.test/v1/attest/challenge", {
-        method: "POST",
-        headers: { Authorization: await hmacAuthHeader() },
-      }),
-      env,
-    );
-
-    expect(authenticated.status).toBe(200);
-    const body = await json(authenticated);
-    expect(typeof body.challenge).toBe("string");
-    expect(typeof body.expiresAt).toBe("string");
-    await expect(env.RATE_LIMIT.get(`attest:challenge:${body.challenge}`)).resolves.toContain("device-a");
-  });
-
-  it("keeps the Phase B HMAC fallback working for coach requests", async () => {
-    const env = makeEnv();
-
     const response = await worker.fetch(
-      coachRequest({ Authorization: await hmacAuthHeader() }),
+      new Request("https://relay.test/v1/attest/challenge", { method: "POST" }),
       env,
     );
 
     expect(response.status).toBe(200);
-    await expect(response.text()).resolves.toContain("Steady single today.");
-    expect(fetch).toHaveBeenCalledTimes(1);
+    const body = await json(response);
+    expect(typeof body.challenge).toBe("string");
+    expect(typeof body.expiresAt).toBe("string");
+    await expect(env.RATE_LIMIT.get(`attest:challenge:${body.challenge}`)).resolves.toContain("issuedAt");
+  });
+
+  it("rate-limits the unauthenticated challenge endpoint by IP", async () => {
+    const env = makeEnv({
+      RATE_LIMIT_MAX_REQUESTS: "2",
+      RATE_LIMIT_WINDOW_SECONDS: "600",
+    });
+
+    await requestChallenge(env);
+    await requestChallenge(env);
+    const response = await worker.fetch(
+      new Request("https://relay.test/v1/attest/challenge", { method: "POST" }),
+      env,
+    );
+
+    expect(response.status).toBe(429);
+    await expect(json(response)).resolves.toMatchObject({ error: "rate_limited" });
+  });
+
+  it("rate-limits unauthenticated bootstrap attempts by IP before attestation work", async () => {
+    const env = makeEnv({
+      RATE_LIMIT_MAX_REQUESTS: "1",
+      RATE_LIMIT_WINDOW_SECONDS: "600",
+    });
+
+    const bootstrapRequest = () => new Request("https://relay.test/v1/attest/bootstrap", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const first = await worker.fetch(bootstrapRequest(), env);
+    const second = await worker.fetch(bootstrapRequest(), env);
+
+    expect(first.status).toBe(400);
+    await expect(json(first)).resolves.toMatchObject({ error: "missing_fields" });
+    expect(second.status).toBe(429);
+    await expect(json(second)).resolves.toMatchObject({ error: "rate_limited" });
+  });
+
+  it("rejects HMAC-only coach requests after the cutover", async () => {
+    const env = makeEnv();
+
+    const response = await worker.fetch(
+      coachRequest({ Authorization: "Bearer retired-hmac-token" }),
+      env,
+    );
+
+    expect(response.status).toBe(410);
+    await expect(json(response)).resolves.toMatchObject({
+      error: "app_attest_required",
+      reason: "attestation_missing",
+    });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("renders app-style minimal fallback prompts for legacy clients", async () => {
@@ -231,10 +275,7 @@ describe("volumearc-ai-relay App Attest transition", () => {
       system: "",
     });
 
-    const response = await worker.fetch(
-      coachRequest({ Authorization: await hmacAuthHeader() }, body),
-      env,
-    );
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
 
     expect(response.status).toBe(200);
     const upstreamInit = vi.mocked(fetch).mock.calls[0]?.[1] as RequestInit;
@@ -268,10 +309,7 @@ describe("volumearc-ai-relay App Attest transition", () => {
       system: "",
     });
 
-    const response = await worker.fetch(
-      coachRequest({ Authorization: await hmacAuthHeader() }, body),
-      env,
-    );
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
 
     expect(response.status).toBe(200);
     const upstreamInit = vi.mocked(fetch).mock.calls[0]?.[1] as RequestInit;
@@ -297,10 +335,7 @@ describe("volumearc-ai-relay App Attest transition", () => {
       system: "client rendered system",
     });
 
-    const response = await worker.fetch(
-      coachRequest({ Authorization: await hmacAuthHeader() }, body),
-      env,
-    );
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
 
     expect(response.status).toBe(200);
     const upstreamInit = vi.mocked(fetch).mock.calls[0]?.[1] as RequestInit;
@@ -310,16 +345,16 @@ describe("volumearc-ai-relay App Attest transition", () => {
     expect(upstreamBody.generationConfig.temperature).toBe(0.7);
   });
 
-  it("can require App Attest and reject HMAC-only coach requests for Phase C", async () => {
-    const env = makeEnv({ REQUIRE_APP_ATTEST: "true" });
+  it("rejects missing App Attest headers with a cutover-specific 410", async () => {
+    const env = makeEnv();
 
-    const response = await worker.fetch(
-      coachRequest({ Authorization: await hmacAuthHeader() }),
-      env,
-    );
+    const response = await worker.fetch(coachRequest(), env);
 
     expect(response.status).toBe(410);
-    await expect(json(response)).resolves.toMatchObject({ error: "app_attest_required" });
+    await expect(json(response)).resolves.toMatchObject({
+      error: "app_attest_required",
+      reason: "attestation_missing",
+    });
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -328,7 +363,6 @@ describe("volumearc-ai-relay App Attest transition", () => {
 
     const response = await worker.fetch(
       coachRequest({
-        Authorization: await hmacAuthHeader(),
         "X-VA-Attest-Key-ID": "partial-key",
       }),
       env,
@@ -344,21 +378,12 @@ describe("volumearc-ai-relay App Attest transition", () => {
 
   it("rejects malformed bootstrap attestations without consuming the challenge", async () => {
     const env = makeEnv();
-    const auth = await hmacAuthHeader();
-    const challengeResponse = await worker.fetch(
-      new Request("https://relay.test/v1/attest/challenge", {
-        method: "POST",
-        headers: { Authorization: auth },
-      }),
-      env,
-    );
-    const challenge = (await json(challengeResponse)).challenge as string;
+    const challenge = await requestChallenge(env);
 
     const response = await worker.fetch(
       new Request("https://relay.test/v1/attest/bootstrap", {
         method: "POST",
         headers: {
-          Authorization: auth,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -375,12 +400,11 @@ describe("volumearc-ai-relay App Attest transition", () => {
       error: "attestation_invalid",
       reason: "attestation_invalid",
     });
-    await expect(env.RATE_LIMIT.get(`attest:challenge:${challenge}`)).resolves.toContain("device-a");
+    await expect(env.RATE_LIMIT.get(`attest:challenge:${challenge}`)).resolves.toContain("issuedAt");
   });
 
   it("accepts valid App Attest assertions and rejects replayed counters", async () => {
     const env = makeEnv();
-    const authorization = await hmacAuthHeader();
     const keyPair = await crypto.subtle.generateKey(
       { name: "ECDSA", namedCurve: "P-256" },
       true,
@@ -398,11 +422,10 @@ describe("volumearc-ai-relay App Attest transition", () => {
       environment: "development",
     }));
 
-    const challenge = await requestChallenge(env, authorization);
+    const challenge = await requestChallenge(env);
     const assertion = await signedAssertion(keyPair.privateKey, COACH_BODY, challenge, 1);
     const response = await worker.fetch(
       coachRequest({
-        Authorization: authorization,
         "X-VA-Attest-Key-ID": keyId,
         "X-VA-Attest-Assertion": assertion,
         "X-VA-Attest-Nonce": challenge,
@@ -414,11 +437,10 @@ describe("volumearc-ai-relay App Attest transition", () => {
     await expect(response.text()).resolves.toContain("Steady single today.");
     await expect(env.RATE_LIMIT.get(`attest:key:${keyId}`)).resolves.toContain("\"counter\":1");
 
-    const replayChallenge = await requestChallenge(env, authorization);
+    const replayChallenge = await requestChallenge(env);
     const replayAssertion = await signedAssertion(keyPair.privateKey, COACH_BODY, replayChallenge, 1);
     const replay = await worker.fetch(
       coachRequest({
-        Authorization: authorization,
         "X-VA-Attest-Key-ID": keyId,
         "X-VA-Attest-Assertion": replayAssertion,
         "X-VA-Attest-Nonce": replayChallenge,
@@ -435,15 +457,7 @@ describe("volumearc-ai-relay App Attest transition", () => {
 
   it("reads bootstrap certificates from attStmt.x5c", async () => {
     const env = makeEnv();
-    const auth = await hmacAuthHeader();
-    const challengeResponse = await worker.fetch(
-      new Request("https://relay.test/v1/attest/challenge", {
-        method: "POST",
-        headers: { Authorization: auth },
-      }),
-      env,
-    );
-    const challenge = (await json(challengeResponse)).challenge as string;
+    const challenge = await requestChallenge(env);
     const attestationObject = encodeCbor({
       fmt: "apple-appattest",
       authData: new Uint8Array(37),
@@ -454,7 +468,6 @@ describe("volumearc-ai-relay App Attest transition", () => {
       new Request("https://relay.test/v1/attest/bootstrap", {
         method: "POST",
         headers: {
-          Authorization: auth,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
