@@ -39,10 +39,20 @@ enum VolumeArcAIRuntimeFactory {
         // threaded through so each fallback emits the
         // `coach.fallback_used` event for operator visibility.
         let relayProvider: AICoachProvider? = VolumeArcAIConfiguration.relayConfiguration.map { configuration in
-            let sessionProvider = VolumeArcRelaySessionProvider(
+            let hmacProvider = VolumeArcRelaySessionProvider(
                 baseURL: configuration.baseURL,
                 applicationID: configuration.applicationID
             )
+            let sessionProvider: any AIRelayCredentialsProviding
+            if VolumeArcRelayAuthMode.current() == .hmac {
+                sessionProvider = hmacProvider
+            } else {
+                sessionProvider = VolumeArcAppAttestRelaySessionProvider(
+                    baseURL: configuration.baseURL,
+                    fallbackProvider: hmacProvider,
+                    telemetrySink: telemetrySink
+                )
+            }
             let direct = AIRelayCoachProvider(
                 configuration: configuration,
                 credentialsProvider: sessionProvider,

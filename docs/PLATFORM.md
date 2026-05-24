@@ -59,7 +59,7 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 | Background tasks | Implemented | `App/VolumeArcBackgroundTasks.swift` registers `appRefresh` + `appProcessing`. `App/Info.plist` declares `BGTaskSchedulerPermittedIdentifiers` and `UIBackgroundModes` so iOS accepts the registrations |
 | Persistence | Implemented | Four-tier fallback chain, seed data, schema, real repository CRUD all work. `VolumeArcSchemaMigrationPlan` bridges the legacy V1 training-plan shape through V2 to V3, with on-disk round-trip migration tests |
 | Secure storage | Implemented | Keychain with fallback, device ID stability |
-| Relay auth | Implemented | Actor-based session provider, token caching, expiration skew, real test coverage against production types |
+| Relay auth | Implemented (App Attest Phase B) | `VolumeArcAppAttestRelaySessionProvider` attaches App Attest assertions for capable devices and falls back to the HMAC session provider during the VOL-225/VOL-226 transition. The Worker validates Apple App Attest certificate chains, app ID hash, credential ID/key ID binding, per-request nonce, signature, and monotonic counter before forwarding to Gemini; App Attest state lives in a Durable Object so nonce consume and counter updates are strongly consistent. Invalid or incomplete `X-VA-Attest-*` headers fail closed with 401 and never downgrade to HMAC; when `REQUIRE_APP_ATTEST=true`, missing App Attest headers retire HMAC with 410. `REQUIRE_APP_ATTEST=true` cutover remains VOL-226 |
 | Telemetry | Implemented | Fanout sink architecture. `SentryTelemetrySink` forwards events as breadcrumbs and captures `.error` severity as Sentry messages. `UserDefaultsTelemetrySink` and `OSLogTelemetrySink` persist/log for diagnostics. PII scrubbing via `VolumeArcSentryPIIScrubber` is installed as Sentry `beforeSend` / `beforeBreadcrumb` (VOL-72 / PR #46) — redacts user identifiers, emails, phone numbers, and drops deny-listed categories before any payload leaves the device |
 | Feature flags | Implemented | `LocalFeatureFlagProvider` is wired through `FlagGateTelemetry` into `VolumeArcAIRuntimeFactory.makeVoiceCoach`, `CloudSyncCoordinator.syncCycle`, the Live Activity controller, and the Foundation Models provider selection (VOL-61 / PR #56). First resolution per flag per launch emits a `feature.flag.applied` `.info` telemetry event |
 | Subscriptions | Implemented (entitlement gating — VOL-91) | StoreKit 2 store and `PaywallView` are wired, presented from `ProfileView`, and drive entitlement state. `StoreKitSubscriptionStore` conforms to `PremiumEntitlementProviding` and threads through `VolumeArcAIRuntimeFactory` at launch: premium unlocks Gemini Pro (coach tier) and live voice (gated AND on `.voiceCoaching` flag); free stays on Flash Lite + `UnavailableVoiceTransport`. Cloud sync, Foundation Models, and Live Activities are currently free for all — gating decision parked in the VOL-91 PR for product to revise. One-shot `premium.entitlement.gated` telemetry event per feature per launch records which tier/transport was installed. Terms/Privacy links open placeholder URLs (`https://volumearc.app/terms`, `/privacy`) via `LegalLinks` (VOL-71 / PR #44) — marketing pages stand up closer to launch. Guideline 3.1.2 auto-renewal disclosure present |
@@ -114,7 +114,7 @@ This is the canonical source of truth for the VolumeArc Apple platform. AI-power
 
 **Cloud sync** (`VolumeArcCloudConfiguration.swift`): `CloudSyncCoordinator` drives `CloudKitSyncTransport` using zone `VolumeArcSyncZone` in container `iCloud.com.mabryventures.VolumeArc`. Push uses `CKModifyRecordsOperation`; pull uses `CKFetchRecordZoneChangesOperation` with cursor persistence in `FileSyncStateStore`. `DefaultSyncPayloadApplier` writes changes into SwiftData with conflict resolution. Falls back to `UnavailableCloudSyncTransport` if unconfigured.
 
-**Relay auth** (`VolumeArcRelaySessionProvider.swift`): Actor that manages device-ID-based session tokens for the AI relay. Tokens cached in Keychain with ISO8601 expiration and 60-second refresh skew.
+**Relay auth** (`VolumeArcAppAttestRelaySessionProvider.swift`, `VolumeArcRelaySessionProvider.swift`): App Attest-capable devices bootstrap a Secure Enclave key with `/v1/attest/challenge` + `/v1/attest/bootstrap`, then attach `X-VA-Attest-*` assertion headers to coach requests. The HMAC session provider remains the bootstrap/fallback path during Phase B and can be forced with `VOLUMEARC_RELAY_AUTH_MODE=hmac`. Once any App Attest header is present, invalid or incomplete attestation fails closed with 401 instead of falling back; `REQUIRE_APP_ATTEST=true` is the Phase C switch that rejects missing App Attest headers and retires HMAC-only coach requests with 410.
 
 **Secure storage** (`VolumeArcSecureStore.swift`): Keychain wrapper with `UserDefaults` fallback in Debug/Simulator builds.
 
@@ -185,6 +185,8 @@ StoreKit 2 with two products and `@Published` entitlement state:
 | Key | Source | Purpose |
 |-----|--------|---------|
 | `VOLUMEARC_AI_RELAY_URL` | Env var or `VolumeArcAIRelayURL` in Info.plist | AI relay base URL for cloud coach + voice |
+| `VOLUMEARC_RELAY_SIGNING_KEY` | Env var or `VolumeArcRelaySigningKey` in Info.plist | HMAC signing key used for App Attest bootstrap and Phase B fallback |
+| `VOLUMEARC_RELAY_AUTH_MODE` | Env var or `VolumeArcRelayAuthMode` in Info.plist | Relay auth mode (`appAttestPreferHMACFallback` by default; `hmac` and `appAttest` available for operations/testing) |
 | `VolumeArcCloudKitContainer` | Info.plist | CloudKit container identifier (`iCloud.com.mabryventures.VolumeArc`) |
 | `VOLUMEARC_SENTRY_DSN` | Env var or `VolumeArcSentryDSN` in Info.plist | Sentry DSN for crash reporting and telemetry |
 
@@ -196,7 +198,7 @@ Sentry (`sentry-cocoa`) is integrated via `VolumeArcSentryConfiguration`. It fol
 
 ### Entitlements
 
-**iOS App:** HealthKit, CloudKit, iCloud Containers (`iCloud.com.mabryventures.VolumeArc`), App Groups (`group.com.mabryventures.volumearc`), Push Notifications (`aps-environment`)
+**iOS App:** HealthKit, CloudKit, iCloud Containers (`iCloud.com.mabryventures.VolumeArc`), App Groups (`group.com.mabryventures.volumearc`), Push Notifications (`aps-environment`), App Attest (`com.apple.developer.devicecheck.appattest-environment`)
 
 **watchOS:** HealthKit, App Groups (`group.com.mabryventures.volumearc`)
 

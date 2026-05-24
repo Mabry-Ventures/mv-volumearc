@@ -110,11 +110,12 @@
 	  archive time. `scripts/validate_exported_ipa_contract.sh` fails the
 	  archive when the URL is configured but this key is missing/empty,
 	  preventing release builds that would silently degrade cloud AI and
-	  live voice. The HMAC path here is the current production auth; the
-	  App Attest path (VOL-206) lives alongside as a Phase A scaffold in
-	  `App/VolumeArcAppAttestSessionProvider.swift`.
+	  live voice. VOL-225 runs App Attest in prefer-with-HMAC-fallback mode
+	  until production telemetry proves the attested path can be required.
 	-->
 	<key>VolumeArcRelaySigningKey</key>
 	<string>$(VOLUMEARC_RELAY_SIGNING_KEY)</string>
+	<key>VolumeArcRelayAuthMode</key>
+	<string>$(VOLUMEARC_RELAY_AUTH_MODE)</string>
 	</dict>
 </plist>
