@@ -52,11 +52,14 @@ interface Env {
   RATE_LIMIT_WINDOW_SECONDS: string;
 }
 
+type FallbackCoachingStyle = "motivational" | "analytical" | "minimal" | "playful";
+type CoachRequestStyle = FallbackCoachingStyle | "precise";
+
 interface CoachRequestBody {
   intent: "progression" | "deload" | "form" | "recovery" | "substitution" | "free";
   question: string;
   contextBlock: string;
-  style?: "motivational" | "precise" | "playful";
+  style?: CoachRequestStyle;
   messages?: Array<{ role: "user" | "assistant"; content: string }>;
   /**
    * Optional client-rendered prompt. When present, the Worker uses this
@@ -205,8 +208,12 @@ async function handleAppAttestBootstrap(request: Request, env: Env): Promise<Res
 }
 
 async function streamGemini(body: CoachRequestBody, model: string, env: Env): Promise<Response> {
-  const systemPrompt = body.system?.trim() || buildSystemPrompt(body.style ?? "motivational");
-  const userMessage = body.prompt?.trim() || `${body.contextBlock}\n\n${body.question}`.trim();
+  const style = normalizeStyle(body.style);
+  const clientSystemPrompt = body.system?.trim();
+  const clientUserMessage = body.prompt?.trim();
+  const systemPrompt = clientSystemPrompt || buildSystemPrompt(style);
+  const userMessage = clientUserMessage || buildFallbackPrompt(body, style);
+  const usesFallbackRendering = !clientSystemPrompt || !clientUserMessage;
 
   const history = (body.messages ?? []).map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
@@ -217,7 +224,7 @@ async function streamGemini(body: CoachRequestBody, model: string, env: Env): Pr
     contents: [...history, { role: "user", parts: [{ text: userMessage }] }],
     systemInstruction: { parts: [{ text: systemPrompt }] },
     generationConfig: {
-      temperature: 0.7,
+      temperature: usesFallbackRendering ? 0.35 : 0.7,
       maxOutputTokens: Number.parseInt(env.MAX_OUTPUT_TOKENS, 10) || 800,
       responseMimeType: "text/plain",
     },
@@ -313,20 +320,96 @@ interface GeminiStreamChunk {
   }>;
 }
 
-function buildSystemPrompt(style: "motivational" | "precise" | "playful"): string {
-  const tone =
-    style === "precise"
-      ? "direct, numerical, and brief"
+function normalizeStyle(style: CoachRequestStyle | undefined): FallbackCoachingStyle {
+  if (style === "analytical" || style === "precise") return "analytical";
+  if (style === "minimal") return "minimal";
+  if (style === "playful") return "playful";
+  return "motivational";
+}
+
+function buildSystemPrompt(style: FallbackCoachingStyle): string {
+  const persona =
+    style === "analytical"
+      ? "Data-driven. Explain the why behind every call. Treat training as a feedback loop."
+      : style === "minimal"
+      ? "Short and direct. One insight, one action. No preamble."
       : style === "playful"
-      ? "warm, lightly humorous, and brief"
-      : "encouraging, concrete, and brief";
+      ? "Warm, lightly humorous, and brief. Keep jokes secondary to the training call."
+      : "High-energy. Push when it is earned, cheer the wins, never saccharine.";
+  const sentenceRule =
+    style === "minimal"
+      ? "Keep the answer to 1-2 sentences."
+      : "Keep the answer under 3 sentences unless the user explicitly asks for detail.";
   return [
-    "You are VolumeArc, an evidence-based strength-training coach.",
-    `Respond in a tone that is ${tone}. Keep responses under three sentences unless the user explicitly asks for more detail.`,
-    "Ground every recommendation in the provided context block (readiness, recent sessions, training plan, equipment).",
-    "If the context is thin, say what's missing rather than guessing.",
-    "Never recommend maximal lifts, competition programming, or medical advice. Defer to a clinician for injury questions.",
+    "You are VolumeArc's strength coach. Speak directly to the athlete.",
+    `Persona: ${persona}`,
+    `Rules: ${sentenceRule}`,
+    "Ground every recommendation in the provided context block: readiness, RPE, recent sessions, recovery signals, active program, next-up movement, and equipment.",
+    "When readiness, RPE, HRV, sleep, load, sets, reps, weight, or program position shapes the call, cite at least one specific number from the context.",
+    "When recovery or readiness shapes the call, use explicit readiness/RPE/recovery language rather than generic encouragement.",
+    "For substitution questions, explicitly name the next-up lift or its primary movement pattern before naming the substitute.",
+    "If the question or context mentions pain, stiffness, knees, shoulders, or injury risk, flag the signal and choose a pain-free alternative; never recommend lifting through pain.",
+    "Never recommend maximal lifts, 1RM attempts, PR attempts, grinding through fatigue, or medical advice.",
+    "When HRV is down, sleep debt is significant, RPE is climbing, or the athlete asks about deloading, prefer deload/back-off/lighter/rest language and do not tell them to push or go heavier.",
+    "If the context is thin, say what is missing and give a conservative recommendation.",
   ].join(" ");
+}
+
+function buildFallbackPrompt(body: CoachRequestBody, style: FallbackCoachingStyle): string {
+  const context = body.contextBlock.trim();
+  const question = body.question.trim();
+  return [
+    `[VAC:tmpl] intent=${body.intent} style=${style}`,
+    "",
+    context,
+    "",
+    "## Coaching focus",
+    intentEnvelope(body.intent),
+    "",
+    "## Athlete question",
+    question,
+  ].join("\n").trim();
+}
+
+function intentEnvelope(intent: CoachRequestBody["intent"]): string {
+  switch (intent) {
+    case "progression":
+      return [
+        "The athlete is asking about pushing load or volume.",
+        "Anchor the answer in the most recent session's RPE, bar-speed, readiness, and recovery signals.",
+        "Recommend a small concrete jump only if the prior set moved cleanly and recovery does not flag otherwise; else hold or back off and explain why.",
+      ].join(" ");
+    case "deload":
+      return [
+        "The athlete is considering a deload.",
+        "Use readiness, recent RPE trend, HRV delta, sleep debt, and training load to decide.",
+        "If a deload is warranted, clearly name the deload/back-off call and a specific intensity or volume cut.",
+      ].join(" ");
+    case "form":
+      return [
+        "The athlete is asking about technique.",
+        "Give one or two cues tied to the specific lift in the context.",
+        "Flag pain or injury signals instead of asking the athlete to push through them.",
+      ].join(" ");
+    case "recovery":
+      return [
+        "The athlete is asking about readiness or recovery.",
+        "Read the readiness score, recent session count, average RPE, HRV delta, sleep debt, and 7-day strength load when present.",
+        "Give a short push/hold/back-off recommendation and name the dominant signal driving it.",
+      ].join(" ");
+    case "substitution":
+      return [
+        "The athlete wants an exercise substitution.",
+        "Use the next-up exercise from the context as the anchor and name it or its primary movement pattern in the answer.",
+        "Recommend a substitute that hits the same pattern, and choose a pain-free option when pain or stiffness is mentioned.",
+      ].join(" ");
+    case "free":
+      return [
+        "Open question.",
+        "Answer directly using the training context, active program, and next-up movement provided.",
+        "Stay specific to the athlete's data and avoid generic coaching platitudes.",
+      ].join(" ");
+  }
 }
 
 // --- Auth ---------------------------------------------------------------

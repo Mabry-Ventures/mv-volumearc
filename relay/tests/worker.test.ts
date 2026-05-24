@@ -220,6 +220,95 @@ describe("volumearc-ai-relay App Attest transition", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("renders app-style minimal fallback prompts for legacy clients", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "substitution",
+      question: "Swap for pull-ups - bar is occupied.",
+      contextBlock: "## Training context\n- Readiness: 60/100\n- Next up: Pull-ups at BW x 8",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(
+      coachRequest({ Authorization: await hmacAuthHeader() }, body),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    const upstreamInit = vi.mocked(fetch).mock.calls[0]?.[1] as RequestInit;
+    const upstreamBody = JSON.parse(upstreamInit.body as string);
+    const systemPrompt = upstreamBody.systemInstruction.parts[0].text as string;
+    const userMessage = upstreamBody.contents.at(-1).parts[0].text as string;
+    expect(systemPrompt).toContain("Short and direct");
+    expect(systemPrompt).toContain("1-2 sentences");
+    expect(userMessage).toContain("[VAC:tmpl] intent=substitution style=minimal");
+    expect(userMessage).toContain("wants an exercise substitution");
+    expect(userMessage).toContain("Next up: Pull-ups");
+    expect(upstreamBody.generationConfig.temperature).toBe(0.35);
+  });
+
+  it("renders analytical recovery fallback prompts with numeric grounding rules", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "recovery",
+      question: "How am I looking for today's session?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 58/100 - Recovery signals mixed, leaning low.",
+        "- Last 7 days: 4 sessions, avg RPE 8.4",
+        "",
+        "## Recovery (Apple Health)",
+        "- HRV: 48ms 7-day vs 55ms baseline (-12.7%)",
+        "- Sleep: 49.0h over 7d vs 56.0h target - -7.0h significant deficit",
+      ].join("\n"),
+      style: "analytical",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(
+      coachRequest({ Authorization: await hmacAuthHeader() }, body),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    const upstreamInit = vi.mocked(fetch).mock.calls[0]?.[1] as RequestInit;
+    const upstreamBody = JSON.parse(upstreamInit.body as string);
+    const systemPrompt = upstreamBody.systemInstruction.parts[0].text as string;
+    const userMessage = upstreamBody.contents.at(-1).parts[0].text as string;
+    expect(systemPrompt).toContain("Data-driven");
+    expect(systemPrompt).toContain("cite at least one specific number");
+    expect(userMessage).toContain("[VAC:tmpl] intent=recovery style=analytical");
+    expect(userMessage).toContain("HRV delta");
+    expect(userMessage).toContain("Sleep: 49.0h");
+  });
+
+  it("preserves client-rendered prompt and system fields when present", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Can I add weight?",
+      contextBlock: "## Training context\n- Readiness: 82/100",
+      style: "minimal",
+      prompt: "client rendered prompt",
+      system: "client rendered system",
+    });
+
+    const response = await worker.fetch(
+      coachRequest({ Authorization: await hmacAuthHeader() }, body),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    const upstreamInit = vi.mocked(fetch).mock.calls[0]?.[1] as RequestInit;
+    const upstreamBody = JSON.parse(upstreamInit.body as string);
+    expect(upstreamBody.systemInstruction.parts[0].text).toBe("client rendered system");
+    expect(upstreamBody.contents.at(-1).parts[0].text).toBe("client rendered prompt");
+    expect(upstreamBody.generationConfig.temperature).toBe(0.7);
+  });
+
   it("can require App Attest and reject HMAC-only coach requests for Phase C", async () => {
     const env = makeEnv({ REQUIRE_APP_ATTEST: "true" });
 
