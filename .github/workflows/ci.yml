@@ -577,8 +577,14 @@ jobs:
           fi
 
           # Snapshot the summary so the metrics worktree can read it
-          # after we switch branches.
-          cp .build/coverage-summary.json /tmp/coverage-summary.json
+          # after we switch branches. Use a per-run file so stale
+          # fixed-path artifacts from another runner user cannot block
+          # the copy on persistent self-hosted hosts.
+          summary_snapshot_dir="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
+          mkdir -p "$summary_snapshot_dir"
+          summary_snapshot="$(mktemp "$summary_snapshot_dir/coverage-summary.json.XXXXXX")"
+          cp .build/coverage-summary.json "$summary_snapshot"
+          export COVERAGE_SUMMARY_SNAPSHOT="$summary_snapshot"
 
           # Stage a clean worktree on the metrics branch. If it doesn't
           # exist yet, bootstrap an orphan branch with just the trend file.
@@ -604,6 +610,7 @@ jobs:
           cleanup_metrics_worktree() {
             cd "$GITHUB_WORKSPACE"
             git worktree remove --force "$metrics_dir" 2>/dev/null || true
+            rm -f "$summary_snapshot" 2>/dev/null || true
           }
           trap cleanup_metrics_worktree EXIT
 
@@ -637,7 +644,7 @@ jobs:
 
           python3 <<'PY'
           import json, os, datetime
-          summary = json.load(open("/tmp/coverage-summary.json"))
+          summary = json.load(open(os.environ["COVERAGE_SUMMARY_SNAPSHOT"]))
           trend_path = "coverage-trend.json"
           try:
               trend = json.load(open(trend_path))
