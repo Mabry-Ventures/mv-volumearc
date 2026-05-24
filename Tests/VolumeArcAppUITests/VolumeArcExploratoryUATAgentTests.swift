@@ -25,8 +25,10 @@ final class VolumeArcExploratoryUATAgentTests: XCTestCase {
     }
 
     override func tearDownWithError() throws {
-        let app = XCUIApplication()
-        VolumeArcAppUITestSupport.defensiveTerminate(app)
+        MainActor.assumeIsolated {
+            let app = XCUIApplication()
+            VolumeArcAppUITestSupport.defensiveTerminate(app)
+        }
     }
 
     func testNightlyExploratoryStories() async throws {

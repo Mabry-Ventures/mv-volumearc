@@ -25,6 +25,7 @@ import XCTest
 /// `VolumeArcAppJourneyTests` so a layout regression manifests as a
 /// `waitForExistence(timeout:)` failure on a known-good identifier — not
 /// as a brittle pixel-or-text comparison.
+@MainActor
 final class VolumeArcAccessibilityJourneyTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -37,13 +38,10 @@ final class VolumeArcAccessibilityJourneyTests: XCTestCase {
     /// terminate() then kills whatever instance is running for that
     /// bundle ID, no per-test tracking required.
     override func tearDownWithError() throws {
-        let app = XCUIApplication()
-        VolumeArcAppUITestSupport.attachDebugSnapshot(
-            of: app,
-            named: "tearDown.\(name).accessibility-tree",
-            to: self
-        )
-        VolumeArcAppUITestSupport.defensiveTerminate(app)
+        MainActor.assumeIsolated {
+            let app = XCUIApplication()
+            VolumeArcAppUITestSupport.defensiveTerminate(app)
+        }
     }
 
     // MARK: - 1. Onboarding journey under stress

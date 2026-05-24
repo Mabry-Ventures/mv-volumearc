@@ -35,13 +35,10 @@ final class VolumeArcChaosJourneyTests: XCTestCase {
 
     /// VOL-164: defensively terminate the host app between test methods.
     override func tearDownWithError() throws {
-        let app = XCUIApplication()
-        VolumeArcAppUITestSupport.attachDebugSnapshot(
-            of: app,
-            named: "tearDown.\(name).accessibility-tree",
-            to: self
-        )
-        VolumeArcAppUITestSupport.defensiveTerminate(app)
+        MainActor.assumeIsolated {
+            let app = XCUIApplication()
+            VolumeArcAppUITestSupport.defensiveTerminate(app)
+        }
     }
 
     /// `-CHAOS_HEALTH_AUTH_DENIED`: HealthKit authorization throws

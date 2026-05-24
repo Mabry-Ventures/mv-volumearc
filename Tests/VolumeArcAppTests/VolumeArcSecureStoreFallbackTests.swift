@@ -14,11 +14,20 @@ import Security
 /// routines throw it, and (b) an error-surface test that pins the
 /// new error case and its localized description.
 final class VolumeArcSecureStoreFallbackTests: XCTestCase {
+    @inline(never)
+    private func makeKeychainUnavailableError(_ status: OSStatus) -> VolumeArcSecureStoreError {
+        .keychainUnavailable(status)
+    }
+
+    @inline(never)
+    private func makeUnexpectedStatusError(_ status: OSStatus) -> VolumeArcSecureStoreError {
+        .unexpectedStatus(status)
+    }
 
     // MARK: - Error surface
 
     func testKeychainUnavailableErrorCarriesOSStatus() {
-        let error = VolumeArcSecureStoreError.keychainUnavailable(errSecMissingEntitlement)
+        let error = makeKeychainUnavailableError(errSecMissingEntitlement)
 
         // The OSStatus must be preserved so callers / telemetry can
         // distinguish "device locked" from "missing entitlement" from
@@ -32,7 +41,7 @@ final class VolumeArcSecureStoreFallbackTests: XCTestCase {
     }
 
     func testKeychainUnavailableErrorHasDescriptiveMessage() {
-        let error = VolumeArcSecureStoreError.keychainUnavailable(errSecNotAvailable)
+        let error = makeKeychainUnavailableError(errSecNotAvailable)
         let description = error.errorDescription ?? ""
 
         XCTAssertFalse(description.isEmpty, "keychainUnavailable must have a non-empty description")
@@ -52,8 +61,8 @@ final class VolumeArcSecureStoreFallbackTests: XCTestCase {
         // *fence decision*, while `unexpectedStatus` signals a genuinely
         // unknown failure. Callers can inspect the case to decide
         // between "surface to user" vs "report as bug".
-        let fenceError = VolumeArcSecureStoreError.keychainUnavailable(errSecMissingEntitlement)
-        let genericError = VolumeArcSecureStoreError.unexpectedStatus(errSecMissingEntitlement)
+        let fenceError = makeKeychainUnavailableError(errSecMissingEntitlement)
+        let genericError = makeUnexpectedStatusError(errSecMissingEntitlement)
 
         switch (fenceError, genericError) {
         case (.keychainUnavailable, .unexpectedStatus):

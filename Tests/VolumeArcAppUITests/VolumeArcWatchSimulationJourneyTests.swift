@@ -30,6 +30,7 @@ import XCTest
 /// If a future PR removes the overlay, the launch arg, the published
 /// state, or the handler wiring, the test fails fast with a
 /// `waitForExistence(timeout:)` timeout on the missing identifier.
+@MainActor
 final class VolumeArcWatchSimulationJourneyTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -40,13 +41,10 @@ final class VolumeArcWatchSimulationJourneyTests: XCTestCase {
     /// com.mabryventures.VolumeArc:73459` in CI run 25412302961 — exactly
     /// the cascade pattern this teardown fights.
     override func tearDownWithError() throws {
-        let app = XCUIApplication()
-        VolumeArcAppUITestSupport.attachDebugSnapshot(
-            of: app,
-            named: "tearDown.\(name).accessibility-tree",
-            to: self
-        )
-        VolumeArcAppUITestSupport.defensiveTerminate(app)
+        MainActor.assumeIsolated {
+            let app = XCUIApplication()
+            VolumeArcAppUITestSupport.defensiveTerminate(app)
+        }
     }
 
     /// Post a `restTimer` payload at launch and confirm the dashboard

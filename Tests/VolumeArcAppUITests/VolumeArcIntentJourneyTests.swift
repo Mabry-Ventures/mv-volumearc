@@ -16,13 +16,10 @@ final class VolumeArcIntentJourneyTests: XCTestCase {
     }
 
     override func tearDownWithError() throws {
-        let app = XCUIApplication()
-        VolumeArcAppUITestSupport.attachDebugSnapshot(
-            of: app,
-            named: "tearDown.\(name).accessibility-tree",
-            to: self
-        )
-        VolumeArcAppUITestSupport.defensiveTerminate(app)
+        MainActor.assumeIsolated {
+            let app = XCUIApplication()
+            VolumeArcAppUITestSupport.defensiveTerminate(app)
+        }
     }
 
     // MARK: - intent.start-next-workout

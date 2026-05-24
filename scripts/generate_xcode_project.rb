@@ -301,7 +301,6 @@ configure_target(widget_target, bundle_id: 'com.mabryventures.VolumeArc.widgets'
   # widget for "claims iPad support but parent app doesn't."
   'TARGETED_DEVICE_FAMILY' => '1',
   'APPLICATION_EXTENSION_API_ONLY' => 'YES',
-  'OTHER_LDFLAGS' => ['$(inherited)', '-e', '_NSExtensionMain'],
   'SKIP_INSTALL' => 'YES',
   'CODE_SIGN_ENTITLEMENTS' => 'Widgets/VolumeArcWidgets.entitlements',
   # WidgetKit requires a nested NSExtension dictionary. INFOPLIST_KEY_* build
@@ -312,12 +311,19 @@ configure_target(watch_widgets_target, bundle_id: 'com.mabryventures.VolumeArc.w
   'PRODUCT_NAME' => 'VolumeArcWatchWidgets',
   'TARGETED_DEVICE_FAMILY' => '4',
   'APPLICATION_EXTENSION_API_ONLY' => 'YES',
-  'OTHER_LDFLAGS' => ['$(inherited)', '-e', '_NSExtensionMain'],
   'SKIP_INSTALL' => 'YES',
   'CODE_SIGN_ENTITLEMENTS' => 'WatchWidgets/VolumeArcWatchWidgets.entitlements',
   # Same WidgetKit nested-plist requirement as the iOS widget extension.
   'INFOPLIST_FILE' => 'WatchWidgets/Info.plist',
 })
+
+[widget_target, watch_widgets_target].each do |target|
+  target.build_configurations.each do |config|
+    next unless config.name == 'Release'
+
+    config.build_settings['OTHER_LDFLAGS'] = ['$(inherited)', '-e', '_NSExtensionMain']
+  end
+end
 configure_target(app_tests_target, bundle_id: 'com.mabryventures.VolumeArc.tests', extra: {
   'PRODUCT_NAME' => 'VolumeArcAppTests',
   'GENERATE_INFOPLIST_FILE' => 'YES',
@@ -417,13 +423,8 @@ app_tests_target.add_system_framework('AppIntents')
 app_tests_target.add_system_framework('ActivityKit')
 app_tests_target.add_system_framework('WidgetKit')
 app_tests_target.add_system_framework('WorkoutKit')
-# VOL-142: StoreKitTest powers `SKTestSession`-based unit tests
-# (`StoreKitSubscriptionRevocationTests`) for refund / family-share /
-# grace-period coverage at the model level. UITest target already has
-# this dependency for journey-level paywall tests.
-app_tests_target.add_system_framework('StoreKitTest')
 app_ui_tests_target.add_system_framework('XCTest')
-app_ui_tests_target.add_system_framework('StoreKitTest')
+app_ui_tests_target.add_system_framework('AppIntents')
 app_perf_tests_target.add_system_framework('XCTest')
 # VOL-139: widget XCUITest bundle.
 app_widget_ui_tests_target.add_system_framework('XCTest')

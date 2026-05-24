@@ -12,6 +12,7 @@ import XCTest
 /// because the tab bar element identity varies between SwiftUI runtime
 /// revisions. Deeper journey coverage lives in the integration test
 /// suite (`VolumeArcDashboardIntegrationTests`).
+@MainActor
 final class VolumeArcAppUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -19,7 +20,9 @@ final class VolumeArcAppUITests: XCTestCase {
 
     /// VOL-164: defensively terminate the host app between test methods.
     override func tearDownWithError() throws {
-        VolumeArcAppUITestSupport.defensiveTerminate(XCUIApplication())
+        MainActor.assumeIsolated {
+            VolumeArcAppUITestSupport.defensiveTerminate(XCUIApplication())
+        }
     }
 
     // MARK: - Launch smoke
