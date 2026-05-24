@@ -489,6 +489,23 @@ is_simulator_busy_preflight_failure() {
     "$log_path"
 }
 
+# VOL-227 round 4 (2026-05-24): detect the mid-test XCTRunner crash
+# pattern that the preflight check cannot catch. When the app under test
+# crashes (or the AX stack crashes the runner process) xcodebuild logs
+# "Restarting after unexpected exit, crash, or test timeout" and tries
+# to resume — but subsequent tests in the same restart window also fail
+# with no output. Retrying the whole shard after a fresh AX-daemon kill
+# recovers reliably.
+#
+# Distinct from `is_channel_disconnect_failure` (unit-test signal).
+# Mirrors the same retry logic already in place for preflight failures.
+is_xctest_runner_crash_failure() {
+  local log_path="$1"
+  grep -Fq \
+    'Restarting after unexpected exit, crash, or test timeout' \
+    "$log_path"
+}
+
 ui_shard_pipeline() {
   local shard="$1"
   local log_path="$2"
@@ -557,8 +574,24 @@ run_ui_shard() {
   fi
 
   local first_log="$DERIVED_DATA_PATH/ui-test-${shard}-attempt-1.log"
+  local should_retry=0
+  local retry_reason=""
   if [ -f "$first_log" ] && is_simulator_busy_preflight_failure "$first_log"; then
-    echo "::warning::Shard '$shard' hit a simulator Busy preflight failure; rebooting + retrying once."
+    should_retry=1
+    retry_reason="simulator Busy preflight failure"
+  elif [ -f "$first_log" ] && is_xctest_runner_crash_failure "$first_log"; then
+    # VOL-227 round 4: mid-test runner crash (app crash / AX-stack crash).
+    # Kill AccessibilityUIServer before the retry — the iOS 26.5
+    # UIAccessibilityLoaderWebShared duplicate class issue leaves the AX
+    # daemon in a wedged state after each runner restart. The same
+    # `warm_simulator_for_tests` call already does this; the explicit
+    # kill here is belt-and-suspenders for the degraded-AX path.
+    should_retry=1
+    retry_reason="mid-test XCTRunner crash (unexpected exit / crash / timeout)"
+  fi
+
+  if [ "$should_retry" = "1" ]; then
+    echo "::warning::Shard '$shard' hit a $retry_reason; rebooting + retrying once."
     xcrun simctl shutdown "$IOS_TEST_DEVICE_NAME" 2>/dev/null || true
     sleep 10
     warm_simulator_for_tests
