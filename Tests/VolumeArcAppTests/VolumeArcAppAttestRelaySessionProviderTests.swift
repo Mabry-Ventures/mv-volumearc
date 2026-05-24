@@ -52,18 +52,6 @@ private struct UnsupportedAppAttestService: AppAttestServiceProtocol {
     }
 }
 
-private actor StaticRelayCredentials: AIRelayCredentialsProviding {
-    private let header: String
-
-    init(header: String = "Bearer test-device.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef") {
-        self.header = header
-    }
-
-    func authorizationHeaderValue() async throws -> String {
-        header
-    }
-}
-
 final class VolumeArcAppAttestRelayTests: XCTestCase {
     private let appAttestKeys = [
         "ai.relay.appattest.keyID",
@@ -81,24 +69,9 @@ final class VolumeArcAppAttestRelayTests: XCTestCase {
         try clearAppAttestState()
     }
 
-    func testPreferModeFallsBackToHMACWhenAppAttestUnsupported() async throws {
+    func testUnsupportedDeviceDoesNotReturnLegacyAuthHeaders() async throws {
         let telemetry = CapturingTelemetrySink()
-        let provider = makeProvider(mode: .appAttestPreferHMACFallback, telemetry: telemetry)
-
-        let headers = try await provider.authenticationHeaders(for: Data("{}".utf8))
-        let expectedHeader = try await StaticRelayCredentials().authorizationHeaderValue()
-
-        XCTAssertEqual(headers["Authorization"], expectedHeader)
-        XCTAssertNil(headers["X-VA-Attest-Key-ID"])
-        XCTAssertNil(headers["X-VA-Attest-Assertion"])
-        XCTAssertNil(headers["X-VA-Attest-Nonce"])
-        XCTAssertEqual(telemetry.events(named: "app_attest_failed").first?.metadata["reason"], "unsupported_device")
-        XCTAssertEqual(telemetry.events(named: "hmac_fallback_used").count, 1)
-    }
-
-    func testAppAttestOnlyModeDoesNotSilentlyUseHMACWhenUnsupported() async throws {
-        let telemetry = CapturingTelemetrySink()
-        let provider = makeProvider(mode: .appAttest, telemetry: telemetry)
+        let provider = makeProvider(telemetry: telemetry)
 
         do {
             _ = try await provider.authenticationHeaders(for: Data("{}".utf8))
@@ -110,19 +83,6 @@ final class VolumeArcAppAttestRelayTests: XCTestCase {
         }
 
         XCTAssertEqual(telemetry.events(named: "app_attest_failed").first?.metadata["reason"], "unsupported_device")
-        XCTAssertTrue(telemetry.events(named: "hmac_fallback_used").isEmpty)
-    }
-
-    func testHMACModeBypassesAppAttestCompletely() async throws {
-        let telemetry = CapturingTelemetrySink()
-        let provider = makeProvider(mode: .hmac, telemetry: telemetry)
-
-        let headers = try await provider.authenticationHeaders(for: Data("{}".utf8))
-        let expectedHeader = try await StaticRelayCredentials().authorizationHeaderValue()
-
-        XCTAssertEqual(Array(headers.keys), ["Authorization"])
-        XCTAssertEqual(headers["Authorization"], expectedHeader)
-        XCTAssertTrue(telemetry.events.isEmpty)
     }
 
     func testSupportedModeBootstrapsFreshKeyWhenPersistedKeyIsUnconfirmed() async throws {
@@ -142,8 +102,6 @@ final class VolumeArcAppAttestRelayTests: XCTestCase {
         configuration.protocolClasses = [MockAppAttestRelayURLProtocol.self]
         let provider = VolumeArcAppAttestRelaySessionProvider(
             baseURL: URL(string: "https://relay.test.invalid")!,
-            mode: .appAttest,
-            fallbackProvider: StaticRelayCredentials(),
             coordinator: VolumeArcAppAttestCoordinator(service: service),
             telemetrySink: CapturingTelemetrySink(),
             session: URLSession(configuration: configuration)
@@ -155,6 +113,7 @@ final class VolumeArcAppAttestRelayTests: XCTestCase {
         XCTAssertEqual(headers["X-VA-Attest-Key-ID"], "fresh-key-id")
         XCTAssertEqual(headers["X-VA-Attest-Assertion"], Data("fresh-assertion".utf8).base64EncodedString())
         XCTAssertEqual(headers["X-VA-Attest-Nonce"], assertionNonce.base64EncodedString())
+        XCTAssertNil(headers["Authorization"])
         XCTAssertEqual(try store.load("ai.relay.appattest.confirmedKeyID"), "fresh-key-id")
 
         let generateCalls = await service.generateKeyCalls
@@ -199,8 +158,6 @@ final class VolumeArcAppAttestRelayTests: XCTestCase {
         configuration.protocolClasses = [MockAppAttestRelayURLProtocol.self]
         let provider = VolumeArcAppAttestRelaySessionProvider(
             baseURL: URL(string: "https://relay.test.invalid")!,
-            mode: .appAttest,
-            fallbackProvider: StaticRelayCredentials(),
             coordinator: VolumeArcAppAttestCoordinator(service: service),
             telemetrySink: CapturingTelemetrySink(),
             session: URLSession(configuration: configuration)
@@ -209,6 +166,7 @@ final class VolumeArcAppAttestRelayTests: XCTestCase {
         let headers = try await provider.authenticationHeaders(for: Data("{}".utf8))
 
         XCTAssertEqual(headers["X-VA-Attest-Key-ID"], "pending-key-id")
+        XCTAssertNil(headers["Authorization"])
         XCTAssertEqual(try store.load("ai.relay.appattest.confirmedKeyID"), "pending-key-id")
         XCTAssertEqual(try store.load("ai.relay.appattest.pendingChallenge"), "")
 
@@ -226,13 +184,10 @@ final class VolumeArcAppAttestRelayTests: XCTestCase {
     }
 
     private func makeProvider(
-        mode: VolumeArcRelayAuthMode,
         telemetry: CapturingTelemetrySink
     ) -> VolumeArcAppAttestRelaySessionProvider {
         VolumeArcAppAttestRelaySessionProvider(
             baseURL: URL(string: "https://relay.test.invalid")!,
-            mode: mode,
-            fallbackProvider: StaticRelayCredentials(),
             coordinator: VolumeArcAppAttestCoordinator(service: UnsupportedAppAttestService()),
             telemetrySink: telemetry,
             session: URLSession(configuration: .ephemeral)
@@ -306,20 +261,12 @@ private final class MockAppAttestRelayURLProtocol: URLProtocol, @unchecked Senda
         let path = request.url?.path ?? ""
         switch path {
         case "/v1/attest/challenge":
-            guard Self.hasValidAuthorization(request) else {
-                respond(statusCode: 401, body: ["error": "unauthorized"])
-                return
-            }
             let challenge = MockAppAttestRelayState.shared.nextChallenge()
             respond(statusCode: 200, body: [
                 "challenge": challenge,
                 "expiresAt": "2027-01-01T00:00:00Z"
             ])
         case "/v1/attest/bootstrap":
-            guard Self.hasValidAuthorization(request) else {
-                respond(statusCode: 401, body: ["error": "unauthorized"])
-                return
-            }
             if let body = bodyData(from: request),
                let decoded = try? JSONDecoder().decode(MockAppAttestRelayState.BootstrapRequest.self, from: body) {
                 MockAppAttestRelayState.shared.recordBootstrap(decoded)
@@ -335,10 +282,6 @@ private final class MockAppAttestRelayURLProtocol: URLProtocol, @unchecked Senda
     }
 
     override func stopLoading() {}
-
-    private static func hasValidAuthorization(_ request: URLRequest) -> Bool {
-        request.value(forHTTPHeaderField: "Authorization")?.hasPrefix("Bearer test-device.") == true
-    }
 
     private func respond(statusCode: Int, body: [String: Any]) {
         let data = (try? JSONSerialization.data(withJSONObject: body, options: [])) ?? Data()

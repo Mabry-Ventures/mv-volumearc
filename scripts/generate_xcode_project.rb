@@ -235,18 +235,6 @@ configure_target(app_target, bundle_id: 'com.mabryventures.VolumeArc', extra: {
   # archived builds carry the production values.
   'SENTRY_DSN' => '',
   'VOLUMEARC_AI_RELAY_URL' => '',
-  # VOL-196: relay signing key, same pattern as the two above. Empty
-  # in local/dev builds (`AIRelayCoachProvider` factory falls back to
-  # the local heuristic provider when both URL and key are empty); set
-  # by `ci_scripts/ci_post_clone.sh` from VOLUMEARC_RELAY_SIGNING_KEY
-  # env var at Xcode Cloud archive time. Required for release builds
-  # — `scripts/validate_exported_ipa_contract.sh` fails the archive
-  # if URL is present but key is missing.
-  'VOLUMEARC_RELAY_SIGNING_KEY' => '',
-  # VOL-225: Phase B prefers App Attest when supported, but keeps the
-  # HMAC bearer as a transition fallback until VOL-226 cutover telemetry
-  # proves the attested path is safe to require.
-  'VOLUMEARC_RELAY_AUTH_MODE' => 'appAttestPreferHMACFallback',
   # VOL-55: `VolumeArcCloudKitContainer` used to live in the Info.plist
   # for runtime lookup. `INFOPLIST_KEY_*` silently drops custom
   # (non-Apple-recognized) keys, so the bundle never had it. It now
@@ -586,7 +574,6 @@ add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   'VolumeArcLiveActivityController.swift',
   'VolumeArcPersistenceController.swift',
   'VolumeArcPremiumCatalog.swift',
-  'VolumeArcRelaySessionProvider.swift',
   'VolumeArcSecureStore.swift',
   # VOL-72: included in the test target so
   # `VolumeArcSentryPIIScrubberTests` can unit-test the scrubber's
@@ -683,9 +670,10 @@ app_tests_target.package_product_dependencies << snapshot_tests_dep
 #   distribution certificate, not an ad hoc certificate or a
 #   development certificate.
 #
-# The script runs only when CODE_SIGN_IDENTITY is set (i.e., archive
-# / device builds — never on simulator or unit-test runs where signing
-# is disabled). It strips the existing signature and re-signs with the
+# The script runs only when CODE_SIGN_IDENTITY is set to a concrete
+# distribution identity (i.e., archive / device builds — never on
+# simulator or unit-test runs where signing is disabled or ad-hoc).
+# It strips the existing signature and re-signs with the
 # expanded identity so the framework matches the app's distribution
 # trust chain.
 resign_phase = project.new(Xcodeproj::Project::Object::PBXShellScriptBuildPhase)
@@ -696,8 +684,8 @@ resign_phase.shell_script = <<~BASH
   # See generator comment for ITMS-90035 context.
   set -euo pipefail
 
-  if [ -z "${CODE_SIGN_IDENTITY:-}" ] || [ "${CODE_SIGN_IDENTITY}" = "" ]; then
-    echo "VOL-126: CODE_SIGN_IDENTITY unset — skipping framework re-sign (test/sim build)"
+  if [ -z "${CODE_SIGN_IDENTITY:-}" ] || [ "${CODE_SIGN_IDENTITY}" = "" ] || [ "${CODE_SIGN_IDENTITY}" = "-" ]; then
+    echo "VOL-126: CODE_SIGN_IDENTITY unset/ad-hoc — skipping framework re-sign (test/sim build)"
     exit 0
   fi
 

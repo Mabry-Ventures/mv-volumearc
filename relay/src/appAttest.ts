@@ -11,7 +11,6 @@ export interface AppAttestEnv {
   APPLE_APP_ID?: string;
   APPLE_TEAM_ID?: string;
   APPLE_BUNDLE_ID?: string;
-  REQUIRE_APP_ATTEST?: string;
 }
 
 export interface AppAttestStoredKey {
@@ -55,7 +54,7 @@ const DEFAULT_BUNDLE_ID = "com.mabryventures.VolumeArc";
 const CHALLENGE_TTL_SECONDS = 5 * 60;
 
 interface ChallengeRecord {
-  deviceId: string;
+  subject?: string;
   issuedAt: string;
   expiresAt: string;
 }
@@ -153,13 +152,11 @@ export class AppAttestState implements DurableObject {
 
   private async storeAttestation(request: Request): Promise<Response> {
     const body = await request.json() as {
-      deviceId?: unknown;
       keyId?: unknown;
       challengeB64?: unknown;
       stored?: unknown;
     };
     if (
-      typeof body.deviceId !== "string" ||
       typeof body.keyId !== "string" ||
       typeof body.challengeB64 !== "string" ||
       !isStoredKey(body.stored)
@@ -170,7 +167,8 @@ export class AppAttestState implements DurableObject {
     const result = await this.state.storage.transaction<AppAttestStateResult>(async (txn) => {
       const key = challengeKey(body.challengeB64 as string);
       const challenge = await txn.get<ChallengeRecord>(key);
-      const failure = challengeFailure(challenge, body.deviceId as string);
+      const expectedSubject = (body.stored as AppAttestStoredKey).deviceId;
+      const failure = challengeFailure(challenge, expectedSubject);
       if (failure) {
         if (failure === "challenge_expired") {
           await txn.delete(key);
@@ -242,13 +240,13 @@ export class AppAttestState implements DurableObject {
 
 export async function issueAppAttestChallenge(
   env: AppAttestEnv,
-  deviceId: string,
+  subject?: string,
 ): Promise<{ challenge: string; expiresAt: string }> {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   const challenge = encodeBase64(bytes);
   const expiresAt = new Date(Date.now() + CHALLENGE_TTL_SECONDS * 1000).toISOString();
   const record: ChallengeRecord = {
-    deviceId,
+    ...(subject ? { subject } : {}),
     issuedAt: new Date().toISOString(),
     expiresAt,
   };
@@ -258,7 +256,7 @@ export async function issueAppAttestChallenge(
 
 export async function verifyAndStoreAttestation(
   env: AppAttestEnv,
-  input: { deviceId: string; keyId: string; attestationObjectB64: string; challengeB64: string },
+  input: { keyId: string; attestationObjectB64: string; challengeB64: string },
 ): Promise<{ attestedAt: string; environment: "production" | "development" }> {
   const attestationObject = decodeBase64(input.attestationObjectB64);
   const decoded = decodeAttestationObject(attestationObject);
@@ -303,14 +301,13 @@ export async function verifyAndStoreAttestation(
   const publicKeyJwk = await crypto.subtle.exportKey("jwk", cryptoKey) as JsonWebKey;
   const attestedAt = new Date().toISOString();
   const stored: AppAttestStoredKey = {
-    deviceId: input.deviceId,
+    deviceId: input.keyId,
     publicKeyJwk,
     counter: parsedAuth.counter,
     attestedAt,
     environment,
   };
   await finalizeAttestation(env, {
-    deviceId: input.deviceId,
     keyId: input.keyId,
     challengeB64: input.challengeB64,
     stored,
@@ -386,10 +383,6 @@ export async function verifyAppAttestAssertion(
     }
     return { ok: false, reason: "attestation_invalid" };
   }
-}
-
-export function appAttestRequired(env: AppAttestEnv): boolean {
-  return env.REQUIRE_APP_ATTEST === "true" || env.REQUIRE_APP_ATTEST === "1";
 }
 
 export class AppAttestValidationError extends Error {
@@ -544,7 +537,7 @@ async function loadStoredKey(env: AppAttestEnv, keyId: string): Promise<AppAttes
 
 async function finalizeAttestation(
   env: AppAttestEnv,
-  input: { deviceId: string; keyId: string; challengeB64: string; stored: AppAttestStoredKey },
+  input: { keyId: string; challengeB64: string; stored: AppAttestStoredKey },
 ): Promise<void> {
   if (env.APP_ATTEST_STATE) {
     const response = await appAttestStateRequest<AppAttestStateResult>(env, "/attestation", input);
@@ -555,7 +548,7 @@ async function finalizeAttestation(
   }
 
   const challenge = await consumeChallenge(env, input.challengeB64);
-  if (challenge.deviceId !== input.deviceId) {
+  if (challenge.subject && challenge.subject !== input.stored.deviceId) {
     throw new AppAttestValidationError("challenge_device_mismatch");
   }
   await keysKV(env).put(storedKey(input.keyId), JSON.stringify(input.stored));
@@ -575,7 +568,7 @@ async function finalizeAssertionCounter(
   }
 
   const challenge = await consumeChallenge(env, input.challengeB64);
-  if (challenge.deviceId !== stored.deviceId) {
+  if (challenge.subject && challenge.subject !== stored.deviceId) {
     return { ok: false, reason: "challenge_device_mismatch" };
   }
   if (input.counter <= stored.counter) {
@@ -654,7 +647,7 @@ function challengeFailure(record: ChallengeRecord | undefined, expectedDeviceId:
   if (!record) {
     return "challenge_not_found";
   }
-  if (record.deviceId !== expectedDeviceId) {
+  if (record.subject && record.subject !== expectedDeviceId) {
     return "challenge_device_mismatch";
   }
   const expiry = Date.parse(record.expiresAt);
@@ -669,7 +662,7 @@ function isChallengeRecord(value: unknown): value is ChallengeRecord {
     return false;
   }
   const record = value as Record<string, unknown>;
-  return typeof record.deviceId === "string" &&
+  return (record.subject === undefined || typeof record.subject === "string") &&
     typeof record.issuedAt === "string" &&
     typeof record.expiresAt === "string";
 }

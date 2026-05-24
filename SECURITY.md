@@ -31,7 +31,7 @@ Detailed material lives in [`docs/SECURITY.md`](docs/SECURITY.md), which covers:
 
 - Threat model (assets, adversaries, mitigations)
 - Network egress allowlist
-- HMAC signing for the coach relay (transitioning to App Attest — VOL-206)
+- App Attest-only authentication for the coach relay
 - Keychain vs UserDefaults policy
 - PII handling and the privacy-mode redactor
 - Vulnerability surface monitored continuously (TruffleHog, Dependabot, AI review gate)
