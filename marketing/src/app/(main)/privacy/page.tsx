@@ -117,6 +117,9 @@ export default function PrivacyPage() {
               memory on your device only. We do not save, upload, or transmit
               form-check video, photos, or camera frames to VolumeArc,
               Cloudflare, Google Gemini, Sentry, iCloud, or Apple Health.
+              Starting or stopping capture from Apple Watch sends only a
+              WatchConnectivity control message; it does not move camera frames
+              off the iPhone.
             </p>
             <p>
               The App keeps only derived form-check metrics such as exercise,

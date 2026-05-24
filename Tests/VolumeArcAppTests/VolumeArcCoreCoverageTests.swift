@@ -171,12 +171,14 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
             restEndsAt: Date(timeIntervalSince1970: 1_730_000_000),
             coachPrompt: "Hold",
             sessionActive: false,
-            statusMessage: "Paused"
+            statusMessage: "Paused",
+            loggedSetCount: 3
         )
         await store.save(snap)
         let loaded = await store.load()
         XCTAssertEqual(loaded?.selectedAction, .hold)
         XCTAssertEqual(loaded?.coachPrompt, "Hold")
+        XCTAssertEqual(loaded?.loggedSetCount, 3)
 
         await store.clear()
         let cleared = await store.load()

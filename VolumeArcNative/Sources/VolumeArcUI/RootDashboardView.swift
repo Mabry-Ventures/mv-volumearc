@@ -167,6 +167,9 @@ public struct RootDashboardView: View {
         .sheet(isPresented: $navigation.showPaywall) {
             paywallSheet
         }
+        .fullScreenCover(item: watchFormCheckRequestBinding) { request in
+            watchFormCheckSheet(for: request)
+        }
         .onChange(of: model.isOnboardingComplete) { _, isComplete in
             guard model.hasLoadedInitialData else { return }
             navigation.showOnboarding = !isComplete
@@ -186,6 +189,56 @@ public struct RootDashboardView: View {
             )
         } else {
             EmptyView()
+        }
+        #else
+        EmptyView()
+        #endif
+    }
+
+    private var watchFormCheckRequestBinding: Binding<WatchFormCheckStartPayload?> {
+        Binding(
+            get: { model.activeWatchFormCheckRequest },
+            set: { newValue in
+                guard newValue == nil, let request = model.activeWatchFormCheckRequest else { return }
+                Task {
+                    await model.dismissWatchFormCheckRequest(sessionID: request.sessionID)
+                }
+            }
+        )
+    }
+
+    @ViewBuilder
+    private func watchFormCheckSheet(for request: WatchFormCheckStartPayload) -> some View {
+        #if os(iOS)
+        if let exercise = request.exercise {
+            FormCheckCaptureView(
+                exercise: exercise,
+                exerciseName: request.exerciseName,
+                startsAutomatically: true,
+                automaticallyUsesResult: true,
+                externalStopToken: model.watchFormCheckStopToken
+            ) { analysis in
+                await model.completeWatchFormCheck(analysis, sessionID: request.sessionID)
+            }
+        } else {
+            VStack(spacing: VA.Space.md) {
+                Text(String(localized: "Form check unavailable", comment: "Unsupported watch form check title"))
+                    .font(VA.Typography.title2)
+                Text(String(localized: "This lift is not supported for camera form check yet.", comment: "Unsupported watch form check message"))
+                    .font(VA.Typography.body)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(VA.Space.xl)
+            .task {
+                await model.rejectWatchFormCheckRequest(
+                    sessionID: request.sessionID,
+                    message: String(
+                        localized: "This lift is not supported for camera form check yet.",
+                        comment: "Unsupported watch form-check stopped message"
+                    )
+                )
+            }
         }
         #else
         EmptyView()

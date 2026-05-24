@@ -49,6 +49,10 @@ final class WatchPayloadCodecTests: XCTestCase {
             .coachCue,
             .completedWorkout,
             .voiceCoachToggle,
+            .formCheckStart,
+            .formCheckStop,
+            .formCheckResult,
+            .formCheckStopped,
         ] {
             let original = WatchPayload(
                 kind: kind,
@@ -117,6 +121,42 @@ final class WatchPayloadCodecTests: XCTestCase {
 
         XCTAssertEqual(decoded?.kind, .voiceCoachToggle)
         XCTAssertEqual(WatchVoiceCoach.decodeSettingsPayload(from: decoded?.body ?? "")?.isEnabled, false)
+    }
+
+    func test_form_check_payloads_roundtrip() throws {
+        let start = WatchFormCheckStartPayload(
+            sessionID: "form-1",
+            exerciseID: FormCheckExercise.squat.rawValue,
+            exerciseName: "Back Squat",
+            setNumber: 2
+        )
+        let decodedStart = try XCTUnwrap(WatchFormCheckStartPayload.decode(from: WatchFormCheckStartPayload.encode(start)))
+        XCTAssertEqual(decodedStart, start)
+        XCTAssertEqual(decodedStart.exercise, .squat)
+
+        let stop = WatchFormCheckStopPayload(sessionID: "form-1")
+        XCTAssertEqual(WatchFormCheckStopPayload.decode(from: WatchFormCheckStopPayload.encode(stop)), stop)
+
+        let result = WatchFormCheckResultPayload(
+            sessionID: "form-1",
+            exercise: .squat,
+            verdict: .review,
+            cueText: "Knees drifted.",
+            hapticCode: .review,
+            repCount: 3,
+            duration: 18,
+            analyzedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        let decodedResult = try XCTUnwrap(WatchFormCheckResultPayload.decode(from: WatchFormCheckResultPayload.encode(result)))
+        XCTAssertEqual(decodedResult, result)
+        XCTAssertEqual(decodedResult.shortSummary, result.shortSummary)
+
+        let stopped = WatchFormCheckStoppedPayload(
+            sessionID: "form-1",
+            reason: .userDismissed,
+            message: "Capture stopped on iPhone."
+        )
+        XCTAssertEqual(WatchFormCheckStoppedPayload.decode(from: WatchFormCheckStoppedPayload.encode(stopped)), stopped)
     }
 
     // MARK: - Codable JSON round-trip

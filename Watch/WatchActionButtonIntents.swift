@@ -213,6 +213,10 @@ actor WatchActionButtonRuntime {
 enum WatchActionButtonFeedback: Sendable, Equatable {
     case acknowledged
     case failed
+    case formSolid
+    case formReview
+    case formInconclusive
+    case resultPending
 }
 
 protocol WatchActionButtonHapticPlaying: Sendable {
@@ -222,12 +226,25 @@ protocol WatchActionButtonHapticPlaying: Sendable {
 struct SystemWatchActionButtonHaptics: WatchActionButtonHapticPlaying {
     func play(_ feedback: WatchActionButtonFeedback) async {
         #if canImport(WatchKit)
-        let haptic: WKHapticType = switch feedback {
-        case .acknowledged: .success
-        case .failed: .failure
+        let haptics: [WKHapticType] = switch feedback {
+        case .acknowledged:
+            [.success]
+        case .failed:
+            [.failure]
+        case .formSolid:
+            [.success, .success, .success]
+        case .formReview:
+            [.retry, .retry, .retry, .retry, .retry]
+        case .formInconclusive:
+            [.failure, .retry]
+        case .resultPending:
+            [.directionUp, .directionDown]
         }
-        await MainActor.run {
-            WKInterfaceDevice.current().play(haptic)
+        for haptic in haptics {
+            await MainActor.run {
+                WKInterfaceDevice.current().play(haptic)
+            }
+            try? await Task.sleep(nanoseconds: 90_000_000)
         }
         #else
         _ = feedback

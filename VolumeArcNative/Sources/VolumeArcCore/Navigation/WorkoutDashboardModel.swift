@@ -56,7 +56,9 @@ public final class WorkoutDashboardModel: ObservableObject {
     /// VOL-112: most-recent Watch payload kind, surfaced for the
     /// deterministic-mode debug overlay so XCUITests can assert the
     /// watch-payload arrival path without scraping telemetry events.
-    @Published public private(set) var lastWatchPayloadKindForTesting: String?
+    @Published public internal(set) var lastWatchPayloadKindForTesting: String?
+    @Published public internal(set) var activeWatchFormCheckRequest: WatchFormCheckStartPayload?
+    @Published public internal(set) var watchFormCheckStopToken: String?
 
     // MARK: - Dependencies
     private let aiProvider: AICoachProvider
@@ -80,7 +82,8 @@ public final class WorkoutDashboardModel: ObservableObject {
     /// context). Internal so the extracted coach-context extension
     /// can call `currentRecovery()`.
     let recoveryReader: RecoveryReader
-    private let watchVoiceSettingsStore: WatchVoiceSettingsStore
+    let watchVoiceSettingsStore: WatchVoiceSettingsStore
+    let watchConnectivityCoordinator: WatchConnectivityCoordinator?
 
     #if canImport(SwiftData)
     private let workoutRepository: SwiftDataWorkoutRepository?
@@ -98,7 +101,8 @@ public final class WorkoutDashboardModel: ObservableObject {
     public let subscriptionStore: StoreKitSubscriptionStore?
     #endif
 
-    private var activeWorkoutID: String?
+    var activeWorkoutID: String?
+    var completedWatchFormCheckSessionIDs: Set<String> = []
 
     // MARK: - Initializers
     #if canImport(SwiftData) && canImport(StoreKit)
@@ -130,7 +134,8 @@ public final class WorkoutDashboardModel: ObservableObject {
         // keep compiling unchanged. App-level wiring injects the real
         // `HealthKitRecoveryReader`.
         recoveryReader: RecoveryReader = UnavailableRecoveryReader(),
-        watchVoiceSettingsStore: WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore()
+        watchVoiceSettingsStore: WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore(),
+        watchConnectivityCoordinator: WatchConnectivityCoordinator? = nil
     ) {
         self.aiProvider = aiProvider
         self.voiceCoach = voiceCoach
@@ -139,6 +144,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.healthStore = healthStore
         self.recoveryReader = recoveryReader
         self.watchVoiceSettingsStore = watchVoiceSettingsStore
+        self.watchConnectivityCoordinator = watchConnectivityCoordinator
         self.workoutRepository = repository
         self.coachMemoryRepository = coachMemoryRepository
         self.userProfileRepository = userProfileRepository
@@ -174,7 +180,8 @@ public final class WorkoutDashboardModel: ObservableObject {
         voiceCoach: LiveVoiceCoachOrchestrator,
         featureFlags: FeatureFlagProvider? = nil,
         recoveryReader: RecoveryReader = UnavailableRecoveryReader(),
-        watchVoiceSettingsStore: WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore()
+        watchVoiceSettingsStore: WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore(),
+        watchConnectivityCoordinator: WatchConnectivityCoordinator? = nil
     ) {
         self.aiProvider = aiProvider
         self.voiceCoach = voiceCoach
@@ -183,6 +190,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.healthStore = healthStore
         self.recoveryReader = recoveryReader
         self.watchVoiceSettingsStore = watchVoiceSettingsStore
+        self.watchConnectivityCoordinator = watchConnectivityCoordinator
         #if canImport(SwiftData)
         self.workoutRepository = nil
         self.coachMemoryRepository = nil
@@ -211,7 +219,8 @@ public final class WorkoutDashboardModel: ObservableObject {
         voiceCoach: LiveVoiceCoachOrchestrator,
         featureFlags: FeatureFlagProvider? = nil,
         recoveryReader: RecoveryReader = UnavailableRecoveryReader(),
-        watchVoiceSettingsStore: WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore()
+        watchVoiceSettingsStore: WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore(),
+        watchConnectivityCoordinator: WatchConnectivityCoordinator? = nil
     ) {
         self.aiProvider = aiProvider
         self.voiceCoach = voiceCoach
@@ -220,6 +229,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.healthStore = healthStore
         self.recoveryReader = recoveryReader
         self.watchVoiceSettingsStore = watchVoiceSettingsStore
+        self.watchConnectivityCoordinator = watchConnectivityCoordinator
         #if canImport(SwiftData)
         self.workoutRepository = nil
         self.coachMemoryRepository = nil
@@ -633,25 +643,6 @@ public final class WorkoutDashboardModel: ObservableObject {
             }
         }
         return streak
-    }
-
-    public func handleWatchPayload(_ payload: WatchPayload) async {
-        telemetrySink.record(TelemetryEvent(
-            category: "watch",
-            name: "payload_received",
-            severity: .info,
-            message: "Watch payload: \(payload.kind.rawValue)"
-        ))
-        // VOL-112: pin the most-recent kind for the test-only debug
-        // overlay. Done before refresh so a slow refresh doesn't delay
-        // the visible signal — XCUITests wait on this string and
-        // shouldn't have to wait for the full repository round-trip.
-        lastWatchPayloadKindForTesting = payload.kind.rawValue
-        if payload.kind == .voiceCoachToggle,
-           let settings = WatchVoiceCoach.decodeSettingsPayload(from: payload.body) {
-            await watchVoiceSettingsStore.setWatchVoiceEnabled(settings.isEnabled)
-        }
-        await refresh()
     }
 
     public func handleHealthBackgroundUpdate(_ update: HealthBackgroundUpdate) async {

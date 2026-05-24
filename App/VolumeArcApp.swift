@@ -88,8 +88,9 @@ enum VolumeArcLaunchArguments {
     ///
     /// `<kind>` is a `WatchPayloadKind` rawValue: `restTimer`,
     /// `liveState`, `startSession`, `endSession`, `coachCue`,
-    /// `completedWorkout`, or `voiceCoachToggle`. The flag is gated on `-UITestMode 1` —
-    /// production app launches ignore it even if accidentally set.
+    /// `completedWorkout`, `voiceCoachToggle`, or a form-check payload
+    /// kind. The flag is gated on `-UITestMode 1` — production app
+    /// launches ignore it even if accidentally set.
     static var postFakeWatchPayloadKind: String? {
         value(after: "-PostFakeWatchPayload")
     }
@@ -197,6 +198,7 @@ struct VolumeArcApp: App {
         let voicePermissionStore = Self.makeVoicePermissionStore()
         let accountSessionStore = Self.makeAccountSessionStore()
         let notificationStore = Self.makeNotificationStore()
+        let watchConnectivityCoordinator = Self.makeWatchConnectivityCoordinator()
         #if canImport(SwiftData)
         let telemetrySink = Self.makeTelemetrySink(initialEvents: persistence.bootstrapTelemetryEvents)
         #else
@@ -372,7 +374,8 @@ struct VolumeArcApp: App {
                 // VOL-203: thread the telemetrySink so HK auth /
                 // query failures emit typed events instead of silently
                 // degrading to empty context.
-                recoveryReader: Self.makeRecoveryReader(telemetrySink: telemetrySink)
+                recoveryReader: Self.makeRecoveryReader(telemetrySink: telemetrySink),
+                watchConnectivityCoordinator: watchConnectivityCoordinator
             )
         } else {
             let syncEngine = CloudSyncCoordinator(
@@ -395,7 +398,8 @@ struct VolumeArcApp: App {
                 operationalSignals: startupSignals,
                 subscriptionStore: subscriptionStore,
                 voiceCoach: voiceCoach,
-                featureFlags: featureFlags
+                featureFlags: featureFlags,
+                watchConnectivityCoordinator: watchConnectivityCoordinator
             )
         }
         #else
@@ -415,7 +419,8 @@ struct VolumeArcApp: App {
             surfaceStore: surfaceStore,
             subscriptionStore: subscriptionStore,
             voiceCoach: voiceCoach,
-            featureFlags: featureFlags
+            featureFlags: featureFlags,
+            watchConnectivityCoordinator: watchConnectivityCoordinator
         )
         #endif
         #else
@@ -443,7 +448,8 @@ struct VolumeArcApp: App {
             telemetrySink: telemetrySink,
             surfaceStore: surfaceStore,
             voiceCoach: voiceCoach,
-            featureFlags: featureFlags
+            featureFlags: featureFlags,
+            watchConnectivityCoordinator: watchConnectivityCoordinator
         )
         #endif
 

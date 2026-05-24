@@ -8,16 +8,30 @@ import VolumeArcCore
 public struct FormCheckCaptureView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var controller: FormCheckCameraController
+    @State private var didAutoStart = false
+    @State private var didAutoComplete = false
     private let exerciseName: String
-    private let onComplete: (FormCheckAnalysis) -> Void
+    private let startsAutomatically: Bool
+    private let automaticallyUsesResult: Bool
+    private let externalStopToken: String?
+    private let onCancel: (() -> Void)?
+    private let onComplete: (FormCheckAnalysis) async -> Void
 
     public init(
         exercise: FormCheckExercise,
         exerciseName: String,
-        onComplete: @escaping (FormCheckAnalysis) -> Void
+        startsAutomatically: Bool = false,
+        automaticallyUsesResult: Bool = false,
+        externalStopToken: String? = nil,
+        onCancel: (() -> Void)? = nil,
+        onComplete: @escaping (FormCheckAnalysis) async -> Void
     ) {
         _controller = StateObject(wrappedValue: FormCheckCameraController(exercise: exercise))
         self.exerciseName = exerciseName
+        self.startsAutomatically = startsAutomatically
+        self.automaticallyUsesResult = automaticallyUsesResult
+        self.externalStopToken = externalStopToken
+        self.onCancel = onCancel
         self.onComplete = onComplete
     }
 
@@ -35,9 +49,28 @@ public struct FormCheckCaptureView: View {
         .ignoresSafeArea()
         .onAppear {
             controller.prepare()
+            startAutomaticallyIfReady()
         }
         .onDisappear {
             controller.stopSession()
+        }
+        .onChange(of: controller.authorization) { _, _ in
+            startAutomaticallyIfReady()
+        }
+        .onChange(of: controller.isSessionRunning) { _, _ in
+            startAutomaticallyIfReady()
+        }
+        .onChange(of: externalStopToken) { _, newValue in
+            guard newValue != nil else { return }
+            controller.stopCapture()
+        }
+        .onChange(of: controller.analysis?.summaryLine) { _, _ in
+            guard automaticallyUsesResult, didAutoComplete == false, let analysis = controller.analysis else { return }
+            didAutoComplete = true
+            Task {
+                await onComplete(analysis)
+                dismiss()
+            }
         }
         .accessibilityIdentifier("formCheck.root")
     }
@@ -83,6 +116,9 @@ public struct FormCheckCaptureView: View {
         HStack {
             Button {
                 controller.stopCapture()
+                if controller.analysis == nil {
+                    onCancel?()
+                }
                 dismiss()
             } label: {
                 Image(systemName: "xmark")
@@ -178,8 +214,10 @@ public struct FormCheckCaptureView: View {
                     accessibilityIdentifier: "formCheck.useResult"
                 ) {
                     VAHaptics.setLogged()
-                    onComplete(analysis)
-                    dismiss()
+                    Task {
+                        await onComplete(analysis)
+                        dismiss()
+                    }
                 }
                 VAButton(
                     String(localized: "Retake", comment: "Retake form check capture"),
@@ -245,6 +283,15 @@ public struct FormCheckCaptureView: View {
             localized: "Set your phone side-on, then capture one set.",
             comment: "Form check ready subtitle"
         )
+    }
+
+    private func startAutomaticallyIfReady() {
+        guard startsAutomatically,
+              didAutoStart == false,
+              controller.authorization == .authorized,
+              controller.isSessionRunning else { return }
+        didAutoStart = true
+        controller.startCapture()
     }
 
     private func metric(label: String, value: String) -> some View {
@@ -471,7 +518,10 @@ public final class FormCheckCameraController: NSObject, ObservableObject, AVCapt
         }
         output.setSampleBufferDelegate(self, queue: sessionQueue)
         session.addOutput(output)
-        output.connection(with: .video)?.videoOrientation = .portrait
+        if let connection = output.connection(with: .video),
+           connection.isVideoRotationAngleSupported(90) {
+            connection.videoRotationAngle = 90
+        }
         return true
     }
 

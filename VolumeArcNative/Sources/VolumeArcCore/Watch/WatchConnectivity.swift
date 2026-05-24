@@ -8,6 +8,10 @@ public enum WatchPayloadKind: String, Sendable, Codable {
     case coachCue
     case completedWorkout
     case voiceCoachToggle
+    case formCheckStart
+    case formCheckStop
+    case formCheckResult
+    case formCheckStopped
 }
 
 public struct WatchPayload: Sendable, Codable {
@@ -57,6 +61,143 @@ public enum WatchConnectivityNotifications {
     public static let payloadUserInfoKey = "watchPayload"
 }
 
+public struct WatchFormCheckStartPayload: Sendable, Codable, Equatable, Identifiable {
+    public let sessionID: String
+    public let exerciseID: String
+    public let exerciseName: String
+    public let setNumber: Int
+
+    public var id: String { sessionID }
+
+    public init(
+        sessionID: String,
+        exerciseID: String,
+        exerciseName: String,
+        setNumber: Int
+    ) {
+        self.sessionID = sessionID
+        self.exerciseID = exerciseID
+        self.exerciseName = exerciseName
+        self.setNumber = setNumber
+    }
+
+    public var exercise: FormCheckExercise? {
+        FormCheckExercise.infer(exerciseID: exerciseID, name: exerciseName)
+    }
+
+    public static func encode(_ payload: WatchFormCheckStartPayload) -> String {
+        SyncPayloadCodec.encode(payload) ?? "{}"
+    }
+
+    public static func decode(from body: String) -> WatchFormCheckStartPayload? {
+        SyncPayloadCodec.decode(WatchFormCheckStartPayload.self, from: body)
+    }
+}
+
+public struct WatchFormCheckStopPayload: Sendable, Codable, Equatable {
+    public let sessionID: String
+
+    public init(sessionID: String) {
+        self.sessionID = sessionID
+    }
+
+    public static func encode(_ payload: WatchFormCheckStopPayload) -> String {
+        SyncPayloadCodec.encode(payload) ?? "{}"
+    }
+
+    public static func decode(from body: String) -> WatchFormCheckStopPayload? {
+        SyncPayloadCodec.decode(WatchFormCheckStopPayload.self, from: body)
+    }
+}
+
+public struct WatchFormCheckResultPayload: Sendable, Codable, Equatable {
+    public let sessionID: String
+    public let exercise: FormCheckExercise
+    public let verdict: FormCheckVerdict
+    public let cueText: String
+    public let hapticCode: FormCheckHapticCode
+    public let repCount: Int
+    public let duration: TimeInterval
+    public let analyzedAt: Date
+
+    public init(
+        sessionID: String,
+        exercise: FormCheckExercise,
+        verdict: FormCheckVerdict,
+        cueText: String,
+        hapticCode: FormCheckHapticCode,
+        repCount: Int,
+        duration: TimeInterval,
+        analyzedAt: Date = .now
+    ) {
+        self.sessionID = sessionID
+        self.exercise = exercise
+        self.verdict = verdict
+        self.cueText = cueText
+        self.hapticCode = hapticCode
+        self.repCount = repCount
+        self.duration = duration
+        self.analyzedAt = analyzedAt
+    }
+
+    public init(sessionID: String, analysis: FormCheckAnalysis) {
+        self.init(
+            sessionID: sessionID,
+            exercise: analysis.exercise,
+            verdict: analysis.verdict,
+            cueText: analysis.cueText,
+            hapticCode: analysis.hapticCode,
+            repCount: analysis.repCount,
+            duration: analysis.duration,
+            analyzedAt: analysis.capturedAt
+        )
+    }
+
+    public var shortSummary: String {
+        switch verdict {
+        case .solid:
+            return String(localized: "Form solid", comment: "Watch form-check solid result")
+        case .review:
+            return String(localized: "Review form", comment: "Watch form-check review result")
+        case .inconclusive:
+            return String(localized: "Try again", comment: "Watch form-check inconclusive result")
+        }
+    }
+
+    public static func encode(_ payload: WatchFormCheckResultPayload) -> String {
+        SyncPayloadCodec.encode(payload) ?? "{}"
+    }
+
+    public static func decode(from body: String) -> WatchFormCheckResultPayload? {
+        SyncPayloadCodec.decode(WatchFormCheckResultPayload.self, from: body)
+    }
+}
+
+public enum WatchFormCheckStopReason: String, Sendable, Codable, Equatable {
+    case userDismissed
+    case unavailable
+}
+
+public struct WatchFormCheckStoppedPayload: Sendable, Codable, Equatable {
+    public let sessionID: String
+    public let reason: WatchFormCheckStopReason
+    public let message: String
+
+    public init(sessionID: String, reason: WatchFormCheckStopReason, message: String) {
+        self.sessionID = sessionID
+        self.reason = reason
+        self.message = message
+    }
+
+    public static func encode(_ payload: WatchFormCheckStoppedPayload) -> String {
+        SyncPayloadCodec.encode(payload) ?? "{}"
+    }
+
+    public static func decode(from body: String) -> WatchFormCheckStoppedPayload? {
+        SyncPayloadCodec.decode(WatchFormCheckStoppedPayload.self, from: body)
+    }
+}
+
 public struct WatchSessionSnapshot: Sendable, Codable {
     public let workoutID: String
     public let selectedAction: WorkoutAction
@@ -64,6 +205,7 @@ public struct WatchSessionSnapshot: Sendable, Codable {
     public let coachPrompt: String
     public let sessionActive: Bool
     public let statusMessage: String
+    public let loggedSetCount: Int
 
     public init(
         workoutID: String = "active-strength-session",
@@ -71,7 +213,8 @@ public struct WatchSessionSnapshot: Sendable, Codable {
         restEndsAt: Date,
         coachPrompt: String,
         sessionActive: Bool,
-        statusMessage: String
+        statusMessage: String,
+        loggedSetCount: Int = 0
     ) {
         self.workoutID = workoutID
         self.selectedAction = selectedAction
@@ -79,6 +222,7 @@ public struct WatchSessionSnapshot: Sendable, Codable {
         self.coachPrompt = coachPrompt
         self.sessionActive = sessionActive
         self.statusMessage = statusMessage
+        self.loggedSetCount = loggedSetCount
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -88,6 +232,7 @@ public struct WatchSessionSnapshot: Sendable, Codable {
         case coachPrompt
         case sessionActive
         case statusMessage
+        case loggedSetCount
     }
 
     public init(from decoder: Decoder) throws {
@@ -98,6 +243,7 @@ public struct WatchSessionSnapshot: Sendable, Codable {
         self.coachPrompt = try container.decode(String.self, forKey: .coachPrompt)
         self.sessionActive = try container.decode(Bool.self, forKey: .sessionActive)
         self.statusMessage = try container.decode(String.self, forKey: .statusMessage)
+        self.loggedSetCount = try container.decodeIfPresent(Int.self, forKey: .loggedSetCount) ?? 0
     }
 }
 

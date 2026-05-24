@@ -603,6 +603,249 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
         XCTAssertTrue(telemetry.currentEvents.isEmpty)
     }
 
+    func test_formCheckStartAndStopSendWatchConnectivityPayloads() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let haptics = RecordingWatchActionButtonHaptics()
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            actionButtonHaptics: haptics
+        )
+
+        await model.startSession()
+        await model.startFormCheckCapture()
+        await model.stopFormCheckCapture()
+
+        let sentPayloads = await transport.sent
+        let startPayload = try XCTUnwrap(sentPayloads.last { $0.kind == .formCheckStart })
+        let stopPayload = try XCTUnwrap(sentPayloads.last { $0.kind == .formCheckStop })
+        let start = try XCTUnwrap(WatchFormCheckStartPayload.decode(from: startPayload.body))
+        let stop = try XCTUnwrap(WatchFormCheckStopPayload.decode(from: stopPayload.body))
+        XCTAssertEqual(start.exercise, .squat)
+        XCTAssertEqual(start.exerciseName, "Back Squat")
+        XCTAssertEqual(stop.sessionID, start.sessionID)
+        XCTAssertEqual(model.activeFormCheckSessionID, start.sessionID)
+        XCTAssertTrue(model.isFormCheckAnalyzing)
+        XCTAssertEqual(model.statusMessage, "Analyzing form on iPhone.")
+        let playedHaptics = await haptics.played
+        XCTAssertEqual(playedHaptics, [.acknowledged])
+    }
+
+    func test_formCheckResultAppliesHapticsVoiceAndSummary() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let voicePlayback = FakeWatchVoicePlayback()
+        let haptics = RecordingWatchActionButtonHaptics()
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            voicePlayback: voicePlayback,
+            actionButtonHaptics: haptics
+        )
+
+        await model.startSession()
+        await model.startFormCheckCapture()
+        let sessionID = try XCTUnwrap(model.activeFormCheckSessionID)
+        let result = WatchFormCheckResultPayload(
+            sessionID: sessionID,
+            exercise: .squat,
+            verdict: .solid,
+            cueText: "Clean reps.",
+            hapticCode: .solid,
+            repCount: 3,
+            duration: 16
+        )
+
+        await model.applyWatchPayload(
+            WatchPayload(
+                kind: .formCheckResult,
+                workoutID: "watch-seeded",
+                body: WatchFormCheckResultPayload.encode(result)
+            )
+        )
+
+        XCTAssertNil(model.activeFormCheckSessionID)
+        XCTAssertFalse(model.isFormCheckAnalyzing)
+        XCTAssertEqual(model.formCheckResultSummary, "Form solid")
+        XCTAssertEqual(model.statusMessage, "Form solid")
+        let playedHaptics = await haptics.played
+        let spoken = await voicePlayback.spoken
+        XCTAssertTrue(playedHaptics.contains(.formSolid))
+        XCTAssertTrue(spoken.contains(WatchVoiceUtterance(text: "Clean reps.")))
+    }
+
+    func test_formCheckStoppedPayloadClearsStateAndPlaysStopHaptic() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let haptics = RecordingWatchActionButtonHaptics()
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            actionButtonHaptics: haptics
+        )
+
+        await model.startSession()
+        await model.startFormCheckCapture()
+        let sessionID = try XCTUnwrap(model.activeFormCheckSessionID)
+        await model.applyWatchPayload(
+            WatchPayload(
+                kind: .formCheckStopped,
+                workoutID: "watch-seeded",
+                body: WatchFormCheckStoppedPayload.encode(
+                    WatchFormCheckStoppedPayload(
+                        sessionID: sessionID,
+                        reason: .unavailable,
+                        message: "This lift is not supported for camera form check yet."
+                    )
+                )
+            )
+        )
+
+        XCTAssertNil(model.activeFormCheckSessionID)
+        XCTAssertFalse(model.isFormCheckAnalyzing)
+        XCTAssertNil(model.formCheckResultSummary)
+        XCTAssertEqual(model.statusMessage, "This lift is not supported for camera form check yet.")
+        XCTAssertEqual(model.pendingSyncCount, 0)
+        let playedHaptics = await haptics.played
+        XCTAssertTrue(playedHaptics.contains(.failed))
+    }
+
+    func test_cancelFormCheckAnalyzingClearsProgressAndSession() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let haptics = RecordingWatchActionButtonHaptics()
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            actionButtonHaptics: haptics
+        )
+
+        await model.startSession()
+        await model.startFormCheckCapture()
+        await model.stopFormCheckCapture()
+        XCTAssertTrue(model.isFormCheckAnalyzing)
+
+        await model.cancelFormCheckAnalyzing()
+
+        XCTAssertNil(model.activeFormCheckSessionID)
+        XCTAssertFalse(model.isFormCheckAnalyzing)
+        XCTAssertNil(model.formCheckResultSummary)
+        XCTAssertEqual(model.statusMessage, "Form check canceled.")
+        let playedHaptics = await haptics.played
+        XCTAssertTrue(playedHaptics.contains(.failed))
+    }
+
+    func test_formCheckAnalyzeTimeoutClearsProgressAndSession() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let haptics = RecordingWatchActionButtonHaptics()
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            actionButtonHaptics: haptics,
+            formCheckAnalyzeTimeoutNanoseconds: 10_000_000
+        )
+
+        await model.startSession()
+        await model.startFormCheckCapture()
+        await model.stopFormCheckCapture()
+
+        try await waitUntil {
+            model.activeFormCheckSessionID == nil && model.isFormCheckAnalyzing == false
+        }
+        XCTAssertNil(model.formCheckResultSummary)
+        XCTAssertEqual(model.statusMessage, "Form check timed out. Try again.")
+        let playedHaptics = await haptics.played
+        XCTAssertTrue(playedHaptics.contains(.failed))
+    }
+
+    func test_formCheckStartUsesNextLoggedSetNumber() async throws {
+        let transport = RecordingWatchTransport(reachable: true)
+        let healthStore = FakeLiveHealthStore()
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore
+        )
+
+        await model.startSession()
+        await model.logSetManually()
+        await model.startFormCheckCapture()
+
+        let sentPayloads = await transport.sent
+        let startPayload = try XCTUnwrap(sentPayloads.last { $0.kind == .formCheckStart })
+        let start = try XCTUnwrap(WatchFormCheckStartPayload.decode(from: startPayload.body))
+        XCTAssertEqual(start.setNumber, 2)
+    }
+
+    func test_formCheckQueuedStopShowsPendingHaptic() async throws {
+        let transport = RecordingWatchTransport(reachable: false)
+        let healthStore = FakeLiveHealthStore()
+        let haptics = RecordingWatchActionButtonHaptics()
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            actionButtonHaptics: haptics
+        )
+
+        await model.startSession()
+        await model.startFormCheckCapture()
+        await model.stopFormCheckCapture()
+
+        XCTAssertEqual(model.statusMessage, "Stop queued. Result pending.")
+        XCTAssertTrue(model.pendingSyncCount > 0)
+        let playedHaptics = await haptics.played
+        XCTAssertTrue(playedHaptics.contains(.resultPending))
+    }
+
+    func test_formCheckReliableTransferStillShowsQueuedWhenPeerIsUnreachable() async throws {
+        let transport = RecordingWatchTransport(reachable: false, throwsWhenUnreachable: false)
+        let healthStore = FakeLiveHealthStore()
+        let haptics = RecordingWatchActionButtonHaptics()
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            actionButtonHaptics: haptics
+        )
+
+        await model.startSession()
+        await model.startFormCheckCapture()
+        XCTAssertEqual(model.statusMessage, "Capture request queued until iPhone reconnects.")
+
+        await model.stopFormCheckCapture()
+        XCTAssertEqual(model.statusMessage, "Stop queued. Result pending.")
+        XCTAssertEqual(model.pendingSyncCount, 0)
+
+        let sentPayloads = await transport.sent
+        XCTAssertNotNil(sentPayloads.first { $0.kind == .formCheckStart })
+        XCTAssertNotNil(sentPayloads.first { $0.kind == .formCheckStop })
+        let playedHaptics = await haptics.played
+        XCTAssertGreaterThanOrEqual(playedHaptics.filter { $0 == .resultPending }.count, 2)
+    }
+
+    func test_formCheckQueuedRequestPlaysPendingHapticAfterReconnectFlush() async throws {
+        let transport = RecordingWatchTransport(reachable: false)
+        let healthStore = FakeLiveHealthStore()
+        let haptics = RecordingWatchActionButtonHaptics()
+        let model = makeModel(
+            transport: transport,
+            healthStore: healthStore,
+            actionButtonHaptics: haptics
+        )
+
+        await model.startFormCheckCapture()
+        XCTAssertNotNil(model.activeFormCheckSessionID)
+        XCTAssertTrue(model.pendingSyncCount > 0)
+
+        await transport.setReachable(true)
+        await model.refreshConnectivity()
+
+        XCTAssertEqual(model.pendingSyncCount, 0)
+        XCTAssertTrue(model.statusMessage.contains("Replayed"))
+        let playedHaptics = await haptics.played
+        XCTAssertGreaterThanOrEqual(playedHaptics.filter { $0 == .resultPending }.count, 2)
+    }
+
     #if canImport(HealthKit) && canImport(WorkoutKit)
     func test_workoutKitPlanFactoryBuildsCustomStrengthWorkoutFromPrescription() throws {
         let target = WorkoutTarget(weight: 95, unit: "lb", repRange: 5...8, targetRPE: 7.5)
@@ -657,6 +900,7 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
         actionButtonCommandStore: any WatchActionButtonCommandStoring = InMemoryWatchActionButtonCommandStore(),
         actionButtonHaptics: any WatchActionButtonHapticPlaying = RecordingWatchActionButtonHaptics(),
         actionButtonNextActionDonor: any WatchActionButtonNextActionDonating = RecordingActionDonor(),
+        formCheckAnalyzeTimeoutNanoseconds: UInt64 = 45_000_000_000,
         workoutID: String = "watch-seeded"
     ) -> WatchWorkoutModel {
         WatchWorkoutModel(
@@ -674,6 +918,7 @@ final class WatchWorkoutModelHealthKitTests: XCTestCase {
             actionButtonCommandStore: actionButtonCommandStore,
             actionButtonHaptics: actionButtonHaptics,
             actionButtonNextActionDonor: actionButtonNextActionDonor,
+            formCheckAnalyzeTimeoutNanoseconds: formCheckAnalyzeTimeoutNanoseconds,
             workoutID: workoutID
         )
     }
@@ -915,9 +1160,15 @@ private actor InMemoryWatchSessionStateStore: WatchSessionStateStore {
 
 private actor RecordingWatchTransport: WatchSessionTransport {
     private(set) var sent: [WatchPayload] = []
-    private let reachable: Bool
+    private var reachable: Bool
+    private let throwsWhenUnreachable: Bool
 
-    init(reachable: Bool) {
+    init(reachable: Bool, throwsWhenUnreachable: Bool = true) {
+        self.reachable = reachable
+        self.throwsWhenUnreachable = throwsWhenUnreachable
+    }
+
+    func setReachable(_ reachable: Bool) {
         self.reachable = reachable
     }
 
@@ -928,6 +1179,9 @@ private actor RecordingWatchTransport: WatchSessionTransport {
     }
 
     func send(_ payload: WatchPayload) async throws {
+        if reachable == false, throwsWhenUnreachable {
+            throw WatchTransportError.notReachable
+        }
         sent.append(payload)
     }
 }
