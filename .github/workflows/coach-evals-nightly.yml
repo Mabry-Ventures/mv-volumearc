@@ -89,16 +89,7 @@ jobs:
           VOLUMEARC_EVAL_OUTPUT_DIR: ${{ runner.temp }}/coach-evals/${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
-          mkdir -p "$VOLUMEARC_EVAL_OUTPUT_DIR"
-          cat > "$VOLUMEARC_EVAL_OUTPUT_DIR/summary.json" <<'JSON'
-          {
-            "total": 0,
-            "passed": 0,
-            "failed": 0,
-            "status": "skipped",
-            "reason": "VOL-226 retired the client HMAC path. Live response-layer coach evals now need a real-device App Attest signer before they can hit the production relay."
-          }
-          JSON
+          bash scripts/run_coach_evals.sh
           echo "::notice::Coach response-layer evals skipped after VOL-226 App Attest-only cutover; template-layer evals still run in the app test suite."
 
           # Surface the run dir as a step output for the next step's

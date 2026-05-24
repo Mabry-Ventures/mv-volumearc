@@ -163,6 +163,13 @@ async function handleAppAttestChallenge(request: Request, env: Env): Promise<Res
 }
 
 async function handleAppAttestBootstrap(request: Request, env: Env): Promise<Response> {
+  const bootstrapRateLimitSubject = `attest-bootstrap:${clientAddress(request)}`;
+  const rateOk = await checkRateLimit(bootstrapRateLimitSubject, env);
+  if (!rateOk) {
+    recordAuthEvent("app_attest_bootstrap_rate_limited");
+    return json({ error: "rate_limited" }, 429);
+  }
+
   let body: {
     keyID?: string;
     key_id?: string;

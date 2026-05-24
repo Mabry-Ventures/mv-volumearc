@@ -211,6 +211,43 @@ describe("volumearc-ai-relay App Attest auth", () => {
     await expect(env.RATE_LIMIT.get(`attest:challenge:${body.challenge}`)).resolves.toContain("issuedAt");
   });
 
+  it("rate-limits the unauthenticated challenge endpoint by IP", async () => {
+    const env = makeEnv({
+      RATE_LIMIT_MAX_REQUESTS: "2",
+      RATE_LIMIT_WINDOW_SECONDS: "600",
+    });
+
+    await requestChallenge(env);
+    await requestChallenge(env);
+    const response = await worker.fetch(
+      new Request("https://relay.test/v1/attest/challenge", { method: "POST" }),
+      env,
+    );
+
+    expect(response.status).toBe(429);
+    await expect(json(response)).resolves.toMatchObject({ error: "rate_limited" });
+  });
+
+  it("rate-limits unauthenticated bootstrap attempts by IP before attestation work", async () => {
+    const env = makeEnv({
+      RATE_LIMIT_MAX_REQUESTS: "1",
+      RATE_LIMIT_WINDOW_SECONDS: "600",
+    });
+
+    const bootstrapRequest = () => new Request("https://relay.test/v1/attest/bootstrap", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const first = await worker.fetch(bootstrapRequest(), env);
+    const second = await worker.fetch(bootstrapRequest(), env);
+
+    expect(first.status).toBe(400);
+    await expect(json(first)).resolves.toMatchObject({ error: "missing_fields" });
+    expect(second.status).toBe(429);
+    await expect(json(second)).resolves.toMatchObject({ error: "rate_limited" });
+  });
+
   it("rejects HMAC-only coach requests after the cutover", async () => {
     const env = makeEnv();
 
