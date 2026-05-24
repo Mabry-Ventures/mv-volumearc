@@ -9,6 +9,7 @@ public struct WorkoutsView: View {
     @State private var restEndsAt: Date = .now.addingTimeInterval(90)
     @State private var restActive: Bool = false
     @State private var summary: CompletedSessionSnapshot?
+    @State private var formCheckPayload: FormCheckCapturePayload?
 
     public init(model: WorkoutDashboardModel) {
         self.model = model
@@ -53,6 +54,14 @@ public struct WorkoutsView: View {
                 summary = nil
             }
         }
+        .fullScreenCover(item: $formCheckPayload) { payload in
+            FormCheckCaptureView(
+                exercise: payload.exercise,
+                exerciseName: payload.exerciseName
+            ) { analysis in
+                completeFormCheck(analysis)
+            }
+        }
     }
 
     /// Captured snapshot of the session state at completion time.
@@ -65,6 +74,12 @@ public struct WorkoutsView: View {
         let duration: Int
         let averageRPE: Double
         let primaryLift: String
+    }
+
+    struct FormCheckCapturePayload: Identifiable {
+        let id = UUID()
+        let exercise: FormCheckExercise
+        let exerciseName: String
     }
 
     // MARK: - Header
@@ -197,26 +212,39 @@ public struct WorkoutsView: View {
     }
 
     private var activeActions: some View {
-        HStack(spacing: VA.Space.md) {
-            if !restActive {
+        VStack(spacing: VA.Space.md) {
+            HStack(spacing: VA.Space.md) {
+                if !restActive {
+                    VAButton(
+                        String(localized: "Start Rest", comment: "Button to start rest timer"),
+                        icon: "timer",
+                        style: .secondary,
+                        accessibilityIdentifier: "workouts.startRest"
+                    ) {
+                        restEndsAt = .now.addingTimeInterval(90)
+                        restActive = true
+                        VAHaptics.tap()
+                    }
+                }
                 VAButton(
-                    String(localized: "Start Rest", comment: "Button to start rest timer"),
-                    icon: "timer",
+                    String(localized: "Complete Workout", comment: "Button to finish the current workout session"),
+                    icon: "flag.checkered",
                     style: .secondary,
-                    accessibilityIdentifier: "workouts.startRest"
+                    accessibilityIdentifier: "workouts.completeWorkout"
                 ) {
-                    restEndsAt = .now.addingTimeInterval(90)
-                    restActive = true
-                    VAHaptics.tap()
+                    completeWorkout()
                 }
             }
-            VAButton(
-                String(localized: "Complete Workout", comment: "Button to finish the current workout session"),
-                icon: "flag.checkered",
-                style: .secondary,
-                accessibilityIdentifier: "workouts.completeWorkout"
-            ) {
-                completeWorkout()
+            if formCheckExercise != nil {
+                VAButton(
+                    String(localized: "Form Check", comment: "Button to start Vision form check"),
+                    icon: "camera.viewfinder",
+                    style: .primary,
+                    accessibilityIdentifier: "workouts.formCheck"
+                ) {
+                    VAHaptics.tap()
+                    openFormCheck()
+                }
             }
         }
     }
@@ -333,18 +361,61 @@ public struct WorkoutsView: View {
     // MARK: - Idle state
 
     private var idleState: some View {
-        WorkoutIdleLibrary(
-            featuredTitle: model.nextWorkout?.title ?? String(
-                localized: "Strength Session",
-                comment: "Featured workout fallback title"
-            ),
-            featuredFocus: model.autopilot?.nextExerciseName ?? String(
-                localized: "Chest · Shoulders · Triceps",
-                comment: "Featured workout focus"
-            ),
-            startWorkout: startWorkout
-        )
-        .accessibilityIdentifier("workouts.emptyState")
+        VStack(alignment: .leading, spacing: VA.Space.xl) {
+            if !model.recentSessions.isEmpty {
+                recentSessionsHistory
+            }
+            programsLibraryLink
+            WorkoutIdleLibrary(
+                featuredTitle: model.nextWorkout?.title ?? String(
+                    localized: "Strength Session",
+                    comment: "Featured workout fallback title"
+                ),
+                featuredFocus: model.autopilot?.nextExerciseName ?? String(
+                    localized: "Chest · Shoulders · Triceps",
+                    comment: "Featured workout focus"
+                ),
+                startWorkout: startWorkout
+            )
+            .accessibilityIdentifier("workouts.emptyState")
+        }
+    }
+
+    private var programsLibraryLink: some View {
+        NavigationLink {
+            ProgramsLibraryView(model: model)
+        } label: {
+            VACard(style: .accent) {
+                HStack(alignment: .center, spacing: VA.Space.md) {
+                    WorkoutIllustrationTile(
+                        systemImage: "books.vertical.fill",
+                        size: VA.Space.ctaIllustration,
+                        accent: VA.Colors.primary
+                    )
+                    VStack(alignment: .leading, spacing: VA.Space.xs) {
+                        Text(String(localized: "Programs", comment: "Workouts programs library CTA title"))
+                            .font(VA.Typography.headline)
+                            .foregroundStyle(VA.Colors.textPrimary)
+                        Text(programsLibrarySubtitle)
+                            .font(VA.Typography.footnote)
+                            .foregroundStyle(VA.Colors.textSecondary)
+                            .lineLimit(2)
+                    }
+                    Spacer(minLength: VA.Space.sm)
+                    Image(systemName: "chevron.right")
+                        .font(VA.Typography.caption)
+                        .foregroundStyle(VA.Colors.textTertiary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("workouts.programsLibrary")
+    }
+
+    private var recentSessionsHistory: some View {
+        WorkoutHistorySection(sessions: model.recentSessions) { session in
+            model.recordWorkoutDetailOpened(session: session)
+        }
     }
 
     // MARK: - Actions
@@ -394,6 +465,34 @@ public struct WorkoutsView: View {
         }
     }
 
+    private func completeFormCheck(_ analysis: FormCheckAnalysis) {
+        model.recordFormCheckAnalysis(analysis)
+        toastPresenter.show(VAToast(
+            kind: toastKind(for: analysis.verdict),
+            title: String(localized: "Form check saved", comment: "Toast after form check capture"),
+            message: analysis.summaryLine
+        ))
+    }
+
+    private func openFormCheck() {
+        guard let exercise = formCheckExercise else { return }
+        formCheckPayload = FormCheckCapturePayload(
+            exercise: exercise,
+            exerciseName: model.autopilot?.nextExerciseName ?? LocalizedLabels.formCheckExerciseDisplayName(exercise)
+        )
+    }
+
+    private func toastKind(for verdict: FormCheckVerdict) -> VAToast.Kind {
+        switch verdict {
+        case .solid:
+            return .success
+        case .review:
+            return .warning
+        case .inconclusive:
+            return .info
+        }
+    }
+
     // MARK: - Derived display values
 
     private var activeWorkoutTitle: String {
@@ -417,6 +516,14 @@ public struct WorkoutsView: View {
         return "\(Int(target.weight)) x \(target.repRange.lowerBound)"
     }
 
+    private var formCheckExercise: FormCheckExercise? {
+        guard let autopilot = model.autopilot else { return nil }
+        return FormCheckExercise.infer(
+            exerciseID: autopilot.nextExerciseID,
+            name: autopilot.nextExerciseName
+        )
+    }
+
     private var nextExercisePreview: String {
         model.autopilot?.nextExerciseName ?? String(localized: "Accessory work", comment: "Active workout up next fallback")
     }
@@ -426,6 +533,19 @@ public struct WorkoutsView: View {
             return String(localized: "3 x 10 · moderate load", comment: "Active workout up next fallback target")
         }
         return "\(target.repRange.lowerBound) x \(target.repRange.upperBound) · \(Int(target.weight)) \(target.unit)"
+    }
+
+    private var programsLibrarySubtitle: String {
+        if let activeProgram = model.activeProgram {
+            return String(
+                localized: "\(activeProgram.programName) · Week \(activeProgram.weekNumber), Day \(activeProgram.dayNumber)",
+                comment: "Workouts active program CTA subtitle"
+            )
+        }
+        return String(
+            localized: "Starting Strength, 5/3/1, PPL, Upper/Lower, and HST",
+            comment: "Workouts programs library CTA subtitle"
+        )
     }
 }
 #endif

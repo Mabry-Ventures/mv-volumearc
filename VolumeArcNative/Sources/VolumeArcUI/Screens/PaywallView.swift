@@ -20,55 +20,77 @@ public struct PaywallView: View {
 
     public var body: some View {
         NavigationStack {
-            ScrollView {
-                // VOL-93: eager VStack (not LazyVStack) so the XCUITest
-                // journey suite can locate the legal footer + Restore
-                // Purchases button even when they're below the fold. The
-                // paywall has a fixed, known-small set of children (hero,
-                // feature comparison, plans, action buttons, legal), so
-                // the eager-render cost is negligible — LazyVStack's
-                // memory/scroll-perf win is marginal at 5 elements.
-                VStack(alignment: .leading, spacing: VA.Space.xl) {
-                    hero
-                    featureComparison
-                    plans
-                    actionButtons
-                    legalLinks
-                }
-                .padding(VA.Space.lg)
-            }
-            .background(
-                LinearGradient(
-                    colors: [
-                        VA.Colors.primary.opacity(0.18),
-                        VA.Colors.surfaceSecondary
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-            )
-            .navigationTitle(String(localized: "Premium", comment: "Paywall navigation title"))
-            .navigationBarTitleDisplayMode(.inline)
-            .accessibilityIdentifier("paywall.root")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(String(localized: "Close", comment: "Paywall dismiss button")) {
-                        VAHaptics.tap()
-                        isPresented = false
+            paywallContent
+                .navigationTitle(String(localized: "Premium", comment: "Paywall navigation title"))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(String(localized: "Close", comment: "Paywall dismiss button")) {
+                            VAHaptics.tap()
+                            isPresented = false
+                        }
+                        .tint(VA.Colors.primary)
+                        .accessibilityIdentifier("paywall.close")
                     }
-                    .accessibilityIdentifier("paywall.close")
                 }
-            }
-            .task {
-                if subscriptionStore.products.isEmpty {
-                    await subscriptionStore.loadProducts()
+                .task {
+                    if subscriptionStore.shouldLoadProductsOnPaywallAppear {
+                        await subscriptionStore.loadProducts()
+                    }
                 }
-            }
-            .onChange(of: subscriptionStore.isPremium) { _, newValue in
-                if newValue { isPresented = false }
-            }
+                .onChange(of: subscriptionStore.isPremium) { _, newValue in
+                    if newValue { isPresented = false }
+                }
         }
+    }
+
+    @_spi(Testing) public var snapshotContent: some View {
+        paywallContent
+    }
+
+    @_spi(Testing) public var snapshotPlanStateContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: VA.Space.xl) {
+                plans
+                actionButtons
+            }
+            .padding(VA.Space.lg)
+        }
+        .background(paywallBackground)
+    }
+
+    private var paywallContent: some View {
+        ScrollView {
+            // VOL-93: eager VStack (not LazyVStack) so the XCUITest
+            // journey suite can locate the legal footer + Restore
+            // Purchases button even when they're below the fold. The
+            // paywall has a fixed, known-small set of children (hero,
+            // feature comparison, plans, action buttons, legal), so
+            // the eager-render cost is negligible — LazyVStack's
+            // memory/scroll-perf win is marginal at 5 elements.
+            VStack(alignment: .leading, spacing: VA.Space.xl) {
+                hero
+                featureComparison
+                plans
+                actionButtons
+                legalLinks
+            }
+            .padding(VA.Space.lg)
+        }
+        .background(paywallBackground)
+        .accessibilityIdentifier("paywall.root")
+    }
+
+    private var paywallBackground: some View {
+        LinearGradient(
+            colors: [
+                VA.Colors.primary.opacity(VA.Opacity.paywallBackgroundStart),
+                VA.Colors.surfaceSecondary
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
     }
 
     // MARK: - Hero

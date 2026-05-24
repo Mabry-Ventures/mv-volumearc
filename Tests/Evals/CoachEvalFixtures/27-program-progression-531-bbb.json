@@ -1,0 +1,14 @@
+{
+  "id": "program-progression-531-bbb",
+  "intent": "progression",
+  "question": "Can I push the top set today?",
+  "contextBlock": "## Training context\n- Athlete: Sam (intermediate)\n- Readiness: 82/100 — Strong recovery and stable fatigue.\n- Next up: Back Squat at 285lb x 5\n- Last 7 days: 4 sessions, avg RPE 7.4\n- Last session: 5 sets, 8200lb total, RPE 7.5\n\n## Active program\n- Program: 5/3/1 BBB by Jim Wendler\n- Position: Week 3 / 16, Day 4 / 4\n- Session: 5/3/1 Squat (Squat plus lower volume)\n- Today's prescription: 5/3/1 squat, 5x10 squat at BBB load, single-leg or trunk assistance\n- Advancement: Advance training maxes after each 4-week wave: +5 lb upper body, +10 lb lower body.",
+  "style": "analytical",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": true,
+    "mustMentionReadinessOrRPE": true,
+    "toneHint": "program-aware-progression"
+  },
+  "notes": "VOL-144: Program-aware progression ask. Coach should respect the 5/3/1 wave instead of free-form load jumps."
+}

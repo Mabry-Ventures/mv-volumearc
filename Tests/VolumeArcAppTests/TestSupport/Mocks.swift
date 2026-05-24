@@ -147,7 +147,9 @@ struct MockHealthStore: HealthStore {
         get async { authorized }
     }
 
-    func requestAuthorization() async throws -> Bool { authorized }
+    func requestAuthorization() async throws -> HealthAuthorizationResult {
+        HealthAuthorizationResult(canShareWorkouts: authorized, requestedReadIdentifiers: [])
+    }
     func startWorkoutSession(activityType: WorkoutActivityType) async throws {}
     func endWorkoutSession() async throws {}
 }
@@ -171,9 +173,9 @@ struct DenyingHealthStore: HealthStore {
         get async { false }
     }
 
-    func requestAuthorization() async throws -> Bool {
+    func requestAuthorization() async throws -> HealthAuthorizationResult {
         if let authorizationError { throw authorizationError }
-        return false
+        return HealthAuthorizationResult(canShareWorkouts: false, requestedReadIdentifiers: [])
     }
 
     func startWorkoutSession(activityType: WorkoutActivityType) async throws {
@@ -202,9 +204,9 @@ final class RecordingHealthStore: HealthStore, @unchecked Sendable {
         get async { authorized }
     }
 
-    func requestAuthorization() async throws -> Bool {
+    func requestAuthorization() async throws -> HealthAuthorizationResult {
         calls.append(.requestAuthorization)
-        return authorized
+        return HealthAuthorizationResult(canShareWorkouts: authorized, requestedReadIdentifiers: [])
     }
 
     func startWorkoutSession(activityType: WorkoutActivityType) async throws {

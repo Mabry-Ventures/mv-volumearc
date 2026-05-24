@@ -29,7 +29,7 @@ final class VolumeArcBackgroundTasksTests: XCTestCase {
     private var trainingPlanRepository: SwiftDataTrainingPlanRepository!
 
     override func setUp() async throws {
-        let schema = Schema(VolumeArcSchemaV4.models)
+        let schema = Schema(VolumeArcSchemaV5.models)
         let config = ModelConfiguration(
             "BackgroundTasksTest-\(UUID().uuidString)",
             schema: schema,

@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 #if canImport(SwiftUI)
 import Foundation
 import SwiftUI
@@ -16,12 +17,15 @@ import SwiftData
 public final class WorkoutDashboardModel: ObservableObject {
 
     // MARK: - Published state
-
     @Published public private(set) var readiness: ReadinessAssessment = ReadinessAssessment(score: 85, brief: "Ready to train.", factors: [])
     @Published public private(set) var autopilot: WorkoutAutopilotState?
     @Published public private(set) var recentSessions: [RecentSession] = []
     @Published public private(set) var athlete: AthleteProfile = VolumeArcProductDefaults.athleteProfile
     @Published public private(set) var nextWorkout: WeeklyWorkout?
+    @Published public private(set) var trainingPrograms: [TrainingProgramDefinition] = TrainingProgramCatalog.curated
+    @Published public private(set) var activeProgram: ActiveTrainingProgramContext?
+    @Published public private(set) var coachMemory: CoachMemory = CoachMemory()
+    @Published public internal(set) var latestFormCheckAnalysis: FormCheckAnalysis?
 
     @Published public var activeWorkoutTitle: String?
     @Published public private(set) var isSessionActive: Bool = false
@@ -52,10 +56,11 @@ public final class WorkoutDashboardModel: ObservableObject {
     /// VOL-112: most-recent Watch payload kind, surfaced for the
     /// deterministic-mode debug overlay so XCUITests can assert the
     /// watch-payload arrival path without scraping telemetry events.
-    @Published public private(set) var lastWatchPayloadKindForTesting: String?
+    @Published public internal(set) var lastWatchPayloadKindForTesting: String?
+    @Published public internal(set) var activeWatchFormCheckRequest: WatchFormCheckStartPayload?
+    @Published public internal(set) var watchFormCheckStopToken: String?
 
     // MARK: - Dependencies
-
     private let aiProvider: AICoachProvider
     private let voiceCoach: LiveVoiceCoachOrchestrator
     // VOL-181: relaxed from `private` to internal so the extracted
@@ -77,6 +82,8 @@ public final class WorkoutDashboardModel: ObservableObject {
     /// context). Internal so the extracted coach-context extension
     /// can call `currentRecovery()`.
     let recoveryReader: RecoveryReader
+    let watchVoiceSettingsStore: WatchVoiceSettingsStore
+    let watchConnectivityCoordinator: WatchConnectivityCoordinator?
 
     #if canImport(SwiftData)
     private let workoutRepository: SwiftDataWorkoutRepository?
@@ -85,6 +92,7 @@ public final class WorkoutDashboardModel: ObservableObject {
     let coachMemoryRepository: SwiftDataCoachMemoryRepository?
     private let userProfileRepository: SwiftDataUserProfileRepository?
     private let trainingPlanRepository: SwiftDataTrainingPlanRepository?
+    let trainingProgramRepository: SwiftDataTrainingProgramRepository?
     private let refreshLoader: DashboardRefreshLoader?
     #endif
 
@@ -93,10 +101,10 @@ public final class WorkoutDashboardModel: ObservableObject {
     public let subscriptionStore: StoreKitSubscriptionStore?
     #endif
 
-    private var activeWorkoutID: String?
+    var activeWorkoutID: String?
+    var completedWatchFormCheckSessionIDs: Set<String> = []
 
     // MARK: - Initializers
-
     #if canImport(SwiftData) && canImport(StoreKit)
     public init(
         aiProvider: AICoachProvider,
@@ -125,7 +133,9 @@ public final class WorkoutDashboardModel: ObservableObject {
         // so existing test sites (which don't care about recovery)
         // keep compiling unchanged. App-level wiring injects the real
         // `HealthKitRecoveryReader`.
-        recoveryReader: RecoveryReader = UnavailableRecoveryReader()
+        recoveryReader: RecoveryReader = UnavailableRecoveryReader(),
+        watchVoiceSettingsStore: WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore(),
+        watchConnectivityCoordinator: WatchConnectivityCoordinator? = nil
     ) {
         self.aiProvider = aiProvider
         self.voiceCoach = voiceCoach
@@ -133,10 +143,16 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.featureFlags = featureFlags ?? LocalFeatureFlagProvider()
         self.healthStore = healthStore
         self.recoveryReader = recoveryReader
+        self.watchVoiceSettingsStore = watchVoiceSettingsStore
+        self.watchConnectivityCoordinator = watchConnectivityCoordinator
         self.workoutRepository = repository
         self.coachMemoryRepository = coachMemoryRepository
         self.userProfileRepository = userProfileRepository
         self.trainingPlanRepository = trainingPlanRepository
+        self.trainingProgramRepository = SwiftDataTrainingProgramRepository(
+            container: repository.container,
+            trainingPlanRepository: trainingPlanRepository
+        )
         self.refreshLoader = DashboardRefreshLoader(container: repository.container)
         self.syncEngine = syncEngine
         self.subscriptionStore = subscriptionStore
@@ -163,7 +179,9 @@ public final class WorkoutDashboardModel: ObservableObject {
         subscriptionStore: StoreKitSubscriptionStore,
         voiceCoach: LiveVoiceCoachOrchestrator,
         featureFlags: FeatureFlagProvider? = nil,
-        recoveryReader: RecoveryReader = UnavailableRecoveryReader()
+        recoveryReader: RecoveryReader = UnavailableRecoveryReader(),
+        watchVoiceSettingsStore: WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore(),
+        watchConnectivityCoordinator: WatchConnectivityCoordinator? = nil
     ) {
         self.aiProvider = aiProvider
         self.voiceCoach = voiceCoach
@@ -171,11 +189,14 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.featureFlags = featureFlags ?? LocalFeatureFlagProvider()
         self.healthStore = healthStore
         self.recoveryReader = recoveryReader
+        self.watchVoiceSettingsStore = watchVoiceSettingsStore
+        self.watchConnectivityCoordinator = watchConnectivityCoordinator
         #if canImport(SwiftData)
         self.workoutRepository = nil
         self.coachMemoryRepository = nil
         self.userProfileRepository = nil
         self.trainingPlanRepository = nil
+        self.trainingProgramRepository = nil
         self.refreshLoader = nil
         #endif
         self.syncEngine = syncEngine
@@ -197,7 +218,9 @@ public final class WorkoutDashboardModel: ObservableObject {
         surfaceStore: PlatformSurfaceStateStore,
         voiceCoach: LiveVoiceCoachOrchestrator,
         featureFlags: FeatureFlagProvider? = nil,
-        recoveryReader: RecoveryReader = UnavailableRecoveryReader()
+        recoveryReader: RecoveryReader = UnavailableRecoveryReader(),
+        watchVoiceSettingsStore: WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore(),
+        watchConnectivityCoordinator: WatchConnectivityCoordinator? = nil
     ) {
         self.aiProvider = aiProvider
         self.voiceCoach = voiceCoach
@@ -205,11 +228,14 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.featureFlags = featureFlags ?? LocalFeatureFlagProvider()
         self.healthStore = healthStore
         self.recoveryReader = recoveryReader
+        self.watchVoiceSettingsStore = watchVoiceSettingsStore
+        self.watchConnectivityCoordinator = watchConnectivityCoordinator
         #if canImport(SwiftData)
         self.workoutRepository = nil
         self.coachMemoryRepository = nil
         self.userProfileRepository = nil
         self.trainingPlanRepository = nil
+        self.trainingProgramRepository = nil
         self.refreshLoader = nil
         #endif
         #if canImport(StoreKit)
@@ -220,7 +246,6 @@ public final class WorkoutDashboardModel: ObservableObject {
     }
 
     // MARK: - Refresh
-
     /// Reload all published state from repositories. Called at launch and after writes.
     @discardableResult
     public func refresh() async -> Bool {
@@ -245,6 +270,9 @@ public final class WorkoutDashboardModel: ObservableObject {
             self.readiness = snapshot.readiness
             self.autopilot = snapshot.autopilot
             self.nextWorkout = snapshot.nextWorkout
+            self.trainingPrograms = snapshot.trainingPrograms
+            self.activeProgram = snapshot.activeProgram
+            self.coachMemory = snapshot.coachMemory
 
             if let active = snapshot.activeWorkout {
                 self.activeWorkoutID = active.identifier
@@ -287,7 +315,6 @@ public final class WorkoutDashboardModel: ObservableObject {
     }
 
     // MARK: - Dashboard actions
-
     /// Start a new workout session.
     public func startWorkoutSession() async {
         #if canImport(SwiftData)
@@ -300,6 +327,8 @@ public final class WorkoutDashboardModel: ObservableObject {
             self.isSessionActive = true
             self.loggedSetCountThisSession = 0
 
+            publishWidgetSnapshot()
+
             telemetrySink.record(TelemetryEvent(
                 category: "workout",
                 name: "session_started",
@@ -310,50 +339,6 @@ public final class WorkoutDashboardModel: ObservableObject {
             telemetrySink.record(TelemetryEvent(
                 category: "workout",
                 name: "session_start_failed",
-                severity: .error,
-                message: error.localizedDescription
-            ))
-        }
-        #endif
-    }
-
-    /// Log the currently recommended set from autopilot state.
-    public func logRecommendedSet() async {
-        #if canImport(SwiftData)
-        guard let workoutRepository, let autopilot else { return }
-
-        if activeWorkoutID == nil {
-            await startWorkoutSession()
-        }
-        guard let workoutID = activeWorkoutID else { return }
-
-        let set = WorkoutSetPerformance(
-            weight: autopilot.nextTarget.weight,
-            reps: autopilot.nextTarget.repRange.lowerBound,
-            rpe: autopilot.nextTarget.targetRPE,
-            completedAt: .now
-        )
-
-        do {
-            try workoutRepository.appendSet(
-                set,
-                forExercise: autopilot.nextExerciseID,
-                to: workoutID
-            )
-            loggedSetCountThisSession += 1
-
-            telemetrySink.record(TelemetryEvent(
-                category: "workout",
-                name: "set_logged",
-                severity: .info,
-                message: "Logged \(Int(set.weight))lb x \(set.reps) on \(autopilot.nextExerciseName)"
-            ))
-
-            await refresh()
-        } catch {
-            telemetrySink.record(TelemetryEvent(
-                category: "workout",
-                name: "set_log_failed",
                 severity: .error,
                 message: error.localizedDescription
             ))
@@ -449,6 +434,40 @@ public final class WorkoutDashboardModel: ObservableObject {
         #endif
     }
 
+    @discardableResult
+    public func appendCoachMemory(content: String, theme: String = "manual") async -> Bool {
+        #if canImport(SwiftData)
+        guard let coachMemoryRepository else { return false }
+        let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedTheme = theme.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedContent.isEmpty else { return false }
+
+        do {
+            let resolvedTheme = trimmedTheme.isEmpty ? "manual" : trimmedTheme
+            try coachMemoryRepository.append(content: trimmedContent, theme: resolvedTheme)
+            telemetrySink.record(TelemetryEvent(
+                category: "coach.memory",
+                name: "manual_saved",
+                severity: .info,
+                message: "Saved coach memory entry",
+                metadata: ["theme": resolvedTheme]
+            ))
+            await refresh()
+            return true
+        } catch {
+            telemetrySink.record(TelemetryEvent(
+                category: "coach.memory",
+                name: "manual_save_failed",
+                severity: .error,
+                message: error.localizedDescription
+            ))
+            return false
+        }
+        #else
+        return false
+        #endif
+    }
+
     /// Trigger a cloud sync cycle.
     public func syncNow() async {
         telemetrySink.record(TelemetryEvent(
@@ -483,7 +502,6 @@ public final class WorkoutDashboardModel: ObservableObject {
     }
 
     // MARK: - Coach
-
     /// Send a prompt to the AI coach and stream the response into `coachMessages` token-by-token.
     public func askCoach(_ prompt: String) async {
         guard !prompt.trimmingCharacters(in: .whitespaces).isEmpty else { return }
@@ -600,6 +618,9 @@ public final class WorkoutDashboardModel: ObservableObject {
                 workoutTitle: activeWorkoutTitle ?? "Strength Session",
                 activeExerciseName: autopilot.nextExerciseName,
                 targetSummary: "\(Int(autopilot.nextTarget.weight))lb × \(autopilot.nextTarget.repRange.lowerBound)",
+                setProgressSummary: autopilot.liveActivitySetProgressSummary(
+                    loggedSetCount: loggedSetCountThisSession
+                ),
                 restSecondsRemaining: nil
             )
             PlatformSurfaceDefaultsWriter.saveLiveActivityState(state)
@@ -622,21 +643,6 @@ public final class WorkoutDashboardModel: ObservableObject {
             }
         }
         return streak
-    }
-
-    public func handleWatchPayload(_ payload: WatchPayload) async {
-        telemetrySink.record(TelemetryEvent(
-            category: "watch",
-            name: "payload_received",
-            severity: .info,
-            message: "Watch payload: \(payload.kind.rawValue)"
-        ))
-        // VOL-112: pin the most-recent kind for the test-only debug
-        // overlay. Done before refresh so a slow refresh doesn't delay
-        // the visible signal — XCUITests wait on this string and
-        // shouldn't have to wait for the full repository round-trip.
-        lastWatchPayloadKindForTesting = payload.kind.rawValue
-        await refresh()
     }
 
     public func handleHealthBackgroundUpdate(_ update: HealthBackgroundUpdate) async {
@@ -664,6 +670,55 @@ public final class WorkoutDashboardModel: ObservableObject {
 }
 
 public extension WorkoutDashboardModel {
+    /// Log the currently recommended set from autopilot state.
+    func logRecommendedSet() async {
+        #if canImport(SwiftData)
+        guard let workoutRepository else { return }
+
+        if autopilot == nil {
+            await refresh()
+        }
+        guard let autopilot else { return }
+
+        if activeWorkoutID == nil {
+            await startWorkoutSession()
+        }
+        guard let workoutID = activeWorkoutID else { return }
+
+        let set = WorkoutSetPerformance(
+            weight: autopilot.nextTarget.weight,
+            reps: autopilot.nextTarget.repRange.lowerBound,
+            rpe: autopilot.nextTarget.targetRPE,
+            completedAt: .now
+        )
+
+        do {
+            try workoutRepository.appendSet(
+                set,
+                forExercise: autopilot.nextExerciseID,
+                to: workoutID
+            )
+            loggedSetCountThisSession += 1
+
+            telemetrySink.record(TelemetryEvent(
+                category: "workout",
+                name: "set_logged",
+                severity: .info,
+                message: "Logged \(Int(set.weight))lb x \(set.reps) on \(autopilot.nextExerciseName)"
+            ))
+
+            await refresh()
+        } catch {
+            telemetrySink.record(TelemetryEvent(
+                category: "workout",
+                name: "set_log_failed",
+                severity: .error,
+                message: error.localizedDescription
+            ))
+        }
+        #endif
+    }
+
     /// VOL-110: BGTask app-refresh entry point with bracketing telemetry.
     @discardableResult
     func performBackgroundRefresh() async -> Bool {
@@ -700,15 +755,15 @@ public extension WorkoutDashboardModel {
         }
 
         do {
-            let granted = try await healthStore.requestAuthorization()
+            let result = try await healthStore.requestAuthorization()
             isHealthAuthorized = await healthStore.isAuthorized
             telemetrySink.record(TelemetryEvent(
                 category: "health",
                 name: "auth_requested",
                 severity: .info,
-                message: "HealthKit authorization request returned granted=\(granted)."
+                message: "HealthKit authorization request returned canShareWorkouts=\(result.canShareWorkouts)."
             ))
-            return granted && isHealthAuthorized
+            return result.canShareWorkouts && isHealthAuthorized
         } catch {
             isHealthAuthorized = await healthStore.isAuthorized
             telemetrySink.record(TelemetryEvent(

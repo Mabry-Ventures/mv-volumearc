@@ -20,6 +20,11 @@ import Foundation
 /// - **Training load**: 7-day total kJ of strength-training energy
 ///   plus total minutes. The coach uses the ratio to decide whether
 ///   a high-frequency week was high-intensity or just high-time.
+/// - **Apple effort**: 7-day mean Apple Workout Effort score when the
+///   watch has associated effort samples, plus the estimated score
+///   HealthKit can produce from session strain.
+/// - **Vitals trends**: overnight wrist-temperature and respiratory-rate
+///   trend lines, expressed as 7-day mean vs 28-day baseline.
 /// - **Apple Watch Vitals**: optional 0-100 score from watchOS 26's
 ///   Vitals app. When present, it short-circuits the per-metric
 ///   reading because Apple's composite is meaningful on its own.
@@ -59,6 +64,32 @@ public struct RecoveryContext: Sendable, Equatable {
     /// 7-day total minutes spent in strength-training workouts.
     public let strengthLoad7DayMinutes: Double?
 
+    /// 7-day average of Apple Workout Effort scores attached to recent
+    /// strength workouts. Nil when HealthKit has no related effort samples.
+    public let appleWorkoutEffort7DayAverage: Double?
+
+    /// 7-day average of HealthKit's estimated Workout Effort score for
+    /// recent sessions. Useful when the user has not manually rated effort.
+    public let appleEstimatedWorkoutEffort7DayAverage: Double?
+
+    /// 7-day mean overnight wrist temperature, in degrees Celsius.
+    public let wristTemperature7DayMeanCelsius: Double?
+
+    /// 28-day baseline overnight wrist temperature, in degrees Celsius.
+    public let wristTemperature28DayBaselineCelsius: Double?
+
+    /// Signed wrist-temperature delta: 7-day mean minus 28-day baseline.
+    public let wristTemperatureDeltaCelsius: Double?
+
+    /// 7-day mean respiratory rate, in breaths per minute.
+    public let respiratoryRate7DayMean: Double?
+
+    /// 28-day baseline respiratory rate, in breaths per minute.
+    public let respiratoryRate28DayBaseline: Double?
+
+    /// Signed respiratory-rate delta: 7-day mean minus 28-day baseline.
+    public let respiratoryRateDelta: Double?
+
     /// Optional Apple Watch Vitals composite score (0-100). watchOS
     /// 26+ only. When set, the coach prompt block uses it directly
     /// in addition to the per-metric breakdown.
@@ -73,6 +104,14 @@ public struct RecoveryContext: Sendable, Equatable {
         sleepDebtHours: Double? = nil,
         strengthLoad7DayKJ: Double? = nil,
         strengthLoad7DayMinutes: Double? = nil,
+        appleWorkoutEffort7DayAverage: Double? = nil,
+        appleEstimatedWorkoutEffort7DayAverage: Double? = nil,
+        wristTemperature7DayMeanCelsius: Double? = nil,
+        wristTemperature28DayBaselineCelsius: Double? = nil,
+        wristTemperatureDeltaCelsius: Double? = nil,
+        respiratoryRate7DayMean: Double? = nil,
+        respiratoryRate28DayBaseline: Double? = nil,
+        respiratoryRateDelta: Double? = nil,
         appleWatchVitalsScore: Int? = nil
     ) {
         self.hrvMean7Day = hrvMean7Day
@@ -83,6 +122,14 @@ public struct RecoveryContext: Sendable, Equatable {
         self.sleepDebtHours = sleepDebtHours
         self.strengthLoad7DayKJ = strengthLoad7DayKJ
         self.strengthLoad7DayMinutes = strengthLoad7DayMinutes
+        self.appleWorkoutEffort7DayAverage = appleWorkoutEffort7DayAverage
+        self.appleEstimatedWorkoutEffort7DayAverage = appleEstimatedWorkoutEffort7DayAverage
+        self.wristTemperature7DayMeanCelsius = wristTemperature7DayMeanCelsius
+        self.wristTemperature28DayBaselineCelsius = wristTemperature28DayBaselineCelsius
+        self.wristTemperatureDeltaCelsius = wristTemperatureDeltaCelsius
+        self.respiratoryRate7DayMean = respiratoryRate7DayMean
+        self.respiratoryRate28DayBaseline = respiratoryRate28DayBaseline
+        self.respiratoryRateDelta = respiratoryRateDelta
         self.appleWatchVitalsScore = appleWatchVitalsScore
     }
 
@@ -98,6 +145,14 @@ public struct RecoveryContext: Sendable, Equatable {
             || sleepDebtHours != nil
             || strengthLoad7DayKJ != nil
             || strengthLoad7DayMinutes != nil
+            || appleWorkoutEffort7DayAverage != nil
+            || appleEstimatedWorkoutEffort7DayAverage != nil
+            || wristTemperature7DayMeanCelsius != nil
+            || wristTemperature28DayBaselineCelsius != nil
+            || wristTemperatureDeltaCelsius != nil
+            || respiratoryRate7DayMean != nil
+            || respiratoryRate28DayBaseline != nil
+            || respiratoryRateDelta != nil
             || appleWatchVitalsScore != nil
     }
 
@@ -115,11 +170,24 @@ public struct RecoveryContext: Sendable, Equatable {
 
         var lines: [String] = []
         lines.append("## Recovery (Apple Health)")
+        appendAppleWatchVitals(to: &lines)
+        appendHRV(to: &lines)
+        appendSleep(to: &lines)
+        appendStrengthLoad(to: &lines)
+        appendWorkoutEffort(to: &lines)
+        appendWristTemperature(to: &lines)
+        appendRespiratoryRate(to: &lines)
 
+        return lines.joined(separator: "\n")
+    }
+
+    private func appendAppleWatchVitals(to lines: inout [String]) {
         if let score = appleWatchVitalsScore {
             lines.append("- Apple Watch Vitals: \(score)/100")
         }
+    }
 
+    private func appendHRV(to lines: inout [String]) {
         if let mean = hrvMean7Day, let baseline = hrvBaseline28Day, let delta = hrvDeltaPercent {
             let direction = delta >= 0 ? "+" : ""
             lines.append(
@@ -129,7 +197,9 @@ public struct RecoveryContext: Sendable, Equatable {
         } else if let mean = hrvMean7Day {
             lines.append("- HRV: \(format(mean, decimals: 0))ms (7-day mean, baseline pending)")
         }
+    }
 
+    private func appendSleep(to lines: inout [String]) {
         if let debt = sleepDebtHours, let target = sleepDailyTargetHours {
             let descriptor: String
             if debt < -2 {
@@ -150,7 +220,9 @@ public struct RecoveryContext: Sendable, Equatable {
         } else if let total = sleep7DayTotalHours {
             lines.append("- Sleep: \(format(total, decimals: 1))h over 7d (no target configured)")
         }
+    }
 
+    private func appendStrengthLoad(to lines: inout [String]) {
         if let kj = strengthLoad7DayKJ, let minutes = strengthLoad7DayMinutes {
             lines.append(
                 "- Training load (7d strength): \(format(kj, decimals: 0))kJ across " +
@@ -161,8 +233,42 @@ public struct RecoveryContext: Sendable, Equatable {
         } else if let minutes = strengthLoad7DayMinutes {
             lines.append("- Training load (7d strength): \(format(minutes, decimals: 0))min")
         }
+    }
 
-        return lines.joined(separator: "\n")
+    private func appendWorkoutEffort(to lines: inout [String]) {
+        if let effort = appleWorkoutEffort7DayAverage {
+            lines.append("- Apple Workout Effort (7d): \(format(effort, decimals: 1))/10 average")
+        } else if let estimated = appleEstimatedWorkoutEffort7DayAverage {
+            lines.append("- Apple estimated Workout Effort (7d): \(format(estimated, decimals: 1))/10 average")
+        }
+    }
+
+    private func appendWristTemperature(to lines: inout [String]) {
+        if let mean = wristTemperature7DayMeanCelsius,
+           let baseline = wristTemperature28DayBaselineCelsius,
+           let delta = wristTemperatureDeltaCelsius {
+            let sign = delta >= 0 ? "+" : ""
+            lines.append(
+                "- Wrist temperature: \(format(mean, decimals: 2))°C 7-day vs " +
+                "\(format(baseline, decimals: 2))°C baseline (\(sign)\(format(delta, decimals: 2))°C)"
+            )
+        } else if let mean = wristTemperature7DayMeanCelsius {
+            lines.append("- Wrist temperature: \(format(mean, decimals: 2))°C 7-day mean")
+        }
+    }
+
+    private func appendRespiratoryRate(to lines: inout [String]) {
+        if let mean = respiratoryRate7DayMean,
+           let baseline = respiratoryRate28DayBaseline,
+           let delta = respiratoryRateDelta {
+            let sign = delta >= 0 ? "+" : ""
+            lines.append(
+                "- Respiratory rate: \(format(mean, decimals: 1)) br/min 7-day vs " +
+                "\(format(baseline, decimals: 1)) br/min baseline (\(sign)\(format(delta, decimals: 1)) br/min)"
+            )
+        } else if let mean = respiratoryRate7DayMean {
+            lines.append("- Respiratory rate: \(format(mean, decimals: 1)) br/min 7-day mean")
+        }
     }
 
     private func format(_ value: Double, decimals: Int) -> String {

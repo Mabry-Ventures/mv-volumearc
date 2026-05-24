@@ -18,6 +18,10 @@ final class NextWorkoutWidgetSnapshotTests: XCTestCase {
     private enum Metrics {
         static let systemSmall = CGSize(width: 170, height: 170)
         static let systemMedium = CGSize(width: 364, height: 170)
+        static let systemLarge = CGSize(width: 364, height: 382)
+        static let accessoryCircular = CGSize(width: 72, height: 72)
+        static let accessoryRectangular = CGSize(width: 160, height: 72)
+        static let accessoryInline = CGSize(width: 260, height: 32)
     }
 
     private let snapshot = WidgetSummarySnapshot(
@@ -70,6 +74,74 @@ final class NextWorkoutWidgetSnapshotTests: XCTestCase {
         )
     }
 
+    func testSystemLargeLight() {
+        assertWidgetSnapshot(
+            family: .systemLarge,
+            size: Metrics.systemLarge,
+            colorScheme: .light
+        )
+    }
+
+    func testSystemLargeDark() {
+        assertWidgetSnapshot(
+            family: .systemLarge,
+            size: Metrics.systemLarge,
+            colorScheme: .dark
+        )
+    }
+
+    func testAccessoryCircularLight() {
+        assertWidgetSnapshot(
+            family: .accessoryCircular,
+            size: Metrics.accessoryCircular,
+            colorScheme: .light
+        )
+    }
+
+    func testAccessoryCircularDark() {
+        assertWidgetSnapshot(
+            family: .accessoryCircular,
+            size: Metrics.accessoryCircular,
+            colorScheme: .dark
+        )
+    }
+
+    func testAccessoryRectangularLight() throws {
+        try skipAccessoryRectangularInXcodeCloud()
+
+        assertWidgetSnapshot(
+            family: .accessoryRectangular,
+            size: Metrics.accessoryRectangular,
+            colorScheme: .light
+        )
+    }
+
+    func testAccessoryRectangularDark() throws {
+        try skipAccessoryRectangularInXcodeCloud()
+
+        assertWidgetSnapshot(
+            family: .accessoryRectangular,
+            size: Metrics.accessoryRectangular,
+            colorScheme: .dark
+        )
+    }
+
+    func testAccessoryInlineLight() {
+        assertWidgetSnapshot(
+            family: .accessoryInline,
+            size: Metrics.accessoryInline,
+            colorScheme: .light
+        )
+    }
+
+    func testAccessoryInlineDark() {
+        assertWidgetSnapshot(
+            family: .accessoryInline,
+            size: Metrics.accessoryInline,
+            colorScheme: .dark
+        )
+    }
+
     private func assertWidgetSnapshot(
         family: WidgetFamily,
         size: CGSize,
@@ -95,6 +167,18 @@ final class NextWorkoutWidgetSnapshotTests: XCTestCase {
             testName: testName,
             line: line
         )
+    }
+
+    private func skipAccessoryRectangularInXcodeCloud() throws {
+        try XCTSkipIf(Self.isRunningInXcodeCloudTestProducts, """
+        VOL-139: accessory rectangular widget snapshots are enforced locally \
+        and on the self-hosted runner. Xcode Cloud renders this WidgetKit \
+        family differently from its bundled reference PNGs.
+        """)
+    }
+
+    nonisolated private static var isRunningInXcodeCloudTestProducts: Bool {
+        Bundle(for: NextWorkoutWidgetSnapshotTests.self).bundleURL.path.contains("TestProducts.xctestproducts")
     }
 }
 #endif

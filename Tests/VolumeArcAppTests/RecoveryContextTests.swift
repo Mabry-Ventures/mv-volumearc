@@ -19,6 +19,9 @@ final class RecoveryContextTests: XCTestCase {
         XCTAssertTrue(RecoveryContext(hrvMean7Day: 42).hasAnyData)
         XCTAssertTrue(RecoveryContext(sleep7DayTotalHours: 50).hasAnyData)
         XCTAssertTrue(RecoveryContext(strengthLoad7DayMinutes: 200).hasAnyData)
+        XCTAssertTrue(RecoveryContext(appleWorkoutEffort7DayAverage: 7.2).hasAnyData)
+        XCTAssertTrue(RecoveryContext(wristTemperatureDeltaCelsius: 0.18).hasAnyData)
+        XCTAssertTrue(RecoveryContext(respiratoryRateDelta: 0.8).hasAnyData)
         XCTAssertTrue(RecoveryContext(appleWatchVitalsScore: 75).hasAnyData)
     }
 
@@ -108,6 +111,29 @@ final class RecoveryContextTests: XCTestCase {
         let bullets = RecoveryContext(strengthLoad7DayMinutes: 180).asPromptBullets()
         XCTAssertTrue(bullets.contains("Training load (7d strength): 180min"))
         XCTAssertFalse(bullets.contains("kJ"))
+    }
+
+    func testAsPromptBullets_appleEffortAndVitalsTrends_renderWatchSignals() {
+        let bullets = RecoveryContext(
+            appleWorkoutEffort7DayAverage: 7.2,
+            appleEstimatedWorkoutEffort7DayAverage: 6.8,
+            wristTemperature7DayMeanCelsius: 36.68,
+            wristTemperature28DayBaselineCelsius: 36.52,
+            wristTemperatureDeltaCelsius: 0.16,
+            respiratoryRate7DayMean: 15.4,
+            respiratoryRate28DayBaseline: 14.8,
+            respiratoryRateDelta: 0.6
+        ).asPromptBullets()
+
+        XCTAssertTrue(bullets.contains("Apple Workout Effort (7d): 7.2/10 average"))
+        XCTAssertTrue(bullets.contains("Wrist temperature: 36.68°C 7-day vs 36.52°C baseline (+0.16°C)"))
+        XCTAssertTrue(bullets.contains("Respiratory rate: 15.4 br/min 7-day vs 14.8 br/min baseline (+0.6 br/min)"))
+    }
+
+    func testAsPromptBullets_estimatedAppleEffortRendersWhenExplicitMissing() {
+        let bullets = RecoveryContext(appleEstimatedWorkoutEffort7DayAverage: 5.9).asPromptBullets()
+
+        XCTAssertTrue(bullets.contains("Apple estimated Workout Effort (7d): 5.9/10 average"))
     }
 
     // MARK: - CoachContext integration

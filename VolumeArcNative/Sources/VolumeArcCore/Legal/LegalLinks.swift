@@ -12,6 +12,9 @@ import Foundation
 /// `check-legal-pages.mjs` to fail the build if either page regresses to
 /// placeholder/draft content, so these links resolve to real Terms /
 /// Privacy content for App Store review (Guideline 3.1.2).
+/// The Privacy Policy also carries the VOL-155/VOL-242 camera form-check
+/// disclosure: frames stay on-device even when the Watch starts/stops capture;
+/// only derived form metrics can enter coach context.
 public enum LegalLinks {
     // swiftlint:disable force_unwrapping
     // The URL literals below are static, valid https:// strings that cannot

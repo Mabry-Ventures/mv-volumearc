@@ -3,11 +3,9 @@ import clsx from 'clsx'
 
 // VOL-208: the badge points at `/download` rather than `#` so the
 // primary conversion CTA isn't a dead link before the App Store URL
-// is final. `vercel.json` redirects `/download` to the App Store URL
-// when it lands; until then it lands at a "coming soon / TestFlight"
-// page (also wired in marketing/). Once the App Store URL is live,
-// the redirect becomes the single canonical target — no further
-// changes to this component required.
+// is final. Next.js + Vercel both redirect `/download` to the App Store
+// URL, and prefetch stays off so local `next start` smoke tests do not
+// issue an RSC request for a redirect-only route.
 export function AppStoreLink({
   color = 'black',
 }: {
@@ -17,6 +15,7 @@ export function AppStoreLink({
     <Link
       href="/download"
       aria-label="Download on the App Store"
+      prefetch={false}
       className={clsx(
         'rounded-lg transition-colors',
         color === 'black'

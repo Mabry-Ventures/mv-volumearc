@@ -68,6 +68,14 @@ public struct AIRelayConfiguration: Sendable {
 
 public protocol AIRelayCredentialsProviding: Sendable {
     func authorizationHeaderValue() async throws -> String
+    func authenticationHeaders(for requestBody: Data) async throws -> [String: String]
+}
+
+public extension AIRelayCredentialsProviding {
+    func authenticationHeaders(for requestBody: Data) async throws -> [String: String] {
+        _ = requestBody
+        return ["Authorization": try await authorizationHeaderValue()]
+    }
 }
 
 public enum CoachTier: String, Sendable {
@@ -129,10 +137,8 @@ public struct AIRelayCoachProvider: AICoachProvider {
 
     /// Build the POST request (auth, headers, body) for the relay `/v1/coach` endpoint.
     private func buildCoachRequest(prompt: String, context: String) async throws -> URLRequest {
-        let auth = try await credentialsProvider.authorizationHeaderValue()
         var request = URLRequest(url: configuration.baseURL.appending(path: "v1/coach"))
         request.httpMethod = "POST"
-        request.setValue(auth, forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(tier.rawValue, forHTTPHeaderField: "X-Coach-Tier")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
@@ -157,7 +163,12 @@ public struct AIRelayCoachProvider: AICoachProvider {
             "prompt": renderedPrompt,
             "system": systemPrompt
         ]
-        request.httpBody = try JSONEncoder().encode(body)
+        let bodyData = try JSONEncoder().encode(body)
+        let authHeaders = try await credentialsProvider.authenticationHeaders(for: bodyData)
+        for (name, value) in authHeaders {
+            request.setValue(value, forHTTPHeaderField: name)
+        }
+        request.httpBody = bodyData
         return request
     }
 

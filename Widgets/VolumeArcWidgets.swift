@@ -387,110 +387,218 @@ struct NextWorkoutWidget: Widget {
 // MARK: - Live Activity
 
 #if canImport(ActivityKit)
+struct ActiveWorkoutLiveActivitySnapshot: Equatable {
+    let workoutTitle: String
+    let activeExerciseName: String
+    let targetSummary: String
+    let setProgressSummary: String?
+    let restSecondsRemaining: Int?
+
+    init(
+        workoutTitle: String,
+        activeExerciseName: String,
+        targetSummary: String,
+        setProgressSummary: String?,
+        restSecondsRemaining: Int?
+    ) {
+        self.workoutTitle = workoutTitle
+        self.activeExerciseName = activeExerciseName
+        self.targetSummary = targetSummary
+        self.setProgressSummary = setProgressSummary
+        self.restSecondsRemaining = restSecondsRemaining
+    }
+
+    init(context: ActivityViewContext<ActiveWorkoutAttributes>) {
+        self.init(
+            workoutTitle: context.attributes.workoutTitle,
+            activeExerciseName: context.state.activeExerciseName,
+            targetSummary: context.state.targetSummary,
+            setProgressSummary: context.state.setProgressSummary,
+            restSecondsRemaining: context.state.restSecondsRemaining
+        )
+    }
+
+    var setLine: String {
+        setProgressSummary ?? targetSummary
+    }
+
+    var restHeadline: String {
+        guard let restSecondsRemaining else {
+            return String(localized: "GO", comment: "Live Activity rest-complete label when the rest timer hits zero")
+        }
+        return String(
+            localized: "\(restSecondsRemaining)",
+            comment: "Live Activity rest-timer countdown; placeholder is the number of seconds remaining"
+        )
+    }
+
+    var restCompactHeadline: String {
+        guard let restSecondsRemaining else {
+            return String(localized: "GO", comment: "Live Activity rest-complete label when the rest timer hits zero")
+        }
+        return String(
+            localized: "\(restSecondsRemaining)s",
+            comment: "Dynamic Island rest-timer countdown; placeholder is the number of seconds remaining"
+        )
+    }
+}
+
+struct ActiveWorkoutLiveActivityContentView: View {
+    @Environment(\.activityFamily) private var environmentActivityFamily
+
+    let snapshot: ActiveWorkoutLiveActivitySnapshot
+    private let activityFamilyOverride: ActivityFamily?
+
+    init(snapshot: ActiveWorkoutLiveActivitySnapshot, activityFamily: ActivityFamily? = nil) {
+        self.snapshot = snapshot
+        self.activityFamilyOverride = activityFamily
+    }
+
+    private var activityFamily: ActivityFamily {
+        activityFamilyOverride ?? environmentActivityFamily
+    }
+
+    var body: some View {
+        switch activityFamily {
+        case .small:
+            watchFaceLayout
+        default:
+            lockScreenLayout
+        }
+    }
+
+    private var lockScreenLayout: some View {
+        HStack(spacing: VA.Space.md) {
+            VStack(alignment: .leading, spacing: VA.Space.xs) {
+                Text(snapshot.workoutTitle.uppercased())
+                    .font(VA.Typography.widgetHeroBadge)
+                    .foregroundStyle(VA.Colors.primary)
+                    .tracking(VA.Widget.microTracking)
+                Text(snapshot.activeExerciseName)
+                    .font(VA.Typography.widgetActivityTitle)
+                    .foregroundStyle(VA.Colors.textPrimary)
+                Text(snapshot.setLine)
+                    .font(VA.Typography.widgetBody)
+                    .foregroundStyle(VA.Colors.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(VA.Widget.liveActivitySetLineMinimumScale)
+            }
+            Spacer()
+            restCountdownCircle(diameter: VA.Widget.activityPill)
+        }
+        .padding(VA.Space.widgetOuter)
+    }
+
+    private var watchFaceLayout: some View {
+        HStack(spacing: VA.Space.widgetTight) {
+            restCountdownCircle(diameter: VA.Widget.watchLiveActivityPill)
+            VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                Text(snapshot.setLine)
+                    .font(VA.Typography.widgetBody)
+                    .foregroundStyle(VA.Colors.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(VA.Widget.watchLiveActivitySetLineMinimumScale)
+                Text(snapshot.activeExerciseName)
+                    .font(VA.Typography.widgetFootnoteSmall)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                    .lineLimit(1)
+                Text(snapshot.workoutTitle)
+                    .font(VA.Typography.widgetMicro)
+                    .foregroundStyle(VA.Colors.primary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, VA.Space.md)
+        .padding(.vertical, VA.Space.sm)
+    }
+
+    private func restCountdownCircle(diameter: CGFloat) -> some View {
+        VStack(spacing: VA.Space.xxs) {
+            Text(snapshot.restHeadline)
+                .font(VA.Typography.widgetTimerDisplay)
+                .foregroundStyle(snapshot.restSecondsRemaining == nil ? VA.Colors.success : VA.Colors.textPrimary)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(VA.Widget.liveActivityTimerMinimumScale)
+            Text(String(
+                localized: "REST",
+                comment: "Live Activity all-caps badge labeling the rest countdown"
+            ))
+                .font(VA.Typography.widgetMicro)
+                .foregroundStyle(VA.Colors.textSecondary)
+                .tracking(VA.Widget.microTracking)
+        }
+        .frame(width: diameter, height: diameter)
+        .background(VA.Colors.primary.opacity(VA.Widget.backgroundTint))
+        .clipShape(Circle())
+        .accessibilityLabel(restCountdownAccessibilityLabel)
+    }
+
+    private var restCountdownAccessibilityLabel: String {
+        if let restSecondsRemaining = snapshot.restSecondsRemaining {
+            return String(
+                localized: "Rest timer: ^[\(restSecondsRemaining) second](inflect: true) remaining",
+                comment: "Accessibility label for the Live Activity rest timer"
+            )
+        }
+        return String(localized: "Rest complete", comment: "Accessibility label for rest-complete Live Activity state")
+    }
+}
+
+struct ActiveWorkoutDynamicIslandView {
+    let snapshot: ActiveWorkoutLiveActivitySnapshot
+
+    var body: DynamicIsland {
+        DynamicIsland {
+            DynamicIslandExpandedRegion(.leading) {
+                VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                    Text(snapshot.workoutTitle)
+                        .font(VA.Typography.captionLarge)
+                        .foregroundStyle(VA.Colors.textSecondary)
+                    Text(snapshot.activeExerciseName)
+                        .font(VA.Typography.headline)
+                }
+            }
+            DynamicIslandExpandedRegion(.trailing) {
+                Text(snapshot.restCompactHeadline)
+                    .font(VA.Typography.dynamicIslandTitle.monospacedDigit())
+                    .foregroundStyle(snapshot.restSecondsRemaining == nil ? VA.Colors.success : VA.Colors.primary)
+            }
+            DynamicIslandExpandedRegion(.bottom) {
+                Text(snapshot.setLine)
+                    .font(VA.Typography.footnote)
+                    .foregroundStyle(VA.Colors.textSecondary)
+            }
+        } compactLeading: {
+            Image(systemName: "figure.strengthtraining.traditional")
+                .foregroundStyle(VA.Colors.primary)
+        } compactTrailing: {
+            Text(snapshot.restCompactHeadline)
+                .font(VA.Typography.dynamicIslandCompact.monospacedDigit())
+        } minimal: {
+            Image(systemName: "figure.strengthtraining.traditional")
+                .foregroundStyle(VA.Colors.primary)
+        }
+        .keylineTint(VA.Colors.primary)
+    }
+}
+
 struct ActiveWorkoutLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: ActiveWorkoutAttributes.self) { context in
             // Lock screen / banner presentation
-            HStack(spacing: VA.Space.md) {
-                VStack(alignment: .leading, spacing: VA.Space.xs) {
-                    Text(context.attributes.workoutTitle.uppercased())
-                        .font(VA.Typography.widgetHeroBadge)
-                        .foregroundStyle(VA.Colors.primary)
-                        .tracking(VA.Widget.microTracking)
-                    Text(context.state.activeExerciseName)
-                        .font(VA.Typography.widgetActivityTitle)
-                        .foregroundStyle(VA.Colors.textPrimary)
-                    Text(context.state.targetSummary)
-                        .font(VA.Typography.widgetBody)
-                        .foregroundStyle(VA.Colors.primary)
-                }
-                Spacer()
-                if let rest = context.state.restSecondsRemaining {
-                    VStack(spacing: VA.Space.xxs) {
-                        Text(
-                            String(
-                                localized: "\(rest)",
-                                comment: "Live Activity rest-timer countdown; placeholder is the number of seconds remaining"
-                            )
-                        )
-                            .font(VA.Typography.widgetTimerDisplay)
-                            .foregroundStyle(VA.Colors.textPrimary)
-                        Text(String(
-                            localized: "REST",
-                            comment: "Live Activity all-caps badge labeling the rest countdown"
-                        ))
-                            .font(VA.Typography.widgetMicro)
-                            .foregroundStyle(VA.Colors.textSecondary)
-                            .tracking(VA.Widget.microTracking)
-                    }
-                    .frame(width: VA.Widget.activityPill, height: VA.Widget.activityPill)
-                    .background(VA.Colors.primary.opacity(VA.Widget.backgroundTint))
-                    .clipShape(Circle())
-                }
-            }
-            .padding(VA.Space.widgetOuter)
+            ActiveWorkoutLiveActivityContentView(
+                snapshot: ActiveWorkoutLiveActivitySnapshot(context: context)
+            )
             .activityBackgroundTint(VA.Colors.surfacePrimary)
             .activitySystemActionForegroundColor(VA.Colors.primary)
         } dynamicIsland: { context in
-            DynamicIsland {
-                DynamicIslandExpandedRegion(.leading) {
-                    VStack(alignment: .leading, spacing: VA.Space.xxs) {
-                        Text(context.attributes.workoutTitle)
-                            .font(VA.Typography.captionLarge)
-                            .foregroundStyle(VA.Colors.textSecondary)
-                        Text(context.state.activeExerciseName)
-                            .font(VA.Typography.headline)
-                    }
-                }
-                DynamicIslandExpandedRegion(.trailing) {
-                    if let rest = context.state.restSecondsRemaining {
-                        Text(
-                            String(
-                                localized: "\(rest)s",
-                                comment: "Dynamic Island rest-timer countdown; placeholder is the number of seconds remaining"
-                            )
-                        )
-                            .font(VA.Typography.dynamicIslandTitle.monospacedDigit())
-                            .foregroundStyle(VA.Colors.primary)
-                    } else {
-                        Text(String(
-                            localized: "GO",
-                            comment: "Dynamic Island rest-complete label when the rest timer hits zero"
-                        ))
-                            .font(VA.Typography.dynamicIslandTitle)
-                            .foregroundStyle(VA.Colors.success)
-                    }
-                }
-                DynamicIslandExpandedRegion(.bottom) {
-                    Text(context.state.targetSummary)
-                        .font(VA.Typography.footnote)
-                        .foregroundStyle(VA.Colors.textSecondary)
-                }
-            } compactLeading: {
-                Image(systemName: "figure.strengthtraining.traditional")
-                    .foregroundStyle(VA.Colors.primary)
-            } compactTrailing: {
-                if let rest = context.state.restSecondsRemaining {
-                    Text(
-                        String(
-                            localized: "\(rest)s",
-                            comment: "Dynamic Island rest-timer countdown; placeholder is the number of seconds remaining"
-                        )
-                    )
-                        .font(VA.Typography.dynamicIslandCompact.monospacedDigit())
-                } else {
-                    Text(String(
-                        localized: "GO",
-                        comment: "Dynamic Island rest-complete label when the rest timer hits zero"
-                    ))
-                        .font(VA.Typography.dynamicIslandCompact)
-                }
-            } minimal: {
-                Image(systemName: "figure.strengthtraining.traditional")
-                    .foregroundStyle(VA.Colors.primary)
-            }
-            .keylineTint(VA.Colors.primary)
+            ActiveWorkoutDynamicIslandView(
+                snapshot: ActiveWorkoutLiveActivitySnapshot(context: context)
+            ).body
         }
+        .supplementalActivityFamilies([.small, .medium])
     }
 }
 #endif
