@@ -14,6 +14,16 @@ import StoreKitTest
 ///
 /// All tests launch via `VolumeArcAppUITestSupport` so the flag strings
 /// stay in lockstep with the smoke tests.
+///
+/// @MainActor: `XCUIElement` and its query APIs are `@MainActor`-isolated
+/// under iOS 26 / Xcode 26. Without this annotation every XCUI call in a
+/// nonisolated context triggers a Swift 6 concurrency warning and, more
+/// importantly, risks hitting the fragile AX-stack path that causes the
+/// "Restarting after unexpected exit, crash, or test timeout" pattern
+/// observed under iOS 26.5 (duplicate `UIAccessibilityLoaderWebShared`
+/// class registration in WebCore.axbundle vs WebKit.axbundle). Matches
+/// the existing `@MainActor` declaration on `VolumeArcCoachJourneyTests`.
+@MainActor
 final class VolumeArcAppJourneyTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -499,7 +509,14 @@ final class VolumeArcAppJourneyTests: XCTestCase {
             "Perf-seeded Workouts tab should expose history rows before scrolling"
         )
 
-        for _ in 0..<4 {
+        // VOL-227 / iOS 26.5 stability: capped at 2 swipes (was 4).
+        // The 50-session PerfTestMode seed makes the scroll view AX
+        // hierarchy expensive to re-query after each gesture. Under
+        // iOS 26.5's fragile AX stack (UIAccessibilityLoaderWebShared
+        // duplicate class registration) a 4-swipe sequence was reliably
+        // crashing the XCTRunner mid-query. Two swipes still exercises
+        // the list-render contract with ~75% less memory pressure.
+        for _ in 0..<2 {
             root.swipeUp()
         }
 

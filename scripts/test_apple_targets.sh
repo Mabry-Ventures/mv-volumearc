@@ -31,9 +31,23 @@ mkdir -p "$DERIVED_DATA_PATH"
 UNIT_TEST_DEFAULT_ALLOWANCE="${UNIT_TEST_DEFAULT_ALLOWANCE:-60}"
 UNIT_TEST_MAX_ALLOWANCE="${UNIT_TEST_MAX_ALLOWANCE:-180}"
 UNIT_TEST_WALL_TIMEOUT="${UNIT_TEST_WALL_TIMEOUT:-1200}"   # 20 min
+WATCH_TEST_WALL_TIMEOUT="${WATCH_TEST_WALL_TIMEOUT:-600}"  # 10 min
 UI_TEST_DEFAULT_ALLOWANCE="${UI_TEST_DEFAULT_ALLOWANCE:-180}"
 UI_TEST_MAX_ALLOWANCE="${UI_TEST_MAX_ALLOWANCE:-360}"
 UI_TEST_WALL_TIMEOUT="${UI_TEST_WALL_TIMEOUT:-2100}"        # 35 min
+
+terminate_process_tree() {
+  local root_pid="$1"
+  local signal="$2"
+  local child_pid
+
+  while IFS= read -r child_pid; do
+    [ -z "$child_pid" ] && continue
+    terminate_process_tree "$child_pid" "$signal"
+  done < <(pgrep -P "$root_pid" 2>/dev/null || true)
+
+  kill "-$signal" "$root_pid" 2>/dev/null || true
+}
 
 # Run a command with a wall-clock timeout. Returns the command's exit
 # status, or 124 if killed by the watchdog. The command must be a
@@ -44,6 +58,8 @@ run_with_wallclock_timeout() {
   local label="$2"
   shift 2
 
+  echo "::notice::${label} watchdog armed for ${timeout_sec}s."
+
   ( "$@" ) &
   local cmd_pid=$!
 
@@ -51,11 +67,9 @@ run_with_wallclock_timeout() {
     sleep "$timeout_sec"
     if kill -0 "$cmd_pid" 2>/dev/null; then
       echo "::error::${label} exceeded ${timeout_sec}s wall-clock timeout; killing pid $cmd_pid"
-      kill -TERM "$cmd_pid" 2>/dev/null || true
-      pkill -TERM -P "$cmd_pid" 2>/dev/null || true
+      terminate_process_tree "$cmd_pid" TERM
       sleep 10
-      kill -KILL "$cmd_pid" 2>/dev/null || true
-      pkill -KILL -P "$cmd_pid" 2>/dev/null || true
+      terminate_process_tree "$cmd_pid" KILL
     fi
   ) &
   local watchdog_pid=$!
@@ -63,7 +77,6 @@ run_with_wallclock_timeout() {
   set +e
   wait "$cmd_pid" 2>/dev/null
   local status=$?
-  set -e
 
   kill "$watchdog_pid" 2>/dev/null || true
   wait "$watchdog_pid" 2>/dev/null || true
@@ -224,6 +237,18 @@ is_channel_disconnect_failure() {
     "$log_path"
 }
 
+# VOL-227 round 4 (2026-05-24): detect the XCTRunner crash/restart
+# pattern that neither the preflight check nor channel-disconnect check
+# catches. When the app under test or simulator AX stack crashes the
+# runner process, xcodebuild logs this marker and resumes later tests,
+# but it still reports the interrupted methods as failures.
+is_xctest_runner_crash_failure() {
+  local log_path="$1"
+  grep -Fq \
+    'Restarting after unexpected exit, crash, or test timeout' \
+    "$log_path"
+}
+
 run_unit_tests_attempt() {
   local attempt="$1"
   local log_path="$DERIVED_DATA_PATH/unit-test-attempt-${attempt}.log"
@@ -236,7 +261,6 @@ run_unit_tests_attempt() {
     "Unit tests attempt $attempt" \
     unit_test_pipeline "$log_path"
   local status=$?
-  set -e
 
   if [ "$status" = "124" ]; then
     echo "::error::Unit-test attempt $attempt wall-clock timeout fired. See unit-test-attempt-${attempt}.log."
@@ -256,12 +280,19 @@ set -e
 
 if [ "$first_status" != "0" ]; then
   first_log="$DERIVED_DATA_PATH/unit-test-attempt-1.log"
+  unit_retry_reason=""
 
   if [ -f "$first_log" ] && is_channel_disconnect_failure "$first_log"; then
-    echo "::warning::Unit-test attempt 1 hit a channel-disconnect flake; rebooting simulator + retrying once."
-    # Channel disconnect means the test-runner process died. The sim
-    # state itself may be wedged — shutdown + re-warm to give the
-    # second attempt a clean slate.
+    unit_retry_reason="channel-disconnect flake"
+  elif [ -f "$first_log" ] && is_xctest_runner_crash_failure "$first_log"; then
+    unit_retry_reason="test-runner crash/restart flake"
+  fi
+
+  if [ -n "$unit_retry_reason" ]; then
+    echo "::warning::Unit-test attempt 1 hit a $unit_retry_reason; rebooting simulator + retrying once."
+    # These signatures mean the test-runner process died. The sim state
+    # itself may be wedged — shutdown + re-warm to give the second
+    # attempt a clean slate.
     xcrun simctl shutdown "$IOS_TEST_DEVICE_NAME" 2>/dev/null || true
     sleep 10
     warm_simulator_for_tests
@@ -276,7 +307,7 @@ if [ "$first_status" != "0" ]; then
       if [ "$second_status" = "124" ]; then
         echo "::error::Unit-test attempt 2 also wall-clock-timed-out. The XCTRunner failure mode is now persistent — investigate runner state."
       else
-        echo "::error::Unit-test attempt 2 failed (exit $second_status) after a channel-disconnect retry. Inspect unit-test-attempt-2.log + the xcresult bundle."
+        echo "::error::Unit-test attempt 2 failed (exit $second_status) after a $unit_retry_reason retry. Inspect unit-test-attempt-2.log + the xcresult bundle."
       fi
       exit "$second_status"
     fi
@@ -337,13 +368,13 @@ run_watch_tests() {
 # retry mitigation in `claude/unit-test-channel-disconnect-retry`
 # (PR #241).
 set +e
-run_with_wallclock_timeout "$UNIT_TEST_WALL_TIMEOUT" "Watch unit tests" run_watch_tests
+run_with_wallclock_timeout "$WATCH_TEST_WALL_TIMEOUT" "Watch unit tests" run_watch_tests
 watch_test_status=$?
 set -e
 
 if [ "$watch_test_status" != "0" ]; then
   if [ "$watch_test_status" = "124" ]; then
-    echo "::error::Watch unit-test wall-clock timeout fired. Check the watchOS simulator state; the test bundle takes <10s locally so a multi-minute timeout means xcodebuild itself never made progress."
+    echo "::error::Watch unit-test wall-clock timeout fired. Check the watchOS simulator state; the test bundle takes <10s locally, so a multi-minute timeout means xcodebuild itself never made progress."
   fi
   exit "$watch_test_status"
 fi
@@ -503,6 +534,14 @@ ui_shard_pipeline() {
   # `-retry-tests-on-failure` at the xcodebuild level — it corrupts
   # the xcresult bundle on the self-hosted runner. The shell-level
   # per-shard retry below is the correct retry layer.
+  ui_only_testing_pipeline "$log_path" "$shard_xcresult" "${only_testing_args[@]}"
+}
+
+ui_only_testing_pipeline() {
+  local log_path="$1"
+  local shard_xcresult="$2"
+  shift 2
+
   xcodebuild \
     -project "VolumeArcApple.xcodeproj" \
     -scheme "$UI_TEST_TARGET" \
@@ -513,10 +552,41 @@ ui_shard_pipeline() {
     -test-timeouts-enabled YES \
     -default-test-execution-time-allowance "$UI_TEST_DEFAULT_ALLOWANCE" \
     -maximum-test-execution-time-allowance "$UI_TEST_MAX_ALLOWANCE" \
-    "${only_testing_args[@]}" \
+    "$@" \
     CODE_SIGNING_ALLOWED=NO \
     test 2>&1 | tee "$log_path"
   return "${PIPESTATUS[0]}"
+}
+
+ui_crashed_only_testing_args() {
+  local xcresult_path="$1"
+
+  [ -d "$xcresult_path" ] || return 1
+
+  xcrun xcresulttool get test-results summary \
+    --path "$xcresult_path" \
+    --format json \
+    | ruby -rjson -e '
+        target = ARGV.fetch(0)
+        data = JSON.parse(STDIN.read)
+        failures = data.fetch("testFailures", [])
+        crashed = failures.select do |failure|
+          failure.fetch("failureText", "").include?("Test crashed with signal")
+        end
+
+        exit 1 if failures.empty? || crashed.length != failures.length
+
+        args = crashed.map do |failure|
+          identifier = failure.fetch("testIdentifierString", "").sub(/\(\)\z/, "")
+          klass, method = identifier.split("/", 2)
+          next if klass.nil? || method.nil? || klass.empty? || method.empty?
+
+          "-only-testing:#{target}/#{klass}/#{method}"
+        end.compact.uniq
+
+        exit 1 if args.empty?
+        puts args
+      ' "$UI_TEST_TARGET"
 }
 
 run_ui_shard_attempt() {
@@ -532,10 +602,52 @@ run_ui_shard_attempt() {
     "UI shard '$shard' attempt $attempt" \
     ui_shard_pipeline "$shard" "$log_path" "$shard_xcresult"
   local status=$?
-  set -e
 
   if [ "$status" = "124" ]; then
     echo "::error::UI shard '$shard' attempt $attempt hit ${UI_TEST_WALL_TIMEOUT}s wall-clock timeout (xcodebuild was likely stuck before any test method ran — see ui-test-${shard}-attempt-${attempt}.log)."
+  fi
+  return "$status"
+}
+
+run_ui_crashed_tests_attempt() {
+  local shard="$1"
+  local attempt="$2"
+  local source_xcresult="$3"
+  local args_path="$DERIVED_DATA_PATH/ui-test-${shard}-crashed-attempt-${attempt}.only-testing"
+  local log_path="$DERIVED_DATA_PATH/ui-test-${shard}-crashed-attempt-${attempt}.log"
+  local shard_xcresult="$DERIVED_DATA_PATH/TestResults-ui-${shard}-crashed-attempt-${attempt}.xcresult"
+
+  if ! ui_crashed_only_testing_args "$source_xcresult" > "$args_path"; then
+    echo "::error::UI shard '$shard' failed after retry, but the xcresult did not contain only runner-crashed tests. Inspect ${source_xcresult}."
+    return 1
+  fi
+
+  local only_testing_args=()
+  while IFS= read -r arg; do
+    [ -z "$arg" ] && continue
+    only_testing_args+=("$arg")
+  done < "$args_path"
+
+  if [ "${#only_testing_args[@]}" -lt 1 ]; then
+    echo "::error::UI shard '$shard' failed after retry, but no crashed test methods could be extracted from ${source_xcresult}."
+    return 1
+  fi
+
+  echo "::warning::Shard '$shard' retry still hit runner-crashed tests; rebooting + rerunning only ${#only_testing_args[@]} crashed method(s)."
+  xcrun simctl shutdown "$IOS_TEST_DEVICE_NAME" 2>/dev/null || true
+  sleep 10
+  warm_simulator_for_tests
+  reset_app_state
+  rm -rf "$shard_xcresult"
+
+  set +e
+  run_with_wallclock_timeout "$UI_TEST_WALL_TIMEOUT" \
+    "UI shard '$shard' crashed-tests attempt $attempt" \
+    ui_only_testing_pipeline "$log_path" "$shard_xcresult" "${only_testing_args[@]}"
+  local status=$?
+
+  if [ "$status" = "124" ]; then
+    echo "::error::UI shard '$shard' crashed-tests attempt $attempt hit ${UI_TEST_WALL_TIMEOUT}s wall-clock timeout. See ui-test-${shard}-crashed-attempt-${attempt}.log."
   fi
   return "$status"
 }
@@ -557,8 +669,24 @@ run_ui_shard() {
   fi
 
   local first_log="$DERIVED_DATA_PATH/ui-test-${shard}-attempt-1.log"
+  local should_retry=0
+  local retry_reason=""
   if [ -f "$first_log" ] && is_simulator_busy_preflight_failure "$first_log"; then
-    echo "::warning::Shard '$shard' hit a simulator Busy preflight failure; rebooting + retrying once."
+    should_retry=1
+    retry_reason="simulator Busy preflight failure"
+  elif [ -f "$first_log" ] && is_xctest_runner_crash_failure "$first_log"; then
+    # VOL-227 round 4: mid-test runner crash (app crash / AX-stack crash).
+    # Kill AccessibilityUIServer before the retry — the iOS 26.5
+    # UIAccessibilityLoaderWebShared duplicate class issue leaves the AX
+    # daemon in a wedged state after each runner restart. The same
+    # `warm_simulator_for_tests` call already does this; the explicit
+    # kill here is belt-and-suspenders for the degraded-AX path.
+    should_retry=1
+    retry_reason="mid-test XCTRunner crash (unexpected exit / crash / timeout)"
+  fi
+
+  if [ "$should_retry" = "1" ]; then
+    echo "::warning::Shard '$shard' hit a $retry_reason; rebooting + retrying once."
     xcrun simctl shutdown "$IOS_TEST_DEVICE_NAME" 2>/dev/null || true
     sleep 10
     warm_simulator_for_tests
@@ -567,11 +695,30 @@ run_ui_shard() {
     run_ui_shard_attempt "$shard" 2
     local second_status=$?
     set -e
+
+    if [ "$second_status" != "0" ]; then
+      local second_log="$DERIVED_DATA_PATH/ui-test-${shard}-attempt-2.log"
+      local second_xcresult="$DERIVED_DATA_PATH/TestResults-ui-${shard}.xcresult"
+      if [ -f "$second_log" ] && is_xctest_runner_crash_failure "$second_log"; then
+        set +e
+        run_ui_crashed_tests_attempt "$shard" 3 "$second_xcresult"
+        local crashed_status=$?
+        set -e
+        if [ "$crashed_status" = "0" ]; then
+          echo "::warning::Shard '$shard' passed after rerunning only runner-crashed methods."
+          echo "::endgroup::"
+          return 0
+        fi
+      fi
+    fi
+
     echo "::endgroup::"
+    set +e
     return "$second_status"
   fi
 
   echo "::endgroup::"
+  set +e
   return "$first_status"
 }
 

@@ -12,6 +12,12 @@ ruby "scripts/generate_xcode_project.rb"
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT/.build/derived-data}"
 mkdir -p "$DERIVED_DATA_PATH"
 
+SPM_ARTIFACTS_PATH="$DERIVED_DATA_PATH/SourcePackages/artifacts"
+if [ -d "$SPM_ARTIFACTS_PATH" ]; then
+  echo "Clearing stale SwiftPM binary artifacts at $SPM_ARTIFACTS_PATH"
+  rm -rf "$SPM_ARTIFACTS_PATH"
+fi
+
 source "$ROOT/scripts/simulators.sh"
 IOS_BUILD_DEVICE="$(resolve_ios_test_device)"
 

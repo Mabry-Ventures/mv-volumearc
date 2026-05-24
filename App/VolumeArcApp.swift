@@ -78,6 +78,12 @@ enum VolumeArcLaunchArguments {
         flagEnabled("-SimulatePermissionPrompts")
     }
 
+    /// `-StrictPrivacyMode 1` — deterministic-mode-only hook used by
+    /// coach privacy journey tests to seed the profile in strict mode.
+    static var strictPrivacyMode: Bool {
+        isUITestMode && flagEnabled("-StrictPrivacyMode")
+    }
+
     /// `-PostFakeWatchPayload <kind>` — VOL-112. Tells the app to post a
     /// simulated `WatchPayload` notification at launch, as if a paired
     /// Apple Watch had sent the named kind. Used by
@@ -175,20 +181,25 @@ struct VolumeArcApp: App {
                     isUITestMode: VolumeArcLaunchArguments.isUITestMode,
                     skipOnboarding: VolumeArcLaunchArguments.skipOnboarding,
                     seedFixtures: VolumeArcLaunchArguments.seedFixtures,
-                    isPerfTestMode: VolumeArcLaunchArguments.isPerfTestMode
+                    isPerfTestMode: VolumeArcLaunchArguments.isPerfTestMode,
+                    strictPrivacyMode: VolumeArcLaunchArguments.strictPrivacyMode
                 )
             } catch {
                 // Surface bootstrap failure rather than silently swallowing
                 // it with `try?`. A broken deterministic-mode seed will
                 // otherwise cause flaky, non-reproducible test behavior and
                 // hide the root cause.
+                let bootstrapFailureFormat = "[VolumeArc] Launch bootstrap failed: %@ " +
+                    "(isUITestMode=%@, skipOnboarding=%@, seedFixtures=%@, " +
+                    "isPerfTestMode=%@, strictPrivacyMode=%@)"
                 NSLog(
-                    "[VolumeArc] Launch bootstrap failed: %@ (isUITestMode=%@, skipOnboarding=%@, seedFixtures=%@, isPerfTestMode=%@)",
+                    bootstrapFailureFormat,
                     error.localizedDescription,
                     String(describing: VolumeArcLaunchArguments.isUITestMode),
                     String(describing: VolumeArcLaunchArguments.skipOnboarding),
                     String(describing: VolumeArcLaunchArguments.seedFixtures),
-                    String(describing: VolumeArcLaunchArguments.isPerfTestMode)
+                    String(describing: VolumeArcLaunchArguments.isPerfTestMode),
+                    String(describing: VolumeArcLaunchArguments.strictPrivacyMode)
                 )
                 assertionFailure("Launch bootstrap failed: \(error)")
             }
