@@ -243,6 +243,10 @@ configure_target(app_target, bundle_id: 'com.mabryventures.VolumeArc', extra: {
   # — `scripts/validate_exported_ipa_contract.sh` fails the archive
   # if URL is present but key is missing.
   'VOLUMEARC_RELAY_SIGNING_KEY' => '',
+  # VOL-225: Phase B prefers App Attest when supported, but keeps the
+  # HMAC bearer as a transition fallback until VOL-226 cutover telemetry
+  # proves the attested path is safe to require.
+  'VOLUMEARC_RELAY_AUTH_MODE' => 'appAttestPreferHMACFallback',
   # VOL-55: `VolumeArcCloudKitContainer` used to live in the Info.plist
   # for runtime lookup. `INFOPLIST_KEY_*` silently drops custom
   # (non-Apple-recognized) keys, so the bundle never had it. It now
@@ -576,6 +580,7 @@ add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   # Swift module testable from outside, so the source is compiled into
   # the test bundle. Pure additive; production wiring lands in Phase B.
   'VolumeArcAppAttestService.swift',
+  'VolumeArcAppAttestRelaySessionProvider.swift',
   'VolumeArcCloudConfiguration.swift',
   'VolumeArcLiveActivityController.swift',
   'VolumeArcPersistenceController.swift',

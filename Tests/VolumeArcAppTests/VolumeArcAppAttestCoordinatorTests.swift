@@ -74,15 +74,18 @@ final class VolumeArcAppAttestCoordinatorTests: XCTestCase {
     /// resetting the keychain entry before/after each test rather than
     /// changing the key name.
     private let storeKey = "ai.relay.appattest.keyID"
+    private let attestationStoreKey = "ai.relay.appattest.attestationObject"
 
     override func setUpWithError() throws {
         let store = VolumeArcSecureStore()
         try? store.save("", for: storeKey)
+        try? store.save("", for: attestationStoreKey)
     }
 
     override func tearDownWithError() throws {
         let store = VolumeArcSecureStore()
         try? store.save("", for: storeKey)
+        try? store.save("", for: attestationStoreKey)
     }
 
     // MARK: - notSupported short-circuit
