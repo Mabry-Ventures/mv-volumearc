@@ -1,0 +1,214 @@
+name: Exploratory UAT Agent (nightly)
+
+# VOL-169: nightly LLM-driven exploratory UAT. This is intentionally
+# separate from PR CI: it uses a model, screenshots, and a simulator
+# loop, so it belongs on the slow asynchronous lane.
+
+on:
+  schedule:
+    - cron: '30 8 * * *'
+  workflow_dispatch:
+    inputs:
+      max_steps:
+        description: Max agent actions per story
+        required: false
+        default: '5'
+      fail_on_high:
+        description: Fail the workflow when a high-severity anomaly is found
+        required: false
+        default: '1'
+
+concurrency:
+  group: uat-agent-${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  exploratory-uat:
+    name: Exploratory UAT agent
+    runs-on: [self-hosted, mv-volumearc-runner]
+    timeout-minutes: 90
+
+    env:
+      PATH: /opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
+      UAT_AGENT_MODEL: gpt-5.5
+      UAT_AGENT_MAX_STEPS: ${{ github.event.inputs.max_steps || '5' }}
+      UAT_AGENT_FAIL_ON_HIGH: ${{ github.event.inputs.fail_on_high || '1' }}
+      UAT_AGENT_OUTPUT_DIR: .build/uat-agent
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - name: Prepare Ruby toolchain
+        run: bash ./.github/scripts/prepare_ruby_toolchain.sh xcodeproj
+        shell: bash
+
+      - name: Install Ruby bundle
+        run: bundle install --quiet
+
+      - name: Pre-flight
+        run: |
+          set -euo pipefail
+          command -v ruby >/dev/null || { echo "::error::ruby missing"; exit 1; }
+          command -v xcodebuild >/dev/null || { echo "::error::xcodebuild missing"; exit 1; }
+          command -v xcrun >/dev/null || { echo "::error::xcrun missing"; exit 1; }
+          command -v gh >/dev/null || { echo "::error::gh missing"; exit 1; }
+          ruby -rjson -e 'stories = JSON.parse(File.read("Tests/UATAgentStories/nightly.json")); abort("need >=5 stories") unless stories.length >= 5'
+          xcodebuild -version
+          echo "Pre-flight OK"
+        shell: bash
+
+      - name: Run exploratory UAT agent
+        id: agent
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$UAT_AGENT_OUTPUT_DIR"
+
+          if [[ -z "${OPENAI_API_KEY:-}" ]]; then
+            ruby -rjson -rtime -e '
+              puts JSON.pretty_generate({
+                generatedAt: Time.now.utc.iso8601,
+                model: ENV.fetch("UAT_AGENT_MODEL", "gpt-5.5"),
+                configurationError: "OPENAI_API_KEY repository secret is not configured",
+                stories: [],
+                summary: {
+                  totalStories: 0,
+                  highAnomalies: 1,
+                  mediumAnomalies: 0,
+                  lowAnomalies: 0
+                }
+              })
+            ' > "$UAT_AGENT_OUTPUT_DIR/report.json"
+            echo "::error::OPENAI_API_KEY repository secret is not configured"
+            echo "status=78" >> "$GITHUB_OUTPUT"
+            # Defer failure so summary, artifacts, and the GitHub issue report still publish.
+            # The final gate reads status=78 and fails the job after those always() steps.
+            exit 0
+          fi
+
+          set +e
+          ./scripts/run_uat_agent.sh
+          status=$?
+          set -e
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+        shell: bash
+
+      - name: Build report summary
+        if: always()
+        run: |
+          set -euo pipefail
+          report="$UAT_AGENT_OUTPUT_DIR/report.json"
+          summary="$UAT_AGENT_OUTPUT_DIR/report.md"
+          if [[ ! -s "$report" ]]; then
+            mkdir -p "$UAT_AGENT_OUTPUT_DIR"
+            ruby -rjson -rtime -e '
+              puts JSON.pretty_generate({
+                generatedAt: Time.now.utc.iso8601,
+                model: ENV.fetch("UAT_AGENT_MODEL", "gpt-5.5"),
+                configurationError: "UAT agent report was not generated",
+                stories: [],
+                summary: {
+                  totalStories: 0,
+                  highAnomalies: 1,
+                  mediumAnomalies: 0,
+                  lowAnomalies: 0
+                }
+              })
+            ' > "$report"
+          fi
+
+          ruby -rjson -e '
+            report = JSON.parse(File.read(ARGV.fetch(0)))
+            out = []
+            out << "# Nightly exploratory UAT report"
+            out << ""
+            out << "- Run: #{ENV.fetch("GITHUB_SERVER_URL")}/#{ENV.fetch("GITHUB_REPOSITORY")}/actions/runs/#{ENV.fetch("GITHUB_RUN_ID")}"
+            out << "- Commit: #{ENV.fetch("GITHUB_SHA")}"
+            out << "- Model: #{report["model"] || ENV.fetch("UAT_AGENT_MODEL", "gpt-5.5")}"
+            out << "- Generated: #{report["generatedAt"]}"
+            if report["configurationError"]
+              out << "- Configuration error: #{report["configurationError"]}"
+            end
+            summary = report["summary"] || {}
+            out << "- Stories: #{summary["totalStories"].to_i}"
+            out << "- Anomalies: high=#{summary["highAnomalies"].to_i}, medium=#{summary["mediumAnomalies"].to_i}, low=#{summary["lowAnomalies"].to_i}"
+            out << ""
+            (report["stories"] || []).each do |story|
+              out << "## #{story["id"]}"
+              out << story["prompt"].to_s
+              out << ""
+              (story["steps"] || []).each do |step|
+                anomaly = step["anomaly"] || {}
+                out << "- Step #{step["index"]}: #{step["action"]} -> #{step["execution"]}; severity=#{anomaly["severity"] || "none"}; #{anomaly["summary"]}"
+              end
+              out << ""
+            end
+            File.write(ARGV.fetch(1), out.join("\n"))
+          ' "$report" "$summary"
+
+          cat "$summary" >> "$GITHUB_STEP_SUMMARY"
+        shell: bash
+
+      - name: Upload UAT artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ExploratoryUATAgent-${{ github.run_id }}
+          path: |
+            .build/uat-agent/report.json
+            .build/uat-agent/report.md
+            .build/uat-agent/xcodebuild.log
+            .build/uat-agent/ExploratoryUATAgent.xcresult
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Publish GitHub issue report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          title="Nightly exploratory UAT report"
+          body_file="$UAT_AGENT_OUTPUT_DIR/report.md"
+          issue_number="$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --search "in:title \"$title\"" \
+            --json number \
+            --jq '.[0].number // empty')"
+
+          if [[ -z "$issue_number" ]]; then
+            issue_url="$(gh issue create \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$title" \
+              --body-file "$body_file")"
+            issue_number="${issue_url##*/}"
+          else
+            gh issue comment "$issue_number" \
+              --repo "$GITHUB_REPOSITORY" \
+              --body-file "$body_file"
+          fi
+          echo "Published UAT report to issue #$issue_number"
+        shell: bash
+
+      - name: Fail on agent failure or high anomaly
+        if: always()
+        run: |
+          set -euo pipefail
+          status="${{ steps.agent.outputs.status || '1' }}"
+          [[ "$status" =~ ^[0-9]+$ ]] || status=1
+          if [[ "$status" != "0" ]]; then
+            echo "::error::Exploratory UAT agent exited with status $status"
+            exit "$status"
+          fi
+        shell: bash
