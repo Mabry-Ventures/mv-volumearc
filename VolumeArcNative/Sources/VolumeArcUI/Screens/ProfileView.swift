@@ -7,6 +7,7 @@ public struct ProfileView: View {
     @ObservedObject var model: WorkoutDashboardModel
     @State private var isEditingProfile = false
     @State private var isShowingPaywall = false
+    @State private var isShowingCoachMemory = false
     /// VOL-176: feedback sheet visibility. Only rendered when the
     /// caller supplies a non-nil `onSendFeedback` closure (i.e., the
     /// App layer wired Sentry + telemetry submission). The model
@@ -72,6 +73,9 @@ public struct ProfileView: View {
             FeedbackView(isPresented: $isShowingFeedback) { category, description in
                 onSendFeedback?(category, description)
             }
+        }
+        .sheet(isPresented: $isShowingCoachMemory) {
+            CoachMemoryView(model: model)
         }
     }
 
@@ -173,7 +177,26 @@ public struct ProfileView: View {
                 VAHaptics.tap()
                 isEditingProfile = true
             }
+            profileRow(
+                label: String(localized: "Coach memory", comment: "Profile row label"),
+                value: model.coachMemory.isEmpty
+                    ? String(localized: "Empty", comment: "Profile coach memory empty value")
+                    : coachMemoryCountText,
+                icon: "brain.head.profile"
+            ) {
+                VAHaptics.tap()
+                isShowingCoachMemory = true
+            }
+            .accessibilityIdentifier("profile.coachMemory")
         }
+    }
+
+    private var coachMemoryCountText: String {
+        let count = model.coachMemory.entries.count
+        if count == 1 {
+            return String(localized: "1 note", comment: "Profile coach memory single count value")
+        }
+        return String(localized: "\(count) notes", comment: "Profile coach memory plural count value")
     }
 
     private var subscriptionCard: some View {

@@ -33,6 +33,7 @@ public struct DashboardRefreshSnapshot: Sendable {
     public let trainingPrograms: [TrainingProgramDefinition]
     public let activeProgram: ActiveTrainingProgramContext?
     public let activeWorkout: ActiveWorkout?
+    public let coachMemory: CoachMemory
     public let isOnboardingComplete: Bool
 
     public init(
@@ -44,6 +45,7 @@ public struct DashboardRefreshSnapshot: Sendable {
         trainingPrograms: [TrainingProgramDefinition],
         activeProgram: ActiveTrainingProgramContext?,
         activeWorkout: ActiveWorkout?,
+        coachMemory: CoachMemory,
         isOnboardingComplete: Bool
     ) {
         self.athlete = athlete
@@ -54,6 +56,7 @@ public struct DashboardRefreshSnapshot: Sendable {
         self.trainingPrograms = trainingPrograms
         self.activeProgram = activeProgram
         self.activeWorkout = activeWorkout
+        self.coachMemory = coachMemory
         self.isOnboardingComplete = isOnboardingComplete
     }
 }
@@ -100,6 +103,7 @@ public actor DashboardRefreshLoader {
             trainingPrograms: try loadTrainingPrograms(in: context),
             activeProgram: try loadActiveProgramContext(in: context),
             activeWorkout: try loadActiveWorkout(in: context),
+            coachMemory: memory,
             isOnboardingComplete: profile?.onboardingCompleted ?? false
         )
     }

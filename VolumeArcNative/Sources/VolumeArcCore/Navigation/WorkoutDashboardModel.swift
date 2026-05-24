@@ -24,6 +24,7 @@ public final class WorkoutDashboardModel: ObservableObject {
     @Published public private(set) var nextWorkout: WeeklyWorkout?
     @Published public private(set) var trainingPrograms: [TrainingProgramDefinition] = TrainingProgramCatalog.curated
     @Published public private(set) var activeProgram: ActiveTrainingProgramContext?
+    @Published public private(set) var coachMemory: CoachMemory = CoachMemory()
 
     @Published public var activeWorkoutTitle: String?
     @Published public private(set) var isSessionActive: Bool = false
@@ -260,6 +261,7 @@ public final class WorkoutDashboardModel: ObservableObject {
             self.nextWorkout = snapshot.nextWorkout
             self.trainingPrograms = snapshot.trainingPrograms
             self.activeProgram = snapshot.activeProgram
+            self.coachMemory = snapshot.coachMemory
 
             if let active = snapshot.activeWorkout {
                 self.activeWorkoutID = active.identifier
@@ -418,6 +420,40 @@ public final class WorkoutDashboardModel: ObservableObject {
                 message: error.localizedDescription
             ))
         }
+        #endif
+    }
+
+    @discardableResult
+    public func appendCoachMemory(content: String, theme: String = "manual") async -> Bool {
+        #if canImport(SwiftData)
+        guard let coachMemoryRepository else { return false }
+        let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedTheme = theme.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedContent.isEmpty else { return false }
+
+        do {
+            let resolvedTheme = trimmedTheme.isEmpty ? "manual" : trimmedTheme
+            try coachMemoryRepository.append(content: trimmedContent, theme: resolvedTheme)
+            telemetrySink.record(TelemetryEvent(
+                category: "coach.memory",
+                name: "manual_saved",
+                severity: .info,
+                message: "Saved coach memory entry",
+                metadata: ["theme": resolvedTheme]
+            ))
+            await refresh()
+            return true
+        } catch {
+            telemetrySink.record(TelemetryEvent(
+                category: "coach.memory",
+                name: "manual_save_failed",
+                severity: .error,
+                message: error.localizedDescription
+            ))
+            return false
+        }
+        #else
+        return false
         #endif
     }
 
