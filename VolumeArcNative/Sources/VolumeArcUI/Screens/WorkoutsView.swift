@@ -9,7 +9,7 @@ public struct WorkoutsView: View {
     @State private var restEndsAt: Date = .now.addingTimeInterval(90)
     @State private var restActive: Bool = false
     @State private var summary: CompletedSessionSnapshot?
-    @State private var isShowingFormCheck = false
+    @State private var formCheckPayload: FormCheckCapturePayload?
 
     public init(model: WorkoutDashboardModel) {
         self.model = model
@@ -54,14 +54,12 @@ public struct WorkoutsView: View {
                 summary = nil
             }
         }
-        .fullScreenCover(isPresented: $isShowingFormCheck) {
-            if let exercise = formCheckExercise {
-                FormCheckCaptureView(
-                    exercise: exercise,
-                    exerciseName: model.autopilot?.nextExerciseName ?? exercise.displayName
-                ) { analysis in
-                    completeFormCheck(analysis)
-                }
+        .fullScreenCover(item: $formCheckPayload) { payload in
+            FormCheckCaptureView(
+                exercise: payload.exercise,
+                exerciseName: payload.exerciseName
+            ) { analysis in
+                completeFormCheck(analysis)
             }
         }
     }
@@ -76,6 +74,12 @@ public struct WorkoutsView: View {
         let duration: Int
         let averageRPE: Double
         let primaryLift: String
+    }
+
+    struct FormCheckCapturePayload: Identifiable {
+        let id = UUID()
+        let exercise: FormCheckExercise
+        let exerciseName: String
     }
 
     // MARK: - Header
@@ -239,7 +243,7 @@ public struct WorkoutsView: View {
                     accessibilityIdentifier: "workouts.formCheck"
                 ) {
                     VAHaptics.tap()
-                    isShowingFormCheck = true
+                    openFormCheck()
                 }
             }
         }
@@ -468,6 +472,14 @@ public struct WorkoutsView: View {
             title: String(localized: "Form check saved", comment: "Toast after form check capture"),
             message: analysis.summaryLine
         ))
+    }
+
+    private func openFormCheck() {
+        guard let exercise = formCheckExercise else { return }
+        formCheckPayload = FormCheckCapturePayload(
+            exercise: exercise,
+            exerciseName: model.autopilot?.nextExerciseName ?? LocalizedLabels.formCheckExerciseDisplayName(exercise)
+        )
     }
 
     private func toastKind(for verdict: FormCheckVerdict) -> VAToast.Kind {

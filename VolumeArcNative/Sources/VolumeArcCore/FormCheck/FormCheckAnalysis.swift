@@ -10,11 +10,11 @@ public enum FormCheckExercise: String, Codable, Sendable, CaseIterable, Identifi
     public var displayName: String {
         switch self {
         case .squat:
-            return "Squat"
+            return String(localized: "Squat", comment: "Form check exercise name — squat")
         case .benchPress:
-            return "Bench press"
+            return String(localized: "Bench press", comment: "Form check exercise name — bench press")
         case .deadlift:
-            return "Deadlift"
+            return String(localized: "Deadlift", comment: "Form check exercise name — deadlift")
         }
     }
 
@@ -23,7 +23,7 @@ public enum FormCheckExercise: String, Codable, Sendable, CaseIterable, Identifi
         if haystack.contains("deadlift") {
             return .deadlift
         }
-        if haystack.contains("bench") || haystack.contains("press") {
+        if haystack.contains("bench") {
             return .benchPress
         }
         if haystack.contains("squat") {
@@ -124,11 +124,11 @@ public enum FormCheckVerdict: String, Codable, Sendable, CaseIterable {
     public var displayName: String {
         switch self {
         case .solid:
-            return "Solid"
+            return String(localized: "Solid", comment: "Form check verdict — solid")
         case .review:
-            return "Review"
+            return String(localized: "Review", comment: "Form check verdict — review")
         case .inconclusive:
-            return "Try again"
+            return String(localized: "Try again", comment: "Form check verdict — inconclusive")
         }
     }
 }
@@ -152,7 +152,7 @@ public enum FormCheckFlag: String, Codable, Sendable, CaseIterable, Comparable {
         lhs.rawValue < rhs.rawValue
     }
 
-    var promptLabel: String {
+    public var promptLabel: String {
         switch self {
         case .lowConfidence:
             return "pose confidence was low"

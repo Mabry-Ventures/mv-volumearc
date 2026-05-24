@@ -31,7 +31,7 @@ public struct FormCheckCaptureView: View {
             }
             .padding(VA.Space.lg)
         }
-        .background(Color.black)
+        .background(VA.Colors.cameraSurface)
         .ignoresSafeArea()
         .onAppear {
             controller.prepare()
@@ -86,10 +86,10 @@ public struct FormCheckCaptureView: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.white)
-                    .frame(width: 38, height: 38)
-                    .background(.black.opacity(0.42), in: Circle())
+                    .font(VA.Typography.cameraChromeIcon)
+                    .foregroundStyle(VA.Colors.cameraForeground)
+                    .frame(width: VA.Space.cameraChromeControl, height: VA.Space.cameraChromeControl)
+                    .background(VA.Colors.cameraSurface.opacity(VA.Opacity.cameraChrome), in: Circle())
             }
             .accessibilityLabel(String(localized: "Close", comment: "Close form check capture"))
             .accessibilityIdentifier("formCheck.close")
@@ -98,12 +98,12 @@ public struct FormCheckCaptureView: View {
 
             Text(exerciseName)
                 .font(VA.Typography.headline)
-                .foregroundStyle(Color.white)
+                .foregroundStyle(VA.Colors.cameraForeground)
                 .lineLimit(1)
                 .minimumScaleFactor(0.78)
                 .padding(.horizontal, VA.Space.md)
-                .frame(height: 38)
-                .background(.black.opacity(0.42), in: Capsule())
+                .frame(height: VA.Space.cameraChromeControl)
+                .background(VA.Colors.cameraSurface.opacity(VA.Opacity.cameraChrome), in: Capsule())
         }
         .padding(.top, VA.Space.xl)
     }
@@ -137,10 +137,13 @@ public struct FormCheckCaptureView: View {
             controls
         }
         .padding(VA.Space.lg)
-        .background(VA.Colors.surfacePrimary.opacity(0.94), in: RoundedRectangle(cornerRadius: VA.Radius.lg))
+        .background(
+            VA.Colors.surfacePrimary.opacity(VA.Opacity.cameraPanel),
+            in: RoundedRectangle(cornerRadius: VA.Radius.lg)
+        )
         .overlay {
             RoundedRectangle(cornerRadius: VA.Radius.lg)
-                .stroke(Color.white.opacity(0.14), lineWidth: 0.5)
+                .stroke(VA.Colors.cameraForeground.opacity(VA.Opacity.cameraPanelStroke), lineWidth: VA.Space.hairline)
         }
         .accessibilityIdentifier("formCheck.panel")
     }
@@ -265,6 +268,12 @@ public enum FormCheckCameraAuthorization: Sendable, Equatable {
     case unavailable
 }
 
+/// Threading contract: AVFoundation session setup, recording lifecycle,
+/// `configured`, `recordingActive`, `capturedFrames`, `captureStartedAt`, and
+/// `autoStopToken` are confined to `sessionQueue`. Published UI state is
+/// assigned from the main queue / MainActor. The unchecked Sendable conformance
+/// below exists only to bridge AVFoundation's delegate callbacks and GCD
+/// closures while preserving that queue discipline.
 public final class FormCheckCameraController: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     public let session = AVCaptureSession()
     @Published public private(set) var authorization: FormCheckCameraAuthorization = .notDetermined
@@ -519,12 +528,22 @@ private struct FormCheckSkeletonOverlay: View {
                 var path = Path()
                 path.move(to: Self.point(start, in: size))
                 path.addLine(to: Self.point(end, in: size))
-                context.stroke(path, with: .color(.white.opacity(0.72)), lineWidth: 3)
+                context.stroke(
+                    path,
+                    with: .color(VA.Colors.cameraForeground.opacity(VA.Opacity.cameraSkeleton)),
+                    lineWidth: VA.Space.cameraSkeletonStroke
+                )
             }
             for point in frame.joints.values where point.confidence >= 0.35 {
                 let center = Self.point(point, in: size)
-                let rect = CGRect(x: center.x - 4, y: center.y - 4, width: 8, height: 8)
-                context.fill(Path(ellipseIn: rect), with: .color(.white))
+                let radius = VA.Space.cameraJointMarker / 2
+                let rect = CGRect(
+                    x: center.x - radius,
+                    y: center.y - radius,
+                    width: VA.Space.cameraJointMarker,
+                    height: VA.Space.cameraJointMarker
+                )
+                context.fill(Path(ellipseIn: rect), with: .color(VA.Colors.cameraForeground))
             }
         }
         .allowsHitTesting(false)
@@ -554,7 +573,7 @@ private struct FormCheckResultSummary: View {
                 .foregroundStyle(VA.Colors.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
             if !analysis.flags.isEmpty {
-                Text(analysis.flags.map(\.rawValue).joined(separator: " / "))
+                Text(analysis.flags.map(\.promptLabel).joined(separator: " / "))
                     .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -571,19 +590,19 @@ private struct FormCheckUnavailableView: View {
     var body: some View {
         VStack(spacing: VA.Space.md) {
             Image(systemName: "camera.fill")
-                .font(.system(size: 44, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.84))
+                .font(VA.Typography.cameraUnavailableIcon)
+                .foregroundStyle(VA.Colors.cameraForeground.opacity(VA.Opacity.cameraTextPrimary))
             Text(title)
                 .font(VA.Typography.title2)
-                .foregroundStyle(Color.white)
+                .foregroundStyle(VA.Colors.cameraForeground)
             Text(message)
                 .font(VA.Typography.body)
-                .foregroundStyle(Color.white.opacity(0.78))
+                .foregroundStyle(VA.Colors.cameraForeground.opacity(VA.Opacity.cameraTextSecondary))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, VA.Space.xl)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black)
+        .background(VA.Colors.cameraSurface)
     }
 }
 #endif

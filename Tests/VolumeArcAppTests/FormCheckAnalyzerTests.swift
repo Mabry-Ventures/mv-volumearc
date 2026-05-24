@@ -6,7 +6,19 @@ final class FormCheckAnalyzerTests: XCTestCase {
         XCTAssertEqual(FormCheckExercise.infer(exerciseID: "back-squat", name: "Back Squat"), .squat)
         XCTAssertEqual(FormCheckExercise.infer(exerciseID: "barbell-bench-press", name: "Bench Press"), .benchPress)
         XCTAssertEqual(FormCheckExercise.infer(exerciseID: "deadlift", name: "Conventional Deadlift"), .deadlift)
+        XCTAssertNil(FormCheckExercise.infer(exerciseID: "leg-press", name: "Leg Press"))
+        XCTAssertNil(FormCheckExercise.infer(exerciseID: "overhead-press", name: "Overhead Press"))
         XCTAssertNil(FormCheckExercise.infer(exerciseID: "lat-pulldown", name: "Lat Pulldown"))
+    }
+
+    func testAnalyzerReturnsInconclusiveForEmptyFrames() {
+        let analysis = FormCheckAnalyzer(exercise: .squat).analyze(frames: [])
+
+        XCTAssertEqual(analysis.verdict, .inconclusive)
+        XCTAssertEqual(analysis.hapticCode, .inconclusive)
+        XCTAssertEqual(analysis.repCount, 0)
+        XCTAssertTrue(analysis.flags.contains(.lowConfidence))
+        XCTAssertTrue(analysis.flags.contains(.noRepDetected))
     }
 
     func testSquatRepCounterDetectsThreeControlledReps() {
@@ -103,6 +115,7 @@ final class FormCheckAnalyzerTests: XCTestCase {
         joint: FormCheckJointName,
         confidence: Double
     ) -> [FormCheckFrame] {
+        precondition(xValues.count == yValues.count, "xValues and yValues must have equal lengths")
         var frames: [FormCheckFrame] = []
         var timestamp: TimeInterval = 0
         for _ in 0..<repetitions {
