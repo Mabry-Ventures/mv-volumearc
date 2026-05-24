@@ -125,7 +125,7 @@ public struct TrainingProgramDefinition: Sendable, Equatable, Identifiable {
         assignedAt: Date,
         calendar: Calendar = .current
     ) -> ActiveTrainingProgramContext? {
-        guard let firstSession = sessions.first else { return nil }
+        guard sessions.isEmpty == false else { return nil }
 
         let startDay = calendar.startOfDay(for: assignedAt)
         let targetDay = calendar.startOfDay(for: date)

@@ -30,6 +30,7 @@ import WidgetKit
 /// sharding). Phase B uses Apple's `WidgetCenter.shared.getCurrentConfigurations(_:)`
 /// + image-snapshot capture via `swift-snapshot-testing` instead —
 /// no SpringBoard interaction required.
+@MainActor
 final class VolumeArcWidgetUITests: XCTestCase {
 
     override func setUpWithError() throws {

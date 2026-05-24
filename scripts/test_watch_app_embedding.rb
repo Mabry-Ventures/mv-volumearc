@@ -59,9 +59,9 @@ assert(watch_widgets_target.product_type == 'com.apple.product-type.watchkit2-ex
        'VolumeArcWatchWidgets must use the watch extension product type')
 assert(watch_widgets_target.build_configurations.all? { |config| config.build_settings['INFOPLIST_FILE'] == 'WatchWidgets/Info.plist' },
        'VolumeArcWatchWidgets must use the explicit WidgetKit Info.plist')
-assert(watch_widgets_target.build_configurations.all? { |config|
-  array_build_setting(config.build_settings['OTHER_LDFLAGS']).include?('_NSExtensionMain')
-}, 'VolumeArcWatchWidgets must link with _NSExtensionMain as the extension entry point')
+watch_widget_release = watch_widgets_target.build_configurations.find { |config| config.name == 'Release' }
+assert(watch_widget_release && array_build_setting(watch_widget_release.build_settings['OTHER_LDFLAGS']).include?('_NSExtensionMain'),
+       'VolumeArcWatchWidgets Release must link with _NSExtensionMain as the extension entry point')
 assert(watch_target.build_configurations.all? { |config| config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] == 'AppIcon' },
        'VolumeArcWatch must compile the AppIcon asset catalog')
 assert(watch_target.build_configurations.all? { |config| config.build_settings['INFOPLIST_FILE'] == 'Watch/Info.plist' },

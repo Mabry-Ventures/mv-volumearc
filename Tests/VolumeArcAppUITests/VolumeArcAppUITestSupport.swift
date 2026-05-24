@@ -7,6 +7,7 @@ import XCTest
 /// (`VolumeArcAppJourneyTests`). Keeping one definition per flag
 /// combination keeps the tests aligned if we ever rename or add a new
 /// bootstrap flag.
+@MainActor
 enum VolumeArcAppUITestSupport {
     /// Fully-seeded dashboard: onboarding pre-completed, deterministic
     /// fixtures installed. Used by any test whose starting point is the
@@ -226,7 +227,11 @@ enum VolumeArcAppUITestSupport {
 
     /// Internal parser for the compact JSON the probe writes. Public
     /// only so the test target itself can unit-test the matcher.
-    static func telemetryLabel(_ label: String, contains category: String, name: String) -> Bool {
+    nonisolated static func telemetryLabel(
+        _ label: String,
+        contains category: String,
+        name: String
+    ) -> Bool {
         guard let data = label.data(using: .utf8) else { return false }
         guard let raw = try? JSONSerialization.jsonObject(with: data),
               let entries = raw as? [[String: Any]] else {

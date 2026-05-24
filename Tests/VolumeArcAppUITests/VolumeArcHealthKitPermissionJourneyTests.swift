@@ -28,6 +28,7 @@ import XCTest
 /// requires `-SimulatePermissionPrompts 1` which is intentionally NOT
 /// the default for this suite — it's covered separately so the suite
 /// runs hermetically without the system-modal flake risk on Tart VMs.
+@MainActor
 final class VolumeArcHealthKitPermissionJourneyTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -35,13 +36,10 @@ final class VolumeArcHealthKitPermissionJourneyTests: XCTestCase {
 
     /// VOL-164: defensively terminate the host app between test methods.
     override func tearDownWithError() throws {
-        let app = XCUIApplication()
-        VolumeArcAppUITestSupport.attachDebugSnapshot(
-            of: app,
-            named: "tearDown.\(name).accessibility-tree",
-            to: self
-        )
-        VolumeArcAppUITestSupport.defensiveTerminate(app)
+        MainActor.assumeIsolated {
+            let app = XCUIApplication()
+            VolumeArcAppUITestSupport.defensiveTerminate(app)
+        }
     }
 
     /// VOL-109 contract: a fresh user can complete onboarding by tapping

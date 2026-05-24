@@ -15,6 +15,7 @@
 import XCTest
 @testable import VolumeArcUI
 
+@MainActor
 final class VolumeArcPaywallFeatureContractTests: XCTestCase {
     /// The Premium feature list rendered on the paywall must contain
     /// exactly these two items, in this order. If the product team
