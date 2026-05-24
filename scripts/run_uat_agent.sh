@@ -13,7 +13,11 @@ MAX_STEPS="${UAT_AGENT_MAX_STEPS:-5}"
 MODEL="${UAT_AGENT_MODEL:-gpt-5.5}"
 DRY_RUN="${UAT_AGENT_DRY_RUN:-0}"
 FAIL_ON_HIGH="${UAT_AGENT_FAIL_ON_HIGH:-1}"
+CLEAN_DERIVED_DATA="${UAT_AGENT_CLEAN_DERIVED_DATA:-1}"
 
+if [[ "$CLEAN_DERIVED_DATA" = "1" ]]; then
+  rm -rf "$DERIVED_DATA_PATH"
+fi
 mkdir -p "$DERIVED_DATA_PATH" "$RUN_DIR"
 
 if [[ ! -f "$STORIES_FILE" ]]; then
@@ -57,6 +61,7 @@ echo "  stories: $STORIES_FILE"
 echo "  max steps/story: $MAX_STEPS"
 echo "  simulator: $IOS_TEST_DEVICE_NAME"
 echo "  dry run: $DRY_RUN"
+echo "  clean derived data: $CLEAN_DERIVED_DATA"
 
 set +e
 env \

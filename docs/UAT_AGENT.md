@@ -42,6 +42,8 @@ Manual dispatch supports:
 - `max_steps` - max model actions per story, default `5`
 - `fail_on_high` - whether high anomalies fail the workflow, default `1`
 
+The runner cleans its dedicated DerivedData path by default to avoid stale simulator signing artifacts. Set `UAT_AGENT_CLEAN_DERIVED_DATA=0` for faster local reruns when the cache is known-good.
+
 ## Story Contract
 
 `Tests/UATAgentStories/nightly.json` must contain at least five story objects:

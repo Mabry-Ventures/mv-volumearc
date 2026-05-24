@@ -38,7 +38,8 @@ final class VolumeArcExploratoryUATAgentTests: XCTestCase {
         }
 
         let model = environment["UAT_AGENT_MODEL"].flatMap { $0.isEmpty ? nil : $0 } ?? "gpt-5.5"
-        let maxSteps = Int(environment["UAT_AGENT_MAX_STEPS"] ?? "") ?? 5
+        let requestedMaxSteps = Int(environment["UAT_AGENT_MAX_STEPS"] ?? "") ?? 5
+        let maxSteps = max(requestedMaxSteps, 1)
         let client = OpenAIUATDecisionClient(apiKey: apiKey, model: model)
         let stories = try UATStory.load(from: environment)
 
@@ -61,9 +62,11 @@ final class VolumeArcExploratoryUATAgentTests: XCTestCase {
         maxSteps: Int
     ) async -> UATStoryReport {
         let app = VolumeArcAppUITestSupport.makeSeededApp(extra: story.launchArguments)
+        defer { VolumeArcAppUITestSupport.defensiveTerminate(app) }
         app.launch()
 
         var steps: [UATStepReport] = []
+        var didComplete = false
         guard app.wait(for: .runningForeground, timeout: 25) else {
             return UATStoryReport(
                 id: story.id,
@@ -98,7 +101,7 @@ final class VolumeArcExploratoryUATAgentTests: XCTestCase {
                     accessibilityTree: screenTree,
                     screenshotPNG: screenshot.pngRepresentation
                 )
-                let execution = execute(decision: decision, in: app)
+                let execution = await execute(decision: decision, in: app)
                 steps.append(
                     UATStepReport(
                         index: index,
@@ -112,6 +115,7 @@ final class VolumeArcExploratoryUATAgentTests: XCTestCase {
                 )
 
                 if decision.action == "finish" || decision.done == true {
+                    didComplete = true
                     break
                 }
             } catch {
@@ -130,17 +134,16 @@ final class VolumeArcExploratoryUATAgentTests: XCTestCase {
             }
         }
 
-        app.terminate()
         return UATStoryReport(
             id: story.id,
             prompt: story.prompt,
             launchArguments: story.launchArguments,
             steps: steps,
-            completed: steps.last?.action == "finish" || steps.count >= maxSteps
+            completed: didComplete
         )
     }
 
-    private func execute(decision: UATAgentDecision, in app: XCUIApplication) -> String {
+    private func execute(decision: UATAgentDecision, in app: XCUIApplication) async -> String {
         switch decision.action {
         case "tap":
             return executeTap(target: decision.target, in: app)
@@ -152,7 +155,8 @@ final class VolumeArcExploratoryUATAgentTests: XCTestCase {
             return executeSwipe(direction: decision.direction, in: app)
 
         case "wait":
-            Thread.sleep(forTimeInterval: max(1, min(decision.seconds ?? 1, 5)))
+            let seconds = max(1, min(decision.seconds ?? 1, 5))
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
             return "waited"
 
         case "finish":
@@ -195,6 +199,9 @@ final class VolumeArcExploratoryUATAgentTests: XCTestCase {
     ) -> XCUIElement? {
         if let element = resolveElement(target, in: app), element.exists {
             return element
+        }
+        if let target, target.focused != true {
+            return nil
         }
         if app.textFields.firstMatch.exists {
             return app.textFields.firstMatch
@@ -431,7 +438,8 @@ private struct OpenAIUATDecisionClient: Sendable {
 
     Return only one JSON object with these keys:
     action: one of "tap", "typeText", "swipe", "wait", "finish".
-    target: optional object with identifier and/or label.
+    target: optional object with identifier and/or label, or focused: true
+      after the agent has already focused a text field.
     text: optional string for typeText.
     direction: optional "up", "down", "left", or "right" for swipe.
     seconds: optional number from 1 to 5 for wait.
@@ -487,11 +495,13 @@ private struct UATAgentDecision: Decodable {
 private struct UATAgentTarget: Codable {
     let identifier: String?
     let label: String?
+    let focused: Bool?
 
     var description: String {
         [
             identifier.map { "identifier=\($0)" },
             label.map { "label=\($0)" },
+            focused == true ? "focused=true" : nil,
         ]
         .compactMap { $0 }
         .joined(separator: ", ")
@@ -581,11 +591,50 @@ private enum UATAgentError: Error, LocalizedError {
 
 private extension String {
     func firstJSONObjectData() -> Data? {
-        guard let start = firstIndex(of: "{"),
-              let end = lastIndex(of: "}") else {
-            return nil
+        var objectStart: String.Index?
+        var depth = 0
+        var inString = false
+        var isEscaped = false
+        var index = startIndex
+
+        while index < endIndex {
+            let character = self[index]
+            if objectStart == nil {
+                if character == "{" {
+                    objectStart = index
+                    depth = 1
+                }
+                index = self.index(after: index)
+                continue
+            }
+
+            if inString {
+                if isEscaped {
+                    isEscaped = false
+                } else if character == "\\" {
+                    isEscaped = true
+                } else if character == "\"" {
+                    inString = false
+                }
+            } else {
+                switch character {
+                case "\"":
+                    inString = true
+                case "{":
+                    depth += 1
+                case "}":
+                    depth -= 1
+                    if depth == 0, let objectStart {
+                        return String(self[objectStart...index]).data(using: .utf8)
+                    }
+                default:
+                    break
+                }
+            }
+
+            index = self.index(after: index)
         }
-        let slice = self[start...end]
-        return String(slice).data(using: .utf8)
+
+        return nil
     }
 }
