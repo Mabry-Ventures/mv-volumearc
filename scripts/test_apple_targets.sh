@@ -224,6 +224,18 @@ is_channel_disconnect_failure() {
     "$log_path"
 }
 
+# VOL-227 round 4 (2026-05-24): detect the XCTRunner crash/restart
+# pattern that neither the preflight check nor channel-disconnect check
+# catches. When the app under test or simulator AX stack crashes the
+# runner process, xcodebuild logs this marker and resumes later tests,
+# but it still reports the interrupted methods as failures.
+is_xctest_runner_crash_failure() {
+  local log_path="$1"
+  grep -Fq \
+    'Restarting after unexpected exit, crash, or test timeout' \
+    "$log_path"
+}
+
 run_unit_tests_attempt() {
   local attempt="$1"
   local log_path="$DERIVED_DATA_PATH/unit-test-attempt-${attempt}.log"
@@ -256,12 +268,19 @@ set -e
 
 if [ "$first_status" != "0" ]; then
   first_log="$DERIVED_DATA_PATH/unit-test-attempt-1.log"
+  unit_retry_reason=""
 
   if [ -f "$first_log" ] && is_channel_disconnect_failure "$first_log"; then
-    echo "::warning::Unit-test attempt 1 hit a channel-disconnect flake; rebooting simulator + retrying once."
-    # Channel disconnect means the test-runner process died. The sim
-    # state itself may be wedged — shutdown + re-warm to give the
-    # second attempt a clean slate.
+    unit_retry_reason="channel-disconnect flake"
+  elif [ -f "$first_log" ] && is_xctest_runner_crash_failure "$first_log"; then
+    unit_retry_reason="test-runner crash/restart flake"
+  fi
+
+  if [ -n "$unit_retry_reason" ]; then
+    echo "::warning::Unit-test attempt 1 hit a $unit_retry_reason; rebooting simulator + retrying once."
+    # These signatures mean the test-runner process died. The sim state
+    # itself may be wedged — shutdown + re-warm to give the second
+    # attempt a clean slate.
     xcrun simctl shutdown "$IOS_TEST_DEVICE_NAME" 2>/dev/null || true
     sleep 10
     warm_simulator_for_tests
@@ -276,7 +295,7 @@ if [ "$first_status" != "0" ]; then
       if [ "$second_status" = "124" ]; then
         echo "::error::Unit-test attempt 2 also wall-clock-timed-out. The XCTRunner failure mode is now persistent — investigate runner state."
       else
-        echo "::error::Unit-test attempt 2 failed (exit $second_status) after a channel-disconnect retry. Inspect unit-test-attempt-2.log + the xcresult bundle."
+        echo "::error::Unit-test attempt 2 failed (exit $second_status) after a $unit_retry_reason retry. Inspect unit-test-attempt-2.log + the xcresult bundle."
       fi
       exit "$second_status"
     fi
@@ -486,23 +505,6 @@ is_simulator_busy_preflight_failure() {
   local log_path="$1"
   grep -Eq \
     'Application failed preflight checks|SBMainWorkspace.*Busy|Simulator device failed to launch .*xctrunner' \
-    "$log_path"
-}
-
-# VOL-227 round 4 (2026-05-24): detect the mid-test XCTRunner crash
-# pattern that the preflight check cannot catch. When the app under test
-# crashes (or the AX stack crashes the runner process) xcodebuild logs
-# "Restarting after unexpected exit, crash, or test timeout" and tries
-# to resume — but subsequent tests in the same restart window also fail
-# with no output. Retrying the whole shard after a fresh AX-daemon kill
-# recovers reliably.
-#
-# Distinct from `is_channel_disconnect_failure` (unit-test signal).
-# Mirrors the same retry logic already in place for preflight failures.
-is_xctest_runner_crash_failure() {
-  local log_path="$1"
-  grep -Fq \
-    'Restarting after unexpected exit, crash, or test timeout' \
     "$log_path"
 }
 
