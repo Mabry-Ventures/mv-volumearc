@@ -280,6 +280,7 @@ describe("volumearc-ai-relay App Attest transition", () => {
     const userMessage = upstreamBody.contents.at(-1).parts[0].text as string;
     expect(systemPrompt).toContain("Data-driven");
     expect(systemPrompt).toContain("cite at least one specific number");
+    expect(systemPrompt).toContain("do not use the words push, PR, or go heavier");
     expect(userMessage).toContain("[VAC:tmpl] intent=recovery style=analytical");
     expect(userMessage).toContain("HRV delta");
     expect(userMessage).toContain("Sleep: 49.0h");
