@@ -63,7 +63,6 @@ run_with_wallclock_timeout() {
   set +e
   wait "$cmd_pid" 2>/dev/null
   local status=$?
-  set -e
 
   kill "$watchdog_pid" 2>/dev/null || true
   wait "$watchdog_pid" 2>/dev/null || true
@@ -248,7 +247,6 @@ run_unit_tests_attempt() {
     "Unit tests attempt $attempt" \
     unit_test_pipeline "$log_path"
   local status=$?
-  set -e
 
   if [ "$status" = "124" ]; then
     echo "::error::Unit-test attempt $attempt wall-clock timeout fired. See unit-test-attempt-${attempt}.log."
@@ -551,7 +549,6 @@ run_ui_shard_attempt() {
     "UI shard '$shard' attempt $attempt" \
     ui_shard_pipeline "$shard" "$log_path" "$shard_xcresult"
   local status=$?
-  set -e
 
   if [ "$status" = "124" ]; then
     echo "::error::UI shard '$shard' attempt $attempt hit ${UI_TEST_WALL_TIMEOUT}s wall-clock timeout (xcodebuild was likely stuck before any test method ran — see ui-test-${shard}-attempt-${attempt}.log)."
@@ -603,10 +600,12 @@ run_ui_shard() {
     local second_status=$?
     set -e
     echo "::endgroup::"
+    set +e
     return "$second_status"
   fi
 
   echo "::endgroup::"
+  set +e
   return "$first_status"
 }
 
