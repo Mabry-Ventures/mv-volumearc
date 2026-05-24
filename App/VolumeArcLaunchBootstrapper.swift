@@ -17,7 +17,8 @@ enum VolumeArcLaunchBootstrapper {
         isUITestMode: Bool,
         skipOnboarding: Bool,
         seedFixtures: Bool,
-        isPerfTestMode: Bool = false
+        isPerfTestMode: Bool = false,
+        strictPrivacyMode: Bool = false
     ) throws {
         // VOL-99: perf mode implies a deterministic seed, skipped
         // onboarding, and UI test mode (for accessibility identifiers
@@ -26,6 +27,7 @@ enum VolumeArcLaunchBootstrapper {
         let resolvedUITestMode = isUITestMode || isPerfTestMode
         let resolvedSkipOnboarding = skipOnboarding || isPerfTestMode
         let resolvedSeedFixtures = seedFixtures || isPerfTestMode
+        let resolvedStrictPrivacyMode = strictPrivacyMode && resolvedUITestMode
 
         guard resolvedUITestMode || resolvedSkipOnboarding || resolvedSeedFixtures else { return }
 
@@ -43,9 +45,12 @@ enum VolumeArcLaunchBootstrapper {
         }
 
         if resolvedSkipOnboarding || resolvedSeedFixtures {
+            let deterministicProfile = deterministicUserProfile(
+                privacyMode: resolvedStrictPrivacyMode ? .strict : .standard
+            )
             try seedBaseState(
                 into: container,
-                profile: resolvedSeedFixtures ? deterministicUserProfile() : VolumeArcProductDefaults.userProfile,
+                profile: resolvedSeedFixtures ? deterministicProfile : VolumeArcProductDefaults.userProfile,
                 onboardingCompleted: resolvedSkipOnboarding
             )
         }
@@ -232,11 +237,11 @@ enum VolumeArcLaunchBootstrapper {
         }
     }
 
-    private static func deterministicUserProfile() -> UserProfileDefaults {
+    private static func deterministicUserProfile(privacyMode: PrivacyMode = .standard) -> UserProfileDefaults {
         UserProfileDefaults(
             name: "Taylor",
             coachingStyle: .analytical,
-            privacyMode: .standard,
+            privacyMode: privacyMode,
             advancementLevel: .intermediate,
             availableEquipment: [.barbell, .dumbbell, .machine, .bodyweight],
             preferredRepRangeLower: 4,

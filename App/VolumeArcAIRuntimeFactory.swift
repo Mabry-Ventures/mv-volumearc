@@ -78,25 +78,21 @@ enum VolumeArcAIRuntimeFactory {
         }
         #endif
 
-        // VOL-162: `testCoachFirstTokenLatency` (perf suite) needs a
-        // deterministic, hermetic provider — `LocalHeuristicAICoachProvider`
-        // streams one word every 30ms with no network or model
-        // dependency. Without this short-circuit the factory would
-        // install `FoundationModelCoachProvider`, which on the
-        // simulator may not respond at all (the FoundationModels
-        // framework has limited simulator support on Xcode 26), so
-        // the streamed `coach.firstResponse` accessibility identifier
-        // never appears and the `measure` block records the 10s
-        // `waitForExistence` ceiling on every iteration (5
-        // iterations × ~10.3s observed in the failing CI run, mean
-        // 10312ms vs the 800ms budget).
+        // VOL-162 / VOL-227: deterministic UI and perf launches need a
+        // hermetic provider. `LocalHeuristicAICoachProvider` streams one
+        // word every 30ms with no network or model dependency. Without
+        // this short-circuit the factory can install
+        // `FoundationModelCoachProvider`, which on the simulator may not
+        // respond at all (the FoundationModels framework has limited
+        // simulator support on Xcode 26), so the streamed
+        // `coach.firstResponse` accessibility identifier never appears.
         //
-        // `-PerfTestMode 1` is the launch flag the perf tests already
-        // set, and `VolumeArcApp.init` mirrors it onto
-        // `VolumeArcRuntimeFlags.isPerformanceTestMode` so reading
-        // the runtime flag here keeps call sites free of perf-aware
-        // plumbing.
-        if VolumeArcRuntimeFlags.isPerformanceTestMode {
+        // `-UITestMode 1` and `-PerfTestMode 1` are mirrored onto
+        // `VolumeArcRuntimeFlags` in `VolumeArcApp.init`, keeping call
+        // sites free of test-aware plumbing. The chaos relay branch above
+        // remains first so the fallback journey still exercises the
+        // production fallback wrapper.
+        if VolumeArcRuntimeFlags.isDeterministicMode || VolumeArcRuntimeFlags.isPerformanceTestMode {
             return LocalHeuristicAICoachProvider()
         }
 
