@@ -82,14 +82,32 @@ normalize_lower() {
 }
 
 count_sentences() {
-    # Approximate sentence count. Splits on ., !, ? followed by space or EOL.
-    # Filters empty fragments. Good enough for a hard upper bound.
+    # Approximate sentence count without treating decimal points in numbers
+    # (for example, `RPE 7.6`) as sentence boundaries.
     local text="$1"
     printf '%s' "$text" \
         | tr -d '\r' \
-        | awk 'BEGIN { RS="[.!?]+"; n=0 }
-               { gsub(/^[ \t\n]+|[ \t\n]+$/, ""); if (length($0) > 0) n++ }
-               END { print n }'
+        | LC_ALL=C awk '
+            {
+                for (i = 1; i <= length($0); i++) {
+                    char = substr($0, i, 1)
+                    prev = i > 1 ? substr($0, i - 1, 1) : ""
+                    next_char = i < length($0) ? substr($0, i + 1, 1) : ""
+                    if (char !~ /[[:space:]]/) {
+                        segment_has_text = 1
+                    }
+                    if (char ~ /[.!?]/ && !(char == "." && prev ~ /[0-9]/ && next_char ~ /[0-9]/)) {
+                        if (segment_has_text) {
+                            n++
+                            segment_has_text = 0
+                        }
+                    }
+                }
+            }
+            END {
+                if (segment_has_text) n++
+                print n + 0
+            }'
 }
 
 # Run every expectedAssertion against the response text.
@@ -298,9 +316,8 @@ for fixture_path in "${fixture_files[@]}"; do
     # Concatenate all `data: {"text": "..."}` chunks into a single response.
     response_text=$(grep -E '^data: ' "$raw_stream_path" \
         | sed -E 's/^data: //' \
-        | jq -r '.text // empty' 2>/dev/null \
+        | jq -rj '.text // empty' 2>/dev/null \
         | tr -d '\r' \
-        | tr '\n' ' ' \
         | sed -E 's/  +/ /g')
     printf '%s\n' "$response_text" > "$response_path"
 

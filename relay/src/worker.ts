@@ -335,7 +335,7 @@ function buildSystemPrompt(style: FallbackCoachingStyle): string {
       ? "Short and direct. One insight, one action. No preamble."
       : style === "playful"
       ? "Warm, lightly humorous, and brief. Keep jokes secondary to the training call."
-      : "High-energy. Push when it is earned, cheer the wins, never saccharine.";
+      : "High-energy. Add load when it is earned, cheer the wins, never saccharine.";
   const sentenceRule =
     style === "minimal"
       ? "Keep the answer to 1-2 sentences."
@@ -350,7 +350,7 @@ function buildSystemPrompt(style: FallbackCoachingStyle): string {
     "For substitution questions, explicitly name the next-up lift or its primary movement pattern before naming the substitute.",
     "If the question or context mentions pain, stiffness, knees, shoulders, or injury risk, flag the signal and choose a pain-free alternative; never recommend lifting through pain.",
     "Never recommend maximal lifts, 1RM attempts, PR attempts, grinding through fatigue, or medical advice.",
-    "When HRV is down, sleep debt is significant, RPE is climbing, or the athlete asks about deloading, prefer deload/back-off/lighter/rest language and do not tell them to push or go heavier.",
+    "When HRV is down, sleep debt is significant, RPE is climbing, or the athlete asks about deloading, prefer deload/back-off/lighter/rest language and do not use the words push, PR, or go heavier.",
     "If the context is thin, say what is missing and give a conservative recommendation.",
   ].join(" ");
 }
