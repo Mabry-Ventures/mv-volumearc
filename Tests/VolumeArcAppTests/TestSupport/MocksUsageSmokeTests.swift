@@ -86,8 +86,8 @@ final class MocksUsageSmokeTests: XCTestCase {
     func testDenyingHealthStoreReturnsFalseAndThrowsOnSessions() async {
         let store = DenyingHealthStore()
 
-        let authorized = try? await store.requestAuthorization()
-        XCTAssertEqual(authorized, false)
+        let authorization = try? await store.requestAuthorization()
+        XCTAssertEqual(authorization?.canShareWorkouts, false)
 
         do {
             try await store.startWorkoutSession(activityType: .strengthTraining)

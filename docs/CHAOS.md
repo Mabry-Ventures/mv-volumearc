@@ -1,6 +1,6 @@
 # Chaos / fault-injection UAT (VOL-168)
 
-> **Status:** Phase 1 (HealthKit) shipped 2026-05-11. Phase 2 (WatchConnectivity, StoreKit, BGTaskScheduler, AIRelay) tracked under VOL-168.
+> **Status:** Phase 1 (HealthKit) shipped 2026-05-11. AIRelay 5xx fallback shipped under VOL-141/VOL-168. Remaining Phase 2 (WatchConnectivity, StoreKit, BGTaskScheduler, broader AIRelay faults) tracked under VOL-168.
 
 VolumeArc's XCUITest journeys cover the happy path. Most reported "weird bugs we can't repro" happen on the unhappy paths — HealthKit denial mid-onboarding, BLE drop during a watch workout, a purchase that got cancelled by Apple's fraud-prevention layer. Hardware-paired regression devices catch some of this (VOL-94's canary suite), but those tests are slow and hardware-blocked.
 
@@ -27,6 +27,7 @@ The implementation files themselves (`ChaosHealthStore.swift`, etc.) DO ship in 
 | Flag | Subsystem | Effect | Test |
 |---|---|---|---|
 | `-CHAOS_HEALTH_AUTH_DENIED` | HealthKit | Next `requestAuthorization` throws `ChaosError(.authorizationDenied)`. The dashboard model's `auth_failed` telemetry branch fires; the Profile health row stays in "Connect" state. | `VolumeArcChaosJourneyTests.testHealthAuthDenialIsHandledGracefully` |
+| `-CHAOS_AIRELAY_5XX` | AIRelay | Coach primary provider throws a deterministic 503 before yielding any token. `FallbackCoachProvider` switches to the local heuristic path and emits `coach.fallback_used`. | `VolumeArcCoachJourneyTests.testCoachRelay5xxFallsBackToLocalHeuristic` |
 
 ## Phase 2+ roadmap
 

@@ -1,0 +1,14 @@
+{
+  "id": "program-deload-starting-strength",
+  "intent": "deload",
+  "question": "I missed reps twice on squats. Do I deload?",
+  "contextBlock": "## Training context\n- Athlete: Sam (beginner)\n- Readiness: 60/100 — Fatigue is starting to accumulate.\n- Next up: Back Squat at 185lb x 5\n- Last 7 days: 3 sessions, avg RPE 8.8\n- Last session: 3 sets, 2775lb total, RPE 9.3\n\n## Active program\n- Program: Starting Strength by Mark Rippetoe\n- Position: Week 5 / 12, Day 1 / 3\n- Session: Starting Strength A (Squat, press, deadlift)\n- Today's prescription: Squat 3x5, bench press 3x5, deadlift 1x5\n- Advancement: Add 5 lb to upper-body lifts and 10 lb to squat/deadlift when all prescribed reps are completed.",
+  "style": "minimal",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "mustContainNumericContext": true,
+    "mustMentionReadinessOrRPE": true,
+    "toneHint": "program-aware-deload"
+  },
+  "notes": "VOL-144: Program-aware deload ask for a novice linear progression."
+}

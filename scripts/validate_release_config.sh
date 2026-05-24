@@ -144,6 +144,16 @@ if ! grep -F 'static let containerIdentifier: String = "iCloud.com.mabryventures
   exit 1
 fi
 
+# VOL-233: the watch app starts an `HKWorkoutSession` with
+# `HKLiveWorkoutDataSource`. Without workout-processing background mode,
+# live capture can pass simulator tests but stop behaving correctly on
+# a real watch as soon as the app backgrounds during an active session.
+if ! plutil -extract WKBackgroundModes xml1 -o - Watch/Info.plist 2>/dev/null |
+  grep -q '<string>workout-processing</string>'; then
+  echo "FAIL: Watch/Info.plist must declare WKBackgroundModes = workout-processing for live HealthKit workouts" >&2
+  exit 1
+fi
+
 # VOL-177: --no-build exits here. Everything above is static file/text
 # assertions that match what pre-commit can afford to run. Everything
 # below shells to xcodebuild (5-10s per call) and is CI-only.
@@ -244,7 +254,7 @@ required_build_settings=(
   "PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc"
   "CODE_SIGN_ENTITLEMENTS = App/VolumeArc.Release.entitlements"
   "INFOPLIST_FILE = App/Info.plist"
-  "INFOPLIST_KEY_NSHealthShareUsageDescription = VolumeArc reads your completed workouts, heart-rate variability, and sleep from Apple Health to show your training history, calculate readiness, and let the AI coach reference your recovery trend (HRV vs baseline, sleep debt, weekly strength load)."
+  "INFOPLIST_KEY_NSHealthShareUsageDescription = VolumeArc reads your completed workouts, heart-rate variability, sleep, Workout Effort, wrist temperature, and respiratory rate from Apple Health to show your training history, calculate readiness, and let the AI coach reference your recovery trend (HRV vs baseline, sleep debt, weekly strength load, Vitals trends, and Training Load)."
   "INFOPLIST_KEY_NSHealthUpdateUsageDescription = VolumeArc writes completed workouts so your training history stays in sync with Apple Health."
   "INFOPLIST_KEY_NSMicrophoneUsageDescription = VolumeArc uses the microphone for voice coaching requests and voice workout logging."
   "INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = VolumeArc uses speech recognition to understand live coaching requests and voice workout notes."

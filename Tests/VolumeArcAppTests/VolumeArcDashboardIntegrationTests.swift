@@ -17,7 +17,7 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
     private var trainingPlanRepository: SwiftDataTrainingPlanRepository!
 
     override func setUp() async throws {
-        let schema = Schema(VolumeArcSchemaV4.models)
+        let schema = Schema(VolumeArcSchemaV5.models)
         let config = ModelConfiguration(
             "IntegrationTest-\(UUID().uuidString)",
             schema: schema,
@@ -321,6 +321,74 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertFalse(context.contains("Recent coaching notes"), "Strict mode should strip stored coaching memories")
     }
 
+    // VOL-124: strict mode must redact PII from the free-text QUESTION on
+    // the egress path, not just the structured context block. Before the
+    // fix, `askCoach` passed the raw prompt straight to the provider, so a
+    // user who typed an email/phone into the coach box leaked it to the
+    // relay even in strict mode — contradicting the privacy policy.
+    func testStrictPrivacyModeRedactsCoachQuestion() async throws {
+        let store = CapturedContextStore()
+        let provider = CapturingCoachProvider(store: store)
+        let model = makeDashboardModel(aiProvider: provider)
+
+        try userProfileRepository.upsertProfile(
+            UserProfileDefaults(
+                name: "Jane Lifter",
+                coachingStyle: .analytical,
+                privacyMode: .strict,
+                advancementLevel: .advanced,
+                availableEquipment: [.barbell],
+                preferredRepRangeLower: 3,
+                preferredRepRangeUpper: 6,
+                sessionTimeBudgetMinutes: 60,
+                weeklyTrainingDays: 4
+            )
+        )
+        try userProfileRepository.markOnboardingComplete()
+
+        await model.refresh()
+        await model.askCoach("My email is jane@example.com and my phone is 615-555-0142 — should I deload?")
+
+        let capturedPrompt = await store.getPrompt()
+        let outbound = try XCTUnwrap(capturedPrompt)
+        XCTAssertFalse(outbound.contains("jane@example.com"), "Strict mode must redact the email from the outbound question")
+        XCTAssertFalse(outbound.contains("615-555-0142"), "Strict mode must redact the phone number from the outbound question")
+        XCTAssertTrue(outbound.contains(PromptPrivacyRedactor.redactionMarker), "Strict mode should leave the redaction marker in place")
+        XCTAssertTrue(outbound.lowercased().contains("deload"), "Coaching-relevant text must survive redaction")
+    }
+
+    // VOL-124: the default (standard) mode is a no-op for question
+    // redaction — personalization is intentional there, and the privacy
+    // policy discloses it. This pins that we don't over-redact the default.
+    func testStandardPrivacyModePreservesCoachQuestion() async throws {
+        let store = CapturedContextStore()
+        let provider = CapturingCoachProvider(store: store)
+        let model = makeDashboardModel(aiProvider: provider)
+
+        try userProfileRepository.upsertProfile(
+            UserProfileDefaults(
+                name: "Jane Lifter",
+                coachingStyle: .analytical,
+                privacyMode: .standard,
+                advancementLevel: .advanced,
+                availableEquipment: [.barbell],
+                preferredRepRangeLower: 3,
+                preferredRepRangeUpper: 6,
+                sessionTimeBudgetMinutes: 60,
+                weeklyTrainingDays: 4
+            )
+        )
+        try userProfileRepository.markOnboardingComplete()
+
+        await model.refresh()
+        await model.askCoach("My email is jane@example.com — should I deload?")
+
+        let capturedPrompt = await store.getPrompt()
+        let outbound = try XCTUnwrap(capturedPrompt)
+        XCTAssertTrue(outbound.contains("jane@example.com"), "Standard mode should not redact the question")
+        XCTAssertFalse(outbound.contains(PromptPrivacyRedactor.redactionMarker), "Standard mode should leave no redaction marker")
+    }
+
     // MARK: - Coach memory
 
     func testCoachMemoryAppendAndProject() throws {
@@ -333,6 +401,19 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertEqual(memory.entries.count, 1)
         XCTAssertEqual(memory.entries.first?.theme, "squat")
         XCTAssertTrue(memory.entries.first?.summary.contains("squat") ?? false)
+    }
+
+    func testManualCoachMemorySaveRefreshesPublishedMemory() async {
+        let model = makeDashboardModel()
+        let saved = await model.appendCoachMemory(
+            content: "Keep deadlift cues focused on wedge and patience.",
+            theme: "deadlift"
+        )
+
+        XCTAssertTrue(saved)
+        XCTAssertEqual(model.coachMemory.entries.count, 1)
+        XCTAssertEqual(model.coachMemory.entries.first?.theme, "deadlift")
+        XCTAssertTrue(model.coachMemory.entries.first?.summary.contains("wedge") ?? false)
     }
 
     // MARK: - Training plan
@@ -385,7 +466,9 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
     private func makeDashboardModel(
         aiProvider: any AICoachProvider = LocalHeuristicAICoachProvider(),
         recoveryReader: any RecoveryReader = UnavailableRecoveryReader(),
-        telemetrySink: any TelemetrySink = InMemoryTelemetrySink()
+        telemetrySink: any TelemetrySink = InMemoryTelemetrySink(),
+        watchVoiceSettingsStore: any WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore(),
+        watchConnectivityCoordinator: WatchConnectivityCoordinator? = nil
     ) -> WorkoutDashboardModel {
         WorkoutDashboardModel(
             aiProvider: aiProvider,
@@ -409,7 +492,9 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
             voiceCoach: LiveVoiceCoachOrchestrator(
                 transport: AIRelayVoiceTransport(provider: aiProvider)
             ),
-            recoveryReader: recoveryReader
+            recoveryReader: recoveryReader,
+            watchVoiceSettingsStore: watchVoiceSettingsStore,
+            watchConnectivityCoordinator: watchConnectivityCoordinator
         )
     }
 
@@ -436,6 +521,189 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
             ["readiness.opened", "volume.opened", "frequency.opened"],
             "Signals telemetry event names should match the journey catalog rows verbatim"
         )
+    }
+
+    func testRecordWorkoutDetailOpenedEmitsCatalogEventWithSessionMetadata() throws {
+        let telemetry = InMemoryTelemetrySink()
+        let model = makeDashboardModel(telemetrySink: telemetry)
+        let session = RecentSession(
+            date: Date(timeIntervalSince1970: 1_720_000_000),
+            durationMinutes: 52,
+            exerciseIDs: ["back-squat", "bench-press"],
+            totalVolumeLoad: 12_345,
+            averageRPE: 7.5,
+            completedSetCount: 9
+        )
+
+        model.recordWorkoutDetailOpened(session: session)
+
+        let event = try XCTUnwrap(
+            telemetry.currentEvents.first { $0.category == "workout" && $0.name == "detail.opened" }
+        )
+        XCTAssertEqual(event.severity, .info)
+        XCTAssertEqual(event.metadata["sets"], "9")
+        XCTAssertEqual(event.metadata["durationMinutes"], "52")
+        XCTAssertEqual(event.metadata["volumeLoad"], "12345")
+    }
+
+    func testHandleWatchVoiceTogglePayloadPersistsMirroredSetting() async throws {
+        let settings = DashboardTestWatchVoiceSettingsStore(enabled: true)
+        let model = makeDashboardModel(watchVoiceSettingsStore: settings)
+        let payload = WatchPayload(
+            kind: .voiceCoachToggle,
+            workoutID: "voice-toggle",
+            body: WatchVoiceCoach.encodeSettingsPayload(isEnabled: false)
+        )
+
+        await model.handleWatchPayload(payload)
+
+        let enabled = await settings.isWatchVoiceEnabled()
+        XCTAssertFalse(enabled)
+    }
+
+    func testHandleWatchFormCheckStartAndStopDriveRemoteCaptureState() async throws {
+        let model = makeDashboardModel()
+        let request = WatchFormCheckStartPayload(
+            sessionID: "form-session",
+            exerciseID: FormCheckExercise.squat.rawValue,
+            exerciseName: "Back Squat",
+            setNumber: 1
+        )
+
+        await model.handleWatchPayload(
+            WatchPayload(
+                kind: .formCheckStart,
+                workoutID: "watch",
+                body: WatchFormCheckStartPayload.encode(request)
+            )
+        )
+
+        XCTAssertEqual(model.activeWatchFormCheckRequest, request)
+        XCTAssertNil(model.watchFormCheckStopToken)
+
+        await model.handleWatchPayload(
+            WatchPayload(
+                kind: .formCheckStop,
+                workoutID: "watch",
+                body: WatchFormCheckStopPayload.encode(WatchFormCheckStopPayload(sessionID: request.sessionID))
+            )
+        )
+
+        XCTAssertNotNil(model.watchFormCheckStopToken)
+    }
+
+    func testCompleteWatchFormCheckSendsResultPayloadToWatch() async throws {
+        let transport = RecordingDashboardWatchTransport(reachable: true)
+        let coordinator = WatchConnectivityCoordinator(
+            transport: transport,
+            payloadStore: DashboardInMemoryPendingPayloadStore()
+        )
+        let model = makeDashboardModel(watchConnectivityCoordinator: coordinator)
+        let request = WatchFormCheckStartPayload(
+            sessionID: "form-session",
+            exerciseID: FormCheckExercise.squat.rawValue,
+            exerciseName: "Back Squat",
+            setNumber: 1
+        )
+        let analysis = FormCheckAnalysis(
+            exercise: .squat,
+            capturedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            duration: 18,
+            frameCount: 120,
+            poseFrameCount: 120,
+            averageConfidence: 0.92,
+            reps: [],
+            maxLateralDrift: 0.02,
+            flags: [],
+            verdict: .solid,
+            hapticCode: .solid,
+            cueText: "Clean reps."
+        )
+
+        await model.handleWatchPayload(
+            WatchPayload(
+                kind: .formCheckStart,
+                workoutID: "watch",
+                body: WatchFormCheckStartPayload.encode(request)
+            )
+        )
+        await model.completeWatchFormCheck(analysis, sessionID: "form-session")
+
+        XCTAssertNil(model.activeWatchFormCheckRequest)
+        XCTAssertNil(model.watchFormCheckStopToken)
+        let sent = await transport.sent
+        let payload = try XCTUnwrap(sent.first { $0.kind == .formCheckResult })
+        let result = try XCTUnwrap(WatchFormCheckResultPayload.decode(from: payload.body))
+        XCTAssertEqual(result.sessionID, "form-session")
+        XCTAssertEqual(result.verdict, .solid)
+        XCTAssertEqual(result.cueText, "Clean reps.")
+    }
+
+    func testDismissWatchFormCheckSendsStoppedPayloadToWatch() async throws {
+        let transport = RecordingDashboardWatchTransport(reachable: true)
+        let coordinator = WatchConnectivityCoordinator(
+            transport: transport,
+            payloadStore: DashboardInMemoryPendingPayloadStore()
+        )
+        let model = makeDashboardModel(watchConnectivityCoordinator: coordinator)
+        let request = WatchFormCheckStartPayload(
+            sessionID: "form-dismissed",
+            exerciseID: FormCheckExercise.squat.rawValue,
+            exerciseName: "Back Squat",
+            setNumber: 1
+        )
+
+        await model.handleWatchPayload(
+            WatchPayload(
+                kind: .formCheckStart,
+                workoutID: "watch",
+                body: WatchFormCheckStartPayload.encode(request)
+            )
+        )
+        await model.dismissWatchFormCheckRequest(sessionID: request.sessionID)
+
+        XCTAssertNil(model.activeWatchFormCheckRequest)
+        XCTAssertNil(model.watchFormCheckStopToken)
+        let sent = await transport.sent
+        let payload = try XCTUnwrap(sent.first { $0.kind == .formCheckStopped })
+        let stopped = try XCTUnwrap(WatchFormCheckStoppedPayload.decode(from: payload.body))
+        XCTAssertEqual(stopped.sessionID, request.sessionID)
+        XCTAssertEqual(stopped.reason, .userDismissed)
+    }
+
+    func testRejectWatchFormCheckSendsUnavailableStoppedPayloadToWatch() async throws {
+        let transport = RecordingDashboardWatchTransport(reachable: true)
+        let coordinator = WatchConnectivityCoordinator(
+            transport: transport,
+            payloadStore: DashboardInMemoryPendingPayloadStore()
+        )
+        let model = makeDashboardModel(watchConnectivityCoordinator: coordinator)
+        let request = WatchFormCheckStartPayload(
+            sessionID: "form-unavailable",
+            exerciseID: "unsupported-lift",
+            exerciseName: "Unsupported Lift",
+            setNumber: 1
+        )
+
+        await model.handleWatchPayload(
+            WatchPayload(
+                kind: .formCheckStart,
+                workoutID: "watch",
+                body: WatchFormCheckStartPayload.encode(request)
+            )
+        )
+        await model.rejectWatchFormCheckRequest(
+            sessionID: request.sessionID,
+            message: "This lift is not supported for camera form check yet."
+        )
+
+        XCTAssertNil(model.activeWatchFormCheckRequest)
+        XCTAssertNil(model.watchFormCheckStopToken)
+        let sent = await transport.sent
+        let payload = try XCTUnwrap(sent.first { $0.kind == .formCheckStopped })
+        let stopped = try XCTUnwrap(WatchFormCheckStoppedPayload.decode(from: payload.body))
+        XCTAssertEqual(stopped.sessionID, request.sessionID)
+        XCTAssertEqual(stopped.reason, .unavailable)
     }
 
     // MARK: - VOL-181 recovery wiring
@@ -527,8 +795,13 @@ private struct FixedRecoveryReader: RecoveryReader {
 
 private actor CapturedContextStore {
     private var context: String?
+    private var prompt: String?
     func set(_ value: String) { context = value }
     func get() -> String? { context }
+    // VOL-124: also capture the outbound free-text prompt so tests can
+    // assert strict-mode question redaction on the relay egress path.
+    func setPrompt(_ value: String) { prompt = value }
+    func getPrompt() -> String? { prompt }
 }
 
 private struct CapturingCoachProvider: AICoachProvider, Sendable {
@@ -536,7 +809,61 @@ private struct CapturingCoachProvider: AICoachProvider, Sendable {
 
     func coachResponse(for prompt: String, context: String) async throws -> String {
         await store.set(context)
+        await store.setPrompt(prompt)
         return "Captured"
+    }
+}
+
+private actor DashboardTestWatchVoiceSettingsStore: WatchVoiceSettingsStore {
+    private var enabled: Bool
+
+    init(enabled: Bool) {
+        self.enabled = enabled
+    }
+
+    func isWatchVoiceEnabled() async -> Bool {
+        enabled
+    }
+
+    func setWatchVoiceEnabled(_ enabled: Bool) async {
+        self.enabled = enabled
+    }
+}
+
+private actor DashboardInMemoryPendingPayloadStore: WatchPendingPayloadStore {
+    private var payloads: [WatchPayload] = []
+
+    func enqueue(_ payload: WatchPayload) async {
+        payloads.append(payload)
+    }
+
+    func dequeueAll() async -> [WatchPayload] {
+        defer { payloads.removeAll() }
+        return payloads
+    }
+
+    func count() async -> Int {
+        payloads.count
+    }
+}
+
+private actor RecordingDashboardWatchTransport: WatchSessionTransport {
+    private(set) var sent: [WatchPayload] = []
+    private let reachable: Bool
+
+    init(reachable: Bool) {
+        self.reachable = reachable
+    }
+
+    func activate() async {}
+
+    func isReachable() async -> Bool {
+        reachable
+    }
+
+    func send(_ payload: WatchPayload) async throws {
+        guard reachable else { throw WatchTransportError.notReachable }
+        sent.append(payload)
     }
 }
 #endif

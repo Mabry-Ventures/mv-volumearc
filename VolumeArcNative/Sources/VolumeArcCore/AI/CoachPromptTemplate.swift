@@ -270,6 +270,8 @@ public struct CoachContext: Sendable {
     public let averageRPE: Double
     public let lastSessionSummary: String?
     public let recentMemories: [String]
+    public let program: ActiveTrainingProgramContext?
+    public let formCheck: FormCheckAnalysis?
 
     /// VOL-145 Phase 1A: HealthKit-derived recovery signals. Optional
     /// so the prompt-block surface stays clean when the user hasn't
@@ -289,6 +291,8 @@ public struct CoachContext: Sendable {
         averageRPE: Double = 0,
         lastSessionSummary: String? = nil,
         recentMemories: [String] = [],
+        program: ActiveTrainingProgramContext? = nil,
+        formCheck: FormCheckAnalysis? = nil,
         recovery: RecoveryContext? = nil
     ) {
         self.athleteName = athleteName
@@ -301,6 +305,8 @@ public struct CoachContext: Sendable {
         self.averageRPE = averageRPE
         self.lastSessionSummary = lastSessionSummary
         self.recentMemories = recentMemories
+        self.program = program
+        self.formCheck = formCheck
         self.recovery = recovery
     }
 
@@ -329,6 +335,16 @@ public struct CoachContext: Sendable {
             if let lastSessionSummary {
                 lines.append("- Last session: \(lastSessionSummary)")
             }
+        }
+
+        if let program {
+            lines.append("")
+            lines.append(program.promptFragment)
+        }
+
+        if let formCheck {
+            lines.append("")
+            lines.append(formCheck.promptFragment)
         }
 
         // VOL-145 Phase 1A: append the HK-derived recovery section

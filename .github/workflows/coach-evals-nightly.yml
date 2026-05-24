@@ -160,6 +160,38 @@ jobs:
           total=$(jq -r '.total' "$summary")
           passed=$(jq -r '.passed' "$summary")
           failed=$(jq -r '.failed' "$summary")
+          fixtures=$(jq -c '.fixtures // []' "$summary")
+          axes=$(jq -c '
+            def summarize($field):
+              sort_by(.[$field] // "unknown")
+              | group_by(.[$field] // "unknown")
+              | map({
+                  label: ((.[0][$field] // "unknown") | tostring),
+                  total: length,
+                  passed: (map(select(.verdict == "PASS")) | length),
+                  failed: (map(select(.verdict != "PASS")) | length)
+                });
+
+            (.fixtures // []) as $fixtures
+            | {
+                readiness: (
+                  $fixtures
+                  | map(. + {
+                      readinessBucket: (
+                        if .readiness == null then "unknown"
+                        elif .readiness < 60 then "<60"
+                        elif .readiness < 75 then "60-74"
+                        elif .readiness < 85 then "75-84"
+                        else "85+"
+                        end
+                      )
+                    })
+                  | summarize("readinessBucket")
+                ),
+                intent: ($fixtures | summarize("intent")),
+                style: ($fixtures | summarize("style"))
+              }
+          ' "$summary")
           echo "Eval results: $passed/$total passed, $failed failed"
 
           # Append to docs/coach-eval-trend.json (parallel to the
@@ -179,12 +211,16 @@ jobs:
             --argjson total "$total" \
             --argjson passed "$passed" \
             --argjson failed "$failed" \
-            '{timestamp: $ts, sha: $sha, run_id: $run_id, total: $total, passed: $passed, failed: $failed}')
+            --argjson axes "$axes" \
+            --argjson fixtures "$fixtures" \
+            '{timestamp: $ts, sha: $sha, run_id: $run_id, total: $total, passed: $passed, failed: $failed, axes: $axes, fixtures: $fixtures}')
 
           # Append while preserving prior records.
           tmp=$(mktemp)
           jq --argjson r "$record" '.records += [$r]' "$trend_file" > "$tmp"
           mv "$tmp" "$trend_file"
+          mkdir -p marketing/src/data
+          cp "$trend_file" marketing/src/data/coach-eval-trend.json
 
           # Re-fail the job if any fixture failed. The trend record
           # captures the result regardless.
@@ -211,14 +247,16 @@ jobs:
         # checks) doesn't commit. Mirrors VOL-166's coverage-trend
         # commit pattern.
         if: |
+          always() &&
           github.event_name == 'schedule' &&
           github.ref == 'refs/heads/main'
         run: |
           set -euo pipefail
-          if ! git diff --quiet docs/coach-eval-trend.json; then
+          if ! git diff --quiet docs/coach-eval-trend.json marketing/src/data/coach-eval-trend.json; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add docs/coach-eval-trend.json
+            git add marketing/src/data/coach-eval-trend.json
             git commit -m "chore(coach-evals): append nightly trend record"
             git push
           else

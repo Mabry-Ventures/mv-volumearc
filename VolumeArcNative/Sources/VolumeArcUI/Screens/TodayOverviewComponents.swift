@@ -8,6 +8,7 @@ struct TodayOverviewMetrics: View {
     let sparklineValues: [Double]
     let trendLabel: String
     let trendIsPositive: Bool
+    let onReadinessTap: () -> Void
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -25,42 +26,50 @@ struct TodayOverviewMetrics: View {
     }
 
     private var readinessTile: some View {
-        VACard(style: .glass) {
-            VStack(alignment: .leading, spacing: VA.Space.md) {
-                Text(String(localized: "Readiness", comment: "Today overview card label for readiness"))
-                    .font(VA.Typography.footnote)
-                    .foregroundStyle(VA.Colors.textSecondary)
+        Button(action: onReadinessTap) {
+            VACard(style: .glass) {
+                VStack(alignment: .leading, spacing: VA.Space.md) {
+                    Text(String(localized: "Readiness", comment: "Today overview card label for readiness"))
+                        .font(VA.Typography.footnote)
+                        .foregroundStyle(VA.Colors.textSecondary)
 
-                HStack {
-                    Spacer(minLength: 0)
-                    ZStack {
-                        VAProgressRing(progress: Double(readiness.score) / 100, lineWidth: 9)
-                            .frame(width: 108, height: 108)
-                        VStack(spacing: VA.Space.xxs) {
-                            Text("\(readiness.score)")
-                                .font(VA.Typography.title)
-                                .foregroundStyle(VA.Colors.textPrimary)
-                                .contentTransition(.numericText())
-                            Text(String(localized: "OF 100", comment: "Readiness score denominator label"))
-                                .font(VA.Typography.caption)
-                                .foregroundStyle(VA.Colors.textSecondary)
+                    HStack {
+                        Spacer(minLength: 0)
+                        ZStack {
+                            VAProgressRing(progress: Double(readiness.score) / 100, lineWidth: 9)
+                                .frame(width: 108, height: 108)
+                            VStack(spacing: VA.Space.xxs) {
+                                Text("\(readiness.score)")
+                                    .font(VA.Typography.title)
+                                    .foregroundStyle(VA.Colors.textPrimary)
+                                    .contentTransition(.numericText())
+                                Text(String(localized: "OF 100", comment: "Readiness score denominator label"))
+                                    .font(VA.Typography.caption)
+                                    .foregroundStyle(VA.Colors.textSecondary)
+                            }
                         }
+                        Spacer(minLength: 0)
                     }
-                    Spacer(minLength: 0)
-                }
 
-                Text(readiness.brief)
-                    .font(VA.Typography.footnote)
-                    .foregroundStyle(VA.Colors.textSecondary)
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
+                    Text(readiness.brief)
+                        .font(VA.Typography.footnote)
+                        .foregroundStyle(VA.Colors.textSecondary)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
+        .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(String(
             localized: "Readiness score \(readiness.score) out of 100. \(readiness.brief)",
             comment: "VoiceOver label describing the readiness overview card"
         ))
+        .accessibilityHint(String(
+            localized: "Opens training signals",
+            comment: "VoiceOver hint for the tappable Today readiness card"
+        ))
+        .accessibilityIdentifier("today.readinessTile")
     }
 
     private var weeklyVolumeTile: some View {

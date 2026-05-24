@@ -18,6 +18,17 @@ extension Notification.Name {
 /// Launch argument flags the app respects at startup. XCUITests set these
 /// to produce deterministic state.
 enum VolumeArcLaunchArguments {
+    private static func value(after flag: String) -> String? {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: flag) else { return nil }
+
+        let nextIndex = arguments.index(after: index)
+        guard nextIndex < arguments.endIndex else { return nil }
+        let value = arguments[nextIndex]
+        guard value.hasPrefix("-") == false else { return nil }
+        return value
+    }
+
     private static func flagEnabled(_ flag: String) -> Bool {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: flag) else { return false }
@@ -76,17 +87,20 @@ enum VolumeArcLaunchArguments {
     /// real-device canary).
     ///
     /// `<kind>` is a `WatchPayloadKind` rawValue: `restTimer`,
-    /// `liveState`, `startSession`, `endSession`, `coachCue`, or
-    /// `completedWorkout`. The flag is gated on `-UITestMode 1` —
-    /// production app launches ignore it even if accidentally set.
+    /// `liveState`, `startSession`, `endSession`, `coachCue`,
+    /// `completedWorkout`, `voiceCoachToggle`, or a form-check payload
+    /// kind. The flag is gated on `-UITestMode 1` — production app
+    /// launches ignore it even if accidentally set.
     static var postFakeWatchPayloadKind: String? {
-        let arguments = ProcessInfo.processInfo.arguments
-        guard let index = arguments.firstIndex(of: "-PostFakeWatchPayload") else { return nil }
-        let nextIndex = arguments.index(after: index)
-        guard nextIndex < arguments.endIndex else { return nil }
-        let value = arguments[nextIndex]
-        guard value.hasPrefix("-") == false else { return nil }
-        return value
+        value(after: "-PostFakeWatchPayload")
+    }
+
+    /// `-OpenDeepLinkOnLaunch <url>` — VOL-141. Deterministic-mode-only
+    /// XCUITest hook that sends a VolumeArc deep link through the same
+    /// app URL handler App Intents / widgets use in production.
+    static var openDeepLinkURL: URL? {
+        guard isUITestMode, let rawValue = value(after: "-OpenDeepLinkOnLaunch") else { return nil }
+        return URL(string: rawValue)
     }
 }
 
@@ -184,6 +198,7 @@ struct VolumeArcApp: App {
         let voicePermissionStore = Self.makeVoicePermissionStore()
         let accountSessionStore = Self.makeAccountSessionStore()
         let notificationStore = Self.makeNotificationStore()
+        let watchConnectivityCoordinator = Self.makeWatchConnectivityCoordinator()
         #if canImport(SwiftData)
         let telemetrySink = Self.makeTelemetrySink(initialEvents: persistence.bootstrapTelemetryEvents)
         #else
@@ -213,7 +228,10 @@ struct VolumeArcApp: App {
         let flagGate = FlagGateTelemetry(flags: featureFlags, telemetry: telemetrySink)
         let premiumGate = PremiumGateTelemetry(telemetry: telemetrySink)
         #if canImport(ActivityKit)
-        self.liveActivityController = VolumeArcLiveActivityController(flagGate: flagGate)
+        self.liveActivityController = VolumeArcLiveActivityController(
+            flagGate: flagGate,
+            telemetrySink: telemetrySink
+        )
         #endif
         let surfaceStore = UserDefaultsPlatformSurfaceStateStore()
         #if canImport(StoreKit)
@@ -356,7 +374,8 @@ struct VolumeArcApp: App {
                 // VOL-203: thread the telemetrySink so HK auth /
                 // query failures emit typed events instead of silently
                 // degrading to empty context.
-                recoveryReader: Self.makeRecoveryReader(telemetrySink: telemetrySink)
+                recoveryReader: Self.makeRecoveryReader(telemetrySink: telemetrySink),
+                watchConnectivityCoordinator: watchConnectivityCoordinator
             )
         } else {
             let syncEngine = CloudSyncCoordinator(
@@ -379,7 +398,8 @@ struct VolumeArcApp: App {
                 operationalSignals: startupSignals,
                 subscriptionStore: subscriptionStore,
                 voiceCoach: voiceCoach,
-                featureFlags: featureFlags
+                featureFlags: featureFlags,
+                watchConnectivityCoordinator: watchConnectivityCoordinator
             )
         }
         #else
@@ -399,7 +419,8 @@ struct VolumeArcApp: App {
             surfaceStore: surfaceStore,
             subscriptionStore: subscriptionStore,
             voiceCoach: voiceCoach,
-            featureFlags: featureFlags
+            featureFlags: featureFlags,
+            watchConnectivityCoordinator: watchConnectivityCoordinator
         )
         #endif
         #else
@@ -427,7 +448,8 @@ struct VolumeArcApp: App {
             telemetrySink: telemetrySink,
             surfaceStore: surfaceStore,
             voiceCoach: voiceCoach,
-            featureFlags: featureFlags
+            featureFlags: featureFlags,
+            watchConnectivityCoordinator: watchConnectivityCoordinator
         )
         #endif
 
@@ -492,6 +514,13 @@ struct VolumeArcApp: App {
                 // without needing a paired-simulator session. The full
                 // pairing path is covered by VOL-94's real-device canary.
                 Self.postSimulatedWatchPayloadIfRequested()
+
+                // VOL-141: exercise App Intent / Shortcut deep-link
+                // routing from XCUITests without invoking Siri or the
+                // Shortcuts daemon. Production launches ignore the flag
+                // because `VolumeArcLaunchArguments.openDeepLinkURL`
+                // is gated on `-UITestMode 1`.
+                await handleLaunchDeepLinkIfRequested()
             }
             // VOL-112: hidden test-only overlay surfacing the most-recent
             // received Watch payload kind. Gated on deterministic mode so
@@ -570,9 +599,69 @@ struct VolumeArcApp: App {
             }
     }
 
+    @MainActor
+    private func handleLaunchDeepLinkIfRequested() async {
+        guard let url = VolumeArcLaunchArguments.openDeepLinkURL else { return }
+        for _ in 0..<50 where dashboardModel.hasLoadedInitialData == false {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        handle(url: url)
+    }
+
+    @MainActor
     private func handle(url: URL) {
         guard let destination = VolumeArcDeepLink.destination(for: url) else { return }
 
+        recordDeepLinkTelemetry(for: url, destination: destination)
+        recordIntentTelemetryIfPresent(in: url)
+
+        switch destination {
+        case .today, .nextWorkout:
+            navigation.openToday()
+        case let .coach(prompt):
+            navigation.openCoach(prompt: prompt)
+        case .signals:
+            navigation.openSignals()
+        case let .action(action):
+            switch action {
+            case .startWorkoutSession:
+                navigation.openWorkouts()
+                Task {
+                    await dashboardModel.startWorkoutSession()
+                }
+            case .logRecommendedSet:
+                navigation.openWorkouts()
+                Task {
+                    await dashboardModel.logRecommendedSet()
+                }
+            case .syncNow:
+                navigation.openSignals()
+                Task {
+                    await dashboardModel.syncNow()
+                }
+            }
+        }
+    }
+
+    private func recordDeepLinkTelemetry(
+        for url: URL,
+        destination: VolumeArcDeepLink.Destination
+    ) {
+        let source = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?
+            .first(where: { $0.name == "source" })?
+            .value ?? "unknown"
+        let destinationName = telemetryDestinationName(for: destination)
+        telemetrySink.record(TelemetryEvent(
+            category: "deeplink",
+            name: "received",
+            severity: .info,
+            message: "Deep link received for \(destinationName).",
+            metadata: ["destination": destinationName, "source": source]
+        ))
+    }
+
+    private func recordIntentTelemetryIfPresent(in url: URL) {
         // VOL-212: when the deep link carries `?source=intent&intent=<name>`,
         // emit a typed `intent.<name>.invoked` telemetry event so we can
         // see App Intent / Shortcut usage in the operator dashboard
@@ -592,32 +681,20 @@ struct VolumeArcApp: App {
                 metadata: ["intent": intentName]
             ))
         }
+    }
 
+    private func telemetryDestinationName(for destination: VolumeArcDeepLink.Destination) -> String {
         switch destination {
-        case .today, .nextWorkout:
-            navigation.openToday()
-        case let .coach(prompt):
-            navigation.openCoach(prompt: prompt)
+        case .today:
+            return "today"
+        case .nextWorkout:
+            return "nextWorkout"
+        case .coach:
+            return "coach"
         case .signals:
-            navigation.openSignals()
+            return "signals"
         case let .action(action):
-            switch action {
-            case .startWorkoutSession:
-                navigation.openToday()
-                Task {
-                    await dashboardModel.startWorkoutSession()
-                }
-            case .logRecommendedSet:
-                navigation.openToday()
-                Task {
-                    await dashboardModel.logRecommendedSet()
-                }
-            case .syncNow:
-                navigation.openSignals()
-                Task {
-                    await dashboardModel.syncNow()
-                }
-            }
+            return action.rawValue
         }
     }
 }

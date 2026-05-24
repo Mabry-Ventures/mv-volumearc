@@ -81,10 +81,14 @@ public struct RootDashboardView: View {
         .vaToastOverlay(toastPresenter)
         .task {
             let shouldOpenProfileOnLaunch = Self.shouldOpenProfileOnLaunch
+            let shouldOpenWorkoutsOnLaunch = Self.shouldOpenWorkoutsOnLaunch
             let shouldOpenCoachOnLaunch = Self.shouldOpenCoachOnLaunch
             let shouldOpenSignalsOnLaunch = Self.shouldOpenSignalsOnLaunch
             if shouldOpenProfileOnLaunch {
                 navigation.openProfile()
+            }
+            if shouldOpenWorkoutsOnLaunch {
+                navigation.openWorkouts()
             }
             if shouldOpenCoachOnLaunch {
                 navigation.openCoach(prompt: "")
@@ -100,6 +104,10 @@ public struct RootDashboardView: View {
             // simulator-specific TabView hit testing.
             if shouldOpenProfileOnLaunch, navigation.showOnboarding == false {
                 navigation.openProfile()
+            }
+            // VOL-141: stable entry point for Workouts-tab journeys.
+            if shouldOpenWorkoutsOnLaunch, navigation.showOnboarding == false {
+                navigation.openWorkouts()
             }
             // VOL-200 P2: same affordance for Coach-tab journeys.
             if shouldOpenCoachOnLaunch, navigation.showOnboarding == false {
@@ -159,6 +167,9 @@ public struct RootDashboardView: View {
         .sheet(isPresented: $navigation.showPaywall) {
             paywallSheet
         }
+        .fullScreenCover(item: watchFormCheckRequestBinding) { request in
+            watchFormCheckSheet(for: request)
+        }
         .onChange(of: model.isOnboardingComplete) { _, isComplete in
             guard model.hasLoadedInitialData else { return }
             navigation.showOnboarding = !isComplete
@@ -178,6 +189,56 @@ public struct RootDashboardView: View {
             )
         } else {
             EmptyView()
+        }
+        #else
+        EmptyView()
+        #endif
+    }
+
+    private var watchFormCheckRequestBinding: Binding<WatchFormCheckStartPayload?> {
+        Binding(
+            get: { model.activeWatchFormCheckRequest },
+            set: { newValue in
+                guard newValue == nil, let request = model.activeWatchFormCheckRequest else { return }
+                Task {
+                    await model.dismissWatchFormCheckRequest(sessionID: request.sessionID)
+                }
+            }
+        )
+    }
+
+    @ViewBuilder
+    private func watchFormCheckSheet(for request: WatchFormCheckStartPayload) -> some View {
+        #if os(iOS)
+        if let exercise = request.exercise {
+            FormCheckCaptureView(
+                exercise: exercise,
+                exerciseName: request.exerciseName,
+                startsAutomatically: true,
+                automaticallyUsesResult: true,
+                externalStopToken: model.watchFormCheckStopToken
+            ) { analysis in
+                await model.completeWatchFormCheck(analysis, sessionID: request.sessionID)
+            }
+        } else {
+            VStack(spacing: VA.Space.md) {
+                Text(String(localized: "Form check unavailable", comment: "Unsupported watch form check title"))
+                    .font(VA.Typography.title2)
+                Text(String(localized: "This lift is not supported for camera form check yet.", comment: "Unsupported watch form check message"))
+                    .font(VA.Typography.body)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(VA.Space.xl)
+            .task {
+                await model.rejectWatchFormCheckRequest(
+                    sessionID: request.sessionID,
+                    message: String(
+                        localized: "This lift is not supported for camera form check yet.",
+                        comment: "Unsupported watch form-check stopped message"
+                    )
+                )
+            }
         }
         #else
         EmptyView()
@@ -204,6 +265,20 @@ public struct RootDashboardView: View {
     private static var shouldOpenProfileOnLaunch: Bool {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: "-OpenProfileOnLaunch") else {
+            return false
+        }
+        let nextIndex = arguments.index(after: index)
+        guard nextIndex < arguments.endIndex else { return true }
+        let rawValue = arguments[nextIndex]
+        guard rawValue.hasPrefix("-") == false else { return true }
+        return rawValue != "0"
+    }
+
+    /// VOL-141: XCUITest helper that opens the Workouts tab on launch
+    /// so Workouts-only journeys do not depend on TabView hit testing.
+    fileprivate static var shouldOpenWorkoutsOnLaunch: Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "-OpenWorkoutsOnLaunch") else {
             return false
         }
         let nextIndex = arguments.index(after: index)

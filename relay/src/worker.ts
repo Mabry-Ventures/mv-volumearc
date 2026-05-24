@@ -2,13 +2,18 @@
  * volumearc-ai-relay — Cloudflare Worker proxying iOS coach requests to Gemini.
  *
  * Routes
- *   POST /v1/health   → { ok, model }
- *   POST /v1/coach    → SSE stream of Gemini token chunks
+ *   POST /v1/health             → { ok, model }
+ *   POST /v1/attest/challenge   → one-time App Attest nonce
+ *   POST /v1/attest/bootstrap   → Apple-chain attestation validation
+ *   POST /v1/coach              → SSE stream of Gemini token chunks
  *
  * Auth
  *   iOS sends `Authorization: Bearer <device-id>.<hmac-hex>`. The HMAC is
  *   computed by the iOS relay-session provider using the same
- *   RELAY_SIGNING_KEY that lives in Worker secrets. We verify, then proxy.
+ *   RELAY_SIGNING_KEY that lives in Worker secrets. During App Attest Phase
+ *   B, capable clients also send X-VA-Attest-* assertion headers; the Worker
+ *   validates those first and falls back to HMAC only when the headers are
+ *   absent so old clients keep working through the transition.
  *
  * Rate limiting
  *   RATE_LIMIT KV namespace, keyed by device ID. Sliding 10-minute window.
@@ -18,10 +23,27 @@
  *   MODEL_PREMIUM env vars so ops can swap models without a deploy.
  */
 
+import {
+  AppAttestValidationError,
+  appAttestRequired,
+  issueAppAttestChallenge,
+  verifyAndStoreAttestation,
+  verifyAppAttestAssertion,
+} from "./appAttest";
+
+export { AppAttestState } from "./appAttest";
+
 interface Env {
   GEMINI_API_KEY: string;
   RELAY_SIGNING_KEY: string;
   RATE_LIMIT: KVNamespace;
+  ATTEST_KEYS?: KVNamespace;
+  ATTEST_CHALLENGES?: KVNamespace;
+  APP_ATTEST_STATE?: DurableObjectNamespace;
+  APPLE_APP_ID?: string;
+  APPLE_TEAM_ID?: string;
+  APPLE_BUNDLE_ID?: string;
+  REQUIRE_APP_ATTEST?: string;
   MODEL_DEFAULT: string;
   MODEL_PREMIUM: string;
   MAX_OUTPUT_TOKENS: string;
@@ -48,6 +70,21 @@ interface CoachRequestBody {
   system?: string;
 }
 
+interface AuthSuccess {
+  ok: true;
+  deviceId: string;
+  method: "app_attest" | "hmac";
+}
+
+interface AuthFailure {
+  ok: false;
+  status: number;
+  error: string;
+  reason?: string;
+}
+
+type AuthResult = AuthSuccess | AuthFailure;
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -59,6 +96,12 @@ export default {
     try {
       if (url.pathname === "/v1/health") {
         return handleHealth(env);
+      }
+      if (url.pathname === "/v1/attest/challenge") {
+        return await handleAppAttestChallenge(request, env);
+      }
+      if (url.pathname === "/v1/attest/bootstrap") {
+        return await handleAppAttestBootstrap(request, env);
       }
       if (url.pathname === "/v1/coach") {
         return await handleCoach(request, env);
@@ -76,19 +119,11 @@ function handleHealth(env: Env): Response {
 }
 
 async function handleCoach(request: Request, env: Env): Promise<Response> {
-  const deviceId = await authenticate(request, env);
-  if (!deviceId) {
-    return json({ error: "unauthorized" }, 401);
-  }
-
-  const rateOk = await checkRateLimit(deviceId, env);
-  if (!rateOk) {
-    return json({ error: "rate_limited" }, 429);
-  }
-
   let body: CoachRequestBody;
+  let bodyText: string;
   try {
-    body = (await request.json()) as CoachRequestBody;
+    bodyText = await request.text();
+    body = JSON.parse(bodyText) as CoachRequestBody;
   } catch {
     return json({ error: "bad_request" }, 400);
   }
@@ -97,10 +132,76 @@ async function handleCoach(request: Request, env: Env): Promise<Response> {
     return json({ error: "missing_fields" }, 400);
   }
 
+  const auth = await authenticate(request, env, new TextEncoder().encode(bodyText));
+  if (!auth.ok) {
+    recordAuthEvent(auth.reason ?? auth.error, { status: String(auth.status) });
+    return json({ error: auth.error, reason: auth.reason }, auth.status);
+  }
+
+  const rateOk = await checkRateLimit(auth.deviceId, env);
+  if (!rateOk) {
+    return json({ error: "rate_limited" }, 429);
+  }
+
   const tier = request.headers.get("X-Coach-Tier")?.toLowerCase();
   const model = tier === "pro" ? env.MODEL_PREMIUM : env.MODEL_DEFAULT;
 
   return streamGemini(body, model, env);
+}
+
+async function handleAppAttestChallenge(request: Request, env: Env): Promise<Response> {
+  const deviceId = await authenticateHMAC(request, env);
+  if (!deviceId) {
+    recordAuthEvent("app_attest_challenge_unauthorized");
+    return json({ error: "unauthorized" }, 401);
+  }
+  const challenge = await issueAppAttestChallenge(env, deviceId);
+  recordAuthEvent("app_attest_challenge_issued");
+  return json({ challenge: challenge.challenge, expiresAt: challenge.expiresAt }, 200);
+}
+
+async function handleAppAttestBootstrap(request: Request, env: Env): Promise<Response> {
+  const deviceId = await authenticateHMAC(request, env);
+  if (!deviceId) {
+    recordAuthEvent("app_attest_bootstrap_unauthorized");
+    return json({ error: "unauthorized" }, 401);
+  }
+
+  let body: {
+    keyID?: string;
+    key_id?: string;
+    attestationObject?: string;
+    attestation_object_b64?: string;
+    challenge?: string;
+    challenge_b64?: string;
+  };
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    return json({ error: "bad_request" }, 400);
+  }
+
+  const keyId = body.keyID ?? body.key_id;
+  const attestationObject = body.attestationObject ?? body.attestation_object_b64;
+  const challenge = body.challenge ?? body.challenge_b64;
+  if (!keyId || !attestationObject || !challenge) {
+    return json({ error: "missing_fields" }, 400);
+  }
+
+  try {
+    const result = await verifyAndStoreAttestation(env, {
+      deviceId,
+      keyId,
+      attestationObjectB64: attestationObject,
+      challengeB64: challenge,
+    });
+    recordAuthEvent("app_attest_succeeded", { environment: result.environment });
+    return json({ ok: true, attestedAt: result.attestedAt, environment: result.environment }, 200);
+  } catch (error) {
+    const reason = error instanceof AppAttestValidationError ? error.reason : "attestation_invalid";
+    recordAuthEvent("app_attest_failed", { reason });
+    return json({ error: "attestation_invalid", reason }, 401);
+  }
 }
 
 async function streamGemini(body: CoachRequestBody, model: string, env: Env): Promise<Response> {
@@ -230,7 +331,36 @@ function buildSystemPrompt(style: "motivational" | "precise" | "playful"): strin
 
 // --- Auth ---------------------------------------------------------------
 
-async function authenticate(request: Request, env: Env): Promise<string | null> {
+async function authenticate(request: Request, env: Env, requestBody: Uint8Array): Promise<AuthResult> {
+  const appAttest = await verifyAppAttestAssertion(env, request, requestBody);
+  if (appAttest.ok) {
+    recordAuthEvent("app_attest_succeeded");
+    return { ok: true, deviceId: appAttest.deviceId, method: "app_attest" };
+  }
+
+  const hasAnyAppAttestHeader =
+    request.headers.has("X-VA-Attest-Key-ID") ||
+    request.headers.has("X-VA-Attest-Assertion") ||
+    request.headers.has("X-VA-Attest-Nonce");
+  if (hasAnyAppAttestHeader) {
+    recordAuthEvent("app_attest_failed", { reason: appAttest.reason });
+    return { ok: false, status: 401, error: "attestation_invalid", reason: appAttest.reason };
+  }
+
+  if (appAttestRequired(env)) {
+    recordAuthEvent("app_attest_required");
+    return { ok: false, status: 410, error: "app_attest_required" };
+  }
+
+  const deviceId = await authenticateHMAC(request, env);
+  if (!deviceId) {
+    return { ok: false, status: 401, error: "unauthorized" };
+  }
+  recordAuthEvent("hmac_fallback_used");
+  return { ok: true, deviceId, method: "hmac" };
+}
+
+async function authenticateHMAC(request: Request, env: Env): Promise<string | null> {
   const header = request.headers.get("authorization");
   if (!header?.startsWith("Bearer ")) return null;
   const token = header.slice(7).trim();
@@ -268,6 +398,15 @@ function timingSafeEqualHex(a: string, b: string): boolean {
     diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   }
   return diff === 0;
+}
+
+function recordAuthEvent(name: string, metadata: Record<string, string> = {}): void {
+  console.log(JSON.stringify({
+    category: "relay.auth",
+    name,
+    metadata,
+    timestamp: new Date().toISOString(),
+  }));
 }
 
 // --- Rate limiting ------------------------------------------------------

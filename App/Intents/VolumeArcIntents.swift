@@ -43,7 +43,10 @@ struct StartNextWorkoutIntent: AppIntent {
         )
         return .result(
             opensIntent: OpenURLIntent(
-                IntentTelemetry.attribute(VolumeArcDeepLink.url(for: .nextWorkout), intent: "start_next_workout")
+                IntentTelemetry.attribute(
+                    VolumeArcDeepLink.url(for: .action(.startWorkoutSession)),
+                    intent: "start_next_workout"
+                )
             ),
             dialog: IntentDialog(stringLiteral: dialogText)
         )

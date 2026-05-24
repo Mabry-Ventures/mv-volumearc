@@ -26,8 +26,7 @@
 //
 //   Phase 2 PRs will follow the canonical workflow:
 //     a) author runs the new snapshot test locally with
-//        `SNAPSHOT_TESTING_RECORD_MODE=all` (or `record: .all` in
-//        the call) to generate the PNG;
+//        `SNAPSHOT_TESTING_RECORD=all` to generate the PNG;
 //     b) author commits the PNG under `__Snapshots__/`;
 //     c) CI runs with default mode, comparing against the
 //        committed PNG and failing on drift.

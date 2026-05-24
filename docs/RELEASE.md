@@ -56,6 +56,8 @@ One-time setup, done in App Store Connect's web UI (cannot be done via CLI / API
    - `SENTRY_AUTH_TOKEN` — mark as **secret**. Same token as the GitHub `SENTRY_AUTH_TOKEN` secret (Sentry user token with `project:write` on `mabry-ventures-llc/volumearc-ios`).
    - `SENTRY_ORG` — `mabry-ventures-llc` (optional; script defaults to this)
    - `SENTRY_PROJECT` — `volumearc-ios` (optional; script defaults to this)
+   - `VOLUMEARC_AI_RELAY_URL` — `https://relay.volumearc.app`
+   - `VOLUMEARC_RELAY_SIGNING_KEY` — mark as **secret**. Must match the Cloudflare Worker `RELAY_SIGNING_KEY` secret exactly; `ci_scripts/ci_post_clone.sh` injects it into the throwaway Xcode Cloud checkout before archive, and `ci_scripts/ci_post_xcodebuild.sh` fails the archive if the built app still has an empty or unresolved `VolumeArcRelaySigningKey`.
 9. **Post-Actions**: leave empty — the dSYM upload runs from `ci_scripts/ci_post_xcodebuild.sh` which Xcode Cloud invokes automatically after each archive.
 10. **Test grouping** (optional): add a "Test" action with the `VolumeArcAppTests` scheme if you want Xcode Cloud to run unit tests too. Not required since GitHub Actions already runs them.
 
@@ -73,19 +75,22 @@ After setup, push a tag and verify:
 - `SENTRY_AUTH_TOKEN` env var set if you want dSYMs uploaded
 - `DEVELOPMENT_TEAM` env var set
 - `APP_STORE_CONNECT_API_KEY_PATH` env var pointing to a `.p8` key file (for upload_to_testflight)
+- `VOLUMEARC_RELAY_SIGNING_KEY` env var set from 1Password (`VolumeArc Relay HMAC Signing Key`). This must match the Worker `RELAY_SIGNING_KEY`; without it, TestFlight builds install with a relay URL but every coach request fails auth with 401.
 
 ```bash
 export SENTRY_AUTH_TOKEN=<token>
 export DEVELOPMENT_TEAM=E896WB332K
 export APP_STORE_CONNECT_API_KEY_PATH=~/.appstoreconnect/private_keys/AuthKey_XXXXXXXXXX.p8
+export VOLUMEARC_RELAY_SIGNING_KEY=<1Password: VolumeArc Relay HMAC Signing Key>
 bundle exec fastlane ios beta
 ```
 
-Local archive uses your keychain certs directly; no fastlane match infrastructure required.
+Local archive uses your keychain certs directly; no fastlane match infrastructure required. The beta lane reads `VOLUMEARC_RELAY_SIGNING_KEY` from the environment, patches `App/Info.plist` only for the duration of the archive, and restores the source file afterward so the secret never lands in git or in `xcodebuild` command-line arguments. `scripts/archive_for_distribution.sh` uses the same env-only, patch-and-restore pattern.
 
 ### Required GitHub secrets (for the validation gates)
 
 - `SENTRY_AUTH_TOKEN` — for the Sentry SDK init in dev/staging builds (separate concern from dSYM upload)
+- `VOLUMEARC_RELAY_SIGNING_KEY` — for the nightly response-layer coach eval workflow. Same value as the Worker `RELAY_SIGNING_KEY` and the Xcode Cloud secret environment variable.
 - `VOLUMEARC_PAT` — personal access token (only needed if cross-repo checkout returns)
 - `VOLUMEARC_NATIVE_DEPLOY_KEY` — SSH key for the runner's git operations
 

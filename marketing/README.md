@@ -36,8 +36,8 @@ npm run build
 /                       Landing — Hero, PrimaryFeatures, SecondaryFeatures, CallToAction, Pricing, FAQs
 /terms                  Terms of Service (DRAFT — pending legal review, VOL-124)
 /privacy                Privacy Policy (DRAFT — pending legal review, VOL-124)
-/support                Support, contact, common issues, press
-/quality                Public coach-quality eval-trend (scaffold — VOL-148)
+/support                Support, Resend-backed contact form, common issues, press
+/quality                Public coach-quality eval-trend from docs/coach-eval-trend.json
 ```
 
 The `LegalLinks` Swift wrapper in the iOS app (`App/LegalLinks.swift`) routes to `/terms` and `/privacy` on this site. Keep both in sync.
@@ -70,6 +70,9 @@ The build command and output directory are pinned in [`vercel.json`](vercel.json
 |---|---|---|---|
 | `SHADCNBLOCKS_API_KEY` | required | required | Same value as in `mv-design` |
 | `NEXT_PUBLIC_SITE_URL` | `https://volumearc.app` | (auto) | |
+| `RESEND_API_KEY` | required | required | Server-only; powers `/api/support` |
+| `RESEND_FROM_EMAIL` | `VolumeArc <noreply@volumearc.app>` | same or verified preview sender | Must be a Resend-verified domain |
+| `SUPPORT_EMAIL_TO` | `support@mabryventures.com` | same | Destination for support form submissions |
 
 CI build smoke (no deploy) runs in [`.github/workflows/marketing.yml`](../.github/workflows/marketing.yml).
 
@@ -81,7 +84,7 @@ CI build smoke (no deploy) runs in [`.github/workflows/marketing.yml`](../.githu
 | Feature descriptions | Engineering + Marketing | `docs/FEATURES.md` is canonical for feature status |
 | Pricing | Founder | App Store Connect StoreKit products |
 | FAQs | Support + Engineering | This repo |
-| Coach quality (`/quality`) | Engineering | `docs/coach-eval-trend.json` (auto-published, VOL-148) |
+| Coach quality (`/quality`) | Engineering | `docs/coach-eval-trend.json`, mirrored into `src/data/coach-eval-trend.json` for Vercel builds |
 | Terms / Privacy | Legal counsel | This repo (after legal review, VOL-124) |
 
 When a feature ships or its scope changes, update `docs/FEATURES.md` first; this site reflects the canonical doc.

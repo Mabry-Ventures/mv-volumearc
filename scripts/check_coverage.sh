@@ -11,15 +11,16 @@
 # different `COVERAGE_TARGET` + `COVERAGE_THRESHOLD` + `COVERAGE_SUMMARY_JSON`
 # env vars. Current floors:
 #   - VolumeArcCore: 80% (production gate, VOL-52 baseline)
-#   - VolumeArcUI:    2% (guard-rail; baseline measured at 2.59% on
-#                    first run because the SwiftUI layer is mostly
-#                    exercised via XCUITest journey tests rather than
-#                    unit-level line coverage. Real lift comes from
-#                    VOL-141 / VOL-200 — journey coverage gate — plus
-#                    VOL-201 snapshot baselines. Bump the floor in
-#                    the same PR that adds the testable view-model
-#                    extraction.)
-#   - VolumeArcWatch: pending VOL-138 (no dedicated test target yet)
+#   - VolumeArcUI:   18% (VOL-135 ratchet; bundled VAUI snapshots
+#                    lifted the local full-unit-suite measurement to
+#                    18.48%. The 85% target remains a staged follow-up
+#                    once more screen snapshots and testable view-model
+#                    extraction land.)
+#   - VolumeArcCoreWatch: 2% (VOL-138 Phase A; uses XCRESULT=.../TestResults-watch.xcresult
+#                    against the `VolumeArcWatchTests` bundle. 85% is
+#                    the long-term target from the ticket — gated by
+#                    moving WatchWorkoutModel pure logic into
+#                    `VolumeArcCoreWatch`-only files first.)
 #   - Widgets:       pending VOL-139 (no dedicated test target yet)
 # The 90%+ commitment in `docs/PLATFORM.md` is the target end-state;
 # per VOL-140 / VOL-205 the ratchet path is one PR per bump so the

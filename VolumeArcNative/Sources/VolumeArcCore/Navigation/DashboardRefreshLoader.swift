@@ -30,7 +30,10 @@ public struct DashboardRefreshSnapshot: Sendable {
     public let readiness: ReadinessAssessment
     public let autopilot: WorkoutAutopilotState
     public let nextWorkout: WeeklyWorkout?
+    public let trainingPrograms: [TrainingProgramDefinition]
+    public let activeProgram: ActiveTrainingProgramContext?
     public let activeWorkout: ActiveWorkout?
+    public let coachMemory: CoachMemory
     public let isOnboardingComplete: Bool
 
     public init(
@@ -39,7 +42,10 @@ public struct DashboardRefreshSnapshot: Sendable {
         readiness: ReadinessAssessment,
         autopilot: WorkoutAutopilotState,
         nextWorkout: WeeklyWorkout?,
+        trainingPrograms: [TrainingProgramDefinition],
+        activeProgram: ActiveTrainingProgramContext?,
         activeWorkout: ActiveWorkout?,
+        coachMemory: CoachMemory,
         isOnboardingComplete: Bool
     ) {
         self.athlete = athlete
@@ -47,7 +53,10 @@ public struct DashboardRefreshSnapshot: Sendable {
         self.readiness = readiness
         self.autopilot = autopilot
         self.nextWorkout = nextWorkout
+        self.trainingPrograms = trainingPrograms
+        self.activeProgram = activeProgram
         self.activeWorkout = activeWorkout
+        self.coachMemory = coachMemory
         self.isOnboardingComplete = isOnboardingComplete
     }
 }
@@ -91,7 +100,10 @@ public actor DashboardRefreshLoader {
             readiness: readiness,
             autopilot: autopilot,
             nextWorkout: try loadNextWorkout(in: context),
+            trainingPrograms: try loadTrainingPrograms(in: context),
+            activeProgram: try loadActiveProgramContext(in: context),
             activeWorkout: try loadActiveWorkout(in: context),
+            coachMemory: memory,
             isOnboardingComplete: profile?.onboardingCompleted ?? false
         )
     }
@@ -210,6 +222,42 @@ public actor DashboardRefreshLoader {
         guard !sortedWorkouts.isEmpty else { return nil }
         let todayWeekday = WeeklyWorkout.trainingWeekday(for: .now)
         return sortedWorkouts.first { $0.dayOfWeek >= todayWeekday } ?? sortedWorkouts.first
+    }
+
+    private func loadTrainingPrograms(in context: ModelContext) throws -> [TrainingProgramDefinition] {
+        let records = try context.fetch(FetchDescriptor<TrainingProgramRecord>(
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        ))
+        var persistedByID: [String: TrainingProgramDefinition] = [:]
+        for definition in records.compactMap(TrainingProgramDefinition.init(record:)) where persistedByID[definition.id] == nil {
+            persistedByID[definition.id] = definition
+        }
+
+        let curatedIDs = Set(TrainingProgramCatalog.curated.map(\.id))
+        let curatedAndPersisted = TrainingProgramCatalog.curated.map { curated in
+            persistedByID[curated.id] ?? curated
+        }
+        let persistedOnly = persistedByID.values
+            .filter { !curatedIDs.contains($0.id) }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+
+        return curatedAndPersisted + persistedOnly
+    }
+
+    private func loadActiveProgramContext(in context: ModelContext) throws -> ActiveTrainingProgramContext? {
+        var descriptor = FetchDescriptor<TrainingProgramRecord>(
+            predicate: #Predicate<TrainingProgramRecord> { program in
+                program.isActive
+            },
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = 1
+        guard let record = try context.fetch(descriptor).first,
+              let definition = TrainingProgramDefinition(record: record)
+        else {
+            return nil
+        }
+        return definition.scheduledSession(on: .now, assignedAt: record.assignedAt ?? record.updatedAt)
     }
 
     private func logTrainingPlanDecodeFailure(error: Error) {

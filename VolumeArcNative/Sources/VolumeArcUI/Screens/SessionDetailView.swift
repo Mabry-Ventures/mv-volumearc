@@ -7,9 +7,11 @@ import VolumeArcCore
 /// the card hero-animates into the detail.
 public struct SessionDetailView: View {
     let session: RecentSession
+    let onOpen: () -> Void
 
-    public init(session: RecentSession) {
+    public init(session: RecentSession, onOpen: @escaping () -> Void = {}) {
         self.session = session
+        self.onOpen = onOpen
     }
 
     public var body: some View {
@@ -31,6 +33,9 @@ public struct SessionDetailView: View {
             session.date.formatted(.dateTime.weekday(.wide).month().day())
         )
         .navigationBarTitleDisplayMode(.large)
+        .task {
+            onOpen()
+        }
     }
 
     // MARK: - Sections

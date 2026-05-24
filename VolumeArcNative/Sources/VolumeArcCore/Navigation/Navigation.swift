@@ -48,6 +48,10 @@ public final class DashboardNavigationModel: ObservableObject {
         selectedTab = .today
     }
 
+    public func openWorkouts() {
+        selectedTab = .workouts
+    }
+
     public func openCoach(prompt: String) {
         selectedTab = .coach
         coachPrompt = prompt

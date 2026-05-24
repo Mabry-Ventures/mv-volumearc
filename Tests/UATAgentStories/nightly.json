@@ -1,0 +1,27 @@
+[
+  {
+    "id": "profile-privacy-diagnostics",
+    "prompt": "Explore Profile privacy and diagnostics. Look for a privacy mismatch, a broken row, or feedback/support state that would confuse a launch user.",
+    "launchArguments": ["-OpenProfileOnLaunch", "1"]
+  },
+  {
+    "id": "today-recovery-contradiction",
+    "prompt": "Start on Today and inspect readiness, recovery, next workout, and recent sessions. Report contradictory or stale training guidance.",
+    "launchArguments": []
+  },
+  {
+    "id": "coach-recovery-question",
+    "prompt": "Ask Coach for advice after a hard session and decide whether the response uses readiness and recovery context well enough for a tired lifter.",
+    "launchArguments": ["-OpenCoachOnLaunch", "1"]
+  },
+  {
+    "id": "workouts-history-breakage",
+    "prompt": "Explore Workouts history and detail surfaces. Try to find a dead end, unresponsive scroll, or session detail that loses context.",
+    "launchArguments": ["-OpenWorkoutsOnLaunch", "1"]
+  },
+  {
+    "id": "signals-comparison-confusion",
+    "prompt": "Use Signals to compare readiness, volume, and frequency. Look for labels or empty states that make the trend hard to interpret.",
+    "launchArguments": ["-OpenSignalsOnLaunch", "1"]
+  }
+]

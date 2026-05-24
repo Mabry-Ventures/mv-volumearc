@@ -149,6 +149,13 @@ jobs:
         run: bash ./.github/scripts/prepare_ruby_toolchain.sh xcodeproj
         shell: bash
 
+      - name: Install Ruby bundle
+        # VOL-138: `bundle install` pins the exact xcodeproj/cfpropertylist
+        # versions from Gemfile.lock so downstream `bundle exec ruby` calls
+        # are immune to a broken user-gem installation (e.g. xcodeproj-1.27.x
+        # missing gem_version.rb after an interrupted `gem install`).
+        run: bundle install --quiet
+
       - name: Pre-flight
         # VOL-75: fail fast if the runner is missing something required.
         # Cheaper than a 20-minute build that dies at step 6 on a sick runner.
@@ -273,7 +280,7 @@ jobs:
         run: ./scripts/test_xcode_project_regen_idempotent.sh
 
       - name: Watch app archive gate
-        run: ruby scripts/test_watch_app_embedding.rb
+        run: bundle exec ruby scripts/test_watch_app_embedding.rb
 
       - name: Seed SPM lockfile into workspace
         # VOL-90: the canonical `Package.resolved` lives at repo root
@@ -318,24 +325,45 @@ jobs:
       # VOL-205: per-target coverage gates. The platform commitment in
       # `docs/PLATFORM.md` is 90%+ across appropriate surfaces
       # (VOL-140 uplift target). This PR introduces the second per-
-      # target gate — VolumeArcUI — at a deliberately conservative
-      # **2% floor**. First run showed actual VolumeArcUI line
-      # coverage at 2.59%; the SwiftUI layer is exercised mostly via
-      # XCUITest journey tests (which don't accrue line coverage on
-      # the static library targets), so the line-coverage figure is
-      # structurally low and will only meaningfully rise once VOL-141
-      # / VOL-200 land real coverage in the form of unit-testable
-      # extracted view-model logic. The 2% floor is a guard-rail
-      # ("don't regress past current") not a target — the real lift
-      # mechanism is VOL-200 (journey coverage gate) + VOL-201
-      # (snapshot baselines) + VOL-138/139 (Watch / Widget test
-      # targets). Each of those, when it lands, ratchets the floor
-      # upward in the same PR.
-      - name: Coverage gate (VolumeArcUI >= 2% — staged ratchet)
+      # target gate — VolumeArcUI — at a staged floor. The first run
+      # measured 2.59%; VOL-135's bundled VAUI snapshot baselines lifted
+      # the local full-unit-suite measurement to 18.48%, so the CI floor
+      # ratchets to **18%** with a little platform margin. This is still
+      # intentionally below the 85% end-state target: the next meaningful
+      # lifts come from broader screen snapshots plus unit-testable
+      # view-model extraction.
+      - name: Coverage gate (VolumeArcUI >= 18% — staged ratchet)
         env:
           COVERAGE_TARGET: VolumeArcUI
-          COVERAGE_THRESHOLD: '2'
+          COVERAGE_THRESHOLD: '18'
           COVERAGE_SUMMARY_JSON: .build/coverage-summary-volumearcui.json
+        run: ./scripts/check_coverage.sh
+
+      # VOL-138: watchOS coverage gate.
+      #
+      # VolumeArcCoreWatch is the watchOS-compiled flavor of the shared
+      # core library, sourcing from the same `Sources/VolumeArcCore`
+      # directory as the iOS `VolumeArcCore` target. The new
+      # `VolumeArcWatchTests` bundle exercises this against the
+      # watchOS SDK so a Foundation behavior change between iOS and
+      # watchOS (e.g. UserDefaults serialization or Codable Date
+      # encoding) is caught at the right platform layer.
+      #
+      # Phase A floor: **25%**. Measured baseline on first run is
+      # 28.77% — three points of margin below that so a small
+      # source-only addition to VolumeArcCore (which auto-rebuilds
+      # under VolumeArcCoreWatch via shared sources) doesn't trip
+      # the gate before the next test PR catches up. The 85% target
+      # in VOL-138's acceptance criteria is a Phase B/C ratchet
+      # that lands once the per-Watch source surface is moved into
+      # `VolumeArcCoreWatch`-only files and the WatchWorkoutModel
+      # pure logic is extracted into testable types.
+      - name: Coverage gate (VolumeArcCoreWatch >= 25% — staged ratchet, VOL-138)
+        env:
+          XCRESULT: .build/derived-data/TestResults-watch.xcresult
+          COVERAGE_TARGET: VolumeArcCoreWatch
+          COVERAGE_THRESHOLD: '25'
+          COVERAGE_SUMMARY_JSON: .build/coverage-summary-volumearcwatch.json
         run: ./scripts/check_coverage.sh
 
       # VOL-200 Phase 1: user-journey coverage gate. Parses
@@ -364,13 +392,34 @@ jobs:
       # journey; lowering the threshold from 36 to 33 is the honest
       # reflection of where coverage actually stands while the rows
       # exist in the catalog.
+      # VOL-141 App Intent tranche (2026-05-23) covers all 6
+      # `intent.*` rows through deterministic deep-link XCUITests.
+      # New total: 32/69 = 46%.
+      # VOL-141 background deep-link tranche (2026-05-23) covers
+      # `bg.deep-link-arrival` with privacy-safe deeplink telemetry.
+      # New total: 33/69 = 47.8% (staged threshold: 47%).
+      # VOL-141 widget tap tranche (2026-05-23) covers
+      # `widget.tap-deep-link` through the widget's production
+      # `.widgetURL(...)` deep-link contract.
+      # New total: 34/69 = 49.3% (staged threshold: 49%).
+      # VOL-141 Workouts history tranche (2026-05-23) closes
+      # `workouts.view-detail` by exposing recent sessions on the
+      # Workouts tab and asserting `workout.detail.opened`.
+      # New total: 36/69 = 52.2% (staged threshold: 52%).
+      # VOL-141 AIRelay fallback tranche (2026-05-23) closes
+      # `coach.relay-fallback` and `fail.relay-5xx` through the
+      # DEBUG-only `-CHAOS_AIRELAY_5XX` provider injector.
+      # New total: 38/69 = 55.1% (staged threshold: 55%).
+      # VOL-141 Workouts history scroll tranche (2026-05-23) closes
+      # `workouts.history-scroll` against the 50-session perf fixture.
+      # New total: 39/69 = 56.5% (staged threshold: 56%).
       # The platform commits to 100% by end of Wave 2 (VOL-141/VOL-200).
       # Same ratchet contract as the per-target coverage gate above:
       # any PR that adds a journey test bumps `JOURNEY_COVERAGE_THRESHOLD`
       # in lockstep so the gate is always at-or-above current coverage.
-      - name: Journey coverage gate (>= 33% staged ratchet)
+      - name: Journey coverage gate (>= 56% staged ratchet)
         env:
-          JOURNEY_COVERAGE_THRESHOLD: '33'
+          JOURNEY_COVERAGE_THRESHOLD: '56'
         run: ./scripts/check_journey_coverage.sh
 
       # VOL-97: publish the xcresult bundle so reviewers can open it in
@@ -396,6 +445,7 @@ jobs:
         # the script's per-attempt retry fires, the per-attempt log
         # files (capturing the channel-disconnect or wall-clock
         # timeout pattern) are inspectable from the run page.
+        # VOL-138: also includes the watchOS test bundle's xcresult.
         # Reviewers can drill into a single failing shard without
         # downloading the unfiltered firehose.
         if: always()
@@ -407,6 +457,7 @@ jobs:
             .build/derived-data/TestResults.xcresult
             .build/derived-data/TestResults-ui-*.xcresult
             .build/derived-data/unit-test-attempt-*.log
+            .build/derived-data/TestResults-watch.xcresult
             .build/derived-data/ui-test-*-attempt-*.log
           retention-days: 14
 

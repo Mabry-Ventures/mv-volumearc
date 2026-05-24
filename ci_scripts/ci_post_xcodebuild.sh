@@ -313,10 +313,15 @@ if [[ -n "${CI_BUILD_NUMBER:-}" ]]; then
   require_plist_value "CFBundleVersion" "$CI_BUILD_NUMBER" "${WATCH_WIDGET_BUNDLE}/Info.plist"
 fi
 
-if [[ -n "${VOLUMEARC_AI_RELAY_URL:-}" ]]; then
-  relay_url="$(plist_value "VolumeArcAIRelayURL" "${APP_BUNDLE}/Info.plist")"
-  if [[ "$relay_url" != "https://relay.volumearc.app" ]]; then
-    echo "::error::VOL-133: expected VolumeArcAIRelayURL=https://relay.volumearc.app in archived app, got ${relay_url:-<empty>}"
+relay_url="$(plist_value "VolumeArcAIRelayURL" "${APP_BUNDLE}/Info.plist")"
+if [[ -n "${VOLUMEARC_AI_RELAY_URL:-}" && "$relay_url" != "https://relay.volumearc.app" ]]; then
+  echo "::error::VOL-133: expected VolumeArcAIRelayURL=https://relay.volumearc.app in archived app, got ${relay_url:-<empty>}"
+  exit 1
+fi
+if [[ "$relay_url" == "https://relay.volumearc.app" ]]; then
+  relay_signing_key="$(plist_value "VolumeArcRelaySigningKey" "${APP_BUNDLE}/Info.plist")"
+  if [[ -z "$relay_signing_key" || "$relay_signing_key" == "\$(VOLUMEARC_RELAY_SIGNING_KEY)" ]]; then
+    echo "::error::VOL-182: VolumeArcRelaySigningKey is missing or unresolved in the archived app. Set VOLUMEARC_RELAY_SIGNING_KEY as a secret Xcode Cloud environment variable before shipping TestFlight builds."
     exit 1
   fi
 fi

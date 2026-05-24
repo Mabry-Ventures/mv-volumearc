@@ -36,6 +36,7 @@
 // what each one does, and the XCUITest journey that exercises it.
 
 import Foundation
+import VolumeArcCore
 
 public enum ChaosController {
 
@@ -57,4 +58,43 @@ public enum ChaosController {
         return false
         #endif
     }
+
+    // MARK: - AIRelay
+
+    /// `-CHAOS_AIRELAY_5XX`: the coach provider's primary relay path
+    /// fails before yielding a token with a deterministic 503. The
+    /// fallback wrapper must switch to `LocalHeuristicAICoachProvider`
+    /// and emit `coach.fallback_used`.
+    ///
+    /// Used by `VolumeArcCoachJourneyTests.testCoachRelay5xxFallsBackToLocalHeuristic`.
+    public static var injectAIRelay5xx: Bool {
+        #if DEBUG
+        return CommandLine.arguments.contains("-CHAOS_AIRELAY_5XX")
+        #else
+        return false
+        #endif
+    }
 }
+
+#if DEBUG
+struct ChaosAICoachProvider: AICoachProvider {
+    let error: AIRuntimeIntegrationError
+
+    func coachResponse(for prompt: String, context: String) async throws -> String {
+        _ = prompt
+        _ = context
+        throw error
+    }
+
+    func streamCoachResponse(
+        for prompt: String,
+        context: String
+    ) -> AsyncThrowingStream<String, Error> {
+        _ = prompt
+        _ = context
+        return AsyncThrowingStream { continuation in
+            continuation.finish(throwing: error)
+        }
+    }
+}
+#endif

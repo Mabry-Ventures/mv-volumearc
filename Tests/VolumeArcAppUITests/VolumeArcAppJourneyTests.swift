@@ -423,6 +423,159 @@ final class VolumeArcAppJourneyTests: XCTestCase {
         )
     }
 
+    /// VOL-141: deterministic coverage for `workouts.view-detail`.
+    /// The seeded fixture contains recent completed sessions; launching
+    /// directly into Workouts avoids relying on tab-bar hit testing.
+    func testWorkoutHistoryRowOpensSessionDetailAndEmitsTelemetry() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenWorkoutsOnLaunch", "1"]
+        )
+        app.launch()
+        assertAppReachedForeground(app)
+
+        _ = waitForElement(
+            in: app,
+            identifier: "workouts.root",
+            timeout: 15,
+            "Workouts tab should open on launch"
+        )
+
+        let historyRow = app.descendants(matching: .any)
+            .matching(identifier: "workouts.historyRow")
+            .firstMatch
+        if !historyRow.waitForExistence(timeout: 15) {
+            VolumeArcAppUITestSupport.attachDebugSnapshot(
+                of: app,
+                named: "workouts.historyRow.missing",
+                to: self
+            )
+            XCTFail("Seeded Workouts tab should expose a completed-session history row")
+            return
+        }
+        XCTAssertTrue(
+            VolumeArcAppUITestSupport.scrollIntoViewAndTap(historyRow, in: app, timeout: 1),
+            "Completed-session history row should be tappable"
+        )
+
+        _ = waitForElement(
+            in: app,
+            identifier: "session.detail.root",
+            timeout: 10,
+            "Session detail should appear after tapping a Workouts history row"
+        )
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "workout",
+            name: "detail.opened",
+            within: 10,
+            test: self
+        )
+    }
+
+    /// VOL-141: deterministic coverage for `workouts.history-scroll`.
+    /// Perf mode seeds a 50-session history pool; the journey exercises
+    /// the Workouts history surface under that longer list and asserts it
+    /// remains responsive after repeated scroll gestures.
+    func testWorkoutHistoryScrollStaysResponsiveWithLongHistory() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenWorkoutsOnLaunch", "1", "-PerfTestMode", "1"]
+        )
+        app.launch()
+        assertAppReachedForeground(app)
+
+        let root = waitForElement(
+            in: app,
+            identifier: "workouts.root",
+            timeout: 15,
+            "Workouts tab should open on launch"
+        )
+
+        let firstHistoryRow = app.descendants(matching: .any)
+            .matching(identifier: "workouts.historyRow")
+            .firstMatch
+        XCTAssertTrue(
+            firstHistoryRow.waitForExistence(timeout: 15),
+            "Perf-seeded Workouts tab should expose history rows before scrolling"
+        )
+
+        for _ in 0..<4 {
+            root.swipeUp()
+        }
+
+        let postScrollHistoryRow = app.descendants(matching: .any)
+            .matching(identifier: "workouts.historyRow")
+            .firstMatch
+        XCTAssertTrue(
+            postScrollHistoryRow.waitForExistence(timeout: 5),
+            "History rows should remain reachable after scrolling through the long list"
+        )
+
+        root.swipeDown()
+        XCTAssertTrue(
+            root.exists,
+            "Workouts root should remain stable after history scroll gestures"
+        )
+    }
+
+    // MARK: - 5. Deep-link arrivals
+
+    /// VOL-141: deterministic coverage for `bg.deep-link-arrival`.
+    /// The launch argument sends a valid VolumeArc URL through the same
+    /// app handler used by external link arrivals while avoiding Safari
+    /// or universal-link daemon flake in CI.
+    func testExternalDeepLinkRoutesToSignalsAndEmitsTelemetry() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenDeepLinkOnLaunch", "volumearc://signals?source=external"]
+        )
+        app.launch()
+        assertAppReachedForeground(app)
+
+        _ = waitForElement(
+            in: app,
+            identifier: "signals.root",
+            timeout: 15,
+            "External deep link should route to the Signals tab"
+        )
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "deeplink",
+            name: "received",
+            within: 10,
+            test: self
+        )
+    }
+
+    /// VOL-141: deterministic coverage for `widget.tap-deep-link`.
+    /// WidgetKit itself is not reliable to automate in CI, but the
+    /// production widget attaches `VolumeArcDeepLink.url(for: .today)`
+    /// via `.widgetURL(...)`; this exercises the same URL contract at
+    /// the app boundary and verifies the telemetry emitted by the
+    /// handler remains wired.
+    func testWidgetDeepLinkRoutesToTodayAndEmitsTelemetry() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenDeepLinkOnLaunch", "volumearc://today?source=widget"]
+        )
+        app.launch()
+        assertAppReachedForeground(app)
+
+        _ = waitForElement(
+            in: app,
+            identifier: "today.scroll",
+            timeout: 15,
+            "Widget deep link should route to the Today tab"
+        )
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "deeplink",
+            name: "received",
+            within: 10,
+            test: self
+        )
+    }
+
     private func assertAppReachedForeground(_ app: XCUIApplication) {
         XCTAssertTrue(
             app.wait(for: .runningForeground, timeout: 20),

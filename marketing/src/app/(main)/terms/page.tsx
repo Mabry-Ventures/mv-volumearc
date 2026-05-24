@@ -12,7 +12,11 @@ export const metadata: Metadata = {
 // Tennessee governing law. Effective from launch date. If a future
 // revision is needed, bump LAST_UPDATED, add a versioned anchor, and
 // keep prior versions reachable per Apple Guideline 3.1.2.
-const EFFECTIVE_DATE = 'May 18, 2026'
+// VOL-124 — accuracy pass after a Codex cross-check against the app's
+// actual data flows: device-family (iPhone/Watch only), CloudKit
+// encryption wording (in-transit/at-rest, not E2EE), auto-renew charge
+// timing, consumer-rights venue carveout.
+const EFFECTIVE_DATE = 'May 22, 2026'
 
 export default function TermsPage() {
   return (
@@ -54,7 +58,8 @@ export default function TermsPage() {
               Tennessee. The App provides workout tracking, AI-powered
               coaching, and integration with Apple HealthKit, CloudKit, and
               StoreKit. The App is distributed exclusively through the Apple
-              App Store and runs on iOS, iPadOS, and watchOS devices.
+              App Store and runs on iPhone and Apple Watch (iOS and watchOS).
+              iPad and other Apple platforms are not supported in this version.
             </p>
 
             <h2>3. Subscription &amp; Auto-Renewal (Apple Guideline 3.1.2)</h2>
@@ -68,9 +73,12 @@ export default function TermsPage() {
               live voice coaching, and no other features.
             </p>
             <p>
-              <strong>Auto-renewal.</strong> Subscriptions automatically renew
-              for the same period at the then-current price unless cancelled
-              at least 24 hours before the end of the current billing period.
+              <strong>Auto-renewal.</strong> Your Apple ID is charged at
+              confirmation of purchase and again for each renewal within 24
+              hours before the current period ends, at the then-current price
+              shown on the App Store. Subscriptions automatically renew for the
+              same period unless cancelled at least 24 hours before the end of
+              the current billing period.
               You can manage or cancel your subscription at any time in iOS
               Settings → [your name] → Subscriptions → VolumeArc. Cancellation
               takes effect at the end of the current billing period; you keep
@@ -176,7 +184,9 @@ export default function TermsPage() {
               and other content you create in the App. Your content is stored
               in your private CloudKit container under your iCloud account
               and is accessible to you, but not to Mabry Ventures (CloudKit
-              private databases are encrypted end-to-end by Apple). You grant
+              private databases are encrypted in transit and at rest by Apple,
+              who holds the keys; Mabry Ventures cannot read, list, or recover
+              them). You grant
               Mabry Ventures no rights to your content beyond what is
               technically necessary to operate the App for you.
             </p>
@@ -228,7 +238,9 @@ export default function TermsPage() {
               or federal courts located in Davidson County, Tennessee, and
               you consent to the personal jurisdiction of those courts. The
               United Nations Convention on Contracts for the International
-              Sale of Goods does not apply.
+              Sale of Goods does not apply. Nothing in this section limits any
+              non-waivable rights or protections you have under the mandatory
+              consumer-protection laws of your country or state of residence.
             </p>
 
             <h2>14. Apple-Specific Terms</h2>
@@ -256,7 +268,7 @@ export default function TermsPage() {
             <h2>16. Contact</h2>
             <p>
               Questions about these Terms? Email{' '}
-              <a href="mailto:legal@volumearc.app">legal@volumearc.app</a>{' '}
+              <a href="mailto:legal@volumearc.com">legal@volumearc.com</a>{' '}
               or write to:
             </p>
             <p>

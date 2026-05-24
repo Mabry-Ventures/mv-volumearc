@@ -37,6 +37,10 @@ final class VolumeArcMigrationTests: XCTestCase {
         XCTAssertEqual(VolumeArcSchemaV4.versionIdentifier, Schema.Version(4, 0, 0))
     }
 
+    func testSchemaV5HasCorrectVersion() {
+        XCTAssertEqual(VolumeArcSchemaV5.versionIdentifier, Schema.Version(5, 0, 0))
+    }
+
     // MARK: - Migration plan structure
 
     func testMigrationPlanIncludesV1Schema() {
@@ -50,19 +54,21 @@ final class VolumeArcMigrationTests: XCTestCase {
                       "Migration plan should include VolumeArcSchemaV3")
         XCTAssertTrue(schemas.contains(where: { $0 == VolumeArcSchemaV4.self }),
                       "Migration plan should include VolumeArcSchemaV4")
+        XCTAssertTrue(schemas.contains(where: { $0 == VolumeArcSchemaV5.self }),
+                      "Migration plan should include VolumeArcSchemaV5")
     }
 
     func testMigrationPlanContainsV1ToV2Stage() {
-        XCTAssertEqual(VolumeArcSchemaMigrationPlan.schemas.count, 4,
-                       "Migration plan should define the V1 bridge plus the V2, V3, and V4 schemas")
-        XCTAssertEqual(VolumeArcSchemaMigrationPlan.stages.count, 3,
-                       "Migration plan should contain the V1 to V2 bridge plus the V2 to V3 and V3 to V4 stages")
+        XCTAssertEqual(VolumeArcSchemaMigrationPlan.schemas.count, 5,
+                       "Migration plan should define V1 through V5 schemas")
+        XCTAssertEqual(VolumeArcSchemaMigrationPlan.stages.count, 4,
+                       "Migration plan should contain the V1 to V2, V2 to V3, V3 to V4, and V4 to V5 stages")
     }
 
     // MARK: - In-memory container creation
 
     func testInMemoryContainerCreatesSuccessfully() throws {
-        let schema = Schema(VolumeArcSchemaV4.models)
+        let schema = Schema(VolumeArcSchemaV5.models)
         let config = ModelConfiguration(
             "MigrationTest",
             schema: schema,
@@ -629,9 +635,10 @@ final class VolumeArcMigrationTests: XCTestCase {
             TrainingPlanRecord.self,
             WorkoutRecord.self,
             CoachMemoryRecord.self,
+            TrainingProgramRecord.self,
         ])
         let queueSchema = Schema([OutboundSyncQueueRecord.self])
-        let combinedSchema = Schema(VolumeArcSchemaV4.models)
+        let combinedSchema = Schema(VolumeArcSchemaV5.models)
 
         let primaryConfig = ModelConfiguration(
             "VolumeArc",
@@ -898,10 +905,42 @@ final class VolumeArcMigrationTests: XCTestCase {
         XCTAssertTrue(fetched.first?.workoutsJSON.contains("Upper") ?? false)
     }
 
+    func testCanInsertAndFetchTrainingProgramRecord() throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        guard let sessionsJSON = SyncPayloadCodec.encode(TrainingProgramCatalog.startingStrength.sessions) else {
+            XCTFail("Expected starting strength sessions to encode")
+            return
+        }
+
+        let program = TrainingProgramRecord(
+            identifier: "test-program",
+            catalogIdentifier: "test-program",
+            name: "Test Program",
+            author: "VolumeArc",
+            weeks: 8,
+            sessionsPerWeek: 3,
+            advancementCriteria: "Add reps before load.",
+            difficultyTier: TrainingProgramDifficulty.novice.rawValue,
+            equipmentRequirement: TrainingProgramEquipmentRequirement.barbell.rawValue,
+            sessionsJSON: sessionsJSON
+        )
+        context.insert(program)
+        try context.save()
+
+        var descriptor = FetchDescriptor<TrainingProgramRecord>()
+        descriptor.fetchLimit = 1
+        let fetched = try context.fetch(descriptor)
+
+        XCTAssertEqual(fetched.count, 1)
+        XCTAssertEqual(fetched.first?.name, "Test Program")
+        XCTAssertEqual(fetched.first?.sessionsPerWeek, 3)
+    }
+
     // MARK: - Helpers
 
     private func makeInMemoryContainer() throws -> ModelContainer {
-        let schema = Schema(VolumeArcSchemaV4.models)
+        let schema = Schema(VolumeArcSchemaV5.models)
         let config = ModelConfiguration(
             "MigrationTest-\(UUID().uuidString)",
             schema: schema,
@@ -1190,7 +1229,7 @@ final class VolumeArcMigrationTests: XCTestCase {
     }
 
     private func makeDiskBackedCurrentContainer(at storeURL: URL) throws -> ModelContainer {
-        let schema = Schema(VolumeArcSchemaV4.models)
+        let schema = Schema(VolumeArcSchemaV5.models)
         let config = ModelConfiguration(
             "MigrationFixture",
             schema: schema,

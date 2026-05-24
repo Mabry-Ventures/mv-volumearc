@@ -107,6 +107,12 @@ test_plan_main_ref = test_plans_group.new_file('VOL-Main.xctestplan')
   ref.last_known_file_type = 'text'
   ref.include_in_index = '0'
 end
+# VOL-138: dedicated watchOS unit test group. The Watch is positioned as
+# a first-class surface in `docs/PRODUCT_POSITIONING.md`, so the same
+# tier of structured unit coverage applied to `VolumeArcCore` should
+# apply to the watch-side connectivity, payload codec, and pending-
+# queue logic. Sources live at `Tests/VolumeArcWatchTests/`.
+watch_tests_group = tests_root_group.new_group('VolumeArcWatchTests', 'VolumeArcWatchTests')
 shared_group = project.main_group.new_group('Shared Native Package Sources')
 core_group = shared_group.new_group('VolumeArcCore', PACKAGE_ROOT.join('Sources/VolumeArcCore').relative_path_from(ROOT).to_s)
 ui_group = shared_group.new_group('VolumeArcUI', PACKAGE_ROOT.join('Sources/VolumeArcUI').relative_path_from(ROOT).to_s)
@@ -136,6 +142,13 @@ app_perf_tests_target = project.new_target(:ui_test_bundle, 'VolumeArcAppPerfTes
 # simulator; widget-family snapshot tests come in Phase B once
 # `VOL-135` / `VOL-201` snapshot infra lands.
 app_widget_ui_tests_target = project.new_target(:ui_test_bundle, 'VolumeArcWidgetUITests', :ios, IOS_DEPLOYMENT_TARGET, nil, :swift, 'VolumeArcWidgetUITests')
+# VOL-138: watchOS unit test bundle. Hosts `VolumeArcCoreWatch` so the
+# tests can exercise the shared connectivity / payload / queue types
+# compiled against the watchOS SDK rather than only the iOS SDK
+# (`VolumeArcAppTests` already exercises the iOS slice via
+# `VolumeArcCore`). Built and run on the watchOS simulator by
+# `scripts/test_apple_targets.sh`.
+app_watch_tests_target = project.new_target(:unit_test_bundle, 'VolumeArcWatchTests', :watchos, WATCHOS_DEPLOYMENT_TARGET, nil, :swift, 'VolumeArcWatchTests')
 
 # xcodeproj only exposes a generic `:app_extension` helper. WidgetKit watch
 # extensions need the watch-specific product type so Xcode archives them as
@@ -195,17 +208,15 @@ configure_target(ui_target, extra: {
 })
 configure_target(app_target, bundle_id: 'com.mabryventures.VolumeArc', extra: {
   'PRODUCT_NAME' => 'VolumeArc',
-  # VOL-131: iPhone-only for v1.0 TestFlight. iPad support deferred
-  # until VOL-158 completes its UX-audit pass against the iPad form
-  # factor. The TestFlight-eligible matrix is the iPhone family (1);
-  # iPad lands as a separate explicit decision once the audit signs
-  # off on the experience. Snapfile + CI test matrix are already
-  # iPhone-only — this change brings the entitlement / device-family
-  # declaration in line with the shipped surface.
+  # VOL-131: iPhone-only for v1.0 TestFlight. The TestFlight-eligible
+  # matrix is the iPhone family (1); iPad is a post-v1 product
+  # expansion that requires a fresh UX audit, Snapfile update, and App
+  # Store metadata change before this flips to 1,2.
   'TARGETED_DEVICE_FAMILY' => '1',
   'INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents' => 'YES',
-  'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc reads your completed workouts, heart-rate variability, and sleep from Apple Health to show your training history, calculate readiness, and let the AI coach reference your recovery trend (HRV vs baseline, sleep debt, weekly strength load).',
+  'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc reads your completed workouts, heart-rate variability, sleep, Workout Effort, wrist temperature, and respiratory rate from Apple Health to show your training history, calculate readiness, and let the AI coach reference your recovery trend (HRV vs baseline, sleep debt, weekly strength load, Vitals trends, and Training Load).',
   'INFOPLIST_KEY_NSHealthUpdateUsageDescription' => 'VolumeArc writes completed workouts so your training history stays in sync with Apple Health.',
+  'INFOPLIST_KEY_NSCameraUsageDescription' => 'VolumeArc uses the rear camera for on-device form-check analysis. Video frames are processed locally and are not uploaded.',
   'INFOPLIST_KEY_NSMicrophoneUsageDescription' => 'VolumeArc uses the microphone for voice coaching requests and voice workout logging.',
   'INFOPLIST_KEY_NSSpeechRecognitionUsageDescription' => 'VolumeArc uses speech recognition to understand live coaching requests and voice workout notes.',
   # Export-compliance declaration. Without this, every TestFlight upload
@@ -232,6 +243,10 @@ configure_target(app_target, bundle_id: 'com.mabryventures.VolumeArc', extra: {
   # — `scripts/validate_exported_ipa_contract.sh` fails the archive
   # if URL is present but key is missing.
   'VOLUMEARC_RELAY_SIGNING_KEY' => '',
+  # VOL-225: Phase B prefers App Attest when supported, but keeps the
+  # HMAC bearer as a transition fallback until VOL-226 cutover telemetry
+  # proves the attested path is safe to require.
+  'VOLUMEARC_RELAY_AUTH_MODE' => 'appAttestPreferHMACFallback',
   # VOL-55: `VolumeArcCloudKitContainer` used to live in the Info.plist
   # for runtime lookup. `INFOPLIST_KEY_*` silently drops custom
   # (non-Apple-recognized) keys, so the bundle never had it. It now
@@ -308,6 +323,7 @@ configure_target(app_tests_target, bundle_id: 'com.mabryventures.VolumeArc.tests
   'GENERATE_INFOPLIST_FILE' => 'YES',
   'CODE_SIGNING_ALLOWED' => 'NO',
   'CODE_SIGNING_REQUIRED' => 'NO',
+  'SWIFT_ACTIVE_COMPILATION_CONDITIONS' => 'DEBUG VOLUMEARC_WIDGET_SNAPSHOT_TESTING',
   'SKIP_INSTALL' => 'YES',
 })
 configure_target(app_ui_tests_target, bundle_id: 'com.mabryventures.VolumeArc.uitests', extra: {
@@ -338,6 +354,17 @@ configure_target(app_widget_ui_tests_target, bundle_id: 'com.mabryventures.Volum
   'SKIP_INSTALL' => 'YES',
   'TEST_TARGET_NAME' => 'VolumeArcApp',
 })
+# VOL-138: watch-side unit test bundle. No `TEST_TARGET_NAME` — the
+# tests link `VolumeArcCoreWatch` (a static library) directly and run
+# library-level assertions, no host app required. That matches how
+# `VolumeArcAppTests` exercises `VolumeArcCore` on iOS.
+configure_target(app_watch_tests_target, bundle_id: 'com.mabryventures.VolumeArc.watchtests', extra: {
+  'PRODUCT_NAME' => 'VolumeArcWatchTests',
+  'GENERATE_INFOPLIST_FILE' => 'YES',
+  'CODE_SIGNING_ALLOWED' => 'NO',
+  'CODE_SIGNING_REQUIRED' => 'NO',
+  'SKIP_INSTALL' => 'YES',
+})
 
 ui_target.add_dependency(core_target)
 ui_target.frameworks_build_phase.add_file_reference(core_target.product_reference, true)
@@ -360,25 +387,36 @@ app_tests_target.frameworks_build_phase.add_file_reference(ui_target.product_ref
 app_ui_tests_target.add_dependency(app_target)
 app_perf_tests_target.add_dependency(app_target)
 app_widget_ui_tests_target.add_dependency(app_target) # VOL-139
+# VOL-138: watch tests link the watch flavor of the shared core library.
+app_watch_tests_target.add_dependency(core_watch_target)
+app_watch_tests_target.frameworks_build_phase.add_file_reference(core_watch_target.product_reference, true)
 
 widget_target.add_system_framework('WidgetKit')
 widget_target.add_system_framework('AppIntents')
 widget_target.add_system_framework('ActivityKit')
+widget_target.add_system_framework('WorkoutKit')
 app_target.add_system_framework('AppIntents')
 app_target.add_system_framework('ActivityKit')
 app_target.add_system_framework('AuthenticationServices')
 app_target.add_system_framework('AVFoundation')
 app_target.add_system_framework('Security')
 app_target.add_system_framework('Speech')
+app_target.add_system_framework('WorkoutKit')
+watch_target.add_system_framework('AppIntents')
 watch_target.add_system_framework('WatchKit')
 watch_target.add_system_framework('SwiftUI')
+watch_target.add_system_framework('WorkoutKit')
+watch_target.add_system_framework('AVFoundation')
 watch_widgets_target.add_system_framework('WidgetKit')
 watch_widgets_target.add_system_framework('SwiftUI')
+watch_widgets_target.add_system_framework('WorkoutKit')
 app_tests_target.add_system_framework('XCTest')
 app_tests_target.add_system_framework('AuthenticationServices')
 app_tests_target.add_system_framework('Security')
 app_tests_target.add_system_framework('AppIntents')
 app_tests_target.add_system_framework('ActivityKit')
+app_tests_target.add_system_framework('WidgetKit')
+app_tests_target.add_system_framework('WorkoutKit')
 # VOL-142: StoreKitTest powers `SKTestSession`-based unit tests
 # (`StoreKitSubscriptionRevocationTests`) for refund / family-share /
 # grace-period coverage at the model level. UITest target already has
@@ -390,6 +428,13 @@ app_perf_tests_target.add_system_framework('XCTest')
 # VOL-139: widget XCUITest bundle.
 app_widget_ui_tests_target.add_system_framework('XCTest')
 app_widget_ui_tests_target.add_system_framework('WidgetKit')
+# VOL-138: watch test bundle.
+app_watch_tests_target.add_system_framework('XCTest')
+app_watch_tests_target.add_system_framework('AppIntents')
+app_watch_tests_target.add_system_framework('WatchKit')
+app_watch_tests_target.add_system_framework('SwiftUI')
+app_watch_tests_target.add_system_framework('WorkoutKit')
+app_watch_tests_target.add_system_framework('AVFoundation')
 
 embed_watch_extensions_phase = watch_target.new_copy_files_build_phase('Embed Watch Extensions')
 embed_watch_extensions_phase.symbol_dst_subfolder_spec = :plug_ins
@@ -436,6 +481,19 @@ add_swift_sources(ui_tests_group, app_ui_tests_target, ROOT.join('Tests/VolumeAr
 add_swift_sources(perf_tests_group, app_perf_tests_target, ROOT.join('Tests/VolumeArcAppPerfTests'))
 # VOL-139: widget XCUITest sources.
 add_swift_sources(widget_ui_tests_group, app_widget_ui_tests_target, ROOT.join('Tests/VolumeArcWidgetUITests'))
+# VOL-138: watch-side unit tests. Sources live at
+# `Tests/VolumeArcWatchTests/` so they parallel the other test bundles.
+add_swift_sources(watch_tests_group, app_watch_tests_target, ROOT.join('Tests/VolumeArcWatchTests'))
+# VOL-234/VOL-233: compile the standalone AOD render contract and
+# WatchWorkoutModel into watch tests so the watch active-session surface can be
+# verified without a host app.
+add_selected_swift_sources(watch_group, app_watch_tests_target, ROOT.join('Watch'), [
+  'VADesignTokens.swift',
+  'WatchActionButtonIntents.swift',
+  'WatchAlwaysOnWorkoutView.swift',
+  'WatchVoicePlayback.swift',
+  'WatchWorkoutView.swift',
+])
 add_resource(ui_tests_group, app_ui_tests_target, 'VolumeArcTests.storekit')
 # VOL-142: the same StoreKit configuration powers `SKTestSession`-based
 # unit tests under `Tests/VolumeArcAppTests/`. Reuse the existing
@@ -490,6 +548,18 @@ app_icon_folder_ref = tests_group.new_reference(app_icon_relative)
 app_icon_folder_ref.set_last_known_file_type('folder')
 app_tests_target.resources_build_phase.add_file_reference(app_icon_folder_ref, true)
 
+# VOL-135: bundle committed snapshot PNG references into VolumeArcAppTests.
+# Xcode Cloud's test phase cannot rely on the source checkout being mounted
+# inside the simulator sandbox, so snapshot comparisons must resolve their
+# baselines from `Bundle(for:)`. The tests still record into the source tree
+# when `SNAPSHOT_TESTING_RECORD=all|missing` is set; compare mode reads this
+# folder reference from the built test bundle.
+snapshot_references_relative = ROOT.join('Tests/VolumeArcAppTests/Snapshots/__Snapshots__')
+                                   .relative_path_from(ROOT.join('Tests/VolumeArcAppTests')).to_s
+snapshot_references_folder_ref = tests_group.new_reference(snapshot_references_relative)
+snapshot_references_folder_ref.set_last_known_file_type('folder')
+app_tests_target.resources_build_phase.add_file_reference(snapshot_references_folder_ref, true)
+
 add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   'Intents/VolumeArcIntents.swift',
   'VolumeArcAIConfiguration.swift',
@@ -499,12 +569,18 @@ add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   # closes over `VolumeArcAIConfiguration.relayConfiguration` which is
   # also in this list.
   'VolumeArcAIRuntimeFactory.swift',
+  # VOL-141: `VolumeArcAIRuntimeFactory` consults DEBUG-only chaos
+  # launch flags for deterministic fallback journeys. Compile the
+  # controller into the test bundle alongside the factory so direct
+  # App-layer unit tests see the same symbols as the app target.
+  'Debug/ChaosController.swift',
   # VOL-224: `VolumeArcAppAttestCoordinatorTests` exercises the App
   # Attest coordinator + protocol mock directly. Same pattern as the
   # other App-internal types below — the App target doesn't expose a
   # Swift module testable from outside, so the source is compiled into
   # the test bundle. Pure additive; production wiring lands in Phase B.
   'VolumeArcAppAttestService.swift',
+  'VolumeArcAppAttestRelaySessionProvider.swift',
   'VolumeArcCloudConfiguration.swift',
   'VolumeArcLiveActivityController.swift',
   'VolumeArcPersistenceController.swift',
@@ -523,6 +599,16 @@ add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   # directly into the test bundle. Guarded by `#if canImport(Sentry)`.
   'VolumeArcSentryConfiguration.swift',
   'VolumeArcWidgetController.swift',
+  # VOL-136: same pattern — `HealthKitRecoveryReaderTests` injects a
+  # `FakeRecoverySampleSource` through the reader's internal seam init to
+  # exercise the HRV-delta / sleep-debt aggregation + the empty / partial /
+  # query-failed telemetry routing without a live `HKHealthStore`. The App
+  # target exposes no testable Swift module, so the source is compiled into
+  # the test bundle. Guarded by `#if canImport(HealthKit)` inside the file.
+  'Health/HealthKitRecoveryReader.swift',
+])
+add_selected_swift_sources(widgets_group, app_tests_target, ROOT.join('Widgets'), [
+  'VolumeArcWidgets.swift',
 ])
 
 # Sentry Swift Package dependency
@@ -761,6 +847,17 @@ widget_ui_test_scheme = Xcodeproj::XCScheme.new
 widget_ui_test_scheme.configure_with_targets(app_target, app_widget_ui_tests_target)
 widget_ui_test_scheme.save_as(PROJECT_PATH, 'VolumeArcWidgetUITests', true)
 
+# VOL-138: dedicated watchOS unit test scheme. Mirrors the iOS
+# `VolumeArcAppTests` scheme but with no host application (the bundle
+# links VolumeArcCoreWatch directly). `code_coverage_enabled = true`
+# so `scripts/check_coverage.sh` can be pointed at a watch xcresult
+# bundle once a coverage gate is added (initially informational; the
+# 85% target from VOL-138 acceptance criteria is a follow-on ratchet).
+watch_test_scheme = Xcodeproj::XCScheme.new
+watch_test_scheme.configure_with_targets(nil, app_watch_tests_target)
+watch_test_scheme.test_action.code_coverage_enabled = true
+watch_test_scheme.save_as(PROJECT_PATH, 'VolumeArcWatchTests', true)
+
 # VOL-75 P2: per-target schemes so CI can pass `-scheme` (required by
 # `-derivedDataPath`). Without these, `build_all_targets.sh` has to use
 # `-target`, which incompatible with `-derivedDataPath` — forcing shared
@@ -851,7 +948,9 @@ app_widget_ui_tests_ref = test_plan_target_ref(app_widget_ui_tests_target.uuid, 
 # VOL-PR smoke subset mirrors the `smoke` shard from the self-hosted
 # `UI_SHARDS` map: the launch/navigation smoke class + the telemetry
 # probe-matcher unit-style UI tests. Whole-class identifiers (no method
-# suffix) keep the allowlist coarse and stable.
+# suffix) keep the allowlist coarse and stable. VolumeArcWidgetUITests
+# stays out of VOL-PR until its Xcode Cloud ephemeral-simulator launch
+# crash is fixed; VOL-Main keeps the target as the slower backstop.
 write_test_plan(
   TEST_PLANS_DIR.join('VOL-PR.xctestplan'),
   configuration_id: deterministic_plan_guid('VolumeArc/TestPlan/VOL-PR/Configuration1'),
@@ -863,7 +962,6 @@ write_test_plan(
       'selectedTests' => %w[VolumeArcAppUITests VolumeArcTelemetryProbeMatcherTests],
       'target' => app_ui_tests_ref,
     },
-    { 'parallelizable' => true, 'target' => app_widget_ui_tests_ref },
   ],
 )
 
