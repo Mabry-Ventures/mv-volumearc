@@ -25,6 +25,7 @@ public final class WorkoutDashboardModel: ObservableObject {
     @Published public private(set) var trainingPrograms: [TrainingProgramDefinition] = TrainingProgramCatalog.curated
     @Published public private(set) var activeProgram: ActiveTrainingProgramContext?
     @Published public private(set) var coachMemory: CoachMemory = CoachMemory()
+    @Published public internal(set) var latestFormCheckAnalysis: FormCheckAnalysis?
 
     @Published public var activeWorkoutTitle: String?
     @Published public private(set) var isSessionActive: Bool = false
