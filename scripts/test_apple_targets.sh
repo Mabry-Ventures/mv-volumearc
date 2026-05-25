@@ -185,6 +185,19 @@ warm_simulator_for_tests() {
   echo "Restarting AccessibilityUIServer inside '$device' (VOL-231 mitigation)..."
   xcrun simctl spawn "$device" killall AccessibilityUIServer 2>/dev/null || true
   sleep 2
+
+  # VOL-231 / iOS 26.5 LLDB instability: clear the LLDB VersionStore cache
+  # on the runner host. `DebuggerLLDB.DebuggerVersionStore.StoreError error 0`
+  # is triggered when the cached LLDB debug-info index is stale after an iOS
+  # simulator version update. Deleting the store forces LLDB to rebuild it on
+  # next use, which takes ~1-2s but never produces the StoreError wedge.
+  # `|| true` because the directory may not exist on a fresh runner.
+  LLDB_STORE="${HOME}/Library/Developer/Xcode/LLDB"
+  if [ -d "$LLDB_STORE" ]; then
+    echo "Clearing LLDB VersionStore cache (iOS 26.5 instability mitigation)..."
+    rm -rf "$LLDB_STORE" 2>/dev/null || true
+  fi
+
   echo "Simulator '$device' is ready for tests."
 }
 warm_simulator_for_tests
@@ -245,7 +258,7 @@ is_channel_disconnect_failure() {
 is_xctest_runner_crash_failure() {
   local log_path="$1"
   grep -Eq \
-    'Restarting after unexpected exit, crash, or test timeout|Mach error -308 - \(ipc/mig\) server died|NSMachErrorDomain Code=-308|Failed to install or launch the test runner' \
+    'Restarting after unexpected exit, crash, or test timeout|Mach error -308 - \(ipc/mig\) server died|NSMachErrorDomain Code=-308|Failed to install or launch the test runner|DebuggerLLDB\.DebuggerVersionStore\.StoreError' \
     "$log_path"
 }
 
