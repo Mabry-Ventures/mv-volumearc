@@ -26,9 +26,17 @@ id = "efcd4b67b0984a219559ffa37c65ceed"
 name = "APP_ATTEST_STATE"
 class_name = "AppAttestState"
 
+[[durable_objects.bindings]]
+name = "EVAL_ATTEST_STATE"
+class_name = "EvalAttestState"
+
 [[migrations]]
 tag = "v1_app_attest_state"
 new_sqlite_classes = ["AppAttestState"]
+
+[[migrations]]
+tag = "v2_eval_attest_state"
+new_sqlite_classes = ["EvalAttestState"]
 
 [observability]
 enabled = true
@@ -62,8 +70,10 @@ RATE_LIMIT_WINDOW_SECONDS = "600"
 APPLE_TEAM_ID = "A886EMZZW6"
 APPLE_BUNDLE_ID = "com.mabryventures.VolumeArc"
 
-# Staging-only coach response evals can enable:
+# Staging-only coach response evals can enable all three vars:
 #   EVAL_ATTEST_BROKER_ENABLED = "true"
+#   EVAL_ATTEST_BROKER_ALLOWED_HOSTS = "staging-relay.volumearc.app"
 #   EVAL_ATTEST_BROKER_KEY_TTL_SECONDS = "86400"
-# Keep these unset for production. The Worker also refuses broker requests on
-# the production relay hostname as a second guard.
+# Keep these unset for production. The broker fails closed unless the request
+# host is on the explicit allowlist and the EVAL_ATTEST_STATE Durable Object is
+# bound, so preview/custom hostnames do not inherit the staging auth path.

@@ -38,10 +38,108 @@ class InMemoryKV {
   }
 }
 
+interface EvalStoredKey {
+  deviceId: string;
+  publicKeyJwk: JsonWebKey;
+  counter: number;
+  attestedAt: string;
+  expiresAt: string;
+}
+
+interface EvalChallengeRecord {
+  keyId: string;
+  issuedAt: string;
+  expiresAt: string;
+}
+
+class InMemoryEvalAttestState {
+  private values = new Map<string, unknown>();
+
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const body = await request.json() as Record<string, unknown>;
+    switch (url.pathname) {
+      case "/key":
+        this.values.set(evalStoredKey(body.keyId as string), body.stored);
+        return stateJson({ ok: true }, 200);
+      case "/key/lookup":
+        return stateJson({ ok: true, stored: this.values.get(evalStoredKey(body.keyId as string)) ?? null }, 200);
+      case "/key/delete":
+        this.values.delete(evalStoredKey(body.keyId as string));
+        return stateJson({ ok: true }, 200);
+      case "/challenge":
+        this.values.set(evalChallengeKey(body.challenge as string), body.record);
+        return stateJson({ ok: true }, 200);
+      case "/challenge/lookup":
+        return stateJson({
+          ok: true,
+          stored: this.values.get(evalChallengeKey(body.challenge as string)) ?? null,
+        }, 200);
+      case "/challenge/delete":
+        this.values.delete(evalChallengeKey(body.challenge as string));
+        return stateJson({ ok: true }, 200);
+      case "/assertion":
+        return this.finalizeAssertion(body);
+      default:
+        return stateJson({ ok: false, reason: "not_found" }, 404);
+    }
+  }
+
+  private finalizeAssertion(body: Record<string, unknown>): Response {
+    const keyId = body.keyId as string;
+    const challengeB64 = body.challengeB64 as string;
+    const counter = body.counter as number;
+    const storedKey = evalStoredKey(keyId);
+    const stored = this.values.get(storedKey) as EvalStoredKey | undefined;
+    if (!stored) {
+      return stateJson({ ok: false, reason: "key_not_attested" }, 409);
+    }
+    if (Date.parse(stored.expiresAt) <= Date.now()) {
+      this.values.delete(storedKey);
+      return stateJson({ ok: false, reason: "key_expired" }, 409);
+    }
+
+    const challengeKey = evalChallengeKey(challengeB64);
+    const challenge = this.values.get(challengeKey) as EvalChallengeRecord | undefined;
+    if (!challenge) {
+      return stateJson({ ok: false, reason: "challenge_not_found" }, 409);
+    }
+    if (challenge.keyId !== keyId) {
+      return stateJson({ ok: false, reason: "challenge_device_mismatch" }, 409);
+    }
+    if (Date.parse(challenge.expiresAt) <= Date.now()) {
+      this.values.delete(challengeKey);
+      return stateJson({ ok: false, reason: "challenge_expired" }, 409);
+    }
+    if (counter <= stored.counter) {
+      return stateJson({ ok: false, reason: "counter_replay" }, 409);
+    }
+
+    this.values.delete(challengeKey);
+    this.values.set(storedKey, { ...stored, counter });
+    return stateJson({ ok: true, deviceId: stored.deviceId }, 200);
+  }
+}
+
+class InMemoryDurableObjectNamespace {
+  private readonly state = new InMemoryEvalAttestState();
+
+  idFromName(name: string): DurableObjectId {
+    return name as unknown as DurableObjectId;
+  }
+
+  get(_id: DurableObjectId): DurableObjectStub {
+    return {
+      fetch: (request: Request) => this.state.fetch(request),
+    } as unknown as DurableObjectStub;
+  }
+}
+
 function makeEnv(overrides: Partial<RelayEnv> = {}): RelayEnv {
   return {
     GEMINI_API_KEY: "gemini-test-key",
     RATE_LIMIT: new InMemoryKV() as unknown as KVNamespace,
+    EVAL_ATTEST_STATE: new InMemoryDurableObjectNamespace() as unknown as DurableObjectNamespace,
     MODEL_DEFAULT: "gemini-test-flash",
     MODEL_PREMIUM: "gemini-test-pro",
     MAX_OUTPUT_TOKENS: "800",
@@ -97,6 +195,21 @@ function concatBytes(...chunks: Uint8Array[]): Uint8Array {
     offset += chunk.byteLength;
   }
   return result;
+}
+
+function evalStoredKey(keyId: string): string {
+  return `eval:attest:key:${keyId}`;
+}
+
+function evalChallengeKey(challenge: string): string {
+  return `eval:attest:challenge:${challenge}`;
+}
+
+function stateJson(payload: unknown, status: number): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
 }
 
 async function requestChallenge(env: RelayEnv): Promise<string> {
@@ -363,6 +476,7 @@ describe("volumearc-ai-relay App Attest auth", () => {
     const env = makeEnv({
       EVAL_ATTEST_BROKER_ENABLED: "true",
       EVAL_ATTEST_BROKER_TOKEN: "eval-token",
+      EVAL_ATTEST_BROKER_ALLOWED_HOSTS: "staging-relay.test",
     });
 
     const response = await worker.fetch(
@@ -384,10 +498,36 @@ describe("volumearc-ai-relay App Attest auth", () => {
     });
   });
 
+  it("requires an explicit eval broker host allowlist", async () => {
+    const env = makeEnv({
+      EVAL_ATTEST_BROKER_ENABLED: "true",
+      EVAL_ATTEST_BROKER_TOKEN: "eval-token",
+    });
+
+    const response = await worker.fetch(
+      new Request("https://staging-relay.test/v1/eval-attest/challenge", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer eval-token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ keyId: "anything" }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(404);
+    await expect(json(response)).resolves.toMatchObject({
+      error: "not_found",
+      reason: "eval_attest_disabled",
+    });
+  });
+
   it("accepts staging eval broker assertions and rejects replayed counters", async () => {
     const env = makeEnv({
       EVAL_ATTEST_BROKER_ENABLED: "true",
       EVAL_ATTEST_BROKER_TOKEN: "eval-token",
+      EVAL_ATTEST_BROKER_ALLOWED_HOSTS: "staging-relay.test",
     });
     const key = await evalBrokerKeyPair(env);
     const headers = await evalBrokerAuthHeaders(env, key, COACH_BODY, 1);
@@ -431,6 +571,7 @@ describe("volumearc-ai-relay App Attest auth", () => {
     const env = makeEnv({
       EVAL_ATTEST_BROKER_ENABLED: "true",
       EVAL_ATTEST_BROKER_TOKEN: "eval-token",
+      EVAL_ATTEST_BROKER_ALLOWED_HOSTS: "staging-relay.test",
     });
     const key = await evalBrokerKeyPair(env);
     const headers = await evalBrokerAuthHeaders(env, key, COACH_BODY, 1);
@@ -467,6 +608,32 @@ describe("volumearc-ai-relay App Attest auth", () => {
       error: "attestation_invalid",
       reason: "challenge_not_found",
     });
+  });
+
+  it("evaluates broker headers before stray App Attest headers", async () => {
+    const env = makeEnv({
+      EVAL_ATTEST_BROKER_ENABLED: "true",
+      EVAL_ATTEST_BROKER_TOKEN: "eval-token",
+      EVAL_ATTEST_BROKER_ALLOWED_HOSTS: "staging-relay.test",
+    });
+    const key = await evalBrokerKeyPair(env);
+    const headers = await evalBrokerAuthHeaders(env, key, COACH_BODY, 1);
+
+    const response = await worker.fetch(
+      new Request("https://staging-relay.test/v1/coach", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-VA-Attest-Key-ID": "stray-app-attest-key",
+          ...headers,
+        },
+        body: COACH_BODY,
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toContain("Steady single today.");
   });
 
   it("renders app-style minimal fallback prompts for legacy clients", async () => {

@@ -38,6 +38,7 @@ import {
 } from "./evalAttest";
 
 export { AppAttestState } from "./appAttest";
+export { EvalAttestState } from "./evalAttest";
 
 interface Env {
   GEMINI_API_KEY: string;
@@ -45,11 +46,13 @@ interface Env {
   ATTEST_KEYS?: KVNamespace;
   ATTEST_CHALLENGES?: KVNamespace;
   APP_ATTEST_STATE?: DurableObjectNamespace;
+  EVAL_ATTEST_STATE?: DurableObjectNamespace;
   APPLE_APP_ID?: string;
   APPLE_TEAM_ID?: string;
   APPLE_BUNDLE_ID?: string;
   EVAL_ATTEST_BROKER_ENABLED?: string;
   EVAL_ATTEST_BROKER_TOKEN?: string;
+  EVAL_ATTEST_BROKER_ALLOWED_HOSTS?: string;
   EVAL_ATTEST_BROKER_KEY_TTL_SECONDS?: string;
   MODEL_DEFAULT: string;
   MODEL_PREMIUM: string;
@@ -429,6 +432,16 @@ function intentEnvelope(intent: CoachRequestBody["intent"]): string {
 // --- Auth ---------------------------------------------------------------
 
 async function authenticate(request: Request, env: Env, requestBody: Uint8Array): Promise<AuthResult> {
+  if (hasAnyEvalAttestHeader(request)) {
+    const evalAttest = await verifyEvalAttestAssertion(env, request, requestBody);
+    if (evalAttest.ok) {
+      recordAuthEvent("eval_attest_succeeded");
+      return { ok: true, deviceId: evalAttest.deviceId, method: "eval_attest_broker" };
+    }
+    recordAuthEvent("eval_attest_failed", { reason: evalAttest.reason });
+    return { ok: false, status: 401, error: "attestation_invalid", reason: evalAttest.reason };
+  }
+
   const appAttest = await verifyAppAttestAssertion(env, request, requestBody);
   if (appAttest.ok) {
     recordAuthEvent("app_attest_succeeded");
@@ -442,16 +455,6 @@ async function authenticate(request: Request, env: Env, requestBody: Uint8Array)
   if (hasAnyAppAttestHeader) {
     recordAuthEvent("app_attest_failed", { reason: appAttest.reason });
     return { ok: false, status: 401, error: "attestation_invalid", reason: appAttest.reason };
-  }
-
-  if (hasAnyEvalAttestHeader(request)) {
-    const evalAttest = await verifyEvalAttestAssertion(env, request, requestBody);
-    if (evalAttest.ok) {
-      recordAuthEvent("eval_attest_succeeded");
-      return { ok: true, deviceId: evalAttest.deviceId, method: "eval_attest_broker" };
-    }
-    recordAuthEvent("eval_attest_failed", { reason: evalAttest.reason });
-    return { ok: false, status: 401, error: "attestation_invalid", reason: evalAttest.reason };
   }
 
   recordAuthEvent("app_attest_required");

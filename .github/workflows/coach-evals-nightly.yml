@@ -105,10 +105,11 @@ jobs:
           VOLUMEARC_EVAL_OUTPUT_DIR: ${{ runner.temp }}/coach-evals/${{ github.run_id }}-${{ github.run_attempt }}
           VOLUMEARC_RELAY_BASE_URL: ${{ secrets.VOLUMEARC_EVAL_RELAY_BASE_URL }}
           VOLUMEARC_EVAL_ATTEST_BROKER_TOKEN: ${{ secrets.VOLUMEARC_EVAL_ATTEST_BROKER_TOKEN }}
+          RELAY_URL_OVERRIDE: ${{ github.event.inputs.relay_url || '' }}
         run: |
           set -euo pipefail
-          if [[ -n "${{ github.event.inputs.relay_url || '' }}" ]]; then
-            export VOLUMEARC_RELAY_BASE_URL="${{ github.event.inputs.relay_url }}"
+          if [[ -n "${RELAY_URL_OVERRIDE}" ]]; then
+            export VOLUMEARC_RELAY_BASE_URL="${RELAY_URL_OVERRIDE}"
           fi
           set +e
           bash scripts/run_coach_evals.sh

@@ -44,7 +44,7 @@ Before VOL-226, `scripts/run_coach_evals.sh` POSTed each fixture to the live rel
 3. For each fixture, it requests a one-time broker challenge, signs `requestBody || challenge || counter`, and sends `X-VA-Eval-Attest-*` headers to `/v1/coach`.
 4. The relay verifies the signature, consumes the challenge, advances the stored counter, and rejects replayed counters or replayed challenges.
 
-The broker endpoints are disabled unless `EVAL_ATTEST_BROKER_ENABLED=true` and a broker token is configured on the Worker, and they still refuse `relay.volumearc.app`. That keeps the production client path App Attest-only while giving CI response evals real replay/counter coverage.
+The broker endpoints are disabled unless `EVAL_ATTEST_BROKER_ENABLED=true`, `EVAL_ATTEST_BROKER_TOKEN` is configured, `EVAL_ATTEST_STATE` is bound, and the request host appears in `EVAL_ATTEST_BROKER_ALLOWED_HOSTS`. That fail-closed allowlist keeps the production client path App Attest-only while giving CI response evals real replay/counter coverage.
 
 The response-layer assertion contract remains:
 
@@ -89,8 +89,10 @@ Worker-side staging setup:
 
 - Set `EVAL_ATTEST_BROKER_ENABLED=true` only on the staging relay Worker.
 - Set `EVAL_ATTEST_BROKER_TOKEN` as a Worker secret on staging only.
+- Bind the `EVAL_ATTEST_STATE` Durable Object on staging so challenge consumption and counter advancement happen in one serialized transaction.
+- Set `EVAL_ATTEST_BROKER_ALLOWED_HOSTS` to the exact staging relay hostname or comma-separated hostnames used by the eval runner.
 - Optionally set `EVAL_ATTEST_BROKER_KEY_TTL_SECONDS` to shorten ephemeral eval key lifetime; it is capped at 24 hours.
-- Do not configure these vars on the production `relay.volumearc.app` Worker. The code also refuses broker use on that hostname as a second guard.
+- Do not configure these vars on the production `relay.volumearc.app` Worker. The broker refuses every hostname that is not explicitly allowlisted.
 
 ## Fixture inventory
 

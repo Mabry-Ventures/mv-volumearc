@@ -49,7 +49,7 @@ X-VA-Attest-Nonce: <base64 relay challenge>
 
 If App Attest headers validate, the Worker authenticates the request and forwards it to Gemini. Missing headers return 410 `app_attest_required`; invalid or incomplete headers return 401 `attestation_invalid`.
 
-Staging-only coach evals may use `X-VA-Eval-Attest-*` headers minted by the VOL-244 eval attestation broker. The production `relay.volumearc.app` host refuses that broker path; shipped app clients must always use App Attest.
+Staging-only coach evals may use `X-VA-Eval-Attest-*` headers minted by the VOL-244 eval attestation broker. The broker fails closed unless the Worker is explicitly enabled, has the `EVAL_ATTEST_STATE` Durable Object binding, and the request host is listed in `EVAL_ATTEST_BROKER_ALLOWED_HOSTS`; shipped app clients must always use App Attest.
 
 ### `POST /v1/attest/challenge`
 
@@ -85,7 +85,7 @@ For App Attest-capable devices, the app:
 
 The Worker validates the Apple App Attestation Root CA chain, pins the root hash, verifies the nonce extension, checks the app ID hash (`APPLE_TEAM_ID.APPLE_BUNDLE_ID`), verifies the credential ID/key ID binding, stores the public key + counter in the `APP_ATTEST_STATE` Durable Object, and requires counters to increase for assertions. The Durable Object transaction atomically consumes each challenge and advances the counter, avoiding KV's eventual-consistency replay gap.
 
-For response-layer coach evals, staging Workers can enable `/v1/eval-attest/bootstrap` and `/v1/eval-attest/challenge`. The runner bootstraps an ephemeral P-256 public key with a broker token, signs each fixture request over `requestBody || challenge || counter`, and the relay consumes the challenge plus advances the counter before forwarding. This is deliberately unavailable on `relay.volumearc.app`.
+For response-layer coach evals, staging Workers can enable `/v1/eval-attest/bootstrap` and `/v1/eval-attest/challenge`. The runner bootstraps an ephemeral P-256 public key with a broker token, signs each fixture request over `requestBody || challenge || counter`, and the relay consumes the challenge plus advances the counter in the `EVAL_ATTEST_STATE` Durable Object before forwarding. This path is deliberately fail-closed behind an explicit staging-host allowlist.
 
 **Threat model:**
 - ✅ Protects the Gemini API key (never leaves the Worker)
@@ -135,13 +135,13 @@ npx wrangler secret put EVAL_ATTEST_BROKER_TOKEN  # staging only
 Env vars (non-secret, live in `wrangler.toml`):
 - `MODEL_DEFAULT`, `MODEL_PREMIUM`, `MAX_OUTPUT_TOKENS`, `REQUEST_TIMEOUT_MS`, `RATE_LIMIT_MAX_REQUESTS`, `RATE_LIMIT_WINDOW_SECONDS`
 - `APPLE_TEAM_ID`, `APPLE_BUNDLE_ID` (or a full `APPLE_APP_ID`) for App Attest app-ID hash validation
-- `EVAL_ATTEST_BROKER_ENABLED=true` and optional `EVAL_ATTEST_BROKER_KEY_TTL_SECONDS` on staging only; do not set these for production.
+- `EVAL_ATTEST_BROKER_ENABLED=true`, `EVAL_ATTEST_BROKER_ALLOWED_HOSTS=<staging-host>`, and optional `EVAL_ATTEST_BROKER_KEY_TTL_SECONDS` on staging only; do not set these for production.
 
 Optional KV bindings:
 - `ATTEST_KEYS` — legacy/local fallback App Attest public-key/counter store
 - `ATTEST_CHALLENGES` — legacy/local fallback one-time challenge store
 
-Production binds `APP_ATTEST_STATE` as a Durable Object and uses it for App Attest state. If that binding is absent, the Worker falls back to `ATTEST_KEYS` / `ATTEST_CHALLENGES`, or to `RATE_LIMIT` with `attest:*` prefixes, for local tests and emergency rollback builds.
+Production binds `APP_ATTEST_STATE` as a Durable Object and uses it for App Attest state. If that binding is absent, the Worker falls back to `ATTEST_KEYS` / `ATTEST_CHALLENGES`, or to `RATE_LIMIT` with `attest:*` prefixes, for local tests and emergency rollback builds. Staging response evals additionally bind `EVAL_ATTEST_STATE`; the eval broker does not run without that binding.
 
 ## Wiring the iOS side
 
