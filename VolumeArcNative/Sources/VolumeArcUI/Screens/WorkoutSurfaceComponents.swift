@@ -413,8 +413,15 @@ struct RestTimerDisplay: View {
 
             restRing(remaining: remaining, progress: progress)
                 .accessibilityElement()
-                .accessibilityLabel("Rest timer")
-                .accessibilityValue(remaining == 0 ? "Go time" : "\(remaining) seconds remaining")
+                .accessibilityLabel(String(localized: "Rest timer", comment: "Rest timer accessibility label"))
+                .accessibilityValue(
+                    remaining == 0
+                        ? String(localized: "Go time", comment: "Rest timer complete accessibility value")
+                        : String(
+                            localized: "^[\(remaining) second](inflect: true) remaining",
+                            comment: "Rest timer countdown accessibility value"
+                        )
+                )
                 .onChange(of: remaining) { _, newValue in
                     if active && newValue == 0 && !lastFired {
                         lastFired = true

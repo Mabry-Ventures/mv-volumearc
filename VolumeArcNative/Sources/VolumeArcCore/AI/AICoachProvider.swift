@@ -157,8 +157,6 @@ public struct AIRelayCoachProvider: AICoachProvider {
         let systemPrompt = CoachPromptTemplate.systemPrompt(style: coachingStyle)
         let body: [String: String] = [
             "intent": intent.rawValue,
-            "question": prompt,
-            "contextBlock": context,
             "style": coachingStyle.rawValue,
             "prompt": renderedPrompt,
             "system": systemPrompt

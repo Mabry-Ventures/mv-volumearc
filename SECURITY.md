@@ -6,7 +6,7 @@ This file is the front door for security disclosures and points at the in-depth 
 
 ## Reporting a vulnerability
 
-Email **security@volumearc.app**.
+Email **security@volumearc.com**.
 
 Please include:
 

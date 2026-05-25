@@ -66,22 +66,13 @@
 	<key>UILaunchScreen</key>
 	<dict/>
 
-	<!-- VOL-126: App Store Connect validation requires interface
-	     orientations to be declared. iPhone is portrait-only (lifting
-	     forms work better in portrait, and our SwiftUI hierarchy is
-	     designed around it). iPad supports all four orientations
-	     because App Store rejects iPad apps that don't (unless
-	     UIRequiresFullScreen=YES, which would block multitasking). -->
+	<!-- VOL-126 / VOL-131: App Store Connect validation requires interface
+	     orientations to be declared. v1 is iPhone-only
+	     (`TARGETED_DEVICE_FAMILY = 1` in the generated project), and the
+	     SwiftUI hierarchy is designed around portrait lifting flows. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-	</array>
-	<key>UISupportedInterfaceOrientations~ipad</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 
 	<!--

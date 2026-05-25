@@ -145,6 +145,8 @@ function makeEnv(overrides: Partial<RelayEnv> = {}): RelayEnv {
     EVAL_ATTEST_STATE: new InMemoryDurableObjectNamespace() as unknown as DurableObjectNamespace,
     MODEL_DEFAULT: "gemini-test-flash",
     MODEL_PREMIUM: "gemini-test-pro",
+    APPLE_TEAM_ID: "A886EMZZW6",
+    APPLE_BUNDLE_ID: "com.mabryventures.VolumeArc",
     MAX_OUTPUT_TOKENS: "800",
     REQUEST_TIMEOUT_MS: "1000",
     RATE_LIMIT_MAX_REQUESTS: "30",
@@ -788,8 +790,6 @@ describe("volumearc-ai-relay App Attest auth", () => {
     const env = makeEnv();
     const body = JSON.stringify({
       intent: "progression",
-      question: "Can I add weight?",
-      contextBlock: "## Training context\n- Readiness: 82/100",
       style: "minimal",
       prompt: "client rendered prompt",
       system: "client rendered system",
@@ -803,6 +803,81 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(upstreamBody.systemInstruction.parts[0].text).toBe("client rendered system");
     expect(upstreamBody.contents.at(-1).parts[0].text).toBe("client rendered prompt");
     expect(upstreamBody.generationConfig.temperature).toBe(0.7);
+  });
+
+  it("accepts prompt-only app requests and rejects empty coach payloads", async () => {
+    const env = makeEnv();
+    const promptOnlyBody = JSON.stringify({
+      intent: "planning",
+      style: "analytical",
+      prompt: "[VAC:tmpl] intent=planning style=analytical\n\n## Athlete question\nWhat is my week?",
+      system: "client rendered system",
+    });
+
+    const promptOnlyResponse = await worker.fetch(
+      coachRequest(await appAttestAuthHeaders(env, promptOnlyBody), promptOnlyBody),
+      env,
+    );
+
+    expect(promptOnlyResponse.status).toBe(200);
+    const upstreamInit = vi.mocked(fetch).mock.calls[0]?.[1] as RequestInit;
+    const upstreamBody = JSON.parse(upstreamInit.body as string);
+    expect(upstreamBody.contents.at(-1).parts[0].text).toContain("intent=planning");
+
+    vi.mocked(fetch).mockClear();
+    const emptyBody = JSON.stringify({
+      intent: "planning",
+      style: "analytical",
+      prompt: "",
+      system: "client rendered system",
+    });
+    const emptyResponse = await worker.fetch(
+      coachRequest(await appAttestAuthHeaders(env, emptyBody), emptyBody),
+      env,
+    );
+
+    expect(emptyResponse.status).toBe(400);
+    await expect(json(emptyResponse)).resolves.toMatchObject({ error: "missing_fields" });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects over-large coach payloads before auth and upstream work", async () => {
+    const env = makeEnv();
+    const oversizedBody = JSON.stringify({
+      intent: "free",
+      style: "minimal",
+      prompt: "x".repeat(32_001),
+    });
+
+    const response = await worker.fetch(coachRequest({}, oversizedBody), env);
+
+    expect(response.status).toBe(413);
+    await expect(json(response)).resolves.toMatchObject({ error: "payload_too_large" });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("counts system prompts and message history in the coach payload limit", async () => {
+    const env = makeEnv();
+    const oversizedSystemBody = JSON.stringify({
+      intent: "free",
+      style: "minimal",
+      prompt: "short prompt",
+      system: "x".repeat(32_000),
+    });
+    const oversizedMessagesBody = JSON.stringify({
+      intent: "free",
+      style: "minimal",
+      prompt: "short prompt",
+      messages: [{ role: "user", content: "x".repeat(32_000) }],
+    });
+
+    for (const body of [oversizedSystemBody, oversizedMessagesBody]) {
+      vi.mocked(fetch).mockClear();
+      const response = await worker.fetch(coachRequest({}, body), env);
+      expect(response.status).toBe(413);
+      await expect(json(response)).resolves.toMatchObject({ error: "payload_too_large" });
+      expect(fetch).not.toHaveBeenCalled();
+    }
   });
 
   it("rejects missing App Attest headers with a cutover-specific 410", async () => {

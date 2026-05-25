@@ -243,7 +243,7 @@ INFO_PLIST="$REPO_ROOT/App/Info.plist"
 if [[ -f "$INFO_PLIST" ]]; then
   if [[ -n "${SENTRY_DSN:-}" ]]; then
     plutil -replace VolumeArcSentryDSN -string "$SENTRY_DSN" "$INFO_PLIST"
-    echo "Patched VolumeArcSentryDSN into Info.plist (len=${#SENTRY_DSN})"
+    echo "Patched VolumeArcSentryDSN into Info.plist (configured)"
   else
     echo "SENTRY_DSN env var unset; leaving Info.plist placeholder"
   fi

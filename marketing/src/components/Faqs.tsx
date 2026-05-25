@@ -39,7 +39,7 @@ const faqs = [
     {
       question: 'How do you handle HealthKit data?',
       answer:
-        'HealthKit reads (HRV, sleep, training load) feed the Readiness model and the coach prompt. Your raw HealthKit data never leaves the device. Computed summaries (e.g., "HRV down 8%") may be included in the redacted coach prompt envelope, but only with explicit permission and only when you ask the coach a question.',
+        'HealthKit reads (workouts, HRV, sleep, Workout Effort, wrist temperature, respiratory rate, heart rate, and active energy where available) feed the Readiness model and the coach prompt. Your raw HealthKit data never leaves the device. Computed summaries (e.g., "HRV down 8%") may be included in the redacted coach prompt envelope, but only with explicit permission and only when you ask the coach a question.',
     },
     {
       question: 'Can I import my workout history from another app?',

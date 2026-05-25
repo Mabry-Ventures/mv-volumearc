@@ -165,6 +165,14 @@ final class VolumeArcCoachPromptTemplateTests: XCTestCase {
             renderedPrompt.contains("Should I add weight today?"),
             "Relay body must include the athlete's verbatim question"
         )
+        XCTAssertNil(
+            json["question"],
+            "Relay body must not send a duplicate raw `question`; the rendered prompt is the only user-message payload"
+        )
+        XCTAssertNil(
+            json["contextBlock"],
+            "Relay body must not send a duplicate raw `contextBlock`; the rendered prompt is the only context payload"
+        )
         XCTAssertEqual(
             json["intent"] as? String,
             CoachIntent.progression.rawValue,

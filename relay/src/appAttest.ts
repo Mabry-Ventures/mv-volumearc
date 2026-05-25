@@ -49,8 +49,6 @@ oyFraWVIyd/dganmrduC1bmTBGwD
 
 const APP_ATTEST_ROOT_SHA256 = "1cb9823ba28ba6ad2d33a006941de2ae4f513ef1d4e831b9f7e0fa7b6242c932";
 const APP_ATTEST_EXTENSION_OID = "1.2.840.113635.100.8.2";
-const DEFAULT_APPLE_TEAM_ID = "A886EMZZW6";
-const DEFAULT_BUNDLE_ID = "com.mabryventures.VolumeArc";
 const CHALLENGE_TTL_SECONDS = 5 * 60;
 
 interface ChallengeRecord {
@@ -500,8 +498,11 @@ function appId(env: AppAttestEnv): string {
   if (env.APPLE_APP_ID?.trim()) {
     return env.APPLE_APP_ID.trim();
   }
-  const team = env.APPLE_TEAM_ID?.trim() || DEFAULT_APPLE_TEAM_ID;
-  const bundle = env.APPLE_BUNDLE_ID?.trim() || DEFAULT_BUNDLE_ID;
+  const team = env.APPLE_TEAM_ID?.trim();
+  const bundle = env.APPLE_BUNDLE_ID?.trim();
+  if (!team || !bundle) {
+    throw new AppAttestValidationError("app_id_unconfigured");
+  }
   return `${team}.${bundle}`;
 }
 

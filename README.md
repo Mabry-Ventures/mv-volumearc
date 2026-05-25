@@ -50,8 +50,8 @@ The 2026-05-09 forensic re-audit ([`docs/AUDIT.md`](docs/AUDIT.md)) scored the p
 
 ## License
 
-**Proprietary — all rights reserved by Mabry Ventures, LLC** (Nashville, Tennessee). See [`LICENSE`](LICENSE) for full text, or contact `legal@volumearc.app` for licensing inquiries.
+**Proprietary — all rights reserved by Mabry Ventures, LLC** (Nashville, Tennessee). See [`LICENSE`](LICENSE) for full text, or contact `legal@volumearc.com` for licensing inquiries.
 
 ## Security
 
-See [`SECURITY.md`](SECURITY.md) for the vulnerability-disclosure process. The detailed threat model lives in [`docs/SECURITY.md`](docs/SECURITY.md). For security disclosures, contact `security@volumearc.app`.
+See [`SECURITY.md`](SECURITY.md) for the vulnerability-disclosure process. The detailed threat model lives in [`docs/SECURITY.md`](docs/SECURITY.md). For security disclosures, contact `security@volumearc.com`.

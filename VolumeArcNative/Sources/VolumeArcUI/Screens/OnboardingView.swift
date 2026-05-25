@@ -336,8 +336,9 @@ public struct OnboardingView: View {
                         symbol: "figure.strengthtraining.traditional",
                         text: String(
                             localized: """
-                            Reads completed workouts (and, on Apple Watch, heart rate + \
-                            active energy during a session) to chart your training history.
+                            Reads workouts, HRV, sleep, Workout Effort, wrist temperature, \
+                            respiratory rate, and Apple Watch session signals to chart your \
+                            training history.
                             """,
                             comment: "Onboarding permissions step — what HealthKit data VolumeArc reads"
                         )
@@ -356,8 +357,9 @@ public struct OnboardingView: View {
                         symbol: "iphone.gen3",
                         text: String(
                             localized: """
-                            Your Health data stays in Apple Health on this device. \
-                            VolumeArc does not upload it to our servers.
+                            Raw HealthKit data stays in Apple Health on this device. \
+                            If you use Cloud Coach, only computed aggregates leave \
+                            with your consent.
                             """,
                             comment: "Onboarding permissions step — on-device storage guarantee"
                         )
