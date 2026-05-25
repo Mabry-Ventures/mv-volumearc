@@ -76,11 +76,19 @@ public actor DashboardRefreshLoader {
         self.progressionEngine = progressionEngine
     }
 
-    public func load(sessionFetchLimit: Int) throws -> DashboardRefreshSnapshot {
+    public func load(
+        sessionFetchLimit: Int,
+        externalSessions: [RecentSession] = []
+    ) throws -> DashboardRefreshSnapshot {
         let context = ModelContext(container)
         let profile = try loadProfile(in: context)
         let athlete = loadAthleteProfile(from: profile)
-        let recentSessions = try loadRecentSessions(limit: sessionFetchLimit, in: context)
+        let persistedSessions = try loadRecentSessions(limit: sessionFetchLimit, in: context)
+        let recentSessions = Self.mergeRecentSessions(
+            persistedSessions,
+            externalSessions,
+            limit: sessionFetchLimit
+        )
         let readiness = progressionEngine.evaluateReadiness(from: recentSessions, athlete: athlete)
 
         let primaryExercise = VolumeArcExerciseCatalog.backSquat
@@ -105,6 +113,18 @@ public actor DashboardRefreshLoader {
             activeWorkout: try loadActiveWorkout(in: context),
             coachMemory: memory,
             isOnboardingComplete: profile?.onboardingCompleted ?? false
+        )
+    }
+
+    private static func mergeRecentSessions(
+        _ persistedSessions: [RecentSession],
+        _ externalSessions: [RecentSession],
+        limit: Int
+    ) -> [RecentSession] {
+        Array(
+            (persistedSessions + externalSessions)
+                .sorted { $0.date > $1.date }
+                .prefix(limit)
         )
     }
 
@@ -286,6 +306,7 @@ public actor DashboardRefreshLoader {
 
     private static func recentSession(from workout: WorkoutRecord) -> RecentSession {
         RecentSession(
+            title: workout.title.isEmpty ? nil : workout.title,
             date: workout.completedAt ?? workout.startedAt,
             durationMinutes: workout.durationMinutes,
             exerciseIDs: workout.exerciseIDsCSV.split(separator: ",").map(String.init),

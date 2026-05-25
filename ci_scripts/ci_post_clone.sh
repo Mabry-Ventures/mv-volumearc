@@ -127,6 +127,46 @@ end
 RUBY
 }
 
+install_portable_swiftlint() {
+  local version="${SWIFTLINT_VERSION:-0.63.2}"
+  local install_dir="$REPO_ROOT/.build/tools/swiftlint-$version"
+  local archive="$install_dir/portable_swiftlint.zip"
+
+  echo "Installing SwiftLint $version from the portable GitHub release"
+  mkdir -p "$install_dir"
+  curl --fail --location --retry 3 --retry-all-errors --connect-timeout 20 \
+    --output "$archive" \
+    "https://github.com/realm/SwiftLint/releases/download/$version/portable_swiftlint.zip"
+  /usr/bin/unzip -q -o "$archive" -d "$install_dir"
+  chmod +x "$install_dir/swiftlint"
+  export PATH="$install_dir:$PATH"
+}
+
+ensure_swiftlint() {
+  if command -v swiftlint >/dev/null 2>&1; then
+    return 0
+  fi
+
+  # Xcode Cloud's hosted images may not have SwiftLint, and Homebrew can fail
+  # before installation if ghcr.io is temporarily unavailable. Use SwiftLint's
+  # official portable release there so the fail-fast gate is not coupled to
+  # Homebrew's bottle infrastructure.
+  if [[ -n "${CI_WORKFLOW:-}" ]]; then
+    install_portable_swiftlint
+    return 0
+  fi
+
+  if command -v brew >/dev/null 2>&1; then
+    echo "swiftlint not on PATH; installing via Homebrew"
+    if brew install swiftlint; then
+      return 0
+    fi
+    echo "Homebrew SwiftLint install failed; falling back to portable release"
+  fi
+
+  install_portable_swiftlint
+}
+
 # Patch runtime config from Xcode Cloud env vars into the bundle's
 # Info.plist BEFORE xcodebuild runs. Xcode Cloud's environment
 # variables don't propagate to `xcodebuild` as build settings, so the
@@ -172,10 +212,7 @@ RUBY
 # there.
 if [[ "${SKIP_HYGIENE_GATE:-0}" != "1" ]]; then
   echo "VOL-246: running fail-fast hygiene gate"
-  if ! command -v swiftlint >/dev/null 2>&1; then
-    echo "swiftlint not on PATH; installing via Homebrew (available on Xcode Cloud images)"
-    brew install swiftlint
-  fi
+  ensure_swiftlint
   swiftlint_version="$(swiftlint version 2>/dev/null | head -n1 | awk '{print $NF}')"
   swiftlint_major="$(printf '%s\n' "$swiftlint_version" | cut -d. -f1)"
   swiftlint_minor="$(printf '%s\n' "$swiftlint_version" | cut -d. -f2)"

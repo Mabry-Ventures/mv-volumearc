@@ -82,6 +82,7 @@ public final class WorkoutDashboardModel: ObservableObject {
     /// context). Internal so the extracted coach-context extension
     /// can call `currentRecovery()`.
     let recoveryReader: RecoveryReader
+    let healthWorkoutImporter: HealthWorkoutImporting
     let watchVoiceSettingsStore: WatchVoiceSettingsStore
     let watchConnectivityCoordinator: WatchConnectivityCoordinator?
 
@@ -134,6 +135,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         // keep compiling unchanged. App-level wiring injects the real
         // `HealthKitRecoveryReader`.
         recoveryReader: RecoveryReader = UnavailableRecoveryReader(),
+        healthWorkoutImporter: HealthWorkoutImporting = UnavailableHealthWorkoutImporter(),
         watchVoiceSettingsStore: WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore(),
         watchConnectivityCoordinator: WatchConnectivityCoordinator? = nil
     ) {
@@ -143,6 +145,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.featureFlags = featureFlags ?? LocalFeatureFlagProvider()
         self.healthStore = healthStore
         self.recoveryReader = recoveryReader
+        self.healthWorkoutImporter = healthWorkoutImporter
         self.watchVoiceSettingsStore = watchVoiceSettingsStore
         self.watchConnectivityCoordinator = watchConnectivityCoordinator
         self.workoutRepository = repository
@@ -180,6 +183,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         voiceCoach: LiveVoiceCoachOrchestrator,
         featureFlags: FeatureFlagProvider? = nil,
         recoveryReader: RecoveryReader = UnavailableRecoveryReader(),
+        healthWorkoutImporter: HealthWorkoutImporting = UnavailableHealthWorkoutImporter(),
         watchVoiceSettingsStore: WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore(),
         watchConnectivityCoordinator: WatchConnectivityCoordinator? = nil
     ) {
@@ -189,6 +193,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.featureFlags = featureFlags ?? LocalFeatureFlagProvider()
         self.healthStore = healthStore
         self.recoveryReader = recoveryReader
+        self.healthWorkoutImporter = healthWorkoutImporter
         self.watchVoiceSettingsStore = watchVoiceSettingsStore
         self.watchConnectivityCoordinator = watchConnectivityCoordinator
         #if canImport(SwiftData)
@@ -219,6 +224,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         voiceCoach: LiveVoiceCoachOrchestrator,
         featureFlags: FeatureFlagProvider? = nil,
         recoveryReader: RecoveryReader = UnavailableRecoveryReader(),
+        healthWorkoutImporter: HealthWorkoutImporting = UnavailableHealthWorkoutImporter(),
         watchVoiceSettingsStore: WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore(),
         watchConnectivityCoordinator: WatchConnectivityCoordinator? = nil
     ) {
@@ -228,6 +234,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.featureFlags = featureFlags ?? LocalFeatureFlagProvider()
         self.healthStore = healthStore
         self.recoveryReader = recoveryReader
+        self.healthWorkoutImporter = healthWorkoutImporter
         self.watchVoiceSettingsStore = watchVoiceSettingsStore
         self.watchConnectivityCoordinator = watchConnectivityCoordinator
         #if canImport(SwiftData)
@@ -263,7 +270,11 @@ public final class WorkoutDashboardModel: ObservableObject {
             // limit when `-PerfTestMode 1` is active so the rows exist in
             // memory for XCTest to scroll past.
             let sessionFetchLimit = VolumeArcRuntimeFlags.isPerformanceTestMode ? 60 : 20
-            let snapshot = try await refreshLoader.load(sessionFetchLimit: sessionFetchLimit)
+            let externalHealthSessions = await externalHealthWorkoutSessions(limit: sessionFetchLimit)
+            let snapshot = try await refreshLoader.load(
+                sessionFetchLimit: sessionFetchLimit,
+                externalSessions: externalHealthSessions
+            )
 
             self.athlete = snapshot.athlete
             self.recentSessions = snapshot.recentSessions
@@ -654,19 +665,6 @@ public final class WorkoutDashboardModel: ObservableObject {
         ))
         await refresh()
     }
-
-    #if canImport(SwiftData)
-    private static func recentSession(from workout: WorkoutRecord) -> RecentSession {
-        RecentSession(
-            date: workout.completedAt ?? workout.startedAt,
-            durationMinutes: workout.durationMinutes,
-            exerciseIDs: workout.exerciseIDsCSV.split(separator: ",").map(String.init),
-            totalVolumeLoad: workout.totalVolumeLoad,
-            averageRPE: workout.averageRPE,
-            completedSetCount: workout.completedSetCount
-        )
-    }
-    #endif
 }
 
 public extension WorkoutDashboardModel {

@@ -173,6 +173,8 @@ public extension AthleteProfile {
 
 /// A completed training session.
 public struct RecentSession: Sendable {
+    public let title: String?
+    public let sourceName: String?
     public let date: Date
     public let durationMinutes: Int
     public let exerciseIDs: [String]
@@ -181,6 +183,8 @@ public struct RecentSession: Sendable {
     public let completedSetCount: Int
 
     public init(
+        title: String? = nil,
+        sourceName: String? = nil,
         date: Date,
         durationMinutes: Int = 60,
         exerciseIDs: [String] = [],
@@ -188,12 +192,18 @@ public struct RecentSession: Sendable {
         averageRPE: Double = 7.0,
         completedSetCount: Int = 0
     ) {
+        self.title = title
+        self.sourceName = sourceName
         self.date = date
         self.durationMinutes = durationMinutes
         self.exerciseIDs = exerciseIDs
         self.totalVolumeLoad = totalVolumeLoad
         self.averageRPE = averageRPE
         self.completedSetCount = completedSetCount
+    }
+
+    public var isExternalHealthSession: Bool {
+        completedSetCount == 0 && exerciseIDs.contains { $0.hasPrefix("healthkit-") }
     }
 }
 

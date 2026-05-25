@@ -30,7 +30,7 @@ public struct SessionDetailView: View {
         // row.
         .accessibilityIdentifier("session.detail.root")
         .navigationTitle(
-            session.date.formatted(.dateTime.weekday(.wide).month().day())
+            navigationTitle
         )
         .navigationBarTitleDisplayMode(.large)
         .task {
@@ -42,11 +42,11 @@ public struct SessionDetailView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: VA.Space.xs) {
-            Text(String(localized: "SESSION", comment: "Session detail header label"))
+            Text(headerLabel)
                 .font(VA.Typography.caption)
                 .foregroundStyle(VA.Colors.textSecondary)
                 .tracking(0.5)
-            Text(session.date.formatted(.dateTime.hour().minute()))
+            Text(headerTitle)
                 .font(VA.Typography.title)
                 .foregroundStyle(VA.Colors.textPrimary)
         }
@@ -72,28 +72,43 @@ public struct SessionDetailView: View {
         HStack(spacing: VA.Space.md) {
             VACard(style: .glass) {
                 VStack(alignment: .leading, spacing: VA.Space.xs) {
-                    Text(String(localized: "SETS", comment: "Session detail set count label"))
-                        .font(VA.Typography.caption)
-                        .foregroundStyle(VA.Colors.textSecondary)
-                        .tracking(0.5)
-                    Text("\(session.completedSetCount)")
-                        .font(VA.Typography.display)
-                        .foregroundStyle(VA.Colors.textPrimary)
-                }
-            }
-            VACard(style: .glass) {
-                VStack(alignment: .leading, spacing: VA.Space.xs) {
-                    Text(String(localized: "VOLUME", comment: "Session detail volume label"))
+                    Text(primaryMetricLabel)
                         .font(VA.Typography.caption)
                         .foregroundStyle(VA.Colors.textSecondary)
                         .tracking(0.5)
                     HStack(alignment: .firstTextBaseline, spacing: 2) {
-                        Text("\(Int(session.totalVolumeLoad))")
+                        Text(primaryMetricValue)
                             .font(VA.Typography.display)
                             .foregroundStyle(VA.Colors.textPrimary)
-                        Text(String(localized: "lb", comment: "Weight unit abbreviation — pounds"))
-                            .font(VA.Typography.footnote)
-                            .foregroundStyle(VA.Colors.textSecondary)
+                        if let unit = primaryMetricUnit {
+                            Text(unit)
+                                .font(VA.Typography.footnote)
+                                .foregroundStyle(VA.Colors.textSecondary)
+                        }
+                    }
+                }
+            }
+            VACard(style: .glass) {
+                VStack(alignment: .leading, spacing: VA.Space.xs) {
+                    Text(secondaryMetricLabel)
+                        .font(VA.Typography.caption)
+                        .foregroundStyle(VA.Colors.textSecondary)
+                        .tracking(0.5)
+                    if session.isExternalHealthSession {
+                        Text(session.sourceName ?? String(localized: "Health", comment: "Short HealthKit source fallback"))
+                            .font(VA.Typography.display)
+                            .foregroundStyle(VA.Colors.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.65)
+                    } else {
+                        HStack(alignment: .firstTextBaseline, spacing: 2) {
+                            Text("\(Int(session.totalVolumeLoad))")
+                                .font(VA.Typography.display)
+                                .foregroundStyle(VA.Colors.textPrimary)
+                            Text(String(localized: "lb", comment: "Weight unit abbreviation — pounds"))
+                                .font(VA.Typography.footnote)
+                                .foregroundStyle(VA.Colors.textSecondary)
+                        }
                     }
                 }
             }
@@ -123,7 +138,50 @@ public struct SessionDetailView: View {
     }
 
     private func exerciseDisplayName(_ id: String) -> String {
-        VolumeArcExerciseCatalog.exercise(withID: id)?.name ?? id.replacingOccurrences(of: "-", with: " ").capitalized
+        if id.hasPrefix("healthkit-") {
+            return session.title ?? String(localized: "Apple Health workout", comment: "Fallback HealthKit workout title")
+        }
+        return VolumeArcExerciseCatalog.exercise(withID: id)?.name
+            ?? id.replacingOccurrences(of: "-", with: " ").capitalized
+    }
+
+    private var navigationTitle: String {
+        if session.isExternalHealthSession, let title = session.title, !title.isEmpty {
+            return title
+        }
+        return session.date.formatted(.dateTime.weekday(.wide).month().day())
+    }
+
+    private var headerLabel: String {
+        session.isExternalHealthSession
+            ? String(localized: "APPLE HEALTH", comment: "Session detail header label for HealthKit imports")
+            : String(localized: "SESSION", comment: "Session detail header label")
+    }
+
+    private var headerTitle: String {
+        session.isExternalHealthSession
+            ? session.date.formatted(.dateTime.weekday(.wide).month().day().hour().minute())
+            : session.date.formatted(.dateTime.hour().minute())
+    }
+
+    private var primaryMetricLabel: String {
+        session.isExternalHealthSession
+            ? String(localized: "DURATION", comment: "Session detail duration label")
+            : String(localized: "SETS", comment: "Session detail set count label")
+    }
+
+    private var primaryMetricValue: String {
+        session.isExternalHealthSession ? "\(session.durationMinutes)" : "\(session.completedSetCount)"
+    }
+
+    private var primaryMetricUnit: String? {
+        session.isExternalHealthSession ? String(localized: "min", comment: "Minute unit abbreviation") : nil
+    }
+
+    private var secondaryMetricLabel: String {
+        session.isExternalHealthSession
+            ? String(localized: "SOURCE", comment: "Session detail source label")
+            : String(localized: "VOLUME", comment: "Session detail volume label")
     }
 }
 #endif
