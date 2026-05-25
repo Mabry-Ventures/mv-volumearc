@@ -5,9 +5,9 @@ Regression protection for the AI coach's prompt quality. Two layers:
 | Layer | Where | When it runs | What it catches |
 |-------|-------|--------------|-----------------|
 | Template-layer (hermetic) | `Tests/VolumeArcAppTests/Evals/CoachEvalTests.swift` | Every PR via `scripts/test_apple_targets.sh` | Any regression that bypasses `CoachPromptTemplate.render`, drops the template marker, changes intent envelopes, strips the system prompt persona, or mutates the renderer's determinism. No network, no model call, no Gemini budget burned. |
-| Response-layer (paused after VOL-226) | `scripts/run_coach_evals.sh` | Skipped artifact only | The live relay now requires real App Attest assertions. A generic shell runner cannot mint those, so response-layer model-output checks need a real-device App Attest signer before they can resume. |
+| Response-layer (staging live relay) | `scripts/run_coach_evals.sh` | Nightly cron + manual dispatch | Posts every fixture to the staging relay through the VOL-244 eval attestation broker, then checks the streamed Gemini response against the fixture's response-quality assertions. Production relay auth remains App Attest-only. |
 
-Fixtures remain the single source of truth. They live at `Tests/Evals/CoachEvalFixtures/*.json` and get bundled into the iOS test target as a folder reference. The shell script no longer POSTs them to the live relay until the App Attest signer exists.
+Fixtures remain the single source of truth. They live at `Tests/Evals/CoachEvalFixtures/*.json` and get bundled into the iOS test target as a folder reference. The response-layer runner sends the same fixture payload shape to the relay, with `prompt` and `system` set to empty strings so the Worker fallback template remains under test.
 
 ## Methodology
 
@@ -35,9 +35,16 @@ Each fixture gets fed through `CoachPromptTemplate.render(intent:contextBlock:qu
 
 A coverage sweep also asserts that every `CoachIntent`, every `CoachingStyle`, every readiness bucket from `{45, 60, 72, 82, 88}`, and every session-history tier from `{0, 1, 5+}` still has at least one fixture. If a future edit trims the suite below the coverage floor, the test fails loudly.
 
-### Response-layer assertions (paused)
+### Response-layer assertions
 
-Before VOL-226, `scripts/run_coach_evals.sh` POSTed each fixture to the live relay and checked the streamed model response against `expectedAssertions`. That path used the retired shared client HMAC credential. After the App Attest-only cutover, the relay correctly rejects non-attested shell requests with 410, so live response assertions are paused until a real-device signer can supply valid `X-VA-Attest-*` headers.
+Before VOL-226, `scripts/run_coach_evals.sh` POSTed each fixture to the live relay with the retired shared client HMAC credential. VOL-244 replaces that path with a staging-only eval attestation broker:
+
+1. The runner generates an ephemeral P-256 key pair in memory for the current eval run.
+2. It bootstraps the public key through `/v1/eval-attest/bootstrap` on a staging relay host, authorized by `VOLUMEARC_EVAL_ATTEST_BROKER_TOKEN`.
+3. For each fixture, it requests a one-time broker challenge, signs `requestBody || challenge || counter`, and sends `X-VA-Eval-Attest-*` headers to `/v1/coach`.
+4. The relay verifies the signature, consumes the challenge, advances the stored counter, and rejects replayed counters or replayed challenges.
+
+The broker endpoints are disabled unless `EVAL_ATTEST_BROKER_ENABLED=true`, `EVAL_ATTEST_BROKER_TOKEN` is configured, `EVAL_ATTEST_STATE` is bound, and the request host appears in `EVAL_ATTEST_BROKER_ALLOWED_HOSTS`. That fail-closed allowlist keeps the production client path App Attest-only while giving CI response evals real replay/counter coverage.
 
 The response-layer assertion contract remains:
 
@@ -66,12 +73,26 @@ The `CoachEvalTests` class runs as part of `VolumeArcAppTests`. Failure surfaces
 ### Response layer
 
 ```bash
-#   export VOLUMEARC_EVAL_OUTPUT_DIR=".build/coach-evals/manual-run"
+# Required. Keep these in environment variables, never CLI args.
+export VOLUMEARC_RELAY_BASE_URL="https://<staging-relay-host>"
+export VOLUMEARC_EVAL_ATTEST_BROKER_TOKEN="<broker token>"
+
+# Optional.
+export VOLUMEARC_EVAL_OUTPUT_DIR=".build/coach-evals/manual-run"
 
 ./scripts/run_coach_evals.sh
 ```
 
-The script currently writes a skipped `summary.json` under `$VOLUMEARC_EVAL_OUTPUT_DIR` and exits successfully. Re-enable live calls only after the harness can mint real App Attest assertions from a signed VolumeArc build.
+The script writes per-fixture raw SSE streams, extracted response text, HTTP status files, and a machine-readable `summary.json` under `$VOLUMEARC_EVAL_OUTPUT_DIR`. It exits `1` when any fixture fails response assertions and exits `2` for missing configuration.
+
+Worker-side staging setup:
+
+- Set `EVAL_ATTEST_BROKER_ENABLED=true` only on the staging relay Worker.
+- Set `EVAL_ATTEST_BROKER_TOKEN` as a Worker secret on staging only.
+- Bind the `EVAL_ATTEST_STATE` Durable Object on staging so challenge consumption and counter advancement happen in one serialized transaction.
+- Set `EVAL_ATTEST_BROKER_ALLOWED_HOSTS` to the exact staging relay hostname or comma-separated hostnames used by the eval runner.
+- Optionally set `EVAL_ATTEST_BROKER_KEY_TTL_SECONDS` to shorten ephemeral eval key lifetime; it is capped at 24 hours.
+- Do not configure these vars on the production `relay.volumearc.app` Worker. The broker refuses every hostname that is not explicitly allowlisted.
 
 ## Fixture inventory
 
@@ -109,7 +130,7 @@ The script currently writes a skipped `summary.json` under `$VOLUMEARC_EVAL_OUTP
 | 30 | `program-recovery-upper-lower` | 45 | recovery | 4 | analytical | Program-aware recovery should preserve the weekly plan while modifying today. | pending | pending |
 | 31 | `program-free-hst` | 88 | free | 5 | motivational | Free-form coaching should still anchor to the active HST block. | pending | pending |
 
-The `Last template-run` and `Last response-run` columns are hand-updated when you run the harness. The template-layer column flips to `PASS` on every green CI run against the branch. The response-layer column should stay `paused` until the App Attest signer follow-up lands.
+The `Last template-run` and `Last response-run` columns are hand-updated when you run the harness. The template-layer column flips to `PASS` on every green CI run against the branch. The response-layer column flips to `PASS`/`FAIL` from the nightly broker-backed run.
 
 ## Adding a new fixture
 
@@ -124,18 +145,17 @@ The XCTest bundle reads fixtures as a bundled folder reference (`Bundle(for:).ur
 
 ## Nightly CI (VOL-147)
 
-The response-layer eval workflow still runs on a cron at **07:00 UTC daily** via [`.github/workflows/coach-evals-nightly.yml`](../.github/workflows/coach-evals-nightly.yml), but after VOL-226 it publishes an explicit skipped artifact until a real-device App Attest signer exists. The job:
+The response-layer eval workflow runs on a cron at **07:00 UTC daily** via [`.github/workflows/coach-evals-nightly.yml`](../.github/workflows/coach-evals-nightly.yml). The job:
 
-1. Pre-flights `jq` on the self-hosted runner.
-2. Runs `scripts/run_coach_evals.sh`, which writes a skipped summary explaining that App Attest-only relay auth needs a real-device signer.
+1. Pre-flights `node`, `jq`, `VOLUMEARC_EVAL_RELAY_BASE_URL`, and `VOLUMEARC_EVAL_ATTEST_BROKER_TOKEN`.
+2. Runs `scripts/run_coach_evals.sh`, which bootstraps an ephemeral eval key with the staging broker and sends all fixtures through `/v1/coach`.
 3. Parses the resulting `summary.json` and appends a `{timestamp, sha, run_id, total, passed, failed, axes, fixtures}` record to [`docs/coach-eval-trend.json`](coach-eval-trend.json) — the trend file is committed back to `main` only on cron runs (mirrors VOL-166's `docs/coverage-trend.json` pattern). The same file is mirrored into `marketing/src/data/coach-eval-trend.json` so Vercel's `marketing/` project root can statically render `/quality`.
-4. Uploads the skipped `summary.json` as a workflow artifact (`coach-eval-results-<run_id>`), retained 30 days.
+4. Uploads the full run directory as a workflow artifact (`coach-eval-results-<run_id>`), retained 30 days.
 
-Manual operator runs use `workflow_dispatch` with an optional `relay_url` input to point at staging. Manual dispatch runs **do not** commit to the trend file.
+Manual operator runs use `workflow_dispatch` with an optional `relay_url` input to point at a non-default staging relay. Manual dispatch runs **do not** commit to the trend file.
 
 ### Future work
 
-- **Real-device App Attest signer** — run a signed VolumeArc build on a physical device, request relay challenges, mint valid App Attest assertions, and hand those headers to the response-layer harness without exporting private key material.
 - **Linear regression ticket on fixture failure** — once live response evals resume, wire a Slack webhook for the regression channel, and open a `coach-eval-regression`-labeled Linear ticket on first failure of a given fixture so drift is owned.
 - **Response-quality golden replay** — record a reference response per fixture once the prompt is locked, run a semantic-similarity check against it on each nightly run, and flag drift above a threshold. Needs a cheap embedding pipeline that doesn't round-trip to Gemini.
 - **Multi-tier evals** — the current suite hits only the `flash-lite` tier. Add a flag to the shell script to run the same fixtures against `pro` so pricing-model-budget trade-offs are visible.

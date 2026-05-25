@@ -42,6 +42,8 @@ The Cloudflare Worker (`relay/`) validates App Attest assertions for iPhone inst
 
 Missing App Attest headers return 410 (`app_attest_required`). Invalid or incomplete App Attest headers return 401 and never downgrade to a legacy shared-secret path.
 
+Nightly response-layer coach evals do not weaken the production path. VOL-244 adds a staging-only eval attestation broker that is disabled unless the Worker is explicitly enabled, the staging host is allowlisted, a broker token is present, and `EVAL_ATTEST_STATE` is bound; it exists so CI can run model-output fixtures with ephemeral P-256 keys, one-time challenges, and monotonic counters without restoring the retired shared HMAC client credential.
+
 ## Keychain vs UserDefaults
 
 **Keychain (via `VolumeArcSecureStore`)** for secrets that need durability across reinstalls or that grant access to network resources:

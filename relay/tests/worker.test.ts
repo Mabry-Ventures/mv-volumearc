@@ -38,10 +38,111 @@ class InMemoryKV {
   }
 }
 
+interface EvalStoredKey {
+  deviceId: string;
+  publicKeyJwk: JsonWebKey;
+  counter: number;
+  attestedAt: string;
+  expiresAt: string;
+}
+
+interface EvalChallengeRecord {
+  keyId: string;
+  issuedAt: string;
+  expiresAt: string;
+}
+
+class InMemoryEvalAttestState {
+  private values = new Map<string, unknown>();
+
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const body = await request.json() as Record<string, unknown>;
+    switch (url.pathname) {
+      case "/key":
+        this.values.set(evalStoredKey(body.keyId as string), body.stored);
+        return stateJson({ ok: true }, 200);
+      case "/key/lookup":
+        return stateJson({ ok: true, stored: this.values.get(evalStoredKey(body.keyId as string)) ?? null }, 200);
+      case "/key/delete":
+        this.values.delete(evalStoredKey(body.keyId as string));
+        return stateJson({ ok: true }, 200);
+      case "/challenge":
+        this.values.set(evalChallengeKey(body.challenge as string), body.record);
+        return stateJson({ ok: true }, 200);
+      case "/challenge/lookup":
+        return stateJson({
+          ok: true,
+          stored: this.values.get(evalChallengeKey(body.challenge as string)) ?? null,
+        }, 200);
+      case "/challenge/delete":
+        this.values.delete(evalChallengeKey(body.challenge as string));
+        return stateJson({ ok: true }, 200);
+      case "/assertion":
+        return this.finalizeAssertion(body);
+      default:
+        return stateJson({ ok: false, reason: "not_found" }, 404);
+    }
+  }
+
+  private finalizeAssertion(body: Record<string, unknown>): Response {
+    const keyId = body.keyId as string;
+    const challengeB64 = body.challengeB64 as string;
+    const counter = body.counter as number;
+    if (!isValidEvalCounter(counter)) {
+      return stateJson({ ok: false, reason: "counter_invalid" }, 409);
+    }
+    const storedKey = evalStoredKey(keyId);
+    const stored = this.values.get(storedKey) as EvalStoredKey | undefined;
+    if (!stored) {
+      return stateJson({ ok: false, reason: "key_not_attested" }, 409);
+    }
+    if (Date.parse(stored.expiresAt) <= Date.now()) {
+      this.values.delete(storedKey);
+      return stateJson({ ok: false, reason: "key_expired" }, 409);
+    }
+
+    const challengeKey = evalChallengeKey(challengeB64);
+    const challenge = this.values.get(challengeKey) as EvalChallengeRecord | undefined;
+    if (!challenge) {
+      return stateJson({ ok: false, reason: "challenge_not_found" }, 409);
+    }
+    if (challenge.keyId !== keyId) {
+      return stateJson({ ok: false, reason: "challenge_device_mismatch" }, 409);
+    }
+    if (Date.parse(challenge.expiresAt) <= Date.now()) {
+      this.values.delete(challengeKey);
+      return stateJson({ ok: false, reason: "challenge_expired" }, 409);
+    }
+    if (counter <= stored.counter) {
+      return stateJson({ ok: false, reason: "counter_replay" }, 409);
+    }
+
+    this.values.delete(challengeKey);
+    this.values.set(storedKey, { ...stored, counter });
+    return stateJson({ ok: true, deviceId: stored.deviceId }, 200);
+  }
+}
+
+class InMemoryDurableObjectNamespace {
+  private readonly state = new InMemoryEvalAttestState();
+
+  idFromName(name: string): DurableObjectId {
+    return name as unknown as DurableObjectId;
+  }
+
+  get(_id: DurableObjectId): DurableObjectStub {
+    return {
+      fetch: (request: Request) => this.state.fetch(request),
+    } as unknown as DurableObjectStub;
+  }
+}
+
 function makeEnv(overrides: Partial<RelayEnv> = {}): RelayEnv {
   return {
     GEMINI_API_KEY: "gemini-test-key",
     RATE_LIMIT: new InMemoryKV() as unknown as KVNamespace,
+    EVAL_ATTEST_STATE: new InMemoryDurableObjectNamespace() as unknown as DurableObjectNamespace,
     MODEL_DEFAULT: "gemini-test-flash",
     MODEL_PREMIUM: "gemini-test-pro",
     MAX_OUTPUT_TOKENS: "800",
@@ -99,6 +200,21 @@ function concatBytes(...chunks: Uint8Array[]): Uint8Array {
   return result;
 }
 
+function evalStoredKey(keyId: string): string {
+  return `eval:attest:key:${keyId}`;
+}
+
+function evalChallengeKey(challenge: string): string {
+  return `eval:attest:challenge:${challenge}`;
+}
+
+function stateJson(payload: unknown, status: number): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
 async function requestChallenge(env: RelayEnv): Promise<string> {
   const response = await worker.fetch(
     new Request("https://relay.test/v1/attest/challenge", {
@@ -141,6 +257,83 @@ async function appAttestAuthHeaders(
   };
 }
 
+async function evalBrokerKeyPair(env: RelayEnv): Promise<{ keyId: string; privateKey: CryptoKey }> {
+  const keyPair = await crypto.subtle.generateKey(
+    { name: "ECDSA", namedCurve: "P-256" },
+    true,
+    ["sign", "verify"],
+  );
+  const publicKeyRaw = new Uint8Array(await crypto.subtle.exportKey("raw", keyPair.publicKey));
+  const publicKeyJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
+  const keyId = base64(await sha256(publicKeyRaw));
+
+  const response = await worker.fetch(
+    new Request("https://staging-relay.test/v1/eval-attest/bootstrap", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer eval-token",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ keyId, publicKeyJwk }),
+    }),
+    env,
+  );
+  expect(response.status).toBe(200);
+  return { keyId, privateKey: keyPair.privateKey };
+}
+
+async function evalBrokerAuthHeaders(
+  env: RelayEnv,
+  key: { keyId: string; privateKey: CryptoKey },
+  body: string = COACH_BODY,
+  counter = 1,
+): Promise<HeadersInit> {
+  const challengeResponse = await worker.fetch(
+    new Request("https://staging-relay.test/v1/eval-attest/challenge", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer eval-token",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ keyId: key.keyId }),
+    }),
+    env,
+  );
+  expect(challengeResponse.status).toBe(200);
+  const challenge = (await json(challengeResponse)).challenge as string;
+  return evalBrokerSignedHeaders(key, body, challenge, counter);
+}
+
+async function evalBrokerSignedHeaders(
+  key: { keyId: string; privateKey: CryptoKey },
+  body: string,
+  challenge: string,
+  counter: number,
+): Promise<HeadersInit> {
+  return await evalBrokerSignedHeadersWithPayloadCounter(key, body, challenge, counter, counter);
+}
+
+async function evalBrokerSignedHeadersWithPayloadCounter(
+  key: { keyId: string; privateKey: CryptoKey },
+  body: string,
+  challenge: string,
+  headerCounter: number,
+  payloadCounter: number,
+): Promise<HeadersInit> {
+  const payload = evalSigningPayload(new TextEncoder().encode(body), challenge, payloadCounter);
+  const signature = new Uint8Array(await crypto.subtle.sign(
+    { name: "ECDSA", hash: "SHA-256" },
+    key.privateKey,
+    payload,
+  ));
+  return {
+    "X-VA-Eval-Attest-Key-ID": key.keyId,
+    "X-VA-Eval-Attest-Assertion": base64(signature),
+    "X-VA-Eval-Attest-Nonce": challenge,
+    "X-VA-Eval-Attest-Counter": String(headerCounter),
+  };
+}
+
 async function signedAssertion(
   privateKey: CryptoKey,
   body: string,
@@ -166,6 +359,19 @@ async function signedAssertion(
     authenticatorData: authData,
     signature: p1363ToDerEcdsaSignature(signature),
   }));
+}
+
+function evalSigningPayload(requestBody: Uint8Array, challenge: string, counter: number): Uint8Array {
+  if (!isValidEvalCounter(counter)) {
+    throw new RangeError("counter_invalid");
+  }
+  const counterBytes = new Uint8Array(4);
+  new DataView(counterBytes.buffer).setUint32(0, counter, false);
+  return concatBytes(requestBody, decodeBase64(challenge), counterBytes);
+}
+
+function isValidEvalCounter(value: unknown): value is number {
+  return Number.isSafeInteger(value) && value >= 1 && value <= 0xffffffff;
 }
 
 function p1363ToDerEcdsaSignature(signature: Uint8Array): Uint8Array {
@@ -262,6 +468,260 @@ describe("volumearc-ai-relay App Attest auth", () => {
       reason: "attestation_missing",
     });
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps the eval attestation broker disabled unless explicitly configured", async () => {
+    const env = makeEnv();
+
+    const response = await worker.fetch(
+      new Request("https://staging-relay.test/v1/eval-attest/bootstrap", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer eval-token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(404);
+    await expect(json(response)).resolves.toMatchObject({
+      error: "not_found",
+      reason: "eval_attest_disabled",
+    });
+  });
+
+  it("refuses the eval attestation broker on the production relay host", async () => {
+    const env = makeEnv({
+      EVAL_ATTEST_BROKER_ENABLED: "true",
+      EVAL_ATTEST_BROKER_TOKEN: "eval-token",
+      EVAL_ATTEST_BROKER_ALLOWED_HOSTS: "staging-relay.test",
+    });
+
+    const response = await worker.fetch(
+      new Request("https://relay.volumearc.app/v1/eval-attest/challenge", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer eval-token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ keyId: "anything" }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(404);
+    await expect(json(response)).resolves.toMatchObject({
+      error: "not_found",
+      reason: "eval_attest_disabled",
+    });
+  });
+
+  it("requires an explicit eval broker host allowlist", async () => {
+    const env = makeEnv({
+      EVAL_ATTEST_BROKER_ENABLED: "true",
+      EVAL_ATTEST_BROKER_TOKEN: "eval-token",
+    });
+
+    const response = await worker.fetch(
+      new Request("https://staging-relay.test/v1/eval-attest/challenge", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer eval-token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ keyId: "anything" }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(404);
+    await expect(json(response)).resolves.toMatchObject({
+      error: "not_found",
+      reason: "eval_attest_disabled",
+    });
+  });
+
+  it("accepts staging eval broker assertions and rejects replayed counters", async () => {
+    const env = makeEnv({
+      EVAL_ATTEST_BROKER_ENABLED: "true",
+      EVAL_ATTEST_BROKER_TOKEN: "eval-token",
+      EVAL_ATTEST_BROKER_ALLOWED_HOSTS: "staging-relay.test",
+    });
+    const key = await evalBrokerKeyPair(env);
+    const headers = await evalBrokerAuthHeaders(env, key, COACH_BODY, 1);
+
+    const response = await worker.fetch(
+      new Request("https://staging-relay.test/v1/coach", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...headers,
+        },
+        body: COACH_BODY,
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toContain("Steady single today.");
+
+    const replayChallengeHeaders = await evalBrokerAuthHeaders(env, key, COACH_BODY, 1);
+    const replay = await worker.fetch(
+      new Request("https://staging-relay.test/v1/coach", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...replayChallengeHeaders,
+        },
+        body: COACH_BODY,
+      }),
+      env,
+    );
+
+    expect(replay.status).toBe(401);
+    await expect(json(replay)).resolves.toMatchObject({
+      error: "attestation_invalid",
+      reason: "counter_replay",
+    });
+  });
+
+  it("rejects eval broker counters that overflow the signed uint32 payload", async () => {
+    const env = makeEnv({
+      EVAL_ATTEST_BROKER_ENABLED: "true",
+      EVAL_ATTEST_BROKER_TOKEN: "eval-token",
+      EVAL_ATTEST_BROKER_ALLOWED_HOSTS: "staging-relay.test",
+    });
+    const key = await evalBrokerKeyPair(env);
+    const firstHeaders = await evalBrokerAuthHeaders(env, key, COACH_BODY, 1);
+    const first = await worker.fetch(
+      new Request("https://staging-relay.test/v1/coach", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...firstHeaders,
+        },
+        body: COACH_BODY,
+      }),
+      env,
+    );
+    expect(first.status).toBe(200);
+
+    const challengeResponse = await worker.fetch(
+      new Request("https://staging-relay.test/v1/eval-attest/challenge", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer eval-token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ keyId: key.keyId }),
+      }),
+      env,
+    );
+    expect(challengeResponse.status).toBe(200);
+    const { challenge } = await json(challengeResponse) as { challenge: string };
+    const overflowHeaders = await evalBrokerSignedHeadersWithPayloadCounter(key, COACH_BODY, challenge, 4_294_967_297, 1);
+    const overflow = await worker.fetch(
+      new Request("https://staging-relay.test/v1/coach", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...overflowHeaders,
+        },
+        body: COACH_BODY,
+      }),
+      env,
+    );
+
+    expect(overflow.status).toBe(401);
+    await expect(json(overflow)).resolves.toMatchObject({
+      error: "attestation_invalid",
+      reason: "counter_invalid",
+    });
+
+    const nextHeaders = await evalBrokerAuthHeaders(env, key, COACH_BODY, 2);
+    const next = await worker.fetch(
+      new Request("https://staging-relay.test/v1/coach", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...nextHeaders,
+        },
+        body: COACH_BODY,
+      }),
+      env,
+    );
+    expect(next.status).toBe(200);
+  });
+
+  it("rejects replayed eval broker challenges", async () => {
+    const env = makeEnv({
+      EVAL_ATTEST_BROKER_ENABLED: "true",
+      EVAL_ATTEST_BROKER_TOKEN: "eval-token",
+      EVAL_ATTEST_BROKER_ALLOWED_HOSTS: "staging-relay.test",
+    });
+    const key = await evalBrokerKeyPair(env);
+    const headers = await evalBrokerAuthHeaders(env, key, COACH_BODY, 1);
+
+    const first = await worker.fetch(
+      new Request("https://staging-relay.test/v1/coach", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...headers,
+        },
+        body: COACH_BODY,
+      }),
+      env,
+    );
+    expect(first.status).toBe(200);
+
+    const challenge = (headers as Record<string, string>)["X-VA-Eval-Attest-Nonce"];
+    const replayHeaders = await evalBrokerSignedHeaders(key, COACH_BODY, challenge, 2);
+    const replay = await worker.fetch(
+      new Request("https://staging-relay.test/v1/coach", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...replayHeaders,
+        },
+        body: COACH_BODY,
+      }),
+      env,
+    );
+
+    expect(replay.status).toBe(401);
+    await expect(json(replay)).resolves.toMatchObject({
+      error: "attestation_invalid",
+      reason: "challenge_not_found",
+    });
+  });
+
+  it("evaluates broker headers before stray App Attest headers", async () => {
+    const env = makeEnv({
+      EVAL_ATTEST_BROKER_ENABLED: "true",
+      EVAL_ATTEST_BROKER_TOKEN: "eval-token",
+      EVAL_ATTEST_BROKER_ALLOWED_HOSTS: "staging-relay.test",
+    });
+    const key = await evalBrokerKeyPair(env);
+    const headers = await evalBrokerAuthHeaders(env, key, COACH_BODY, 1);
+
+    const response = await worker.fetch(
+      new Request("https://staging-relay.test/v1/coach", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-VA-Attest-Key-ID": "stray-app-attest-key",
+          ...headers,
+        },
+        body: COACH_BODY,
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toContain("Steady single today.");
   });
 
   it("renders app-style minimal fallback prompts for legacy clients", async () => {
