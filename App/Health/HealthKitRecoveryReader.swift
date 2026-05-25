@@ -130,8 +130,9 @@ public struct HealthKitRecoveryReader: RecoveryReader {
     /// previously indistinguishable because every error was swallowed
     /// by `try?`. The protocol surface stays non-throwing (callers
     /// still get a `RecoveryContext` and don't have to handle errors)
-    /// but the typed telemetry stream now carries the diagnostic info
-    /// the operator needs to act on.
+    /// but the typed telemetry stream now carries breadcrumb-level
+    /// diagnostics without turning optional HealthKit recovery gaps
+    /// into Sentry issues.
     private let telemetrySink: (any TelemetrySink)?
 
     /// Production initializer. Builds a real `HKHealthStore`-backed
@@ -189,9 +190,9 @@ public struct HealthKitRecoveryReader: RecoveryReader {
 
     private func recoveryQuerySnapshot(now: Date) async -> RecoveryQuerySnapshot {
         // VOL-203: each query now goes through `runQuery` which emits
-        // a `healthkit.recovery_query_failed` event on throw and a
-        // `healthkit.recovery_query_empty` event on "no data" so an
-        // operator can distinguish missing data from missing
+        // a warning-level `healthkit.recovery_query_failed` event on
+        // throw and a `healthkit.recovery_query_empty` event on "no data"
+        // so an operator can distinguish missing data from missing
         // permissions from query failures. The reader still returns
         // `RecoveryContext` (the protocol contract); the caller path
         // doesn't change, but the telemetry stream carries the signal.
@@ -307,12 +308,18 @@ public struct HealthKitRecoveryReader: RecoveryReader {
     // MARK: - Query telemetry wrapper (VOL-203)
 
     /// Wraps a single source query so a throw becomes a typed
-    /// `healthkit.recovery_query_failed` telemetry event (with the
-    /// field name and the underlying error code, but never the user
-    /// values) and a successful empty result becomes a
+    /// warning-level `healthkit.recovery_query_failed` telemetry event
+    /// (with the field name and the underlying error code, but never the
+    /// user values) and a successful empty result becomes a
     /// `healthkit.recovery_query_empty` event. The caller still gets
     /// a flat `Double?` / typed-optional back, so the per-field
     /// degradation behavior matches the prior `try?` pattern exactly.
+    /// Keep failures below `.error`: `SentryTelemetrySink` captures
+    /// `.error` events as standalone issues, and optional HealthKit
+    /// recovery reads can fail when a tester has denied one field,
+    /// lacks a watch-backed metric, or HealthKit reports a transient
+    /// read error. Those should be diagnostics and breadcrumbs, not
+    /// nine production Sentry messages from one refresh.
     /// `T` is the per-field optional shape (Double? for scalar metrics,
     /// `RecoveryStrengthLoad?` / `RecoveryWorkoutEffort?` for typed summaries).
     private func runQuery<T>(field: String, work: @Sendable () async throws -> T?) async -> T? {
@@ -332,7 +339,7 @@ public struct HealthKitRecoveryReader: RecoveryReader {
             telemetrySink?.record(TelemetryEvent(
                 category: "healthkit",
                 name: "recovery_query_failed",
-                severity: .error,
+                severity: .warning,
                 message: "HK recovery query failed for field \(field).",
                 metadata: [
                     "field": field,

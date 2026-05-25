@@ -207,8 +207,32 @@ final class HealthKitRecoveryReaderTests: XCTestCase {
         XCTAssertEqual(context.hrvMean7Day, 54)
         let failures = sink.events(named: "recovery_query_failed")
         XCTAssertEqual(failures.count, 1)
+        XCTAssertEqual(failures.first?.severity, .warning)
         XCTAssertEqual(failures.first?.metadata["field"], "sleep7")
         XCTAssertEqual(failures.first?.metadata["error_code"], "5")
+    }
+
+    func testRecoveryQueryFailuresStayBelowSentryCaptureSeverity() async {
+        let sink = CapturingTelemetrySink()
+        let source = FakeRecoverySampleSource(
+            asleepHours: 46.5,
+            strength: RecoveryStrengthLoad(kj: 2800, minutes: 120),
+            effort: RecoveryWorkoutEffort(workoutScore: 6.8, estimatedScore: nil),
+            hrvError: NSError(domain: "HKErrorDomain", code: 5, userInfo: nil),
+            wristTemperatureError: NSError(domain: "HKErrorDomain", code: 5, userInfo: nil),
+            respiratoryRateError: NSError(domain: "HKErrorDomain", code: 5, userInfo: nil)
+        )
+        let reader = HealthKitRecoveryReader(source: source, telemetrySink: sink)
+
+        _ = await reader.currentRecovery(now: .now)
+
+        let failures = sink.events(named: "recovery_query_failed")
+        XCTAssertEqual(failures.count, 6)
+        XCTAssertTrue(
+            failures.allSatisfy { $0.severity == .warning },
+            "Optional HealthKit recovery read failures should remain diagnostic breadcrumbs, not captured Sentry issues"
+        )
+        XCTAssertTrue(sink.events(named: "recovery_all_empty").isEmpty)
     }
 }
 
