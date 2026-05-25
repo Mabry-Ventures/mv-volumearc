@@ -257,6 +257,26 @@ public struct ProfileView: View {
             // the localized "Diagnostics" string.
             .accessibilityIdentifier("profile.diagnostics")
 
+            let bundledWatchFaces = WatchFacePack.bundledPresets()
+            if !bundledWatchFaces.isEmpty {
+                NavigationLink {
+                    WatchFacePackView(model: model)
+                } label: {
+                    profileRowLabel(
+                        label: String(localized: "Watch Faces", comment: "Profile watch faces row label"),
+                        value: bundledWatchFaces.count == 1
+                            ? String(localized: "1 preset", comment: "Profile watch faces singular row value")
+                            : String(
+                                localized: "\(bundledWatchFaces.count) presets",
+                                comment: "Profile watch faces plural row value"
+                            ),
+                        icon: "applewatch"
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("profile.watchFaces")
+            }
+
             profileRow(
                 label: model.isHealthAuthorized
                     ? String(localized: "Apple Health", comment: "Profile Apple Health row label")
