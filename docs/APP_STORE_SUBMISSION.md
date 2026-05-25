@@ -35,7 +35,7 @@ Local source of truth:
 | Privacy URL | `fastlane/metadata/en-US/privacy_url.txt` | Ready |
 | Support URL | `fastlane/metadata/en-US/support_url.txt` | Ready |
 | Review notes | `fastlane/metadata/en-US/review_information/notes.txt` | Drafted |
-| Review contact phone | `fastlane/metadata/en-US/review_information/phone_number.txt` | Action required |
+| Review contact phone | `fastlane/metadata/en-US/review_information/phone_number.txt` | Ready |
 
 Apple limits checked against App Store Connect Help:
 
@@ -94,7 +94,6 @@ The binary screenshot output is intentionally gitignored. Before final submissio
 Current blockers:
 
 - `fastlane` cannot run on this Mac until Ruby/Bundler matches `Gemfile.lock` (`Bundler 4.0.10` requires Ruby 3.2+, but `/usr/bin/ruby` is 2.6.10).
-- `fastlane/metadata/en-US/review_information/phone_number.txt` still needs the App Review contact phone.
 - Final human visual approval is still required before uploading screenshots to ASC.
 
 ## Recent ASC Upload Rejection
@@ -122,7 +121,7 @@ Use this as the App Store Connect privacy questionnaire source. It is derived fr
 
 ## Final Human Checklist
 
-- Replace `ACTION REQUIRED` in `fastlane/metadata/en-US/review_information/phone_number.txt` with the App Review contact phone.
+- Confirm the App Review contact phone in `fastlane/metadata/en-US/review_information/phone_number.txt`.
 - Confirm ASC app version string matches the binary selected for review.
 - Regenerate `fastlane/screenshots/` from a passing screenshot lane.
 - Inspect all iPhone and Apple Watch screenshots before upload.

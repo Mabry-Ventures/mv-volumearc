@@ -37,7 +37,7 @@ VOLUMEARC_RELEASE_READY=1 bash scripts/validate_release_config.sh
 | `review_information/email_address.txt` | ✅ Done | `jared@mabryventures.com` |
 | `review_information/first_name.txt` | ✅ Done | "Jared" |
 | `review_information/last_name.txt` | ✅ Done | "Mabry" |
-| `review_information/phone_number.txt` | 🟥 Action required | Escalation phone for App Review |
+| `review_information/phone_number.txt` | ✅ Done | Escalation phone for App Review |
 
 ## Screenshots
 
