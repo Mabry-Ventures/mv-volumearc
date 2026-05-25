@@ -31,7 +31,7 @@ struct VolumeArcStartActionButtonWorkoutIntent: StartWorkoutIntent {
     static let title: LocalizedStringResource = "Start VolumeArc Workout"
     static let description = IntentDescription(
         LocalizedStringResource(
-            "Start the next prescribed VolumeArc workout from Apple Watch Ultra Action Button.",
+            "Start the next prescribed VolumeArc workout from the Action Button.",
             comment: "Action Button start workout intent description"
         )
     )
