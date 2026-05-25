@@ -27,6 +27,21 @@ public struct CoachView: View {
         .background(VA.Colors.surfaceGrouped)
         .navigationTitle(DashboardTab.coach.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button {
+                    dismissKeyboard()
+                } label: {
+                    Image(systemName: "keyboard.chevron.compact.down")
+                }
+                .accessibilityLabel(String(
+                    localized: "Dismiss keyboard",
+                    comment: "Coach composer keyboard toolbar dismiss button"
+                ))
+                .accessibilityIdentifier("coach.keyboardDismiss")
+            }
+        }
         .onAppear {
             if let prompt = navigation.coachPrompt, !prompt.isEmpty {
                 draftMessage = prompt
@@ -69,7 +84,12 @@ public struct CoachView: View {
                     }
                 }
                 .padding(VA.Space.lg)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    dismissKeyboard()
+                }
             }
+            .scrollDismissesKeyboard(.interactively)
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
@@ -113,7 +133,12 @@ public struct CoachView: View {
                         }
                     }
                     .padding(VA.Space.lg)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        dismissKeyboard()
+                    }
                 }
+                .scrollDismissesKeyboard(.interactively)
                 .onChange(of: model.coachMessages.count) { _, _ in
                     withAnimation(VAAnimation.standard) {
                         proxy.scrollTo(model.coachMessages.last?.id, anchor: .bottom)
@@ -265,6 +290,7 @@ public struct CoachView: View {
         let prompt = draftMessage
         draftMessage = ""
         showPlanDraft = showPlanDraft || isPlanningPrompt(prompt)
+        dismissKeyboard()
         VAHaptics.tap()
         Task {
             await model.askCoach(prompt)
@@ -281,6 +307,7 @@ public struct CoachView: View {
     private func startPlanNow() {
         Task {
             VAHaptics.sessionStart()
+            dismissKeyboard()
             await model.startWorkoutSession()
             navigation.selectedTab = .workouts
         }
@@ -289,6 +316,10 @@ public struct CoachView: View {
     private func isPlanningPrompt(_ prompt: String) -> Bool {
         let lowercasedPrompt = prompt.lowercased()
         return lowercasedPrompt.contains("plan") || lowercasedPrompt.contains("tomorrow")
+    }
+
+    private func dismissKeyboard() {
+        inputFocused = false
     }
 }
 #endif
