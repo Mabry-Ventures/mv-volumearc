@@ -312,6 +312,9 @@ public enum VA {
         /// Large illustration tile dimension used in CTA cards.
         public static let ctaIllustration: CGFloat = 58
 
+        /// Minimum height for exercise illustration heroes.
+        public static let exerciseIllustrationMinHeight: CGFloat = 180
+
         /// Single-point border stroke.
         public static let border: CGFloat = 1
 

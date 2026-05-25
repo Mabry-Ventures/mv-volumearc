@@ -973,6 +973,35 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         XCTAssertTrue(response.contains("hold the target load"))
     }
 
+    func testLocalHeuristicAICoachProviderPlanningRespectsRequestedHorizon() async throws {
+        let provider = LocalHeuristicAICoachProvider()
+        let context = """
+        ## Training context
+        - Readiness: 88/100 — Peak recovery
+        - Next up: Back Squat at 135lb x 5
+
+        ## Weekly schedule
+        - Monday: Upper Strength
+        - Tuesday: Lower Strength
+        - Thursday: Upper Volume
+        - Friday: Lower Volume
+        """
+
+        let today = try await provider.coachResponse(
+            for: "What's the plan for today?",
+            context: context
+        )
+        XCTAssertTrue(today.contains("Today: Back Squat at 135lb x 5"))
+        XCTAssertFalse(today.contains("Upper Strength"))
+
+        let week = try await provider.coachResponse(
+            for: "What are my plans for the week?",
+            context: context
+        )
+        XCTAssertTrue(week.contains("Monday: Upper Strength"))
+        XCTAssertFalse(week.contains("14 days"))
+    }
+
     func testAICoachProviderStreamingDefaultYieldsChunks() async throws {
         struct OneShotProvider: AICoachProvider {
             func coachResponse(for prompt: String, context: String) async throws -> String {
@@ -989,6 +1018,7 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
 
     func testCoachPromptTemplateInferIntentFreeFallthrough() {
         XCTAssertEqual(CoachPromptTemplate.inferIntent(from: "How is the weather?"), .free)
+        XCTAssertEqual(CoachPromptTemplate.inferIntent(from: "Can you map out this week?"), .planning)
     }
 
     func testCoachPromptTemplateRenderConvenienceInfersIntent() {
@@ -1065,9 +1095,27 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         XCTAssertTrue(block.contains("Heavy day"))
     }
 
+    func testCoachContextIncludesWeeklyScheduleForPlanningRequests() {
+        let context = CoachContext(
+            athleteName: "Alex",
+            advancementLevel: "intermediate",
+            readinessScore: 78,
+            readinessBrief: "Solid",
+            weeklyPlan: [
+                WeeklyWorkout(dayOfWeek: 1, title: "Upper Strength"),
+                WeeklyWorkout(dayOfWeek: 4, title: "Lower Volume")
+            ]
+        )
+
+        let block = context.asPromptBlock(privacyMode: .standard)
+        XCTAssertTrue(block.contains("## Weekly schedule"))
+        XCTAssertTrue(block.contains("Monday: Upper Strength"))
+        XCTAssertTrue(block.contains("Thursday: Lower Volume"))
+    }
+
     func testCoachIntentAndCoachingStyleRawCases() {
         XCTAssertEqual(Set(CoachIntent.allCases.map(\.rawValue)),
-                       ["progression", "deload", "form", "recovery", "substitution", "free"])
+                       ["progression", "deload", "form", "recovery", "substitution", "planning", "free"])
         XCTAssertEqual(Set(CoachingStyle.allCases.map(\.rawValue)),
                        ["motivational", "analytical", "minimal"])
     }

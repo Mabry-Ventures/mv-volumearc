@@ -1,0 +1,15 @@
+{
+  "id": "planning-week-upper-lower",
+  "intent": "planning",
+  "question": "What are my plans for the week?",
+  "contextBlock": "## Training context\n- Athlete: Sam (intermediate)\n- Readiness: 78/100 — Solid recovery, slight fatigue.\n- Next up: Upper Strength at 185lb x 5\n- Last 7 days: 3 sessions, avg RPE 7.6\n- Last session: 4 sets, 5200lb total, RPE 7.7\n\n## Weekly schedule\n- Monday: Upper Strength\n- Tuesday: Lower Strength\n- Thursday: Upper Volume\n- Friday: Lower Volume\n\n## Active program\n- Program: Upper/Lower 4-day by VolumeArc\n- Position: Week 4 / 12, Day 1 / 4\n- Session: Upper Strength (Heavy press and pull)\n- Today's prescription: Bench press 4x4-6, weighted row 4x6-8, overhead press 3x5-8, pull-up 3x6-10\n- Advancement: Progress compounds weekly when top sets stay under RPE 8.5; progress isolation work by reps first.",
+  "style": "analytical",
+  "expectedAssertions": {
+    "maxSentences": 5,
+    "maxEnumeratedPlanDays": 7,
+    "mustContainNumericContext": true,
+    "mustMentionReadinessOrRPE": true,
+    "mustNotMention": ["14 days", "fourteen days", "two weeks", "next week", "week 2", "second week", "next 14"]
+  },
+  "notes": "Planning guardrail: a request for 'the week' must stay inside the current 7-day training week and must not spill into a 14-day or second-week schedule."
+}

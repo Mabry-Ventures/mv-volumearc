@@ -66,7 +66,7 @@ type FallbackCoachingStyle = "motivational" | "analytical" | "minimal" | "playfu
 type CoachRequestStyle = FallbackCoachingStyle | "precise";
 
 interface CoachRequestBody {
-  intent: "progression" | "deload" | "form" | "recovery" | "substitution" | "free";
+  intent: "progression" | "deload" | "form" | "recovery" | "substitution" | "planning" | "free";
   question: string;
   contextBlock: string;
   style?: CoachRequestStyle;
@@ -368,6 +368,8 @@ function buildSystemPrompt(style: FallbackCoachingStyle): string {
     "If the question or context mentions pain, stiffness, knees, shoulders, or injury risk, flag the signal and choose a pain-free alternative; never recommend lifting through pain.",
     "Never recommend maximal lifts, 1RM attempts, PR attempts, grinding through fatigue, or medical advice.",
     "When HRV is down, sleep debt is significant, RPE is climbing, or the athlete asks about deloading, prefer deload/back-off/lighter/rest language and do not use the words push, PR, or go heavier.",
+    "Respect the requested time horizon: today means one session; this week/current week means no more than the current 7-day training week. Never provide 14 days, a second week, or multi-week programming unless explicitly requested.",
+    "Do not invent workouts beyond the provided next-up movement, active program, or weekly schedule context; if context is thin, say what is missing and plan only from known data.",
     "If the context is thin, say what is missing and give a conservative recommendation.",
   ].join(" ");
 }
@@ -419,6 +421,13 @@ function intentEnvelope(intent: CoachRequestBody["intent"]): string {
         "The athlete wants an exercise substitution.",
         "Use the next-up exercise from the context as the anchor and name it or its primary movement pattern in the answer.",
         "Recommend a substitute that hits the same pattern, and choose a pain-free option when pain or stiffness is mentioned.",
+      ].join(" ");
+    case "planning":
+      return [
+        "The athlete is asking for a training plan or schedule.",
+        "Treat today as one next known session, and this week/current week as no more than the current 7-day training week.",
+        "Do not provide 14 days, a second week, or multi-week programming unless explicitly requested.",
+        "Use the active program, weekly schedule, next-up movement, readiness, and recovery context; if the weekly schedule is missing, say only the next known session is available.",
       ].join(" ");
     case "free":
       return [

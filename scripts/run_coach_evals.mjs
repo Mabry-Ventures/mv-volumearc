@@ -243,6 +243,13 @@ function runAssertions(fixture, response) {
     }
   }
 
+  if (Number.isSafeInteger(assertions.maxEnumeratedPlanDays)) {
+    const actual = enumeratedPlanDayCount(response);
+    if (actual > assertions.maxEnumeratedPlanDays) {
+      failures.push(`maxEnumeratedPlanDays=${assertions.maxEnumeratedPlanDays} violated (got ${actual})`);
+    }
+  }
+
   if (assertions.mustAnchorOnNextExercise === true) {
     const next = nextExercise(fixture.contextBlock);
     if (next) {
@@ -304,6 +311,24 @@ function countSentences(text) {
     }
   }
   return count + (segmentHasText ? 1 : 0);
+}
+
+function enumeratedPlanDayCount(text) {
+  const lower = String(text ?? "").toLowerCase();
+  const weekdayTokens = lower.match(/\b(mon(day)?|tue(sday)?|wed(nesday)?|thu(rsday)?|fri(day)?|sat(urday)?|sun(day)?)\b/g) ?? [];
+  const uniqueWeekdays = new Set(weekdayTokens.map((token) => token.slice(0, 3)));
+  let maxDayNumber = 0;
+  const numericDayPatterns = [
+    /(?:^|\n)\s*(?:[-*]\s*)?day\s*([1-9][0-9]?)(?=\s*[:.)-]|\s*$)/gm,
+    /\bon\s+day\s*([1-9][0-9]?)(?=\s*[:.)-]|\s*$)/g,
+    /\b([1-9][0-9]?)(?:st|nd|rd|th)\s+day\b/g,
+  ];
+  for (const pattern of numericDayPatterns) {
+    for (const match of lower.matchAll(pattern)) {
+      maxDayNumber = Math.max(maxDayNumber, Number.parseInt(match[1], 10));
+    }
+  }
+  return Math.max(uniqueWeekdays.size, maxDayNumber);
 }
 
 function readinessScore(contextBlock) {

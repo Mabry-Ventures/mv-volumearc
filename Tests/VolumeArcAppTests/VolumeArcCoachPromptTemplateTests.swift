@@ -78,13 +78,31 @@ final class VolumeArcCoachPromptTemplateTests: XCTestCase {
         XCTAssertEqual(CoachPromptTemplate.inferIntent(from: "Form check on my squat?"), .form)
         XCTAssertEqual(CoachPromptTemplate.inferIntent(from: "Can I substitute pull-ups for rows?"), .substitution)
         XCTAssertEqual(CoachPromptTemplate.inferIntent(from: "Should I go heavier?"), .progression)
+        XCTAssertEqual(CoachPromptTemplate.inferIntent(from: "What are my plans for the week?"), .planning)
+        XCTAssertEqual(CoachPromptTemplate.inferIntent(from: "Can you set up my week?"), .planning)
+        XCTAssertEqual(CoachPromptTemplate.inferIntent(from: "How was the weekend?"), .free)
         XCTAssertEqual(CoachPromptTemplate.inferIntent(from: "Hello coach"), .free)
+    }
+
+    func testPlanningIntentAddsHardHorizonGuardrails() {
+        let context = makeContext()
+        let rendered = CoachPromptTemplate.render(
+            intent: .planning,
+            context: context,
+            question: "What are my plans for the week?",
+            style: .analytical
+        )
+
+        XCTAssertTrue(rendered.contains("intent=planning"))
+        XCTAssertTrue(rendered.contains("current 7-day training week"))
+        XCTAssertTrue(rendered.contains("Do not provide 14 days"))
+        XCTAssertTrue(rendered.contains("weekly schedule is not present"))
     }
 
     func testStrictPrivacyModeRedactionPropagatesIntoRender() {
         let context = makeContext(athleteName: "Jane Lifter")
         let rendered = CoachPromptTemplate.render(
-            intent: .free,
+            intent: .planning,
             context: context,
             question: "What's the plan?",
             style: .motivational,
