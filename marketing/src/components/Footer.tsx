@@ -10,6 +10,7 @@ const footerNav = [
       { label: 'Features', href: '/#features' },
       { label: 'Pricing', href: '/#pricing' },
       { label: 'FAQs', href: '/#faqs' },
+      { label: 'Watch faces', href: '/watch-faces' },
       { label: 'Coach quality', href: '/quality' },
     ],
   },

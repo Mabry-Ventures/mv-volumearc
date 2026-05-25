@@ -505,6 +505,12 @@ add_resource(watch_group, watch_target, 'Assets.xcassets')
 # pbxproj, just one folder reference.
 add_resource(app_group, app_target, 'Assets.xcassets')
 
+# VOL-238: bundle exported Apple Watch face files. The README is present
+# until the proprietary `.watchface` exports are generated from Apple's
+# Watch app / watchOS simulator; the install code ignores non-watchface
+# files and resolves the expected filenames at runtime.
+add_resource(app_group, app_target, 'WatchFaces')
+
 # VOL-100: coach eval fixtures wired into the tests bundle so
 # `CoachEvalTests` can resolve them via
 # `Bundle(for:).url(forResource: "CoachEvalFixtures")`. The directory lives
