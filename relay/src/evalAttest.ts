@@ -35,6 +35,7 @@ interface EvalAttestChallengeRecord {
 const CHALLENGE_TTL_SECONDS = 5 * 60;
 const DEFAULT_KEY_TTL_SECONDS = 24 * 60 * 60;
 const MAX_KEY_TTL_SECONDS = 24 * 60 * 60;
+const MAX_EVAL_ATTEST_COUNTER = 0xffffffff;
 
 type EvalAttestStateResult =
   | { ok: true }
@@ -177,13 +178,13 @@ export class EvalAttestState implements DurableObject {
       challengeB64?: unknown;
       counter?: unknown;
     };
-    if (
-      typeof body.keyId !== "string" ||
-      typeof body.challengeB64 !== "string" ||
-      typeof body.counter !== "number"
-    ) {
+    if (typeof body.keyId !== "string" || typeof body.challengeB64 !== "string") {
       return evalJson({ ok: false, reason: "bad_request" }, 400);
     }
+    if (!isValidEvalCounter(body.counter)) {
+      return evalJson({ ok: false, reason: "counter_invalid" }, 409);
+    }
+    const counter = body.counter;
 
     const result = await this.state.storage.transaction<EvalAttestStateAssertionResult>(async (txn) => {
       const storedKey = evalStoredKey(body.keyId as string);
@@ -205,12 +206,12 @@ export class EvalAttestState implements DurableObject {
         }
         return { ok: false, reason: failure };
       }
-      if ((body.counter as number) <= stored.counter) {
+      if (counter <= stored.counter) {
         return { ok: false, reason: "counter_replay" };
       }
 
       await txn.delete(challengeKey);
-      await txn.put(storedKey, { ...stored, counter: body.counter as number });
+      await txn.put(storedKey, { ...stored, counter });
       return { ok: true, deviceId: stored.deviceId };
     });
 
@@ -343,8 +344,8 @@ export async function verifyEvalAttestAssertion(
     return { ok: false, reason: "eval_attest_incomplete" };
   }
 
-  const counter = Number.parseInt(counterHeader, 10);
-  if (!Number.isSafeInteger(counter) || counter < 1) {
+  const counter = parseEvalCounter(counterHeader);
+  if (!isValidEvalCounter(counter)) {
     return { ok: false, reason: "counter_invalid" };
   }
 
@@ -579,9 +580,26 @@ function evalKeyTtlSeconds(env: EvalAttestEnv): number {
 }
 
 function evalSigningPayload(requestBody: Uint8Array, challengeB64: string, counter: number): Uint8Array {
+  if (!isValidEvalCounter(counter)) {
+    throw new RangeError("counter_invalid");
+  }
   const counterBytes = new Uint8Array(4);
   new DataView(counterBytes.buffer).setUint32(0, counter, false);
   return concatBytes(requestBody, decodeBase64(challengeB64), counterBytes);
+}
+
+function parseEvalCounter(value: string): number {
+  if (!/^\d+$/.test(value)) {
+    return Number.NaN;
+  }
+  return Number.parseInt(value, 10);
+}
+
+function isValidEvalCounter(value: unknown): value is number {
+  return typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    value >= 1 &&
+    value <= MAX_EVAL_ATTEST_COUNTER;
 }
 
 function evalJson(payload: unknown, status: number): Response {

@@ -353,6 +353,9 @@ async function writeSummary(rows, passed, failed) {
 }
 
 function evalSigningPayload(requestBody, challenge, counter) {
+  if (!Number.isSafeInteger(counter) || counter < 1 || counter > 0xffffffff) {
+    throw configError("eval broker counter must be a uint32");
+  }
   const counterBytes = new Uint8Array(4);
   new DataView(counterBytes.buffer).setUint32(0, counter, false);
   return concatBytes(requestBody, decodeBase64(challenge), counterBytes);

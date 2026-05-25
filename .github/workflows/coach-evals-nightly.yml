@@ -109,6 +109,35 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -n "${RELAY_URL_OVERRIDE}" ]]; then
+            RELAY_URL_OVERRIDE="$RELAY_URL_OVERRIDE" \
+              CONFIGURED_RELAY_URL="$VOLUMEARC_RELAY_BASE_URL" \
+              node <<'NODE'
+          const override = process.env.RELAY_URL_OVERRIDE ?? "";
+          const configured = process.env.CONFIGURED_RELAY_URL ?? "";
+
+          let overrideUrl;
+          let configuredUrl;
+          try {
+            overrideUrl = new URL(override);
+            configuredUrl = new URL(configured);
+          } catch {
+            console.error("::error::relay_url override must be a valid absolute URL");
+            process.exit(1);
+          }
+
+          if (overrideUrl.protocol !== "https:") {
+            console.error("::error::relay_url override must use https");
+            process.exit(1);
+          }
+          if (overrideUrl.hostname === "relay.volumearc.app") {
+            console.error("::error::Coach response evals must target staging, not production");
+            process.exit(1);
+          }
+          if (overrideUrl.hostname !== configuredUrl.hostname) {
+            console.error("::error::relay_url override host must match the configured staging relay host");
+            process.exit(1);
+          }
+          NODE
             export VOLUMEARC_RELAY_BASE_URL="${RELAY_URL_OVERRIDE}"
           fi
           set +e

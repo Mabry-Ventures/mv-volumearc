@@ -89,6 +89,9 @@ class InMemoryEvalAttestState {
     const keyId = body.keyId as string;
     const challengeB64 = body.challengeB64 as string;
     const counter = body.counter as number;
+    if (!isValidEvalCounter(counter)) {
+      return stateJson({ ok: false, reason: "counter_invalid" }, 409);
+    }
     const storedKey = evalStoredKey(keyId);
     const stored = this.values.get(storedKey) as EvalStoredKey | undefined;
     if (!stored) {
@@ -307,7 +310,17 @@ async function evalBrokerSignedHeaders(
   challenge: string,
   counter: number,
 ): Promise<HeadersInit> {
-  const payload = evalSigningPayload(new TextEncoder().encode(body), challenge, counter);
+  return await evalBrokerSignedHeadersWithPayloadCounter(key, body, challenge, counter, counter);
+}
+
+async function evalBrokerSignedHeadersWithPayloadCounter(
+  key: { keyId: string; privateKey: CryptoKey },
+  body: string,
+  challenge: string,
+  headerCounter: number,
+  payloadCounter: number,
+): Promise<HeadersInit> {
+  const payload = evalSigningPayload(new TextEncoder().encode(body), challenge, payloadCounter);
   const signature = new Uint8Array(await crypto.subtle.sign(
     { name: "ECDSA", hash: "SHA-256" },
     key.privateKey,
@@ -317,7 +330,7 @@ async function evalBrokerSignedHeaders(
     "X-VA-Eval-Attest-Key-ID": key.keyId,
     "X-VA-Eval-Attest-Assertion": base64(signature),
     "X-VA-Eval-Attest-Nonce": challenge,
-    "X-VA-Eval-Attest-Counter": String(counter),
+    "X-VA-Eval-Attest-Counter": String(headerCounter),
   };
 }
 
@@ -349,9 +362,16 @@ async function signedAssertion(
 }
 
 function evalSigningPayload(requestBody: Uint8Array, challenge: string, counter: number): Uint8Array {
+  if (!isValidEvalCounter(counter)) {
+    throw new RangeError("counter_invalid");
+  }
   const counterBytes = new Uint8Array(4);
   new DataView(counterBytes.buffer).setUint32(0, counter, false);
   return concatBytes(requestBody, decodeBase64(challenge), counterBytes);
+}
+
+function isValidEvalCounter(value: unknown): value is number {
+  return Number.isSafeInteger(value) && value >= 1 && value <= 0xffffffff;
 }
 
 function p1363ToDerEcdsaSignature(signature: Uint8Array): Uint8Array {
@@ -565,6 +585,74 @@ describe("volumearc-ai-relay App Attest auth", () => {
       error: "attestation_invalid",
       reason: "counter_replay",
     });
+  });
+
+  it("rejects eval broker counters that overflow the signed uint32 payload", async () => {
+    const env = makeEnv({
+      EVAL_ATTEST_BROKER_ENABLED: "true",
+      EVAL_ATTEST_BROKER_TOKEN: "eval-token",
+      EVAL_ATTEST_BROKER_ALLOWED_HOSTS: "staging-relay.test",
+    });
+    const key = await evalBrokerKeyPair(env);
+    const firstHeaders = await evalBrokerAuthHeaders(env, key, COACH_BODY, 1);
+    const first = await worker.fetch(
+      new Request("https://staging-relay.test/v1/coach", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...firstHeaders,
+        },
+        body: COACH_BODY,
+      }),
+      env,
+    );
+    expect(first.status).toBe(200);
+
+    const challengeResponse = await worker.fetch(
+      new Request("https://staging-relay.test/v1/eval-attest/challenge", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer eval-token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ keyId: key.keyId }),
+      }),
+      env,
+    );
+    expect(challengeResponse.status).toBe(200);
+    const { challenge } = await json(challengeResponse) as { challenge: string };
+    const overflowHeaders = await evalBrokerSignedHeadersWithPayloadCounter(key, COACH_BODY, challenge, 4_294_967_297, 1);
+    const overflow = await worker.fetch(
+      new Request("https://staging-relay.test/v1/coach", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...overflowHeaders,
+        },
+        body: COACH_BODY,
+      }),
+      env,
+    );
+
+    expect(overflow.status).toBe(401);
+    await expect(json(overflow)).resolves.toMatchObject({
+      error: "attestation_invalid",
+      reason: "counter_invalid",
+    });
+
+    const nextHeaders = await evalBrokerAuthHeaders(env, key, COACH_BODY, 2);
+    const next = await worker.fetch(
+      new Request("https://staging-relay.test/v1/coach", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...nextHeaders,
+        },
+        body: COACH_BODY,
+      }),
+      env,
+    );
+    expect(next.status).toBe(200);
   });
 
   it("rejects replayed eval broker challenges", async () => {
