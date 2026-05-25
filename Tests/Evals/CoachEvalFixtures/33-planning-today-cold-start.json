@@ -1,0 +1,16 @@
+{
+  "id": "planning-today-cold-start",
+  "intent": "planning",
+  "question": "Hey coach — what's the plan for today?",
+  "contextBlock": "## Training context\n- Athlete: Reese (beginner)\n- Readiness: 88/100 — Peak recovery, first session of the program.\n- Next up: Back Squat at 135lb x 5\n- No recent sessions logged\n\n## Weekly schedule\n- Monday: Upper Strength\n- Tuesday: Lower Strength\n- Thursday: Upper Volume\n- Friday: Lower Volume",
+  "style": "motivational",
+  "expectedAssertions": {
+    "maxSentences": 3,
+    "maxEnumeratedPlanDays": 1,
+    "mustContainNumericContext": true,
+    "mustMentionReadinessOrRPE": true,
+    "mustNotMention": ["tomorrow", "next week", "14 days", "fourteen days", "two weeks", "week 2", "second week", "next 14"],
+    "mustAnchorOnNextExercise": true
+  },
+  "notes": "Planning guardrail: a request for today's plan must stay to the next known session and avoid turning into a weekly or multi-day schedule."
+}

@@ -103,6 +103,14 @@ final class VolumeArcTodayJourneyTests: XCTestCase {
             detailRoot.waitForExistence(timeout: 5),
             "WorkoutDetailView should appear within 5s of tapping the card"
         )
+
+        let illustration = app.descendants(matching: .any)
+            .matching(identifier: "workout.detail.exerciseIllustration")
+            .firstMatch
+        XCTAssertTrue(
+            illustration.waitForExistence(timeout: 5),
+            "WorkoutDetailView should show the bundled exercise illustration, not only the custom cue generator"
+        )
     }
 
     // MARK: - today.recent-session-tap

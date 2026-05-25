@@ -278,6 +278,8 @@ public struct LocalHeuristicAICoachProvider: AICoachProvider {
             return cueResponse(from: rendered)
         case .deload:
             return deloadResponse(from: rendered)
+        case .planning:
+            return planningResponse(from: rendered)
         case .substitution, .free:
             return defaultResponse(from: rendered)
         }
@@ -313,6 +315,46 @@ public struct LocalHeuristicAICoachProvider: AICoachProvider {
         return "You might not need a full deload yet. Try a lighter top set today and reassess tomorrow."
     }
 
+    private func planningResponse(from context: String) -> String {
+        let schedule = extractWeeklySchedule(from: context)
+        let question = extractAthleteQuestion(from: context).lowercased()
+        if question.contains("today") {
+            if let nextUp = extractLine(prefix: "- Next up: ", from: context) {
+                return String(
+                    localized: "Today: \(nextUp). Keep it to that session, adjust by readiness/RPE, and don't add extra days.",
+                    comment: "Planning response when today's next known session is available"
+                )
+            }
+            return String(
+                localized: """
+                I don't have today's next session yet. Use the next known lift when \
+                it appears, keep effort around RPE 7-8, and don't add extra days.
+                """,
+                comment: "Planning response when user asks for today but no next session is available"
+            )
+        }
+        if !schedule.isEmpty {
+            let scheduleSummary = schedule.prefix(7).joined(separator: "; ")
+            return String(
+                localized: "This week: \(scheduleSummary). Keep the next session tied to readiness/RPE and don't add extra days.",
+                comment: "Planning response when weekly schedule entries are available"
+            )
+        }
+        if let nextUp = extractLine(prefix: "- Next up: ", from: context) {
+            return String(
+                localized: "I only have the next known session: \(nextUp). Treat that as today's plan and avoid inventing the rest of the week.",
+                comment: "Planning response when only the next known session is available"
+            )
+        }
+        return String(
+            localized: """
+            I don't have a weekly schedule yet. Start with the next planned lift, \
+            keep effort around RPE 7-8, and ask again after a logged set.
+            """,
+            comment: "Planning response when no schedule or next session context is available"
+        )
+    }
+
     private func defaultResponse(from context: String) -> String {
         if context.contains("Readiness") {
             return """
@@ -322,6 +364,33 @@ public struct LocalHeuristicAICoachProvider: AICoachProvider {
                 """
         }
         return "Log a couple of sets so I have something to work with, then ask me again."
+    }
+
+    private func extractWeeklySchedule(from context: String) -> [String] {
+        guard let sectionRange = context.range(of: "## Weekly schedule") else { return [] }
+        let section = context[sectionRange.upperBound...]
+        return section
+            .split(separator: "\n")
+            .prefix { !$0.hasPrefix("## ") }
+            .compactMap { line in
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard trimmed.hasPrefix("- ") else { return nil }
+                return String(trimmed.dropFirst(2))
+            }
+    }
+
+    private func extractLine(prefix: String, from context: String) -> String? {
+        context
+            .split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { $0.hasPrefix(prefix) }
+            .map { String($0.dropFirst(prefix.count)) }
+    }
+
+    private func extractAthleteQuestion(from context: String) -> String {
+        guard let sectionRange = context.range(of: "## Athlete question") else { return "" }
+        return context[sectionRange.upperBound...]
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func extractReadinessScore(from context: String) -> Int? {

@@ -37,6 +37,13 @@ public enum CoachPromptTemplate {
         - Prefer specific cues over generic encouragement.
         - If data is thin, say so and give a conservative recommendation.
         - Use plain language. No jargon unless the user uses it first.
+        - Respect the user's requested time horizon. "Today" means one session;
+          "this week" means no more than the current 7-day training week. Never
+          provide 14 days, a second week, or multi-week programming unless the
+          user explicitly asks for it.
+        - Do not invent workouts beyond the provided next-up movement, active
+          program, or weekly schedule context. If the context does not contain a
+          full schedule, say what is missing and plan only from the known data.
 
         Output: Respond naturally, as if texting the athlete between sets.
         """
@@ -167,12 +174,31 @@ public enum CoachPromptTemplate {
             || lowered.contains("alternative") || lowered.contains("instead of") {
             return .substitution
         }
+        if isPlanningQuestion(lowered) {
+            return .planning
+        }
         if lowered.contains("heavy") || lowered.contains("heavier")
             || lowered.contains("more weight") || lowered.contains("add ")
             || lowered.contains(" up") || lowered.contains("push") {
             return .progression
         }
         return .free
+    }
+
+    private static func isPlanningQuestion(_ lowered: String) -> Bool {
+        let patterns = [
+            #"\bplans?\b"#,
+            #"\bschedule\b"#,
+            #"\bweekly\b"#,
+            #"\b(this|current|the)\s+week\b"#,
+            #"\bworkouts?\s+for\s+(today|this\s+week|the\s+week|current\s+week)\b"#,
+            #"\bworkouts?\s+for\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b"#,
+            #"\bwhat\s+(should|do)\s+i\s+do\s+today\b"#,
+            #"\b(set\s+up|map\s+out)\s+(my\s+|this\s+|the\s+|current\s+)?(training\s+)?week\b"#
+        ]
+        return patterns.contains { pattern in
+            lowered.range(of: pattern, options: .regularExpression) != nil
+        }
     }
 
     private static func intentEnvelope(_ intent: CoachIntent) -> String {
@@ -226,12 +252,28 @@ public enum CoachPromptTemplate {
             from the context as the anchor. Recommend a substitute that hits the
             same primary movement pattern with the equipment they have.
             """
+        case .planning:
+            return planningEnvelope
         case .free:
             return """
             Open question — answer directly using the training context provided.
             Stay specific to the athlete's data; avoid generic coaching platitudes.
             """
         }
+    }
+
+    private static var planningEnvelope: String {
+        """
+        The athlete is asking for a training plan or schedule. Treat the
+        requested horizon as a hard limit: today means the next known
+        session only, and this week/current week means no more than the
+        current 7-day training week. Do not provide 14 days, a second week,
+        or multi-week programming unless the athlete explicitly asks for
+        that horizon. Use the active program, weekly schedule, next-up
+        movement, readiness, and recovery context when present; if the
+        weekly schedule is not present, say only the next known session is
+        available and avoid inventing additional days.
+        """
     }
 
     private static func personaForStyle(_ style: CoachingStyle) -> String {
@@ -255,6 +297,7 @@ public enum CoachIntent: String, Sendable, CaseIterable {
     case form
     case recovery
     case substitution
+    case planning
     case free
 }
 
@@ -270,6 +313,7 @@ public struct CoachContext: Sendable {
     public let averageRPE: Double
     public let lastSessionSummary: String?
     public let recentMemories: [String]
+    public let weeklyPlan: [WeeklyWorkout]
     public let program: ActiveTrainingProgramContext?
     public let formCheck: FormCheckAnalysis?
 
@@ -291,6 +335,7 @@ public struct CoachContext: Sendable {
         averageRPE: Double = 0,
         lastSessionSummary: String? = nil,
         recentMemories: [String] = [],
+        weeklyPlan: [WeeklyWorkout] = [],
         program: ActiveTrainingProgramContext? = nil,
         formCheck: FormCheckAnalysis? = nil,
         recovery: RecoveryContext? = nil
@@ -305,6 +350,7 @@ public struct CoachContext: Sendable {
         self.averageRPE = averageRPE
         self.lastSessionSummary = lastSessionSummary
         self.recentMemories = recentMemories
+        self.weeklyPlan = weeklyPlan
         self.program = program
         self.formCheck = formCheck
         self.recovery = recovery
@@ -334,6 +380,14 @@ public struct CoachContext: Sendable {
             }
             if let lastSessionSummary {
                 lines.append("- Last session: \(lastSessionSummary)")
+            }
+        }
+
+        if !weeklyPlan.isEmpty {
+            lines.append("")
+            lines.append("## Weekly schedule")
+            for workout in weeklyPlan.sorted(by: { $0.dayOfWeek < $1.dayOfWeek }) {
+                lines.append("- \(Self.weekdayName(for: workout.dayOfWeek)): \(workout.title)")
             }
         }
 
@@ -368,5 +422,18 @@ public struct CoachContext: Sendable {
         }
 
         return lines.joined(separator: "\n")
+    }
+
+    private static func weekdayName(for trainingWeekday: Int) -> String {
+        switch trainingWeekday {
+        case 1: return "Monday"
+        case 2: return "Tuesday"
+        case 3: return "Wednesday"
+        case 4: return "Thursday"
+        case 5: return "Friday"
+        case 6: return "Saturday"
+        case 7: return "Sunday"
+        default: return "Day \(trainingWeekday)"
+        }
     }
 }

@@ -42,6 +42,13 @@ extension WorkoutDashboardModel {
         }
         #endif
 
+        var weeklyPlan: [WeeklyWorkout] = []
+        #if canImport(SwiftData)
+        if let trainingPlanRepository {
+            weeklyPlan = (try? trainingPlanRepository.weeklyWorkouts()) ?? []
+        }
+        #endif
+
         let nextExercise = autopilot?.nextExerciseName
         let nextTarget: String? = autopilot.map { state in
             let weight = Int(state.nextTarget.weight)
@@ -60,6 +67,7 @@ extension WorkoutDashboardModel {
             averageRPE: avgRPE,
             lastSessionSummary: lastSessionSummary,
             recentMemories: memories,
+            weeklyPlan: weeklyPlan,
             program: activeProgram,
             formCheck: latestFormCheckAnalysis,
             // VOL-181 Phase 1B: cached recovery snapshot fed into the

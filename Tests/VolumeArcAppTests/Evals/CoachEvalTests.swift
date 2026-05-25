@@ -218,6 +218,7 @@ final class CoachEvalTests: XCTestCase {
         case .form: return "asking about technique"
         case .recovery: return "asking about readiness or recovery"
         case .substitution: return "wants an exercise substitution"
+        case .planning: return "asking for a training plan or schedule"
         case .free: return "Open question"
         }
     }
@@ -243,6 +244,7 @@ struct CoachEvalFixture: Decodable, Sendable {
         let mustContainNumericContext: Bool?
         let mustMentionReadinessOrRPE: Bool?
         let mustNotMention: [String]?
+        let maxEnumeratedPlanDays: Int?
         let toneHint: String?
         let mustAnchorOnNextExercise: Bool?
         let mustFlagPainSignal: Bool?

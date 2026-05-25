@@ -23,10 +23,11 @@ struct WorkoutDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: VA.Space.lg) {
                 header
+                exerciseIllustrationHero
                 targetCard
                 cueCard
-                cueIllustrationCard
                 reasonCard
+                customCueIllustrationCard
                 Spacer(minLength: VA.Space.xxl)
             }
             .padding(VA.Space.lg)
@@ -59,6 +60,25 @@ struct WorkoutDetailView: View {
             Text(exerciseName)
                 .font(VA.Typography.display)
                 .foregroundStyle(VA.Colors.textPrimary)
+        }
+    }
+
+    @ViewBuilder
+    private var exerciseIllustrationHero: some View {
+        if let exercise = exerciseDefinition {
+            VACard(style: .flat) {
+                Image(exercise.illustrationAssetName, bundle: .main)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: VA.Space.exerciseIllustrationMinHeight)
+                    .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md))
+                    .accessibilityLabel(String(
+                        localized: "\(exercise.name) exercise illustration",
+                        comment: "Accessibility label for workout detail exercise illustration"
+                    ))
+                    .accessibilityIdentifier("workout.detail.exerciseIllustration")
+            }
         }
     }
 
@@ -97,7 +117,7 @@ struct WorkoutDetailView: View {
     }
 
     @ViewBuilder
-    private var cueIllustrationCard: some View {
+    private var customCueIllustrationCard: some View {
         #if canImport(ImagePlayground) && os(iOS)
         if supportsImagePlayground {
             VACard(style: .flat) {
@@ -106,7 +126,7 @@ struct WorkoutDetailView: View {
                         Image(systemName: "sparkles")
                             .foregroundStyle(VA.Colors.primary)
                         VStack(alignment: .leading, spacing: VA.Space.xxs) {
-                            Text(String(localized: "Form cue image", comment: "Workout detail image generation title"))
+                            Text(String(localized: "Custom cue", comment: "Workout detail custom cue image generation title"))
                                 .font(VA.Typography.headline)
                                 .foregroundStyle(VA.Colors.textPrimary)
                             if savedCueIllustrationURL != nil {
@@ -129,7 +149,7 @@ struct WorkoutDetailView: View {
                     }
 
                     VAButton(
-                        String(localized: "Generate my form cue", comment: "Workout detail Image Playground button"),
+                        String(localized: "Create custom cue", comment: "Workout detail Image Playground button"),
                         icon: "wand.and.sparkles",
                         style: .secondary,
                         accessibilityIdentifier: "workout.detail.generateCueImage"
@@ -169,8 +189,12 @@ struct WorkoutDetailView: View {
         ]
     }
 
+    private var exerciseDefinition: ExerciseDefinition? {
+        VolumeArcExerciseCatalog.exercise(withID: exerciseID)
+    }
+
     private var sourceExerciseImage: Image? {
-        guard let exercise = VolumeArcExerciseCatalog.exercise(withID: exerciseID) else {
+        guard let exercise = exerciseDefinition else {
             return nil
         }
         return Image(exercise.illustrationAssetName, bundle: .main)

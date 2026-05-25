@@ -14,11 +14,11 @@ Fixtures remain the single source of truth. They live at `Tests/Evals/CoachEvalF
 The coach prompt has four axes that matter for quality:
 
 - **Readiness** — the numeric recovery signal the model leans on. Fixtures cover 45, 60, 72, 82, 88 to exercise the low / moderate / borderline / ready / peak branches.
-- **Intent** — the `CoachIntent` classification that selects the per-intent envelope. Fixtures cover all six: `progression`, `deload`, `form`, `recovery`, `substitution`, `free`.
+- **Intent** — the `CoachIntent` classification that selects the per-intent envelope. Fixtures cover all seven: `progression`, `deload`, `form`, `recovery`, `substitution`, `planning`, `free`.
 - **Session history depth** — whether the athlete has 0 (cold start), 1 (single data point), or 5+ (established pattern) recent sessions. Three tiers because the product UI surfaces them differently.
 - **Coaching style** — `motivational`, `analytical`, `minimal`. These map to the `CoachingStyle` enum in `VolumeArcCore`; the task-spec names ("motivational / precise / playful") correspond in spirit but the implementation uses the enum values. A rename is out of scope for this ticket.
 
-Not every cell of the 5 × 6 × 3 × 3 = 270 matrix is covered. The current 31 fixtures were hand-picked so (a) every value on every axis appears at least twice, (b) the pain-signal, cold-start, sparse-history, program-awareness, recovery-context, and numeric-grounding edge cases all have coverage, and (c) fixture IDs remain stable across runs so diffs are tractable.
+Not every cell of the 5 × 7 × 3 × 3 = 315 matrix is covered. The current 33 fixtures were hand-picked so (a) every value on every axis appears at least twice, (b) the pain-signal, cold-start, sparse-history, program-awareness, planning-horizon, recovery-context, and numeric-grounding edge cases all have coverage, and (c) fixture IDs remain stable across runs so diffs are tractable.
 
 ### Template-layer assertions (always on)
 
@@ -52,6 +52,7 @@ The response-layer assertion contract remains:
 - `mustContainNumericContext` — the response cites at least one number.
 - `mustMentionReadinessOrRPE` — cites the grounded signal.
 - `mustNotMention` — list of banned phrases (pain platitudes, max-out language, 1RM references).
+- `maxEnumeratedPlanDays` — upper bound on enumerated weekdays / `Day N` schedule items for planning fixtures.
 - `toneHint` — informational; not asserted today but surfaced in the run log for human review.
 - `mustAnchorOnNextExercise` — the response references the next-up exercise's primary movement pattern. The script extracts the last word from the `Next up:` line in the fixture context (e.g. `"Back Squat"` → `"squat"`) and does a case-insensitive substring match.
 - `mustFlagPainSignal` — the response acknowledges pain or injury hedging language for fixtures where the question carries an injury signal.
@@ -129,6 +130,8 @@ Worker-side staging setup:
 | 29 | `program-substitution-ppl` | 72 | substitution | 5 | motivational | Program-aware substitution should preserve the Pull B vertical-pull slot. | pending | pending |
 | 30 | `program-recovery-upper-lower` | 45 | recovery | 4 | analytical | Program-aware recovery should preserve the weekly plan while modifying today. | pending | pending |
 | 31 | `program-free-hst` | 88 | free | 5 | motivational | Free-form coaching should still anchor to the active HST block. | pending | pending |
+| 32 | `planning-week-upper-lower` | 78 | planning | 3 | analytical | Weekly planning must stay inside the current 7-day training week, not spill into 14 days. | pending | pending |
+| 33 | `planning-today-cold-start` | 88 | planning | 0 | motivational | Today's plan must stay to the next known session, not expand into a multi-day schedule. | pending | pending |
 
 The `Last template-run` and `Last response-run` columns are hand-updated when you run the harness. The template-layer column flips to `PASS` on every green CI run against the branch. The response-layer column flips to `PASS`/`FAIL` from the nightly broker-backed run.
 

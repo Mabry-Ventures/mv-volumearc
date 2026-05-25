@@ -92,7 +92,9 @@ public final class WorkoutDashboardModel: ObservableObject {
     // extension can pull memory.mostRecent into the prompt block.
     let coachMemoryRepository: SwiftDataCoachMemoryRepository?
     private let userProfileRepository: SwiftDataUserProfileRepository?
-    private let trainingPlanRepository: SwiftDataTrainingPlanRepository?
+    // Internal so the extracted coach-context extension can include
+    // the current weekly plan in planning prompts.
+    let trainingPlanRepository: SwiftDataTrainingPlanRepository?
     let trainingProgramRepository: SwiftDataTrainingProgramRepository?
     private let refreshLoader: DashboardRefreshLoader?
     #endif
