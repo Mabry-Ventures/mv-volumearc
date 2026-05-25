@@ -237,7 +237,7 @@ struct WorkoutHistorySection: View {
                 HStack(spacing: VA.Space.md) {
                     WorkoutIllustrationTile(systemImage: "checkmark.circle.fill", size: 52, accent: VA.Colors.success)
                     VStack(alignment: .leading, spacing: VA.Space.xxs) {
-                        Text(session.date.formatted(.dateTime.weekday(.wide).month().day()))
+                        Text(title(for: session))
                             .font(VA.Typography.headline)
                             .foregroundStyle(VA.Colors.textPrimary)
                         Text(summary(for: session))
@@ -246,9 +246,9 @@ struct WorkoutHistorySection: View {
                     }
                     Spacer()
                     VAMetricDisplay(
-                        label: String(localized: "Load", comment: "Metric label for total weight lifted in a session"),
-                        value: "\(Int(session.totalVolumeLoad))",
-                        unit: String(localized: "lb", comment: "Weight unit abbreviation - pounds"),
+                        label: metricLabel(for: session),
+                        value: metricValue(for: session),
+                        unit: metricUnit(for: session),
                         style: .compact
                     )
                     Image(systemName: "chevron.right")
@@ -265,12 +265,39 @@ struct WorkoutHistorySection: View {
         .accessibilityIdentifier("workouts.historyRow")
     }
 
+    private func title(for session: RecentSession) -> String {
+        if session.isExternalHealthSession, let title = session.title, !title.isEmpty {
+            return title
+        }
+        return session.date.formatted(.dateTime.weekday(.wide).month().day())
+    }
+
     private func summary(for session: RecentSession) -> String {
+        if session.isExternalHealthSession {
+            let source = session.sourceName ?? String(localized: "Apple Health", comment: "Fallback source for HealthKit workouts")
+            return "\(source) - \(session.durationMinutes)min"
+        }
         let rpeText = String(format: "%.1f", session.averageRPE)
         let setsText = session.completedSetCount == 1
             ? String(localized: "1 set", comment: "Session summary set count, singular")
             : String(localized: "\(session.completedSetCount) sets", comment: "Session summary set count, plural")
         return "\(setsText) - \(session.durationMinutes)min - RPE \(rpeText)"
+    }
+
+    private func metricLabel(for session: RecentSession) -> String {
+        session.isExternalHealthSession
+            ? String(localized: "Time", comment: "Metric label for HealthKit workout duration")
+            : String(localized: "Load", comment: "Metric label for total weight lifted in a session")
+    }
+
+    private func metricValue(for session: RecentSession) -> String {
+        session.isExternalHealthSession ? "\(session.durationMinutes)" : "\(Int(session.totalVolumeLoad))"
+    }
+
+    private func metricUnit(for session: RecentSession) -> String {
+        session.isExternalHealthSession
+            ? String(localized: "min", comment: "Minute unit abbreviation")
+            : String(localized: "lb", comment: "Weight unit abbreviation - pounds")
     }
 }
 

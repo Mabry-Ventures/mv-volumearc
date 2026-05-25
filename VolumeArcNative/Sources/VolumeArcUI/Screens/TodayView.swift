@@ -442,22 +442,18 @@ public struct TodayView: View {
                         .frame(width: 8, height: 8)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: VA.Space.xxs) {
-                        Text(session.date.formatted(.dateTime.weekday(.wide).month().day()))
+                        Text(sessionTitle(for: session))
                             .font(VA.Typography.headline)
                             .foregroundStyle(VA.Colors.textPrimary)
-                        let rpeText = String(format: "%.1f", session.averageRPE)
-                        let setsText = session.completedSetCount == 1
-                            ? String(localized: "1 set", comment: "Session summary set count, singular")
-                            : String(localized: "\(session.completedSetCount) sets", comment: "Session summary set count, plural")
-                        Text("\(setsText) • \(session.durationMinutes)min • RPE \(rpeText)")
+                        Text(sessionSubtitle(for: session))
                         .font(VA.Typography.footnote)
                         .foregroundStyle(VA.Colors.textSecondary)
                     }
                     Spacer()
                     VAMetricDisplay(
-                        label: String(localized: "Load", comment: "Metric label for total weight lifted in a session"),
-                        value: "\(Int(session.totalVolumeLoad))",
-                        unit: String(localized: "lb", comment: "Weight unit abbreviation — pounds"),
+                        label: sessionMetricLabel(for: session),
+                        value: sessionMetricValue(for: session),
+                        unit: sessionMetricUnit(for: session),
                         style: .compact
                     )
                     Image(systemName: "chevron.right")
@@ -603,6 +599,44 @@ public struct TodayView: View {
         case .warning: return VA.Colors.warning
         case .error: return VA.Colors.error
         }
+    }
+}
+
+private extension TodayView {
+    func sessionTitle(for session: RecentSession) -> String {
+        if session.isExternalHealthSession, let title = session.title, !title.isEmpty {
+            return title
+        }
+        return session.date.formatted(.dateTime.weekday(.wide).month().day())
+    }
+
+    func sessionSubtitle(for session: RecentSession) -> String {
+        if session.isExternalHealthSession {
+            let source = session.sourceName
+                ?? String(localized: "Apple Health", comment: "Fallback source for HealthKit workouts")
+            return "\(source) • \(session.durationMinutes)min"
+        }
+        let rpeText = String(format: "%.1f", session.averageRPE)
+        let setsText = session.completedSetCount == 1
+            ? String(localized: "1 set", comment: "Session summary set count, singular")
+            : String(localized: "\(session.completedSetCount) sets", comment: "Session summary set count, plural")
+        return "\(setsText) • \(session.durationMinutes)min • RPE \(rpeText)"
+    }
+
+    func sessionMetricLabel(for session: RecentSession) -> String {
+        session.isExternalHealthSession
+            ? String(localized: "Time", comment: "Metric label for HealthKit workout duration")
+            : String(localized: "Load", comment: "Metric label for total weight lifted in a session")
+    }
+
+    func sessionMetricValue(for session: RecentSession) -> String {
+        session.isExternalHealthSession ? "\(session.durationMinutes)" : "\(Int(session.totalVolumeLoad))"
+    }
+
+    func sessionMetricUnit(for session: RecentSession) -> String {
+        session.isExternalHealthSession
+            ? String(localized: "min", comment: "Minute unit abbreviation")
+            : String(localized: "lb", comment: "Weight unit abbreviation — pounds")
     }
 }
 #endif

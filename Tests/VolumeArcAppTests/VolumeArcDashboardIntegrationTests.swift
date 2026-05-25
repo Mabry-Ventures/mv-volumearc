@@ -160,6 +160,69 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertTrue(recent.allSatisfy { $0.completedSetCount == 1 })
     }
 
+    func testRefreshLoadsExternalHealthWorkoutsIntoReadinessHistory() async throws {
+        let now = Date.now
+        let importer = FixedHealthWorkoutImporter(workouts: [
+            ImportedHealthWorkout(
+                externalIdentifier: "hk-ride-1",
+                sourceName: "Peloton",
+                sourceBundleIdentifier: "com.onepeloton.ios",
+                title: "Ride from Peloton",
+                activityIdentifier: "13",
+                startedAt: now.addingTimeInterval(-3_900),
+                endedAt: now.addingTimeInterval(-300),
+                durationMinutes: 60,
+                activeEnergyKilocalories: 510
+            ),
+            ImportedHealthWorkout(
+                externalIdentifier: "hk-strength-1",
+                sourceName: "Strong",
+                sourceBundleIdentifier: "io.strongapp.Strong",
+                title: "Strength training from Strong",
+                activityIdentifier: "50",
+                startedAt: now.addingTimeInterval(-2 * 86_400),
+                endedAt: now.addingTimeInterval(-2 * 86_400 + 3_600),
+                durationMinutes: 60,
+                activeEnergyKilocalories: 320
+            ),
+        ])
+        let telemetry = InMemoryTelemetrySink()
+        let model = makeDashboardModel(telemetrySink: telemetry, healthWorkoutImporter: importer)
+
+        await model.refresh()
+        await model.refresh()
+
+        XCTAssertEqual(model.recentSessions.count, 2, "External HK workouts should join the local history once")
+        XCTAssertTrue(
+            model.readiness.factors.contains { $0.name == "Training frequency" && $0.detail.contains("2/") },
+            "Readiness should count imported external workouts as recent training"
+        )
+        let records = try workoutRepository.recentWorkouts(limit: 10)
+        XCTAssertTrue(
+            records.isEmpty,
+            "HealthKit-derived workouts must not be persisted into the CloudKit-backed workout store"
+        )
+
+        let importEvents = telemetry.currentEvents.filter { $0.category == "health" && $0.name == "workouts_loaded" }
+        XCTAssertFalse(importEvents.isEmpty)
+    }
+
+    func testRefreshRecordsHealthWorkoutImportFailureWithoutBlockingDashboard() async {
+        let telemetry = InMemoryTelemetrySink()
+        let model = makeDashboardModel(
+            telemetrySink: telemetry,
+            healthWorkoutImporter: ThrowingHealthWorkoutImporter()
+        )
+
+        let refreshed = await model.refresh()
+
+        XCTAssertTrue(refreshed, "Health import failure should not block local dashboard refresh")
+        XCTAssertTrue(
+            telemetry.currentEvents.contains { $0.category == "health" && $0.name == "workout_import_failed" },
+            "Import failures should be visible to diagnostics"
+        )
+    }
+
     func testCompleteWorkoutSessionReturnsFreshSnapshotForNewSession() async throws {
         // Use a fictitious exercise + an unusual rep count so the value can't
         // collide with whatever the autopilot recommends for the new session.
@@ -467,6 +530,7 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         aiProvider: any AICoachProvider = LocalHeuristicAICoachProvider(),
         recoveryReader: any RecoveryReader = UnavailableRecoveryReader(),
         telemetrySink: any TelemetrySink = InMemoryTelemetrySink(),
+        healthWorkoutImporter: any HealthWorkoutImporting = UnavailableHealthWorkoutImporter(),
         watchVoiceSettingsStore: any WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore(),
         watchConnectivityCoordinator: WatchConnectivityCoordinator? = nil
     ) -> WorkoutDashboardModel {
@@ -493,6 +557,7 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
                 transport: AIRelayVoiceTransport(provider: aiProvider)
             ),
             recoveryReader: recoveryReader,
+            healthWorkoutImporter: healthWorkoutImporter,
             watchVoiceSettingsStore: watchVoiceSettingsStore,
             watchConnectivityCoordinator: watchConnectivityCoordinator
         )
@@ -791,6 +856,24 @@ private struct FixedRecoveryReader: RecoveryReader {
     func currentRecovery(now: Date) async -> RecoveryContext {
         value
     }
+}
+
+private struct FixedHealthWorkoutImporter: HealthWorkoutImporting {
+    let workouts: [ImportedHealthWorkout]
+
+    func completedWorkouts(since startDate: Date, now: Date) async throws -> [ImportedHealthWorkout] {
+        workouts.filter { $0.startedAt >= startDate && $0.endedAt <= now }
+    }
+}
+
+private struct ThrowingHealthWorkoutImporter: HealthWorkoutImporting {
+    func completedWorkouts(since startDate: Date, now: Date) async throws -> [ImportedHealthWorkout] {
+        throw DashboardHealthImportTestError.simulatedFailure
+    }
+}
+
+private enum DashboardHealthImportTestError: Error {
+    case simulatedFailure
 }
 
 private actor CapturedContextStore {

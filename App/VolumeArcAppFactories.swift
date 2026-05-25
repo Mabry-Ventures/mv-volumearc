@@ -68,6 +68,14 @@ extension VolumeArcApp {
         #endif
     }
 
+    static func makeHealthWorkoutImporter() -> HealthWorkoutImporting {
+        #if canImport(HealthKit)
+        return HealthKitWorkoutImporter()
+        #else
+        return UnavailableHealthWorkoutImporter()
+        #endif
+    }
+
     static func makeVoicePermissionStore() -> VoicePermissionStore {
         #if canImport(AVFoundation) && canImport(Speech)
         VolumeArcVoicePermissionStore()

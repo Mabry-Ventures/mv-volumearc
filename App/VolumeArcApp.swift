@@ -386,6 +386,7 @@ struct VolumeArcApp: App {
                 // query failures emit typed events instead of silently
                 // degrading to empty context.
                 recoveryReader: Self.makeRecoveryReader(telemetrySink: telemetrySink),
+                healthWorkoutImporter: Self.makeHealthWorkoutImporter(),
                 watchConnectivityCoordinator: watchConnectivityCoordinator
             )
         } else {
