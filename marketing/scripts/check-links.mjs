@@ -42,6 +42,7 @@ const KNOWN_ROUTES = new Set([
   '/terms',
   '/support',
   '/quality',
+  '/watch-faces',
   '/download', // redirect target — vercel.json handles, not a page route
   '/app',      // redirect target
 ])
