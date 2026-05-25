@@ -336,8 +336,9 @@ public struct OnboardingView: View {
                         symbol: "figure.strengthtraining.traditional",
                         text: String(
                             localized: """
-                            Reads completed workouts (and, on Apple Watch, heart rate + \
-                            active energy during a session) to chart your training history.
+                            Reads workouts, HRV, sleep, Workout Effort, wrist temperature, \
+                            respiratory rate, and Apple Watch session signals to chart your \
+                            training history.
                             """,
                             comment: "Onboarding permissions step — what HealthKit data VolumeArc reads"
                         )

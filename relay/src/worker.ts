@@ -67,8 +67,8 @@ type CoachRequestStyle = FallbackCoachingStyle | "precise";
 
 interface CoachRequestBody {
   intent: "progression" | "deload" | "form" | "recovery" | "substitution" | "planning" | "free";
-  question: string;
-  contextBlock: string;
+  question?: string;
+  contextBlock?: string;
   style?: CoachRequestStyle;
   messages?: Array<{ role: "user" | "assistant"; content: string }>;
   /**
@@ -97,6 +97,7 @@ interface AuthFailure {
 }
 
 type AuthResult = AuthSuccess | AuthFailure;
+const MAX_COACH_PAYLOAD_CHARS = 32_000;
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -147,8 +148,11 @@ async function handleCoach(request: Request, env: Env): Promise<Response> {
     return json({ error: "bad_request" }, 400);
   }
 
-  if (!body.question || !body.contextBlock || !body.intent) {
+  if (!body.intent || !hasCoachPayload(body)) {
     return json({ error: "missing_fields" }, 400);
+  }
+  if (coachPayloadLength(body) > MAX_COACH_PAYLOAD_CHARS) {
+    return json({ error: "payload_too_large" }, 413);
   }
 
   const auth = await authenticate(request, env, new TextEncoder().encode(bodyText));
@@ -375,8 +379,8 @@ function buildSystemPrompt(style: FallbackCoachingStyle): string {
 }
 
 function buildFallbackPrompt(body: CoachRequestBody, style: FallbackCoachingStyle): string {
-  const context = body.contextBlock.trim();
-  const question = body.question.trim();
+  const context = body.contextBlock?.trim() ?? "";
+  const question = body.question?.trim() ?? "";
   return [
     `[VAC:tmpl] intent=${body.intent} style=${style}`,
     "",
@@ -388,6 +392,19 @@ function buildFallbackPrompt(body: CoachRequestBody, style: FallbackCoachingStyl
     "## Athlete question",
     question,
   ].join("\n").trim();
+}
+
+function hasCoachPayload(body: CoachRequestBody): boolean {
+  if (body.prompt?.trim()) {
+    return true;
+  }
+  return Boolean(body.question?.trim() && body.contextBlock?.trim());
+}
+
+function coachPayloadLength(body: CoachRequestBody): number {
+  return [body.prompt, body.question, body.contextBlock]
+    .filter((value): value is string => typeof value === "string")
+    .reduce((total, value) => total + value.length, 0);
 }
 
 function intentEnvelope(intent: CoachRequestBody["intent"]): string {

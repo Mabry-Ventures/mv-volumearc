@@ -486,7 +486,12 @@ public struct VAErrorState: View {
             }
 
             if let retry {
-                VAButton("Try Again", icon: "arrow.clockwise", style: .secondary, action: retry)
+                VAButton(
+                    String(localized: "Try Again", comment: "Generic retry button label"),
+                    icon: "arrow.clockwise",
+                    style: .secondary,
+                    action: retry
+                )
                     .frame(maxWidth: 200)
             }
         }

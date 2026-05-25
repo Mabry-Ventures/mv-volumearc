@@ -28,16 +28,16 @@ Request body:
 
 ```jsonc
 {
-  "intent": "progression" | "deload" | "form" | "recovery" | "substitution" | "free",
-  "question": "user's question",
-  "contextBlock": "readiness + recent sessions + plan",
-  "style": "motivational" | "precise" | "playful",
-  // Optional: iOS pre-renders the prompt via CoachPromptTemplate and sends
-  // it verbatim so the template marker + system prompt stay on-device.
+  "intent": "progression" | "deload" | "form" | "recovery" | "substitution" | "planning" | "free",
+  "style": "motivational" | "analytical" | "minimal" | "playful" | "precise",
+  // Current iOS clients pre-render the prompt via CoachPromptTemplate and
+  // send it verbatim. Do not also send raw question/contextBlock fields.
   "prompt": "<CoachPromptTemplate.render(...)>",
   "system": "<CoachPromptTemplate.systemPrompt(...)>"
 }
 ```
+
+Legacy clients may send `question` + `contextBlock` without `prompt`; the Worker still renders a fallback prompt for that shape.
 
 Required auth headers:
 

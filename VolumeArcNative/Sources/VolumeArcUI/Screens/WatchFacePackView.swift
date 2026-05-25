@@ -328,7 +328,7 @@ private struct WatchFacePreview: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text("82")
                     .font(.system(size: 18, weight: .bold, design: .rounded))
-                Text("Readiness")
+                Text(String(localized: "Readiness", comment: "Watch face preview readiness label"))
                     .font(.system(size: 6, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.56))
             }

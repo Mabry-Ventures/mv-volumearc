@@ -54,6 +54,13 @@ final class VolumeArcCoachJourneyTests: XCTestCase {
             composer.waitForExistence(timeout: 15),
             "Coach composer text field should be reachable within 15s in -UITestMode"
         )
+        let safetyDisclaimer = app.descendants(matching: .any)
+            .matching(identifier: "coach.safetyDisclaimer")
+            .firstMatch
+        XCTAssertTrue(
+            safetyDisclaimer.waitForExistence(timeout: 5),
+            "Coach surface should keep the AI / medical-advice disclaimer visible near the composer"
+        )
 
         composer.tap()
         composer.typeText("Should I push today?")

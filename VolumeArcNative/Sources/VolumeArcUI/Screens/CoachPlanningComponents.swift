@@ -382,6 +382,7 @@ private struct CoachStepperControl: View {
                         .font(VA.Typography.caption)
                         .frame(width: 28, height: 28)
                 }
+                .accessibilityLabel(String(localized: "Decrease \(label)", comment: "Plan stepper decrement button"))
                 Text("\(value)")
                     .font(VA.Typography.monoDigit)
                     .foregroundStyle(VA.Colors.textPrimary)
@@ -391,6 +392,7 @@ private struct CoachStepperControl: View {
                         .font(VA.Typography.caption)
                         .frame(width: 28, height: 28)
                 }
+                .accessibilityLabel(String(localized: "Increase \(label)", comment: "Plan stepper increment button"))
             }
             .foregroundStyle(VA.Colors.textPrimary)
             .background(VA.Colors.textTertiary.opacity(0.10), in: RoundedRectangle(cornerRadius: VA.Radius.sm, style: .continuous))

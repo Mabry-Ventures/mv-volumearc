@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 // feedback bundle; and expanded GDPR / CCPA-CPRA disclosures. The
 // matching code changes (strict-mode question redaction on the relay
 // path; maskAllImages) ship in the same PR.
-const EFFECTIVE_DATE = 'May 23, 2026'
+const EFFECTIVE_DATE = 'May 25, 2026'
 
 export default function PrivacyPage() {
   return (
@@ -63,7 +63,9 @@ export default function PrivacyPage() {
             <ul>
               <li>
                 <strong>On iPhone:</strong> workouts, heart-rate variability
-                (HRV, SDNN), and sleep analysis.
+                (HRV, SDNN), sleep analysis, Workout Effort (logged and
+                estimated), Apple sleeping wrist temperature, and respiratory
+                rate.
               </li>
               <li>
                 <strong>On Apple Watch:</strong> workouts, heart rate, and
@@ -95,11 +97,12 @@ export default function PrivacyPage() {
               relay) embeds numeric aggregates such as a 7-day HRV mean versus
               your 28-day baseline (e.g. &ldquo;54 ms vs 58 ms, −7%&rdquo;), a
               7-day sleep total versus target (e.g. &ldquo;47.2h over 7 days vs
-              56h target&rdquo;), and a 7-day strength-training load in
-              kilojoules and minutes (e.g. &ldquo;4,200 kJ across 180
-              min&rdquo;). These aggregates are derived from your HealthKit
-              data; the raw samples themselves are not transmitted. These
-              aggregates are numeric, not raw samples, and are included
+              56h target&rdquo;), a 7-day strength-training load in kilojoules
+              and minutes (e.g. &ldquo;4,200 kJ across 180 min&rdquo;), Workout
+              Effort trends, sleeping wrist-temperature trends, and
+              respiratory-rate trends. These aggregates are derived from your
+              HealthKit data; the raw samples themselves are not transmitted.
+              These aggregates are numeric, not raw samples, and are included
               whenever you use the cloud coach. On devices that support
               Apple&rsquo;s on-device Foundation Models, the coach may answer
               locally without contacting the relay; if the on-device model is

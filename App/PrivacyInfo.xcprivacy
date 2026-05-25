@@ -8,9 +8,10 @@
 
 		Required-reason APIs declared below cover first-party code only.
 		Bundled frameworks (Sentry) ship their own PrivacyInfo.xcprivacy
-		inside the XCFramework; Apple merges those at submission time, so
-		we intentionally do NOT redeclare Sentry's SystemBootTime /
-		FileTimestamp reasons here.
+		inside the XCFramework; Apple merges those at submission time. We
+		still declare the first-party diagnostic data categories below
+		because VolumeArc configures Sentry crash, performance, and app-hang
+		collection as part of app functionality.
 	-->
 	<key>NSPrivacyTracking</key>
 	<false/>
@@ -69,6 +70,24 @@
 			</array>
 		</dict>
 		<!--
+			Name: in Standard coach privacy mode, the structured coach
+			context may include the athlete profile name so the coach can
+			address the user naturally. Strict mode replaces it with "the
+			athlete" before cloud egress.
+		-->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeName</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!--
 			Audio (microphone) data: voice coaching requests and voice
 			workout notes. Captured on-device via AVAudioApplication and
 			processed via SFSpeechRecognizer. App functionality only.
@@ -97,6 +116,50 @@
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!--
+			Diagnostics: Sentry captures crash reports, sampled performance
+			traces, MetricKit diagnostics, and app-hang diagnostics so the
+			team can find and fix production reliability issues. Text and
+			images are masked in crash-session replay, and VolumeArc's
+			scrubber removes known health/user fields before events leave
+			the device.
+		-->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeCrashData</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePerformanceData</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherDiagnosticData</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<false/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>

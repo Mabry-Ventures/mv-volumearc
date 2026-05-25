@@ -1,11 +1,26 @@
-TBD — App Store full description (max 4000 chars). Should cover:
+VolumeArc is a strength-training coach for lifters who want more than a generic template.
 
-* What the app does (strength training, AI coach, Apple Watch integration)
-* Who it's for (lifters who want personalized prescriptions, not generic templates)
-* The Pro upgrade (Gemini Pro tier coach + live voice coaching; everything else is free)
-* Privacy posture (raw HealthKit stays on-device; computed aggregates flow to AI relay when user asks coach)
-* Apple integrations (HealthKit, CloudKit private DB, Live Activities, widgets, App Intents)
+The app combines workout tracking, readiness signals, Apple Watch support, and an AI coach so each session starts with a clear next step: what to train, how hard to push, and when to back off.
 
-Reference the marketing landing-page hero + features section once finalized so the two surfaces stay in sync (see VOL-198 paywall/Pricing contract). Do NOT promise features still in backlog (curated programs library, Apple Watch Vitals/Training Load).
+Strength coaching that follows your training
+- See today's recommended workout, next lift, target reps, and readiness.
+- Log sets, RPE, rest, and completed sessions from iPhone or Apple Watch.
+- Ask the coach about load selection, recovery, form cues, substitutions, and weekly planning.
+- Review recent training context so advice stays grounded in what you actually did.
 
-Tone reference: marketing/src/components/Hero.tsx + marketing/src/components/Features.tsx as of 2026-05-18.
+Built for Apple Health and Apple Watch
+- Read completed workouts, HRV, sleep, Workout Effort, wrist temperature, respiratory rate, heart rate, and active energy with your permission.
+- Write completed VolumeArc workouts back to Apple Health.
+- Keep your workout history in your private iCloud account with CloudKit.
+- Use widgets, Live Activities, App Intents, and Apple Watch surfaces to stay close to the next session.
+
+Privacy-first AI coaching
+- Raw HealthKit samples stay on your device.
+- When you ask the cloud AI coach a question, VolumeArc may send computed training and recovery summaries through the VolumeArc relay to Google Gemini so the coach can answer with context.
+- Strict privacy mode reduces personal context before cloud coaching requests.
+- Crash and diagnostics reporting is configured to mask text and images.
+
+VolumeArc Pro
+The core tracker, readiness experience, Apple Watch support, widgets, Live Activities, App Intents, CloudKit sync, and on-device/local coach fallback are available without Pro. VolumeArc Pro upgrades the AI coach to the Gemini Pro tier and unlocks live voice coaching.
+
+AI coaching is not medical advice. Consult a physician before starting a new training program or training with pain, dizziness, chest pain, shortness of breath, or other concerning symptoms.

@@ -10,6 +10,9 @@ public struct CoachView: View {
     @State private var showPlanDraft: Bool = false
     @State private var expandedExerciseID: String?
     @State private var planDraft: CoachPlanDraft = .default
+    @State private var showCoachSafetyNotice: Bool = false
+    @AppStorage("volumearc.coachSafetyNoticeAccepted")
+    private var hasAcceptedCoachSafetyNotice: Bool = false
     @FocusState private var inputFocused: Bool
 
     public init(model: WorkoutDashboardModel, navigation: DashboardNavigationModel) {
@@ -42,7 +45,26 @@ public struct CoachView: View {
                 .accessibilityIdentifier("coach.keyboardDismiss")
             }
         }
+        .alert(
+            String(localized: "AI coaching notice", comment: "Coach safety notice alert title"),
+            isPresented: $showCoachSafetyNotice
+        ) {
+            Button(String(localized: "I Understand", comment: "Coach safety notice acknowledgement button")) {
+                hasAcceptedCoachSafetyNotice = true
+            }
+        } message: {
+            Text(String(
+                localized: """
+                    AI coaching uses Google Gemini. Recommendations are not \
+                    medical advice — consult a physician before starting a new \
+                    program or training with pain, dizziness, chest pain, or \
+                    shortness of breath.
+                    """,
+                comment: "One-time Coach AI safety notice"
+            ))
+        }
         .onAppear {
+            presentCoachSafetyNoticeIfNeeded()
             if let prompt = navigation.coachPrompt, !prompt.isEmpty {
                 draftMessage = prompt
                 showPlanDraft = isPlanningPrompt(prompt)
@@ -227,43 +249,54 @@ public struct CoachView: View {
     // MARK: - Composer
 
     private var composer: some View {
-        HStack(alignment: .bottom, spacing: VA.Space.sm) {
-            TextField(
-                String(localized: "Ask the coach", comment: "Coach composer placeholder"),
-                text: $draftMessage,
-                axis: .vertical
-            )
-                .textFieldStyle(.plain)
-                .font(VA.Typography.body)
-                .padding(.horizontal, VA.Space.md)
-                .padding(.vertical, VA.Space.sm)
-                .lineLimit(1...4)
-                .focused($inputFocused)
-                // VOL-99: perf test types into this field before timing
-                // the first-token latency; identifier lets XCUITest find
-                // it in the composer HStack.
-                .accessibilityIdentifier("coach.input")
+        VStack(alignment: .leading, spacing: VA.Space.xs) {
+            HStack(alignment: .bottom, spacing: VA.Space.sm) {
+                TextField(
+                    String(localized: "Ask the coach", comment: "Coach composer placeholder"),
+                    text: $draftMessage,
+                    axis: .vertical
+                )
+                    .textFieldStyle(.plain)
+                    .font(VA.Typography.body)
+                    .padding(.horizontal, VA.Space.md)
+                    .padding(.vertical, VA.Space.sm)
+                    .lineLimit(1...4)
+                    .focused($inputFocused)
+                    // VOL-99: perf test types into this field before timing
+                    // the first-token latency; identifier lets XCUITest find
+                    // it in the composer HStack.
+                    .accessibilityIdentifier("coach.input")
 
-            Button {
-                sendMessage()
-            } label: {
-                Image(systemName: "arrow.up")
-                    .font(VA.Typography.button)
-                    .foregroundStyle(canSend ? VA.Colors.textOnPrimary : VA.Colors.textTertiary)
-                    .frame(width: 36, height: 36)
-                    .background(canSend ? VA.Colors.primary : VA.Colors.textTertiary.opacity(0.12), in: Circle())
+                Button {
+                    sendMessage()
+                } label: {
+                    Image(systemName: "arrow.up")
+                        .font(VA.Typography.button)
+                        .foregroundStyle(canSend ? VA.Colors.textOnPrimary : VA.Colors.textTertiary)
+                        .frame(width: 36, height: 36)
+                        .background(canSend ? VA.Colors.primary : VA.Colors.textTertiary.opacity(0.12), in: Circle())
+                }
+                .disabled(!canSend)
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "Send", comment: "Coach composer send button accessibility label"))
+                // VOL-99: perf test taps this to dispatch the coach request
+                // and start the first-token latency measurement.
+                .accessibilityIdentifier("coach.send")
             }
-            .disabled(!canSend)
-            .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "Send", comment: "Coach composer send button accessibility label"))
-            // VOL-99: perf test taps this to dispatch the coach request
-            // and start the first-token latency measurement.
-            .accessibilityIdentifier("coach.send")
+            .padding(.leading, VA.Space.md)
+            .padding(.trailing, VA.Space.xs)
+            .padding(.vertical, VA.Space.xs)
+            .vaGlassBackground(in: Capsule())
+
+            Text(String(
+                localized: "AI coaching uses Google Gemini. Recommendations are not medical advice.",
+                comment: "Persistent Coach AI safety disclaimer under the composer"
+            ))
+            .font(VA.Typography.caption)
+            .foregroundStyle(VA.Colors.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("coach.safetyDisclaimer")
         }
-        .padding(.leading, VA.Space.md)
-        .padding(.trailing, VA.Space.xs)
-        .padding(.vertical, VA.Space.xs)
-        .vaGlassBackground(in: Capsule())
         .padding(.horizontal, VA.Space.lg)
         .padding(.bottom, VA.Space.lg)
         .background(VA.Colors.surfaceGrouped)
@@ -320,6 +353,12 @@ public struct CoachView: View {
 
     private func dismissKeyboard() {
         inputFocused = false
+    }
+
+    private func presentCoachSafetyNoticeIfNeeded() {
+        guard !VolumeArcRuntimeFlags.isDeterministicMode else { return }
+        guard !hasAcceptedCoachSafetyNotice else { return }
+        showCoachSafetyNotice = true
     }
 }
 #endif
