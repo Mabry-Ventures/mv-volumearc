@@ -402,9 +402,14 @@ function hasCoachPayload(body: CoachRequestBody): boolean {
 }
 
 function coachPayloadLength(body: CoachRequestBody): number {
-  return [body.prompt, body.question, body.contextBlock]
+  const directLength = [body.prompt, body.system, body.question, body.contextBlock]
     .filter((value): value is string => typeof value === "string")
     .reduce((total, value) => total + value.length, 0);
+  const historyLength = (body.messages ?? []).reduce(
+    (total, message) => total + message.content.length,
+    0,
+  );
+  return directLength + historyLength;
 }
 
 function intentEnvelope(intent: CoachRequestBody["intent"]): string {

@@ -357,8 +357,9 @@ public struct OnboardingView: View {
                         symbol: "iphone.gen3",
                         text: String(
                             localized: """
-                            Your Health data stays in Apple Health on this device. \
-                            VolumeArc does not upload it to our servers.
+                            Raw HealthKit data stays in Apple Health on this device. \
+                            If you use Cloud Coach, only computed aggregates leave \
+                            with your consent.
                             """,
                             comment: "Onboarding permissions step — on-device storage guarantee"
                         )

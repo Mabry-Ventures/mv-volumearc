@@ -856,6 +856,30 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("counts system prompts and message history in the coach payload limit", async () => {
+    const env = makeEnv();
+    const oversizedSystemBody = JSON.stringify({
+      intent: "free",
+      style: "minimal",
+      prompt: "short prompt",
+      system: "x".repeat(32_000),
+    });
+    const oversizedMessagesBody = JSON.stringify({
+      intent: "free",
+      style: "minimal",
+      prompt: "short prompt",
+      messages: [{ role: "user", content: "x".repeat(32_000) }],
+    });
+
+    for (const body of [oversizedSystemBody, oversizedMessagesBody]) {
+      vi.mocked(fetch).mockClear();
+      const response = await worker.fetch(coachRequest({}, body), env);
+      expect(response.status).toBe(413);
+      await expect(json(response)).resolves.toMatchObject({ error: "payload_too_large" });
+      expect(fetch).not.toHaveBeenCalled();
+    }
+  });
+
   it("rejects missing App Attest headers with a cutover-specific 410", async () => {
     const env = makeEnv();
 

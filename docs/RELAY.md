@@ -37,6 +37,11 @@ Request body:
 }
 ```
 
+Maximum combined length of all text-bearing coach payload fields (`prompt`,
+`system`, legacy `question` / `contextBlock`, and message history): 32,000
+characters. Requests exceeding this limit return HTTP 413
+`payload_too_large`.
+
 Legacy clients may send `question` + `contextBlock` without `prompt`; the Worker still renders a fallback prompt for that shape.
 
 Required auth headers:
