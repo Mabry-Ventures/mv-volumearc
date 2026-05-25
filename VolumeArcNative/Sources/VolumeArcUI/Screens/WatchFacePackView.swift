@@ -59,79 +59,96 @@ public struct WatchFacePackView: View {
         let fileAvailable = WatchFacePack.bundledFileURL(for: preset) != nil
         return VACard(style: .glass) {
             VStack(alignment: .leading, spacing: VA.Space.lg) {
-                HStack(alignment: .center, spacing: VA.Space.lg) {
-                    WatchFacePreview(preset: preset)
-                        .frame(width: 112, height: 132)
-                        .accessibilityHidden(true)
-
-                    VStack(alignment: .leading, spacing: VA.Space.xs) {
-                        Text(preset.displayName)
-                            .font(VA.Typography.headline)
-                            .foregroundStyle(VA.Colors.textPrimary)
-                        Text(preset.subtitle)
-                            .font(VA.Typography.footnote)
-                            .foregroundStyle(VA.Colors.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(preset.family)
-                            .font(VA.Typography.caption)
-                            .foregroundStyle(VA.Colors.primary)
-                    }
-                    Spacer(minLength: VA.Space.sm)
-                }
-
-                VStack(spacing: VA.Space.sm) {
-                    ForEach(preset.complicationSlots) { slot in
-                        HStack(spacing: VA.Space.md) {
-                            Text(slot.slot)
-                                .font(VA.Typography.caption)
-                                .foregroundStyle(VA.Colors.textSecondary)
-                                .frame(width: 84, alignment: .leading)
-                            VStack(alignment: .leading, spacing: VA.Space.xxs) {
-                                Text(slot.label)
-                                    .font(VA.Typography.footnote)
-                                    .foregroundStyle(VA.Colors.textPrimary)
-                                Text(slot.detail)
-                                    .font(VA.Typography.caption)
-                                    .foregroundStyle(VA.Colors.textSecondary)
-                            }
-                            Spacer()
-                            Text(slot.value)
-                                .font(VA.Typography.footnote)
-                                .foregroundStyle(VA.Colors.textPrimary)
-                        }
-                    }
-                }
-
-                Button {
-                    Task { await install(preset) }
-                } label: {
-                    HStack {
-                        if installingPreset == preset {
-                            ProgressView()
-                        } else {
-                            Image(systemName: fileAvailable ? "applewatch.and.arrow.forward" : "square.and.arrow.down")
-                        }
-                        Text(fileAvailable
-                            ? String(localized: "Install", comment: "Install watch face action")
-                            : String(localized: "Export needed", comment: "Missing watch face file action")
-                        )
-                    }
-                    .font(VA.Typography.button)
-                    .foregroundStyle(VA.Colors.textOnPrimary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-                    .background(fileAvailable ? VA.Colors.primary : VA.Colors.textTertiary, in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .disabled(!fileAvailable || installingPreset != nil)
-                .accessibilityIdentifier("watchFaces.install.\(preset.telemetryName)")
-                .accessibilityHint(fileAvailable
-                    ? Text(String(localized: "Opens Apple's Add Watch Face flow", comment: "Watch face install hint"))
-                    : Text(String(localized: "The exported watch face file is not bundled yet", comment: "Watch face missing file hint"))
-                )
+                presetHeader(preset)
+                complicationList(for: preset)
+                installButton(for: preset, fileAvailable: fileAvailable)
             }
         }
         .accessibilityElement(children: .contain)
+    }
+
+    private func presetHeader(_ preset: WatchFacePreset) -> some View {
+        HStack(alignment: .center, spacing: VA.Space.lg) {
+            WatchFacePreview(preset: preset)
+                .frame(width: 112, height: 132)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: VA.Space.xs) {
+                Text(preset.displayName)
+                    .font(VA.Typography.headline)
+                    .foregroundStyle(VA.Colors.textPrimary)
+                Text(preset.subtitle)
+                    .font(VA.Typography.footnote)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(preset.family)
+                    .font(VA.Typography.caption)
+                    .foregroundStyle(VA.Colors.primary)
+            }
+            Spacer(minLength: VA.Space.sm)
+        }
+    }
+
+    private func complicationList(for preset: WatchFacePreset) -> some View {
+        VStack(spacing: VA.Space.sm) {
+            ForEach(preset.complicationSlots) { slot in
+                HStack(spacing: VA.Space.md) {
+                    Text(slot.slot)
+                        .font(VA.Typography.caption)
+                        .foregroundStyle(VA.Colors.textSecondary)
+                        .frame(width: 84, alignment: .leading)
+                    VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                        Text(slot.label)
+                            .font(VA.Typography.footnote)
+                            .foregroundStyle(VA.Colors.textPrimary)
+                        Text(slot.detail)
+                            .font(VA.Typography.caption)
+                            .foregroundStyle(VA.Colors.textSecondary)
+                    }
+                    Spacer()
+                    Text(slot.value)
+                        .font(VA.Typography.footnote)
+                        .foregroundStyle(VA.Colors.textPrimary)
+                }
+            }
+        }
+    }
+
+    private func installButton(for preset: WatchFacePreset, fileAvailable: Bool) -> some View {
+        Button {
+            Task { await install(preset) }
+        } label: {
+            installButtonLabel(for: preset, fileAvailable: fileAvailable)
+        }
+        .buttonStyle(.plain)
+        .disabled(!fileAvailable || installingPreset != nil)
+        .accessibilityIdentifier("watchFaces.install.\(preset.telemetryName)")
+        .accessibilityHint(fileAvailable
+            ? Text(String(localized: "Opens Apple's Add Watch Face flow", comment: "Watch face install hint"))
+            : Text(String(localized: "The exported watch face file is not bundled yet", comment: "Watch face missing file hint"))
+        )
+    }
+
+    private func installButtonLabel(for preset: WatchFacePreset, fileAvailable: Bool) -> some View {
+        HStack {
+            if installingPreset == preset {
+                ProgressView()
+            } else {
+                Image(systemName: fileAvailable ? "applewatch.and.arrow.forward" : "square.and.arrow.down")
+            }
+            Text(fileAvailable
+                ? String(localized: "Install", comment: "Install watch face action")
+                : String(localized: "Export needed", comment: "Missing watch face file action")
+            )
+        }
+        .font(VA.Typography.button)
+        .foregroundStyle(VA.Colors.textOnPrimary)
+        .frame(maxWidth: .infinity)
+        .frame(height: 44)
+        .background(
+            fileAvailable ? VA.Colors.primary : VA.Colors.textTertiary,
+            in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous)
+        )
     }
 
     @MainActor
