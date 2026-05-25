@@ -8,12 +8,6 @@ final class VolumeArcScreenshotTests: XCTestCase {
 
     @MainActor
     func testCaptureAppStoreScreenshots() throws {
-        try XCTSkipIf(
-            true,
-            "VOL-230: screenshot pipeline times out after 55s. Pre-existing " +
-            "failure exposed by VOL-227 unblocking UI test execution. " +
-            "Investigate the Snapshot helper or the workout-screenshot path."
-        )
         let app = VolumeArcAppUITestSupport.makeSeededApp()
         setupSnapshot(app)
         app.launch()
@@ -62,7 +56,10 @@ final class VolumeArcScreenshotTests: XCTestCase {
 
         app.terminate()
 
-        let paywallApp = VolumeArcAppUITestSupport.makeSeededApp(extra: ["-ShowPaywallOnLaunch", "1"])
+        let paywallApp = VolumeArcAppUITestSupport.makeSeededApp(extra: [
+            "-ShowPaywallOnLaunch", "1",
+            "-UseScreenshotStoreKitFixtures", "1",
+        ])
         setupSnapshot(paywallApp)
         paywallApp.launch()
 
@@ -73,28 +70,11 @@ final class VolumeArcScreenshotTests: XCTestCase {
         let monthlyPlan = paywallApp.descendants(matching: .any)
             .matching(identifier: "paywall.plan.com.mabryventures.VolumeArc.premium.monthly")
             .firstMatch
-        let planLoaded = monthlyPlan.waitForExistence(timeout: 20)
-        let requiresStoreKitProducts = paywallApp.launchArguments.contains { argument in
-            argument == "-RequireStoreKitProducts" || argument.hasPrefix("-RequireStoreKitProducts=")
-        }
-        if requiresStoreKitProducts {
-            XCTAssertTrue(planLoaded, "Premium screenshot should wait for StoreKit products before capture")
-        } else if !planLoaded {
-            // VOL-202: same skip→fail policy as the purchase test —
-            // release screenshot capture is not allowed to silently
-            // skip the premium screen when products fail to load. CI
-            // must produce a complete screenshot matrix. Local dev can
-            // opt in to the skip via ALLOW_STOREKIT_SKIP=1.
-            if ProcessInfo.processInfo.environment["ALLOW_STOREKIT_SKIP"] == "1" {
-                throw XCTSkip(
-                    "StoreKit products unavailable on this simulator; premium screenshot capture skipped (ALLOW_STOREKIT_SKIP=1)."
-                )
-            }
-            XCTFail(
-                "StoreKit products did not load before premium screenshot capture. The release screenshot matrix would be incomplete; fix the StoreKit Test daemon / .storekit config, or set ALLOW_STOREKIT_SKIP=1 locally."
-            )
-            return
-        }
+        XCTAssertTrue(
+            monthlyPlan.waitForExistence(timeout: 10),
+            "Premium screenshot should render deterministic subscription plan fixtures"
+        )
+        monthlyPlan.tap()
         snapshot("06_premium")
     }
 

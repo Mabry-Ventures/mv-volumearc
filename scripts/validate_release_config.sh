@@ -154,6 +154,85 @@ if ! plutil -extract WKBackgroundModes xml1 -o - Watch/Info.plist 2>/dev/null |
   exit 1
 fi
 
+# VOL-125: App Store Connect rejects Siri/App Intent descriptions that
+# include "Apple" trademark wording. Build 255 hit ITMS-90626 for
+# "Apple Watch Ultra Action Button" in an Action Button intent
+# description. Keep this in the cheap static gate so release builds
+# fail before another binary upload.
+if ! ruby <<'RUBY'
+paths = [
+  "App/Intents/VolumeArcIntents.swift",
+  "Watch/WatchActionButtonIntents.swift",
+]
+
+failures = []
+
+paths.each do |path|
+  next unless File.file?(path)
+
+  lines = File.readlines(path)
+  line_index = 0
+  while line_index < lines.length
+    line = lines[line_index]
+    unless line.include?("IntentDescription(")
+      line_index += 1
+      next
+    end
+
+    start_line = line_index + 1
+    block = +""
+    depth = 0
+
+    begin
+      current = lines[line_index]
+      block << current
+      depth += current.count("(")
+      depth -= current.count(")")
+      line_index += 1
+    end while line_index < lines.length && depth.positive?
+
+    failures << "#{path}:#{start_line}" if block.match?(/apple/i)
+  end
+end
+
+if failures.any?
+  warn "FAIL: App Intent descriptions must not contain Apple trademark wording (ITMS-90626):"
+  failures.each { |failure| warn "  - #{failure}" }
+  exit 1
+end
+RUBY
+then
+  exit 1
+fi
+
+# VOL-216 / VOL-125: ASC metadata readiness gate. Soft-warns by
+# default so a regen / smoke run during everyday development doesn't
+# trip on in-progress metadata drafts. When
+# `VOLUMEARC_RELEASE_READY=1` is set (release readiness check,
+# `fastlane ios release` precondition, or operator manually proving
+# "we're submission-ready"), any file under `fastlane/metadata/en-US/`
+# that still contains `TBD` or `ACTION REQUIRED` becomes a hard fail
+# with the file list. This lives in the static section so
+# `--no-build` can be used as the cheap release-readiness smoke.
+metadata_dir="fastlane/metadata/en-US"
+if [[ -d "$metadata_dir" ]]; then
+  draft_blocker_files=$(/usr/bin/grep -Erl "TBD|ACTION REQUIRED" "$metadata_dir" 2>/dev/null || true)
+  if [[ -n "$draft_blocker_files" ]]; then
+    if [[ "${VOLUMEARC_RELEASE_READY:-0}" == "1" ]]; then
+      echo "FAIL: App Store Connect metadata still contains draft blockers (VOLUMEARC_RELEASE_READY=1 active):" >&2
+      while IFS= read -r draft_blocker_file; do
+        echo "  - $draft_blocker_file" >&2
+      done <<<"$draft_blocker_files"
+      echo "Resolve every TBD/ACTION REQUIRED marker before running 'fastlane ios release' or marking the submission as ready." >&2
+      exit 1
+    else
+      echo "INFO: $metadata_dir has $(echo "$draft_blocker_files" | wc -l | tr -d ' ') file(s) with draft blockers. Set VOLUMEARC_RELEASE_READY=1 to enforce."
+    fi
+  else
+    echo "App Store Connect metadata: no TBD/ACTION REQUIRED markers remaining in $metadata_dir."
+  fi
+fi
+
 # VOL-177: --no-build exits here. Everything above is static file/text
 # assertions that match what pre-commit can afford to run. Everything
 # below shells to xcodebuild (5-10s per call) and is CI-only.
@@ -700,34 +779,6 @@ if git describe --tags --abbrev=0 >/dev/null 2>&1; then
     else
       echo "WARNING: VERSION ($current_version) matches latest tag ($latest_tag) — bump VERSION before tagging" >&2
     fi
-  fi
-fi
-
-# VOL-216: ASC metadata readiness gate. Soft-warns by default so a
-# regen / smoke run during everyday development doesn't trip on
-# in-progress metadata drafts. When `VOLUMEARC_RELEASE_READY=1` is
-# set (release readiness check, `fastlane ios release` precondition,
-# or operator manually proving "we're submission-ready"), any file
-# under `fastlane/metadata/en-US/` that still contains the literal
-# token `TBD` becomes a hard fail with the file list. This is the
-# in-repo source-of-truth gate the audit (F-M-007) asked for so a
-# fresh clone can tell submission-ready from never-started.
-metadata_dir="fastlane/metadata/en-US"
-if [[ -d "$metadata_dir" ]]; then
-  tbd_files=$(/usr/bin/grep -rl "TBD" "$metadata_dir" 2>/dev/null || true)
-  if [[ -n "$tbd_files" ]]; then
-    if [[ "${VOLUMEARC_RELEASE_READY:-0}" == "1" ]]; then
-      echo "FAIL: App Store Connect metadata still contains TBD placeholders (VOLUMEARC_RELEASE_READY=1 active):" >&2
-      while IFS= read -r tbd_file; do
-        echo "  - $tbd_file" >&2
-      done <<<"$tbd_files"
-      echo "Resolve every TBD before running 'fastlane ios release' or marking the submission as ready." >&2
-      exit 1
-    else
-      echo "INFO: $metadata_dir has $(echo "$tbd_files" | wc -l | tr -d ' ') file(s) with TBD placeholders. Set VOLUMEARC_RELEASE_READY=1 to enforce."
-    fi
-  else
-    echo "App Store Connect metadata: no TBD placeholders remaining in $metadata_dir."
   fi
 fi
 

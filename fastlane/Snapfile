@@ -8,7 +8,7 @@
 # the local `SnapshotHelper.swift` wrapper.
 
 # Device matrix — keep this in sync with VOL-96 and App Store marketing
-# requirements. iPhone 17 covers the 6.1" class; iPhone 17 Pro Max covers
+# requirements. iPhone 17 covers the 6.3" class; iPhone 17 Pro Max covers
 # the 6.9" class; Apple Watch Series 11 covers the watchOS listing.
 devices([
   "iPhone 17",
@@ -23,10 +23,12 @@ languages([
   "en-US"
 ])
 
-# Release screenshots must include loaded StoreKit pricing. CI can run
-# the screenshot test without this flag and skip only the premium capture
-# when the local StoreKit daemon does not expose products.
-launch_arguments(["-RequireStoreKitProducts=1"])
+# Release screenshots render the submitted subscription prices from a
+# Debug-only deterministic fixture. The simulator StoreKit daemon can return
+# an empty product list even when the local `.storekit` catalog is attached,
+# which makes screenshot generation flaky without changing production StoreKit
+# behavior.
+launch_arguments(["-UseScreenshotStoreKitFixtures", "1"])
 
 # Scheme used for screenshot capture.
 scheme("VolumeArcAppUITests")

@@ -1,1 +1,1 @@
-TBD — comma-separated ASO keywords, max 100 chars. Candidates: strength,workout,gym,lifting,training,coach,AI,Apple Watch,HealthKit,powerlifting,bodybuilding,fitness
+strength,workout,gym,lifting,training,coach,fitness,powerlifting,bodybuilding,readiness,sets

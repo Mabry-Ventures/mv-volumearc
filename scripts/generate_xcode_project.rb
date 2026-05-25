@@ -789,10 +789,12 @@ ui_test_scheme = Xcodeproj::XCScheme.new
 ui_test_scheme.configure_with_targets(app_target, app_ui_tests_target)
 ui_test_scheme.save_as(PROJECT_PATH, 'VolumeArcAppUITests', true)
 
-# VOL-107: activate the local StoreKit configuration for UI-test app
-# launches. xcodeproj can write the scheme, but this gem version does
-# not expose StoreKitConfigurationFileReference on XCScheme, so patch the
-# generated XML deterministically after saving.
+# VOL-107/VOL-125: activate the local StoreKit configuration for UI-test
+# app launches. `xcodebuild test` uses the scheme TestAction, while Xcode's
+# Run button uses LaunchAction, so keep the reference in both places.
+# xcodeproj can write the scheme, but this gem version does not expose
+# StoreKitConfigurationFileReference on XCScheme, so patch the generated XML
+# deterministically after saving.
 ui_scheme_path = PROJECT_PATH.join('xcshareddata/xcschemes/VolumeArcAppUITests.xcscheme')
 ui_scheme_xml = File.read(ui_scheme_path)
 app_runnable = <<~XML.chomp
@@ -812,14 +814,39 @@ storekit_reference = <<~XML.chomp
          identifier = "../Tests/VolumeArcAppUITests/VolumeArcTests.storekit">
       </StoreKitConfigurationFileReference>
 XML
-unless ui_scheme_xml.include?('StoreKitConfigurationFileReference')
-  launch_action_close = '   </LaunchAction>'
-  launch_action_payload = ui_scheme_xml.include?('BuildableProductRunnable') ? storekit_reference : "#{app_runnable}\n#{storekit_reference}"
-  inserted = ui_scheme_xml.sub!(launch_action_close, "#{launch_action_payload}\n#{launch_action_close}")
-  unless inserted
-    raise "Failed to insert StoreKitConfigurationFileReference into #{ui_scheme_path}; " \
-          'VolumeArcAppUITests LaunchAction XML format may have changed.'
+
+def ensure_scheme_action_storekit_reference!(xml, action_name, payload)
+  action_match = xml.match(%r{<#{action_name}\b.*?</#{action_name}>}m)
+  unless action_match
+    raise "Failed to find #{action_name}; VolumeArcAppUITests scheme XML format may have changed."
   end
+
+  action_xml = action_match[0]
+  return false if action_xml.include?('StoreKitConfigurationFileReference')
+
+  close_tag = "   </#{action_name}>"
+  inserted = xml.sub!(close_tag, "#{payload}\n#{close_tag}")
+  unless inserted
+    raise "Failed to insert StoreKitConfigurationFileReference into #{action_name}; " \
+          'VolumeArcAppUITests scheme XML format may have changed.'
+  end
+
+  true
+end
+
+ui_scheme_changed = false
+ui_scheme_changed = ensure_scheme_action_storekit_reference!(
+  ui_scheme_xml,
+  'TestAction',
+  storekit_reference,
+) || ui_scheme_changed
+launch_action_payload = ui_scheme_xml.match(%r{<LaunchAction\b.*?</LaunchAction>}m)&.[](0)&.include?('BuildableProductRunnable') ? storekit_reference : "#{app_runnable}\n#{storekit_reference}"
+ui_scheme_changed = ensure_scheme_action_storekit_reference!(
+  ui_scheme_xml,
+  'LaunchAction',
+  launch_action_payload,
+) || ui_scheme_changed
+if ui_scheme_changed
   File.write(ui_scheme_path, ui_scheme_xml)
 end
 

@@ -1,18 +1,29 @@
-TBD — App Review notes. Must cover:
+VolumeArc does not require a username/password account. Reviewers can launch the app, complete onboarding, and use the free workout tracker without credentials. iCloud/CloudKit sync uses the review device's signed-in iCloud account through Apple's private database.
 
-1. The app uses HealthKit (workouts, HR, active energy, HRV, sleep stages). All reads are gated behind Apple's system prompt. The recovery chip on the Today tab and the coach prompt's recovery context are populated from these reads. RAW HealthKit samples NEVER leave the device. Computed aggregates (HRV mean, sleep duration, strength load) ARE included in the rendered coach prompt that travels to the AI relay → Gemini when the user asks the coach a question. This is disclosed in `App/PrivacyInfo.xcprivacy` and the user-facing privacy page at `https://volumearc.app/privacy`.
+HealthKit:
+- iPhone asks for workouts, HRV, sleep, Workout Effort, wrist temperature, and respiratory rate when the user taps Connect Apple Health.
+- Apple Watch uses workouts, heart rate, and active energy during live workout sessions.
+- Completed VolumeArc workouts may be written back to Apple Health.
+- Raw HealthKit samples stay on device. Computed recovery aggregates may be included in the rendered cloud-coach prompt only when the user asks the coach a question.
 
-2. The app uses CloudKit private DB only — VolumeArc operators have zero access to user data. Apple-managed encryption end-to-end.
+AI relay:
+- Cloud coaching uses the Mabry Ventures Cloudflare Worker at https://relay.volumearc.app, which forwards prompts to Google's Gemini API.
+- The relay logs request shape only (path/status/latency) and does not retain prompt content or response bodies.
+- App Attest is required for production relay calls.
+- Strict privacy mode redacts the user's free-text question before outbound cloud-coach requests.
 
-3. The Pro subscription unlocks two features:
-   * AI coach Gemini Pro tier (free tier uses Gemini Flash Lite)
-   * Live voice coaching
-   Everything else (full tracker, cloud sync, Foundation Models on-device coach, Live Activities, widgets, App Intents) is free. Subscription terms at `https://volumearc.app/terms`.
+Subscriptions:
+- VolumeArc Pro is optional.
+- Pro unlocks only the Gemini Pro coach tier and live voice coaching.
+- The workout tracker, Apple Watch app, CloudKit sync, Foundation Models fallback, Live Activities, widgets, App Intents, and readiness context are free.
+- Terms: https://volumearc.app/terms
 
-4. The AI coach uses Google Gemini via a Cloudflare Worker relay at `relay.volumearc.app`. The relay forwards prompts; it does NOT log prompt content or response bodies (only request shape: path/status/latency). Authentication uses App Attest (VOL-196) to bind sessions to legitimate app instances.
+Diagnostics:
+- Sentry is used for crash and diagnostic reporting.
+- Events are scrubbed before send; Session Replay is disabled for v1.0.
 
-5. Apple Watch app is bundled. Live workout tracking with HKLiveWorkoutDataSource on watchOS.
-
-Demo account in review_information/demo_user.txt + demo_password.txt — TBD.
-
-If reviewer questions: HealthKit egress, strict privacy mode, paid features, subscription cancellation flow — escalate to Mabry Ventures via the contact information in this file.
+Testing notes:
+- Apple Watch app is bundled.
+- Health prompts are optional; the app remains usable if Health access is declined.
+- Premium purchase/restore paths use StoreKit 2 and the submitted auto-renewable subscription products.
+- If questions arise around HealthKit egress, privacy mode, paid features, or subscription cancellation, escalate to Mabry Ventures via the contact information on this review form.

@@ -1,1 +1,1 @@
-TBD — Mabry Ventures contact phone for App Review escalation. Format: +1-XXX-XXX-XXXX.
+ACTION REQUIRED - enter Mabry Ventures App Review contact phone in E.164 format before submission.
