@@ -90,6 +90,54 @@ final class VolumeArcCoachJourneyTests: XCTestCase {
         )
     }
 
+    func testCoachComposerKeyboardDismissKeepsTabsReachable() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenCoachOnLaunch", "1"]
+        )
+        app.launch()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
+
+        let composer = app.descendants(matching: .any)
+            .matching(identifier: "coach.input")
+            .firstMatch
+        XCTAssertTrue(
+            composer.waitForExistence(timeout: 15),
+            "Coach composer should be reachable within 15s in -UITestMode"
+        )
+
+        composer.tap()
+        composer.typeText("Testing keyboard dismissal")
+
+        let keyboard = app.keyboards.firstMatch
+        if keyboard.waitForExistence(timeout: 3) {
+            let dismissKeyboard = app.buttons["coach.keyboardDismiss"].firstMatch
+            XCTAssertTrue(
+                dismissKeyboard.waitForExistence(timeout: 5),
+                "Coach keyboard toolbar should expose a dismiss affordance"
+            )
+            dismissKeyboard.tap()
+            XCTAssertTrue(
+                keyboard.waitForNonExistence(timeout: 5),
+                "Keyboard should dismiss without killing the app"
+            )
+        }
+
+        let todayTab = app.tabBars.buttons["Today"].firstMatch
+        XCTAssertTrue(
+            todayTab.waitForExistence(timeout: 5),
+            "Tab bar should remain reachable after dismissing the Coach composer keyboard"
+        )
+        todayTab.tap()
+
+        let todayScroll = app.descendants(matching: .any)
+            .matching(identifier: "today.scroll")
+            .firstMatch
+        XCTAssertTrue(
+            todayScroll.waitForExistence(timeout: 10),
+            "Today tab should open after leaving Coach"
+        )
+    }
+
     // MARK: - coach.scroll-memory
 
     /// Scroll the Coach tab's memory list. Asserts the memory area
