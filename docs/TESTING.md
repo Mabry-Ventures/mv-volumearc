@@ -112,6 +112,15 @@ SHARD_FILTER=accessibility-screenshots ./scripts/test_apple_targets.sh
 
 **CI matrix readiness.** Today shards run sequentially in the single `Build & Test` job because we have one self-hosted runner. The per-shard log + xcresult layout (`ui-test-<shard>-attempt-N.log`, `TestResults-ui-<shard>.xcresult`) lets a future second runner trivially fan shards into a GitHub Actions `strategy.matrix` without touching the script — set `SHARD_FILTER` per matrix node.
 
+### Xcode Cloud test plans
+
+`scripts/generate_xcode_project.rb` writes both committed Xcode Cloud test plans so target UUIDs stay deterministic:
+
+- `VOL-PR.xctestplan` runs `VolumeArcAppTests` plus the UI smoke subset.
+- `VOL-Main.xctestplan` runs `VolumeArcAppTests` plus the full `VolumeArcAppUITests` target, with the UI target serialized to avoid iOS 26.5 AX-runner initialization cascades on Xcode Cloud's ephemeral simulators.
+
+`VolumeArcWidgetUITests` intentionally stays out of both Xcode Cloud plans until its ephemeral-simulator launch crash is fixed. The target still builds through the generated project and remains runnable locally or from a dedicated scheme.
+
 ## XCUITests
 
 The UI suite is intentionally **smoke-level** today:

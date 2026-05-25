@@ -244,8 +244,8 @@ is_channel_disconnect_failure() {
 # but it still reports the interrupted methods as failures.
 is_xctest_runner_crash_failure() {
   local log_path="$1"
-  grep -Fq \
-    'Restarting after unexpected exit, crash, or test timeout' \
+  grep -Eq \
+    'Restarting after unexpected exit, crash, or test timeout|Mach error -308 - \(ipc/mig\) server died|NSMachErrorDomain Code=-308|Failed to install or launch the test runner' \
     "$log_path"
 }
 
@@ -772,14 +772,15 @@ for entry in "${shard_results[@]}"; do
   shard="${entry%%:*}"
   status="${entry##*:}"
 
-  log_to_check="$DERIVED_DATA_PATH/ui-test-${shard}-attempt-1.log"
+  log_to_check="$DERIVED_DATA_PATH/ui-test-${shard}-attempt-2.log"
   if [ ! -f "$log_to_check" ]; then
-    log_to_check="$DERIVED_DATA_PATH/ui-test-${shard}-attempt-2.log"
+    log_to_check="$DERIVED_DATA_PATH/ui-test-${shard}-attempt-1.log"
   fi
 
   methods=0
   if [ -f "$log_to_check" ]; then
-    methods="$(grep -cE "^Test Case '-\[VolumeArcAppUITests\." "$log_to_check" 2>/dev/null || echo 0)"
+    methods="$(grep -cE "^Test Case '-\[VolumeArcAppUITests\." "$log_to_check" 2>/dev/null || true)"
+    methods="${methods:-0}"
   fi
   total_methods=$((total_methods + methods))
 
