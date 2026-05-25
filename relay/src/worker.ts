@@ -30,6 +30,12 @@ import {
   verifyAndStoreAttestation,
   verifyAppAttestAssertion,
 } from "./appAttest";
+import {
+  handleEvalAttestBootstrap,
+  handleEvalAttestChallenge,
+  hasAnyEvalAttestHeader,
+  verifyEvalAttestAssertion,
+} from "./evalAttest";
 
 export { AppAttestState } from "./appAttest";
 
@@ -42,6 +48,9 @@ interface Env {
   APPLE_APP_ID?: string;
   APPLE_TEAM_ID?: string;
   APPLE_BUNDLE_ID?: string;
+  EVAL_ATTEST_BROKER_ENABLED?: string;
+  EVAL_ATTEST_BROKER_TOKEN?: string;
+  EVAL_ATTEST_BROKER_KEY_TTL_SECONDS?: string;
   MODEL_DEFAULT: string;
   MODEL_PREMIUM: string;
   MAX_OUTPUT_TOKENS: string;
@@ -74,7 +83,7 @@ interface CoachRequestBody {
 interface AuthSuccess {
   ok: true;
   deviceId: string;
-  method: "app_attest";
+  method: "app_attest" | "eval_attest_broker";
 }
 
 interface AuthFailure {
@@ -103,6 +112,12 @@ export default {
       }
       if (url.pathname === "/v1/attest/bootstrap") {
         return await handleAppAttestBootstrap(request, env);
+      }
+      if (url.pathname === "/v1/eval-attest/bootstrap") {
+        return await handleEvalAttestBootstrap(request, env);
+      }
+      if (url.pathname === "/v1/eval-attest/challenge") {
+        return await handleEvalAttestChallenge(request, env);
       }
       if (url.pathname === "/v1/coach") {
         return await handleCoach(request, env);
@@ -427,6 +442,16 @@ async function authenticate(request: Request, env: Env, requestBody: Uint8Array)
   if (hasAnyAppAttestHeader) {
     recordAuthEvent("app_attest_failed", { reason: appAttest.reason });
     return { ok: false, status: 401, error: "attestation_invalid", reason: appAttest.reason };
+  }
+
+  if (hasAnyEvalAttestHeader(request)) {
+    const evalAttest = await verifyEvalAttestAssertion(env, request, requestBody);
+    if (evalAttest.ok) {
+      recordAuthEvent("eval_attest_succeeded");
+      return { ok: true, deviceId: evalAttest.deviceId, method: "eval_attest_broker" };
+    }
+    recordAuthEvent("eval_attest_failed", { reason: evalAttest.reason });
+    return { ok: false, status: 401, error: "attestation_invalid", reason: evalAttest.reason };
   }
 
   recordAuthEvent("app_attest_required");

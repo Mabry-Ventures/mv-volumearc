@@ -2,10 +2,11 @@ name: Coach Evals (nightly)
 
 # VOL-147: nightly response-layer coach eval CI.
 #
-# VOL-226 retired the shared client HMAC credential. Until this workflow
-# has a real-device App Attest signer, it publishes an explicit skipped
-# summary instead of calling the App Attest-only production relay through
-# a retired auth path.
+# VOL-226 retired the shared client HMAC credential. VOL-244 restores the
+# response-layer path through a staging-only eval attestation broker: the
+# harness bootstraps an ephemeral public key, then signs every fixture request
+# with one-time nonce + monotonic counter headers. Production relay auth remains
+# App Attest-only.
 #
 # Schedule + triggers:
 # - Daily cron at 07:00 UTC (one window per day; the relay's Gemini
@@ -73,13 +74,28 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Pre-flight
-        # Same shape as ci.yml Pre-flight. Response-layer live relay evals
-        # are paused after VOL-226 because the relay now requires real
-        # App Attest assertions; keep jq available for the skipped summary
-        # artifact while the real-device eval signer is designed.
+        # Same shape as ci.yml Pre-flight, plus the staging-only eval
+        # attestation broker config. Secrets stay in env vars and are never
+        # passed as CLI arguments.
+        env:
+          VOLUMEARC_RELAY_BASE_URL: ${{ secrets.VOLUMEARC_EVAL_RELAY_BASE_URL }}
+          VOLUMEARC_EVAL_ATTEST_BROKER_TOKEN: ${{ secrets.VOLUMEARC_EVAL_ATTEST_BROKER_TOKEN }}
         run: |
           set -euo pipefail
+          command -v node >/dev/null || { echo "::error::node missing"; exit 1; }
           command -v jq >/dev/null || { echo "::error::jq missing (brew install jq)"; exit 1; }
+          if [[ -z "${VOLUMEARC_RELAY_BASE_URL:-}" ]]; then
+            echo "::error::VOLUMEARC_EVAL_RELAY_BASE_URL secret is not configured"
+            exit 1
+          fi
+          if [[ "${VOLUMEARC_RELAY_BASE_URL%/}" == "https://relay.volumearc.app" ]]; then
+            echo "::error::Coach response evals must target the staging relay broker, not production"
+            exit 1
+          fi
+          if [[ -z "${VOLUMEARC_EVAL_ATTEST_BROKER_TOKEN:-}" ]]; then
+            echo "::error::VOLUMEARC_EVAL_ATTEST_BROKER_TOKEN secret is not configured"
+            exit 1
+          fi
           echo "Pre-flight OK"
         shell: bash
 
@@ -87,10 +103,17 @@ jobs:
         id: evals
         env:
           VOLUMEARC_EVAL_OUTPUT_DIR: ${{ runner.temp }}/coach-evals/${{ github.run_id }}-${{ github.run_attempt }}
+          VOLUMEARC_RELAY_BASE_URL: ${{ secrets.VOLUMEARC_EVAL_RELAY_BASE_URL }}
+          VOLUMEARC_EVAL_ATTEST_BROKER_TOKEN: ${{ secrets.VOLUMEARC_EVAL_ATTEST_BROKER_TOKEN }}
         run: |
           set -euo pipefail
+          if [[ -n "${{ github.event.inputs.relay_url || '' }}" ]]; then
+            export VOLUMEARC_RELAY_BASE_URL="${{ github.event.inputs.relay_url }}"
+          fi
+          set +e
           bash scripts/run_coach_evals.sh
-          echo "::notice::Coach response-layer evals skipped after VOL-226 App Attest-only cutover; template-layer evals still run in the app test suite."
+          eval_exit=$?
+          set -e
 
           # Surface the run dir as a step output for the next step's
           # parsing logic. The workflow passes a run-scoped directory
@@ -102,6 +125,7 @@ jobs:
             exit 1
           fi
           echo "run_dir=$latest" >> "$GITHUB_OUTPUT"
+          echo "eval_exit=$eval_exit" >> "$GITHUB_OUTPUT"
           echo "Latest run dir: $latest"
         shell: bash
 

@@ -35,6 +35,8 @@ enabled = true
 
 # Secrets (configured via `wrangler secret put <NAME>`):
 #   GEMINI_API_KEY     — Google AI Studio API key, never in source
+#   EVAL_ATTEST_BROKER_TOKEN — staging-only coach-eval broker token; do not
+#                              configure on production `relay.volumearc.app`
 #
 # App Attest stores attested keys/challenges in the APP_ATTEST_STATE Durable
 # Object so challenge consume + assertion counter updates are strongly
@@ -59,3 +61,9 @@ RATE_LIMIT_WINDOW_SECONDS = "600"
 # App Attest validation.
 APPLE_TEAM_ID = "A886EMZZW6"
 APPLE_BUNDLE_ID = "com.mabryventures.VolumeArc"
+
+# Staging-only coach response evals can enable:
+#   EVAL_ATTEST_BROKER_ENABLED = "true"
+#   EVAL_ATTEST_BROKER_KEY_TTL_SECONDS = "86400"
+# Keep these unset for production. The Worker also refuses broker requests on
+# the production relay hostname as a second guard.
