@@ -47,7 +47,7 @@ This is the granular per-feature checklist. For high-level system status, see [`
 | Coach memory | ✅ | `CoachMemoryRepository` persists recent context and is appended during coaching turns. |
 | Streaming response UX | ✅ | `AIRelayCoachProvider.streamCoachResponse` consumes `text/event-stream` from the `volumearc-ai-relay` Cloudflare Worker, parses `data: {"text":"..."}` frames, and yields Gemini tokens as they arrive. Non-streaming callers join the stream to a single string. Synthetic word-chunking is kept as the default-impl fallback for providers without native streaming. |
 | Evaluation harness | ✅ | Template-layer hermetic `CoachEvalTests` asserts marker, system prompt persona, intent envelope, context preservation, and prompt-boundary sanitization against 47 fixtures under `Tests/Evals/CoachEvalFixtures/`, including medical red flags and prompt-injection attempts. Response-layer live relay evals run nightly against the staging relay through the VOL-244 eval attestation broker, gated by an explicit host allowlist and Durable Object counter store, preserving production App Attest-only auth while restoring model-output regression failures. |
-| Privacy mode enforcement | 📋 | Privacy mode is modeled and surfaced in UI, but strict-mode prompt enforcement is not yet consistently applied in the dashboard coach path. |
+| Privacy mode enforcement | ✅ | Standard/Strict mode is available during onboarding and Profile editing. Strict mode redacts free-text PII and strips identifying coach context before outbound coach prompts leave the device. |
 
 ## Data & progression
 

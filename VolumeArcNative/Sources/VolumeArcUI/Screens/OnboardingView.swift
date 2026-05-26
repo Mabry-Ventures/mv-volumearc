@@ -280,7 +280,11 @@ public struct OnboardingView: View {
                     .foregroundStyle(VA.Colors.textSecondary)
             }
 
-            VStack(spacing: VA.Space.md) {
+            VStack(alignment: .leading, spacing: VA.Space.md) {
+                Text(String(localized: "Coach voice", comment: "Onboarding coaching style section label"))
+                    .font(VA.Typography.caption)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                    .tracking(0.5)
                 ForEach(CoachingStyle.allCases, id: \.self) { style in
                     selectionRow(
                         title: style.displayName,
@@ -288,6 +292,23 @@ public struct OnboardingView: View {
                         isSelected: result.coachingStyle == style
                     ) {
                         result.coachingStyle = style
+                        VAHaptics.selection()
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: VA.Space.md) {
+                Text(String(localized: "Cloud coach privacy", comment: "Onboarding privacy mode section label"))
+                    .font(VA.Typography.caption)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                    .tracking(0.5)
+                ForEach(PrivacyMode.allCases, id: \.self) { mode in
+                    selectionRow(
+                        title: mode.displayName,
+                        subtitle: mode.footerDescription,
+                        isSelected: result.privacyMode == mode
+                    ) {
+                        result.privacyMode = mode
                         VAHaptics.selection()
                     }
                 }
@@ -591,19 +612,22 @@ public struct OnboardingResult: Sendable {
     public var weeklyDays: Int
     public var sessionMinutes: Int
     public var coachingStyle: CoachingStyle
+    public var privacyMode: PrivacyMode
 
     public init(
         name: String = "",
         advancementLevel: AdvancementLevel = .intermediate,
         weeklyDays: Int = 4,
         sessionMinutes: Int = 60,
-        coachingStyle: CoachingStyle = .motivational
+        coachingStyle: CoachingStyle = .motivational,
+        privacyMode: PrivacyMode = .standard
     ) {
         self.name = name
         self.advancementLevel = advancementLevel
         self.weeklyDays = weeklyDays
         self.sessionMinutes = sessionMinutes
         self.coachingStyle = coachingStyle
+        self.privacyMode = privacyMode
     }
 
     /// Convert to a `UserProfileDefaults` for persistence.
@@ -611,7 +635,7 @@ public struct OnboardingResult: Sendable {
         UserProfileDefaults(
             name: name,
             coachingStyle: coachingStyle,
-            privacyMode: .standard,
+            privacyMode: privacyMode,
             advancementLevel: advancementLevel,
             availableEquipment: [.barbell, .dumbbell, .machine, .bodyweight],
             preferredRepRangeLower: 5,

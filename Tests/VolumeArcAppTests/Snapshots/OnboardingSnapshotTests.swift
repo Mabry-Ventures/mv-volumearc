@@ -104,7 +104,8 @@ final class OnboardingSnapshotTests: XCTestCase {
                     advancementLevel: .intermediate,
                     weeklyDays: 4,
                     sessionMinutes: 60,
-                    coachingStyle: .minimal
+                    coachingStyle: .minimal,
+                    privacyMode: .strict
                 )
             case .permissions:
                 return OnboardingResult(name: "Maya")
