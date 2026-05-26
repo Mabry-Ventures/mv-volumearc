@@ -369,18 +369,25 @@ public struct LocalHeuristicAICoachProvider: AICoachProvider {
     }
 
     private func medicalRedFlagResponse(from text: String) -> String? {
+        let nearby = "[\\s\\S]{0,80}"
         let redFlagPatterns = [
-            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b.{0,80}\\bchest\\s+pain\\b",
-            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b.{0,80}\\bdizz(?:y|iness)\\b",
-            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b.{0,80}\\bfaint(?:ed|ing)?\\b",
+            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+                nearby + "\\bchest\\s+pain\\b",
+            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+                nearby + "\\bdizz(?:y|iness)\\b",
+            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+                nearby + "\\bfaint(?:ed|ing)?\\b",
             "\\b(i\\s*(?:passed\\s+out|have\\s+syncope|had\\s+syncope)|i\\W?ve\\s+passed\\s+out)\\b",
-            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b.{0,80}" +
+            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+                nearby +
                 "\\b(?:severe\\s+)?short(?:ness)?\\s+of\\s+breath\\b",
             "\\b(i\\s*(?:am|might\\s+be|may\\s+be)|i\\W?m)\\s+pregnant\\b",
             "\\b(?:during|while)\\s+(?:my\\s+)?pregnancy\\b",
-            "\\b(i\\s*(?:have|had|am\\s+dealing\\s+with)|i\\W?m\\s+dealing\\s+with)\\b.{0,80}\\beating\\s+disorder\\b",
+            "\\b(i\\s*(?:have|had|am\\s+dealing\\s+with)|i\\W?m\\s+dealing\\s+with)\\b" +
+                nearby + "\\b(?:eating\\s+disorder|starv\\w*|purg\\w*|not\\s+eating)\\b",
             "\\bi\\s*(?:haven'?t|have\\s+not)\\s+eaten\\b",
-            "\\b(i\\s*(?:have|had|experienced|experience)|my)\\b.{0,80}\\b(?:cardiac\\s+event|heart\\s+attack)\\b",
+            "\\b(i\\s*(?:have|had|experienced|experience)|my)\\b" +
+                nearby + "\\b(?:cardiac\\s+event|heart\\s+attack)\\b",
         ]
         let minorSafetyConcern =
             containsPattern("\\b(i\\s*am|i\\W?m|age(?:d)?|as\\s+a)\\s+1[0-7]\\b", in: text) ||

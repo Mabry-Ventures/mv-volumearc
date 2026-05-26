@@ -1035,6 +1035,28 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         XCTAssertFalse(response.lowercased().contains("keep lifting"))
     }
 
+    func testLocalHeuristicAICoachProviderStopsOnNewlineMedicalRedFlags() async throws {
+        let provider = LocalHeuristicAICoachProvider()
+        let response = try await provider.coachResponse(
+            for: "I feel\nchest pain during squats. Should I finish the session?",
+            context: "Readiness: 88/100 — peak recovery"
+        )
+
+        XCTAssertTrue(response.contains("Stop the session"))
+        XCTAssertTrue(response.lowercased().contains("medical care"))
+    }
+
+    func testLocalHeuristicAICoachProviderStopsOnEatingDisorderLanguage() async throws {
+        let provider = LocalHeuristicAICoachProvider()
+        let response = try await provider.coachResponse(
+            for: "I'm dealing with an eating disorder and have been purging. Can I still cut weight?",
+            context: "Readiness: 88/100 — peak recovery"
+        )
+
+        XCTAssertTrue(response.contains("Stop the session"))
+        XCTAssertTrue(response.lowercased().contains("medical care"))
+    }
+
     func testLocalHeuristicAICoachProviderHandlesMinorSafetyWithoutWeightFalsePositive() async throws {
         let provider = LocalHeuristicAICoachProvider()
         let minorResponse = try await provider.coachResponse(

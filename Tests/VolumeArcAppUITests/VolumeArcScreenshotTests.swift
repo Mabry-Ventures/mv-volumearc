@@ -74,6 +74,11 @@ final class VolumeArcScreenshotTests: XCTestCase {
             monthlyPlan.waitForExistence(timeout: 10),
             "Premium screenshot should render deterministic subscription plan fixtures"
         )
+        expectation(
+            for: NSPredicate(format: "isHittable == true"),
+            evaluatedWith: monthlyPlan
+        )
+        waitForExpectations(timeout: 5)
         monthlyPlan.tap()
         snapshot("06_premium")
     }

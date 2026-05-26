@@ -12,11 +12,17 @@ enum VolumeArcPremiumCatalog {
     static let screenshotProductDisplays = [
         StoreKitSubscriptionProductDisplay(
             id: "com.mabryventures.VolumeArc.premium.monthly",
-            displayPrice: "$9.99"
+            displayPrice: String(
+                localized: "$9.99",
+                comment: "Deterministic screenshot fixture monthly price"
+            )
         ),
         StoreKitSubscriptionProductDisplay(
             id: "com.mabryventures.VolumeArc.premium.yearly",
-            displayPrice: "$79.99"
+            displayPrice: String(
+                localized: "$79.99",
+                comment: "Deterministic screenshot fixture yearly price"
+            )
         ),
     ]
     #endif
