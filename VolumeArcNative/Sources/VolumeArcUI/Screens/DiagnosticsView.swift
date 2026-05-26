@@ -120,7 +120,7 @@ public struct DiagnosticsView: View {
     private func eventRow(_ event: TelemetryEvent) -> some View {
         HStack(alignment: .top, spacing: VA.Space.sm) {
             Image(systemName: iconForSeverity(event.severity))
-                .font(.system(size: 14, weight: .bold))
+                .font(VA.Typography.caption)
                 .foregroundStyle(colorForSeverity(event.severity))
                 .frame(width: 20)
             VStack(alignment: .leading, spacing: 2) {
