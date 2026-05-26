@@ -205,7 +205,7 @@ Commit the updated `Package.resolved` alongside the generator change.
 
 ### Screenshots lane (VOL-96)
 
-`fastlane ios screenshots` drives `snapshot` against the device matrix declared in [`fastlane/Snapfile`](../fastlane/Snapfile). Output lives in `fastlane/screenshots/` and is picked up automatically by `deliver` during the `release` lane. The UI test is skipped in ordinary CI unless `VOLUMEARC_RUN_SCREENSHOT_CAPTURE=1` is present; the fastlane screenshots lane sets that flag automatically, and direct `xcodebuild` screenshot-test runs must export it manually.
+`fastlane ios screenshots` drives `snapshot` against the device matrix declared in [`fastlane/Snapfile`](../fastlane/Snapfile). Output lives in `fastlane/screenshots/` and is picked up automatically by `deliver` during the `release` lane. Screenshot capture uses the dedicated `VolumeArcScreenshots` scheme, whose TestAction sets `VOLUMEARC_RUN_SCREENSHOT_CAPTURE=1`; the ordinary UI-test schemes omit that variable so release screenshots never run during routine CI.
 
 The screenshot test class is compiled in `VolumeArcAppUITests` but explicitly excluded from the normal `scripts/test_apple_targets.sh` UI shards. This keeps routine CI from reporting a permanent skip while preserving the release-lane capture path.
 
@@ -213,7 +213,7 @@ Current matrix:
 
 | Device | App Store class |
 | --- | --- |
-| iPhone 17 | 6.1" |
+| iPhone 17 | 6.3" |
 | iPhone 17 Pro Max | 6.9" |
 | Apple Watch Series 11 (46mm) | watchOS |
 
@@ -237,7 +237,7 @@ Before cutting or submitting a build from a new main SHA, wait for both authorit
 - `VolumeArc | VolumeArc Main | VOL-Main - iOS`
 - `VolumeArc | Internal Testing - Archive - iOS`
 
-The self-hosted GitHub Actions `Build & Test` job is still useful diagnostic signal, but simulator/XCTRunner infrastructure flakes are classified through [`docs/TESTING.md`](TESTING.md#ci-runner-flake-taxonomy-vol-227-cluster). Xcode Cloud remains the release gate of record.
+The self-hosted GitHub Actions `Build & Test` job is still useful diagnostic signal, but it is not a required merge check while the self-hosted simulator runner is unstable. Simulator/XCTRunner infrastructure flakes are classified through [`docs/TESTING.md`](TESTING.md#ci-runner-flake-taxonomy-vol-227-cluster). Xcode Cloud remains the release gate of record; the branch ruleset requires CodeRabbit, Codex, Repo Hygiene, and the Xcode Cloud PR context.
 
 ## Rollback
 

@@ -99,6 +99,15 @@ final class VolumeArcCoachPromptTemplateTests: XCTestCase {
         XCTAssertTrue(rendered.contains("weekly schedule is not present"))
     }
 
+    func testSanitizeUserControlledTextPreservesLegitimateMultilineNotes() {
+        let sanitized = CoachPromptTemplate.sanitizeUserControlledText("""
+        Friday: deload
+        Saturday: focus on bar speed
+        """)
+
+        XCTAssertEqual(sanitized, "Friday: deload\nSaturday: focus on bar speed")
+    }
+
     func testStrictPrivacyModeRedactionPropagatesIntoRender() {
         let context = makeContext(athleteName: "Jane Lifter")
         let rendered = CoachPromptTemplate.render(

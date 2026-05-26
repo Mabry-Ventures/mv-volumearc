@@ -175,7 +175,7 @@ public enum CoachPromptTemplate {
         }
         return lines
             .filter { !$0.isEmpty }
-            .joined(separator: " / ")
+            .joined(separator: "\n")
     }
 
     /// Convenience that infers the intent from the question text and renders.

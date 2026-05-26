@@ -100,6 +100,40 @@ final class StoreKitSubscriptionStateMachineTests: XCTestCase {
         )
     }
 
+    func test_paywallAppearLoadPolicy_doesNotReloadDisplayFixtures() {
+        let store = StoreKitSubscriptionStore(
+            productIDs: Self.allProductIDs,
+            loadingState: .loaded,
+            productDisplays: [
+                StoreKitSubscriptionProductDisplay(id: Self.monthly, displayPrice: "$9.99"),
+            ],
+            allowsAutomaticProductReload: true
+        )
+
+        XCTAssertFalse(
+            store.shouldLoadProductsOnPaywallAppear,
+            "Display-only screenshot fixtures should not be replaced by an empty simulator StoreKit response."
+        )
+    }
+
+    #if DEBUG
+    func test_screenshotFixturePublishesSubmittedPlanDisplays() {
+        let displays = [
+            StoreKitSubscriptionProductDisplay(id: Self.monthly, displayPrice: "$9.99"),
+            StoreKitSubscriptionProductDisplay(id: Self.yearly, displayPrice: "$79.99"),
+        ]
+
+        let store = StoreKitSubscriptionStore.screenshotFixture(
+            productIDs: Self.allProductIDs,
+            productDisplays: displays
+        )
+
+        XCTAssertEqual(store.productDisplays, displays)
+        XCTAssertEqual(store.loadingState, .loaded)
+        XCTAssertFalse(store.shouldLoadProductsOnPaywallAppear)
+    }
+    #endif
+
     func test_paywallAppearLoadPolicy_doesNotStartSecondConcurrentLoad() {
         let store = StoreKitSubscriptionStore(
             productIDs: Self.allProductIDs,

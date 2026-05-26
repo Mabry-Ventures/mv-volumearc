@@ -26,6 +26,9 @@
     },
     {
       "parallelizable": false,
+      "skippedTests": [
+        "VolumeArcScreenshotTests"
+      ],
       "target": {
         "containerPath": "container:VolumeArcApple.xcodeproj",
         "identifier": "609B3CCDDC9FCB3BC7625EF9",

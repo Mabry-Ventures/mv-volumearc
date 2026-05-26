@@ -789,10 +789,16 @@ ui_test_scheme = Xcodeproj::XCScheme.new
 ui_test_scheme.configure_with_targets(app_target, app_ui_tests_target)
 ui_test_scheme.save_as(PROJECT_PATH, 'VolumeArcAppUITests', true)
 
-# VOL-107: activate the local StoreKit configuration for UI-test app
-# launches. xcodeproj can write the scheme, but this gem version does
-# not expose StoreKitConfigurationFileReference on XCScheme, so patch the
-# generated XML deterministically after saving.
+screenshot_scheme = Xcodeproj::XCScheme.new
+screenshot_scheme.configure_with_targets(app_target, app_ui_tests_target)
+screenshot_scheme.save_as(PROJECT_PATH, 'VolumeArcScreenshots', true)
+
+# VOL-107/VOL-125: activate the local StoreKit configuration for UI-test
+# app launches. `xcodebuild test` uses the scheme TestAction, while Xcode's
+# Run button uses LaunchAction, so keep the reference in both places.
+# xcodeproj can write the scheme, but this gem version does not expose
+# StoreKitConfigurationFileReference on XCScheme, so patch the generated XML
+# deterministically after saving.
 ui_scheme_path = PROJECT_PATH.join('xcshareddata/xcschemes/VolumeArcAppUITests.xcscheme')
 ui_scheme_xml = File.read(ui_scheme_path)
 app_runnable = <<~XML.chomp
@@ -812,15 +818,134 @@ storekit_reference = <<~XML.chomp
          identifier = "../Tests/VolumeArcAppUITests/VolumeArcTests.storekit">
       </StoreKitConfigurationFileReference>
 XML
-unless ui_scheme_xml.include?('StoreKitConfigurationFileReference')
-  launch_action_close = '   </LaunchAction>'
-  launch_action_payload = ui_scheme_xml.include?('BuildableProductRunnable') ? storekit_reference : "#{app_runnable}\n#{storekit_reference}"
-  inserted = ui_scheme_xml.sub!(launch_action_close, "#{launch_action_payload}\n#{launch_action_close}")
-  unless inserted
-    raise "Failed to insert StoreKitConfigurationFileReference into #{ui_scheme_path}; " \
-          'VolumeArcAppUITests LaunchAction XML format may have changed.'
+
+def ensure_scheme_action_storekit_reference!(xml, action_name, payload)
+  action_match = xml.match(%r{<#{action_name}\b.*?</#{action_name}>}m)
+  unless action_match
+    raise "Failed to find #{action_name}; VolumeArcAppUITests scheme XML format may have changed."
   end
+
+  action_xml = action_match[0]
+  return false if action_xml.include?('StoreKitConfigurationFileReference')
+
+  close_tag = "   </#{action_name}>"
+  inserted = xml.sub!(close_tag, "#{payload}\n#{close_tag}")
+  unless inserted
+    raise "Failed to insert StoreKitConfigurationFileReference into #{action_name}; " \
+          'VolumeArcAppUITests scheme XML format may have changed.'
+  end
+
+  true
+end
+
+def ensure_scheme_action_environment_variable!(xml, action_name, key, value)
+  action_match = xml.match(%r{<#{action_name}\b.*?</#{action_name}>}m)
+  unless action_match
+    raise "Failed to find #{action_name}; scheme XML format may have changed."
+  end
+
+  action_xml = action_match[0]
+  return false if action_xml.include?("key = \"#{key}\"")
+
+  variable_payload = <<~XML.chomp
+      <EnvironmentVariables>
+         <EnvironmentVariable
+            key = "#{key}"
+            value = "#{value}"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+      </EnvironmentVariables>
+  XML
+  close_tag = "   </#{action_name}>"
+  inserted = xml.sub!(close_tag, "#{variable_payload}\n#{close_tag}")
+  unless inserted
+    raise "Failed to insert environment variable into #{action_name}; scheme XML format may have changed."
+  end
+
+  true
+end
+
+def ensure_scheme_test_skips!(xml, identifiers)
+  return false if identifiers.empty?
+
+  testable_match = xml.match(%r{<TestableReference\b.*?</TestableReference>}m)
+  unless testable_match
+    raise 'Failed to find TestableReference; scheme XML format may have changed.'
+  end
+
+  testable_xml = testable_match[0]
+  missing_identifiers = identifiers.reject { |identifier| testable_xml.include?("Identifier = \"#{identifier}\"") }
+  return false if missing_identifiers.empty?
+
+  tests_payload = missing_identifiers.sort.map do |identifier|
+    <<~XML.chomp
+               <Test
+                  Identifier = "#{identifier}">
+               </Test>
+    XML
+  end.join("\n")
+
+  if testable_xml.include?('<SkippedTests>')
+    skipped_block = testable_xml.match(%r{<SkippedTests>.*?</SkippedTests>}m)&.[](0)
+    unless skipped_block
+      raise 'Failed to find SkippedTests block; scheme XML format may have changed.'
+    end
+
+    updated_block = skipped_block.sub(%r{\n\s*</SkippedTests>}, "\n#{tests_payload}\n            </SkippedTests>")
+    xml.sub!(skipped_block, updated_block)
+  else
+    skipped_payload = <<~XML.chomp
+            <SkippedTests>
+    #{tests_payload}
+            </SkippedTests>
+    XML
+    xml.sub!(%r{\n\s*</TestableReference>}, "\n#{skipped_payload}\n         </TestableReference>")
+  end
+
+  true
+end
+
+def patch_ui_scheme_storekit_references!(scheme_path, app_runnable, storekit_reference)
+  scheme_xml = File.read(scheme_path)
+  scheme_changed = false
+  scheme_changed = ensure_scheme_action_storekit_reference!(
+    scheme_xml,
+    'TestAction',
+    storekit_reference,
+  ) || scheme_changed
+  launch_action_xml = scheme_xml.match(%r{<LaunchAction\b.*?</LaunchAction>}m)&.[](0)
+  launch_action_payload = launch_action_xml&.include?('BuildableProductRunnable') ? storekit_reference : "#{app_runnable}\n#{storekit_reference}"
+  scheme_changed = ensure_scheme_action_storekit_reference!(
+    scheme_xml,
+    'LaunchAction',
+    launch_action_payload,
+  ) || scheme_changed
+  File.write(scheme_path, scheme_xml) if scheme_changed
+  scheme_xml
+end
+
+patch_ui_scheme_storekit_references!(ui_scheme_path, app_runnable, storekit_reference)
+ui_scheme_xml = File.read(ui_scheme_path)
+if ensure_scheme_test_skips!(ui_scheme_xml, ['VolumeArcScreenshotTests'])
   File.write(ui_scheme_path, ui_scheme_xml)
+end
+
+screenshot_scheme_path = PROJECT_PATH.join('xcshareddata/xcschemes/VolumeArcScreenshots.xcscheme')
+screenshot_scheme_xml = patch_ui_scheme_storekit_references!(screenshot_scheme_path, app_runnable, storekit_reference)
+ui_test_class_names = Dir[ROOT.join('Tests/VolumeArcAppUITests/*Tests.swift')].map do |path|
+  File.basename(path, '.swift')
+end
+screenshot_scheme_skips = ui_test_class_names - ['VolumeArcScreenshotTests']
+if ensure_scheme_test_skips!(screenshot_scheme_xml, screenshot_scheme_skips)
+  File.write(screenshot_scheme_path, screenshot_scheme_xml)
+end
+if ensure_scheme_action_environment_variable!(
+  screenshot_scheme_xml,
+  'TestAction',
+  'VOLUMEARC_RUN_SCREENSHOT_CAPTURE',
+  '1',
+)
+  File.write(screenshot_scheme_path, screenshot_scheme_xml)
 end
 
 # VOL-99: dedicated perf scheme. `scripts/test_performance.sh`
@@ -968,7 +1093,11 @@ write_test_plan(
   expansion_target: app_expansion_ref,
   test_targets: [
     { 'parallelizable' => true, 'target' => app_tests_ref },
-    { 'parallelizable' => false, 'target' => app_ui_tests_ref },
+    {
+      'parallelizable' => false,
+      'skippedTests' => %w[VolumeArcScreenshotTests],
+      'target' => app_ui_tests_ref,
+    },
   ],
 )
 

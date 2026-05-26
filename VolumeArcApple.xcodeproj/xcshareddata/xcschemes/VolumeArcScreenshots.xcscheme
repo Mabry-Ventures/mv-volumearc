@@ -53,7 +53,46 @@
             </BuildableReference>
         <SkippedTests>
 <Test
-   Identifier = "VolumeArcScreenshotTests">
+   Identifier = "VolumeArcAccessibilityJourneyTests">
+</Test>
+<Test
+   Identifier = "VolumeArcAppJourneyTests">
+</Test>
+<Test
+   Identifier = "VolumeArcAppUITests">
+</Test>
+<Test
+   Identifier = "VolumeArcChaosJourneyTests">
+</Test>
+<Test
+   Identifier = "VolumeArcCoachJourneyTests">
+</Test>
+<Test
+   Identifier = "VolumeArcExploratoryUATAgentTests">
+</Test>
+<Test
+   Identifier = "VolumeArcFeedbackJourneyTests">
+</Test>
+<Test
+   Identifier = "VolumeArcHealthKitPermissionJourneyTests">
+</Test>
+<Test
+   Identifier = "VolumeArcIntentJourneyTests">
+</Test>
+<Test
+   Identifier = "VolumeArcProfileJourneyTests">
+</Test>
+<Test
+   Identifier = "VolumeArcSignalsJourneyTests">
+</Test>
+<Test
+   Identifier = "VolumeArcTelemetryProbeMatcherTests">
+</Test>
+<Test
+   Identifier = "VolumeArcTodayJourneyTests">
+</Test>
+<Test
+   Identifier = "VolumeArcWatchSimulationJourneyTests">
 </Test>
         </SkippedTests>
          </TestableReference>
@@ -61,6 +100,13 @@
 <StoreKitConfigurationFileReference
    identifier = "../Tests/VolumeArcAppUITests/VolumeArcTests.storekit">
 </StoreKitConfigurationFileReference>
+<EnvironmentVariables>
+   <EnvironmentVariable
+      key = "VOLUMEARC_RUN_SCREENSHOT_CAPTURE"
+      value = "1"
+      isEnabled = "YES">
+   </EnvironmentVariable>
+</EnvironmentVariables>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"

@@ -1051,6 +1051,28 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         XCTAssertTrue(bodyweightResponse.contains("Green light"))
     }
 
+    func testLocalHeuristicAICoachProviderAvoidsBenignMedicalWordFalsePositives() async throws {
+        let provider = LocalHeuristicAICoachProvider()
+        let response = try await provider.coachResponse(
+            for: "This tempo block feels dizzying on paper, should I make a minor adjustment for post-pregnancy strength?",
+            context: "Readiness: 88/100 — peak recovery\nLast note: athlete mentioned faintly tired after travel"
+        )
+
+        XCTAssertFalse(response.contains("Stop the session"))
+        XCTAssertFalse(response.lowercased().contains("medical care"))
+    }
+
+    func testLocalHeuristicAICoachProviderDoesNotEscalateContextOnlyRedFlags() async throws {
+        let provider = LocalHeuristicAICoachProvider()
+        let response = try await provider.coachResponse(
+            for: "What should I do today?",
+            context: "Readiness: 88/100 — peak recovery\nHistorical note: I had chest pain during a workout last year."
+        )
+
+        XCTAssertFalse(response.contains("Stop the session"))
+        XCTAssertFalse(response.lowercased().contains("medical care"))
+    }
+
     func testAICoachProviderStreamingDefaultYieldsChunks() async throws {
         struct OneShotProvider: AICoachProvider {
             func coachResponse(for prompt: String, context: String) async throws -> String {

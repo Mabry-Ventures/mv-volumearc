@@ -22,6 +22,33 @@ final class VolumeArcAppConfigurationTests: XCTestCase {
         )
     }
 
+    #if DEBUG && canImport(StoreKit)
+    func testScreenshotPremiumCatalogMatchesStoreKitFixturePrices() throws {
+        let storeKitURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("VolumeArcAppUITests/VolumeArcTests.storekit")
+        let data = try Data(contentsOf: storeKitURL)
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let groups = try XCTUnwrap(root["subscriptionGroups"] as? [[String: Any]])
+        let storeKitPrices = Dictionary(uniqueKeysWithValues: groups
+            .flatMap { ($0["subscriptions"] as? [[String: Any]]) ?? [] }
+            .compactMap { subscription -> (String, String)? in
+                guard let productID = subscription["productID"] as? String,
+                      let displayPrice = subscription["displayPrice"] as? String else {
+                    return nil
+                }
+                return (productID, "$\(displayPrice)")
+            })
+
+        let screenshotPrices = Dictionary(uniqueKeysWithValues: VolumeArcPremiumCatalog
+            .screenshotProductDisplays
+            .map { ($0.id, $0.displayPrice) })
+
+        XCTAssertEqual(screenshotPrices, storeKitPrices)
+    }
+    #endif
+
     func testCloudKitSyncZoneMatchesShippingContract() {
         XCTAssertEqual(VolumeArcCloudConfiguration.syncZoneName, "VolumeArcSyncZone")
     }

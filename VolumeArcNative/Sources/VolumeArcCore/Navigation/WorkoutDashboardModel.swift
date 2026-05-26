@@ -742,11 +742,20 @@ extension WorkoutDashboardModel {
             queue: nil
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.coachFallbackNotice = String(
+                self?.showTemporaryCoachFallbackNotice(String(
                     localized: "Coach is offline — quick local recommendation.",
                     comment: "Coach banner shown when relay response falls back to local heuristic"
-                )
+                ))
             }
+        }
+    }
+
+    private func showTemporaryCoachFallbackNotice(_ notice: String) {
+        coachFallbackNotice = notice
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(8))
+            guard self?.coachFallbackNotice == notice else { return }
+            self?.coachFallbackNotice = nil
         }
     }
 

@@ -201,7 +201,7 @@ public struct PaywallView: View {
 
     @ViewBuilder
     private var plans: some View {
-        if subscriptionStore.products.isEmpty {
+        if subscriptionStore.productDisplays.isEmpty {
             if case .loading = subscriptionStore.loadingState {
                 VALoadingState(message: String(
                     localized: "Loading plans…",
@@ -228,19 +228,19 @@ public struct PaywallView: View {
             }
         } else {
             VStack(spacing: VA.Space.md) {
-                ForEach(subscriptionStore.products, id: \.id) { product in
-                    planRow(product)
+                ForEach(subscriptionStore.productDisplays) { plan in
+                    planRow(plan)
                 }
             }
         }
     }
 
-    private func planRow(_ product: Product) -> some View {
-        let isSelected = selectedProductID == product.id
-        let isYearly = product.id.contains("yearly")
+    private func planRow(_ plan: StoreKitSubscriptionProductDisplay) -> some View {
+        let isSelected = selectedProductID == plan.id
+        let isYearly = plan.id.contains("yearly")
 
         return Button {
-            selectedProductID = product.id
+            selectedProductID = plan.id
             VAHaptics.selection()
         } label: {
             HStack(spacing: VA.Space.md) {
@@ -266,8 +266,8 @@ public struct PaywallView: View {
                         }
                     }
                     Text(isYearly
-                         ? String(localized: "\(product.displayPrice) / year", comment: "Yearly plan price line")
-                         : String(localized: "\(product.displayPrice) / month", comment: "Monthly plan price line"))
+                         ? String(localized: "\(plan.displayPrice) / year", comment: "Yearly plan price line")
+                         : String(localized: "\(plan.displayPrice) / month", comment: "Monthly plan price line"))
                         .font(VA.Typography.footnote)
                         .foregroundStyle(VA.Colors.textSecondary)
                 }
@@ -283,7 +283,7 @@ public struct PaywallView: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("paywall.plan.\(product.id)")
+        .accessibilityIdentifier("paywall.plan.\(plan.id)")
     }
 
     // MARK: - Action buttons
