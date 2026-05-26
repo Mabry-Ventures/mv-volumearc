@@ -185,6 +185,18 @@ warm_simulator_for_tests() {
   echo "Restarting AccessibilityUIServer inside '$device' (VOL-231 mitigation)..."
   xcrun simctl spawn "$device" killall AccessibilityUIServer 2>/dev/null || true
   sleep 2
+
+  # VOL-227: iOS 26.5 can surface
+  # `DebuggerLLDB.DebuggerVersionStore.StoreError error 0` when the
+  # runner's LLDB VersionStore is stale after a simulator/Xcode update.
+  # Clear only the VersionStore subdirectory; the rest of
+  # ~/Library/Developer/Xcode/LLDB may contain unrelated debugger state.
+  lldb_version_store="${HOME}/Library/Developer/Xcode/LLDB/VersionStore"
+  if [ -d "$lldb_version_store" ]; then
+    echo "Clearing LLDB VersionStore cache (iOS 26.5 instability mitigation)..."
+    rm -rf "$lldb_version_store" 2>/dev/null || true
+  fi
+
   echo "Simulator '$device' is ready for tests."
 }
 warm_simulator_for_tests
@@ -245,7 +257,7 @@ is_channel_disconnect_failure() {
 is_xctest_runner_crash_failure() {
   local log_path="$1"
   grep -Eq \
-    'Restarting after unexpected exit, crash, or test timeout|Mach error -308 - \(ipc/mig\) server died|NSMachErrorDomain Code=-308|Failed to install or launch the test runner' \
+    'Restarting after unexpected exit, crash, or test timeout|Mach error -308 - \(ipc/mig\) server died|NSMachErrorDomain Code=-308|Failed to install or launch the test runner|DebuggerLLDB\.DebuggerVersionStore\.StoreError' \
     "$log_path"
 }
 
@@ -411,7 +423,12 @@ fi
 #                                signals, app intents, healthkit perms,
 #                                watch sim, chaos)
 #   accessibility-screenshots → AX-stress (known daemon wedge cause)
-#                                + screenshot capture
+#
+# Manual/opt-in XCUITest classes live outside the ordinary CI shard map
+# and are allowlisted by `ui_manual_only_classes`. `VolumeArcScreenshotTests`
+# belongs there: fastlane's App Store screenshot lane runs it with
+# VOLUMEARC_RUN_SCREENSHOT_CAPTURE=1, while ordinary CI avoids a permanent
+# skip in the accessibility shard.
 #
 # `verify_shard_coverage` below greps `Tests/VolumeArcAppUITests` for
 # every `final class … XCTestCase` declaration and fails if any class
@@ -453,7 +470,6 @@ EOF
     accessibility-screenshots)
       cat <<'EOF'
 VolumeArcAccessibilityJourneyTests
-VolumeArcScreenshotTests
 EOF
       ;;
     *)
@@ -461,6 +477,12 @@ EOF
       return 1
       ;;
   esac
+}
+
+ui_manual_only_classes() {
+  cat <<'EOF'
+VolumeArcScreenshotTests
+EOF
 }
 
 ui_shard_only_testing_args() {
@@ -477,6 +499,8 @@ verify_shard_coverage() {
   # script targets that floor.
   local mapped_list=""
   local mapped_count=0
+  local manual_only_list=""
+  local manual_only_count=0
   local shard class
   for shard in "${UI_SHARDS[@]}"; do
     while IFS= read -r class; do
@@ -485,13 +509,19 @@ verify_shard_coverage() {
       mapped_count=$((mapped_count + 1))
     done < <(ui_shard_classes "$shard")
   done
+  while IFS= read -r class; do
+    [ -z "$class" ] && continue
+    manual_only_list+="${class}"$'\n'
+    manual_only_count=$((manual_only_count + 1))
+  done < <(ui_manual_only_classes)
 
   local missing=()
   local f
   while IFS= read -r f; do
     while IFS= read -r class; do
       [ -z "$class" ] && continue
-      if ! printf '%s\n' "$mapped_list" | grep -qFx "$class"; then
+      if ! printf '%s\n' "$mapped_list" | grep -qFx "$class" \
+        && ! printf '%s\n' "$manual_only_list" | grep -qFx "$class"; then
         missing+=("$class (in $(basename "$f"))")
       fi
     done < <(
@@ -506,11 +536,11 @@ verify_shard_coverage() {
   done < <(find Tests/VolumeArcAppUITests -name '*.swift' -type f)
 
   if [ "${#missing[@]}" -gt 0 ]; then
-    echo "::error::Unmapped XCUITest classes — add them to UI_SHARDS in scripts/test_apple_targets.sh:" >&2
+    echo "::error::Unmapped XCUITest classes — add them to UI_SHARDS or ui_manual_only_classes in scripts/test_apple_targets.sh:" >&2
     printf '  - %s\n' "${missing[@]}" >&2
     return 1
   fi
-  echo "Shard map covers all ${mapped_count} XCUITest classes."
+  echo "Shard map covers ${mapped_count} CI XCUITest classes; ${manual_only_count} manual-only class(es) are explicitly allowlisted."
 }
 
 is_simulator_busy_preflight_failure() {

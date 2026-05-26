@@ -207,6 +207,8 @@ Commit the updated `Package.resolved` alongside the generator change.
 
 `fastlane ios screenshots` drives `snapshot` against the device matrix declared in [`fastlane/Snapfile`](../fastlane/Snapfile). Output lives in `fastlane/screenshots/` and is picked up automatically by `deliver` during the `release` lane. The UI test is skipped in ordinary CI unless `VOLUMEARC_RUN_SCREENSHOT_CAPTURE=1` is present; the fastlane screenshots lane sets that flag automatically, and direct `xcodebuild` screenshot-test runs must export it manually.
 
+The screenshot test class is compiled in `VolumeArcAppUITests` but explicitly excluded from the normal `scripts/test_apple_targets.sh` UI shards. This keeps routine CI from reporting a permanent skip while preserving the release-lane capture path.
+
 Current matrix:
 
 | Device | App Store class |
@@ -227,6 +229,15 @@ Current languages: `en-US`.
 #### Screenshot capture flow
 
 `VolumeArcScreenshotTests` launches seeded app states, calls `setupSnapshot(app)`, and attaches named screenshots with `snapshot("name")`. The UI test target includes the local `SnapshotHelper.swift`, and `scripts/generate_xcode_project.rb` picks up both files through the existing UI test source glob.
+
+### Xcode Cloud wait gate
+
+Before cutting or submitting a build from a new main SHA, wait for both authoritative Xcode Cloud signals on that exact commit:
+
+- `VolumeArc | VolumeArc Main | VOL-Main - iOS`
+- `VolumeArc | Internal Testing - Archive - iOS`
+
+The self-hosted GitHub Actions `Build & Test` job is still useful diagnostic signal, but simulator/XCTRunner infrastructure flakes are classified through [`docs/TESTING.md`](TESTING.md#ci-runner-flake-taxonomy-vol-227-cluster). Xcode Cloud remains the release gate of record.
 
 ## Rollback
 

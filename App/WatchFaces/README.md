@@ -7,3 +7,5 @@ Expected filenames:
 - VolumeArc-Photo.watchface
 
 Do not hand-author placeholder `.watchface` files. `CLKWatchFaceLibrary` rejects invalid containers.
+
+Until valid exports exist here, the iOS Profile screen hides the Watch Faces install row. Add real Apple-generated files only.

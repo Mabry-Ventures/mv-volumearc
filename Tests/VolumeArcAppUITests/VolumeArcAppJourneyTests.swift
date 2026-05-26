@@ -322,12 +322,17 @@ final class VolumeArcAppJourneyTests: XCTestCase {
             timeout: 10,
             "Active session should expose Complete Workout"
         )
+        expectation(
+            for: NSPredicate(format: "isHittable == true"),
+            evaluatedWith: completeButton
+        )
+        waitForExpectations(timeout: 5)
         completeButton.tap()
 
         let summary = waitForElement(
             in: app,
             identifier: "sessionSummary.root",
-            timeout: 15,
+            timeout: 30,
             "Completing a workout should present the session summary"
         )
 

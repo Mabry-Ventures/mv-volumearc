@@ -100,7 +100,7 @@ public struct VAToastView: View {
     public var body: some View {
         HStack(alignment: .top, spacing: VA.Space.md) {
             Image(systemName: toast.kind.icon)
-                .font(.system(size: 20, weight: .semibold))
+                .font(VA.Typography.toastIcon)
                 .foregroundStyle(toast.kind.tint)
                 .accessibilityHidden(true)
 
