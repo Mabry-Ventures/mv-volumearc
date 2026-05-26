@@ -253,11 +253,7 @@ async function streamGemini(body: CoachRequestBody, model: string, env: Env): Pr
       { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
       { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
       { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-      // Fitness coaching legitimately discusses load, fatigue, injury risk,
-      // and pain-free substitutions. Keep Gemini's dangerous-content filter
-      // less eager while our system prompt still forbids max attempts,
-      // lifting through pain, and medical advice.
-      { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
+      { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
     ],
   };
 

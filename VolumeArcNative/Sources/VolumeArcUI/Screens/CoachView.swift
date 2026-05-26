@@ -13,6 +13,10 @@ public struct CoachView: View {
     @State private var showCoachSafetyNotice: Bool = false
     @AppStorage("volumearc.coachSafetyNoticeAccepted")
     private var hasAcceptedCoachSafetyNotice: Bool = false
+    @AppStorage("volumearc.coachSafetyNoticeAcceptedAt")
+    private var coachSafetyNoticeAcceptedAt: String = ""
+    @AppStorage("volumearc.coachSafetyNoticeAcceptedProfile")
+    private var coachSafetyNoticeAcceptedProfile: String = ""
     @FocusState private var inputFocused: Bool
 
     public init(model: WorkoutDashboardModel, navigation: DashboardNavigationModel) {
@@ -52,12 +56,14 @@ public struct CoachView: View {
         ) {
             Button(String(localized: "I Understand", comment: "Coach safety notice acknowledgement button")) {
                 hasAcceptedCoachSafetyNotice = true
+                coachSafetyNoticeAcceptedAt = ISO8601DateFormatter().string(from: Date())
+                coachSafetyNoticeAcceptedProfile = coachSafetyProfileKey
             }
         } message: {
             Text(String(
                 localized: """
-                    AI coaching uses Google Gemini. Recommendations are not \
-                    medical advice — consult a physician before starting a new \
+                    AI coaching may use Google Gemini when you're online. \
+                    Recommendations are not medical advice — consult a physician before starting a new \
                     program or training with pain, dizziness, chest pain, or \
                     shortness of breath.
                     """,
@@ -310,7 +316,7 @@ public struct CoachView: View {
             .vaGlassBackground(in: Capsule())
 
             Text(String(
-                localized: "AI coaching uses Google Gemini. Recommendations are not medical advice.",
+                localized: "AI coaching may use Google Gemini when you're online. Recommendations are not medical advice.",
                 comment: "Persistent Coach AI safety disclaimer under the composer"
             ))
             .font(VA.Typography.caption)
@@ -378,8 +384,13 @@ public struct CoachView: View {
 
     private func presentCoachSafetyNoticeIfNeeded() {
         guard !VolumeArcRuntimeFlags.isDeterministicMode else { return }
-        guard !hasAcceptedCoachSafetyNotice else { return }
+        guard !hasAcceptedCoachSafetyNotice || coachSafetyNoticeAcceptedProfile != coachSafetyProfileKey else { return }
         showCoachSafetyNotice = true
+    }
+
+    private var coachSafetyProfileKey: String {
+        let trimmed = model.athlete.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "default-athlete" : trimmed.lowercased()
     }
 }
 #endif

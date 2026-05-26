@@ -1035,6 +1035,28 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         XCTAssertFalse(response.lowercased().contains("keep lifting"))
     }
 
+    func testLocalHeuristicAICoachProviderStopsOnNewlineMedicalRedFlags() async throws {
+        let provider = LocalHeuristicAICoachProvider()
+        let response = try await provider.coachResponse(
+            for: "I feel\nchest pain during squats. Should I finish the session?",
+            context: "Readiness: 88/100 — peak recovery"
+        )
+
+        XCTAssertTrue(response.contains("Stop the session"))
+        XCTAssertTrue(response.lowercased().contains("medical care"))
+    }
+
+    func testLocalHeuristicAICoachProviderStopsOnEatingDisorderLanguage() async throws {
+        let provider = LocalHeuristicAICoachProvider()
+        let response = try await provider.coachResponse(
+            for: "I'm dealing with an eating disorder and have been purging. Can I still cut weight?",
+            context: "Readiness: 88/100 — peak recovery"
+        )
+
+        XCTAssertTrue(response.contains("Stop the session"))
+        XCTAssertTrue(response.lowercased().contains("medical care"))
+    }
+
     func testLocalHeuristicAICoachProviderHandlesMinorSafetyWithoutWeightFalsePositive() async throws {
         let provider = LocalHeuristicAICoachProvider()
         let minorResponse = try await provider.coachResponse(
@@ -1049,6 +1071,28 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         )
         XCTAssertFalse(bodyweightResponse.contains("Stop the session"))
         XCTAssertTrue(bodyweightResponse.contains("Green light"))
+    }
+
+    func testLocalHeuristicAICoachProviderAvoidsBenignMedicalWordFalsePositives() async throws {
+        let provider = LocalHeuristicAICoachProvider()
+        let response = try await provider.coachResponse(
+            for: "This tempo block feels dizzying on paper, should I make a minor adjustment for post-pregnancy strength?",
+            context: "Readiness: 88/100 — peak recovery\nLast note: athlete mentioned faintly tired after travel"
+        )
+
+        XCTAssertFalse(response.contains("Stop the session"))
+        XCTAssertFalse(response.lowercased().contains("medical care"))
+    }
+
+    func testLocalHeuristicAICoachProviderDoesNotEscalateContextOnlyRedFlags() async throws {
+        let provider = LocalHeuristicAICoachProvider()
+        let response = try await provider.coachResponse(
+            for: "What should I do today?",
+            context: "Readiness: 88/100 — peak recovery\nHistorical note: I had chest pain during a workout last year."
+        )
+
+        XCTAssertFalse(response.contains("Stop the session"))
+        XCTAssertFalse(response.lowercased().contains("medical care"))
     }
 
     func testAICoachProviderStreamingDefaultYieldsChunks() async throws {

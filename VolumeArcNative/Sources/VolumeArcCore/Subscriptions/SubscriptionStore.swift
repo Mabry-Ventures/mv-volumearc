@@ -130,6 +130,16 @@ public struct TransactionUpdate: Sendable, Equatable {
 #if canImport(StoreKit)
 import StoreKit
 
+public struct StoreKitSubscriptionProductDisplay: Identifiable, Equatable, Sendable {
+    public let id: String
+    public let displayPrice: String
+
+    public init(id: String, displayPrice: String) {
+        self.id = id
+        self.displayPrice = displayPrice
+    }
+}
+
 extension TransactionUpdate {
     /// Bridge from the real `StoreKit.Transaction`. Production code
     /// uses this when wiring `Transaction.updates` into the store;
@@ -153,6 +163,7 @@ public final class StoreKitSubscriptionStore: ObservableObject, PremiumEntitleme
     public let productIDs: [String]
 
     @Published public private(set) var products: [Product] = []
+    @Published public private(set) var productDisplays: [StoreKitSubscriptionProductDisplay] = []
     @Published public private(set) var purchasedProductIDs: Set<String> = []
     @Published public private(set) var loadingState: LoadingState = .idle
     @Published public var lastPurchaseError: String?
@@ -180,6 +191,7 @@ public final class StoreKitSubscriptionStore: ObservableObject, PremiumEntitleme
     public init(
         productIDs: [String],
         loadingState: LoadingState,
+        productDisplays: [StoreKitSubscriptionProductDisplay] = [],
         lastPurchaseError: String? = nil,
         allowsAutomaticProductReload: Bool = false,
         telemetry: (any TelemetrySink)? = nil
@@ -188,9 +200,26 @@ public final class StoreKitSubscriptionStore: ObservableObject, PremiumEntitleme
         self.allowsAutomaticProductReload = allowsAutomaticProductReload
         self.telemetry = telemetry
         self.loadingState = loadingState
+        self.productDisplays = productDisplays
         self.lastPurchaseError = lastPurchaseError
         updateListenerTask = nil
     }
+
+    #if DEBUG
+    public static func screenshotFixture(
+        productIDs: [String],
+        productDisplays: [StoreKitSubscriptionProductDisplay],
+        telemetry: (any TelemetrySink)? = nil
+    ) -> StoreKitSubscriptionStore {
+        StoreKitSubscriptionStore(
+            productIDs: productIDs,
+            loadingState: .loaded,
+            productDisplays: productDisplays,
+            allowsAutomaticProductReload: false,
+            telemetry: telemetry
+        )
+    }
+    #endif
 
     deinit {
         updateListenerTask?.cancel()
@@ -203,7 +232,7 @@ public final class StoreKitSubscriptionStore: ObservableObject, PremiumEntitleme
 
     /// Whether a paywall presentation should kick off product loading.
     public var shouldLoadProductsOnPaywallAppear: Bool {
-        guard allowsAutomaticProductReload, products.isEmpty else { return false }
+        guard allowsAutomaticProductReload, products.isEmpty, productDisplays.isEmpty else { return false }
         switch loadingState {
         case .idle, .loaded, .failed:
             return true
@@ -217,12 +246,20 @@ public final class StoreKitSubscriptionStore: ObservableObject, PremiumEntitleme
         loadingState = .loading
         do {
             let fetched = try await Product.products(for: productIDs)
-            self.products = fetched.sorted { lhs, rhs in
+            let sortedProducts = fetched.sorted { lhs, rhs in
                 lhs.price < rhs.price
+            }
+            self.products = sortedProducts
+            self.productDisplays = sortedProducts.map { product in
+                StoreKitSubscriptionProductDisplay(
+                    id: product.id,
+                    displayPrice: product.displayPrice
+                )
             }
             loadingState = .loaded
             await refreshEntitlements()
         } catch {
+            productDisplays = []
             loadingState = .failed(error.localizedDescription)
         }
     }

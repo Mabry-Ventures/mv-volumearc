@@ -186,20 +186,22 @@ warm_simulator_for_tests() {
   xcrun simctl spawn "$device" killall AccessibilityUIServer 2>/dev/null || true
   sleep 2
 
-  # VOL-227: iOS 26.5 can surface
-  # `DebuggerLLDB.DebuggerVersionStore.StoreError error 0` when the
-  # runner's LLDB VersionStore is stale after a simulator/Xcode update.
-  # Clear only the VersionStore subdirectory; the rest of
-  # ~/Library/Developer/Xcode/LLDB may contain unrelated debugger state.
-  lldb_version_store="${HOME}/Library/Developer/Xcode/LLDB/VersionStore"
-  if [ -d "$lldb_version_store" ]; then
-    echo "Clearing LLDB VersionStore cache (iOS 26.5 instability mitigation)..."
-    rm -rf "$lldb_version_store" 2>/dev/null || true
-  fi
-
   echo "Simulator '$device' is ready for tests."
 }
 warm_simulator_for_tests
+
+clear_lldb_version_store() {
+  # VOL-227: iOS 26.5 can surface
+  # `DebuggerLLDB.DebuggerVersionStore.StoreError error 0` when the
+  # runner's LLDB VersionStore is stale after a simulator/Xcode update.
+  # Clear only the VersionStore subdirectory, and only after that
+  # signature appears, so routine test runs don't churn debugger state.
+  local lldb_version_store="${HOME}/Library/Developer/Xcode/LLDB/VersionStore"
+  if [ -d "$lldb_version_store" ]; then
+    echo "Clearing LLDB VersionStore cache after StoreError detection..."
+    rm -rf "$lldb_version_store" 2>/dev/null || true
+  fi
+}
 
 unit_test_pipeline() {
   local log_path="$1"
@@ -259,6 +261,11 @@ is_xctest_runner_crash_failure() {
   grep -Eq \
     'Restarting after unexpected exit, crash, or test timeout|Mach error -308 - \(ipc/mig\) server died|NSMachErrorDomain Code=-308|Failed to install or launch the test runner|DebuggerLLDB\.DebuggerVersionStore\.StoreError' \
     "$log_path"
+}
+
+is_lldb_version_store_failure() {
+  local log_path="$1"
+  grep -Eq 'DebuggerLLDB\.DebuggerVersionStore\.StoreError' "$log_path"
 }
 
 run_unit_tests_attempt() {
@@ -664,6 +671,9 @@ run_ui_crashed_tests_attempt() {
   fi
 
   echo "::warning::Shard '$shard' retry still hit runner-crashed tests; rebooting + rerunning only ${#only_testing_args[@]} crashed method(s)."
+  if [ -f "$DERIVED_DATA_PATH/ui-test-${shard}-attempt-2.log" ] && is_lldb_version_store_failure "$DERIVED_DATA_PATH/ui-test-${shard}-attempt-2.log"; then
+    clear_lldb_version_store
+  fi
   xcrun simctl shutdown "$IOS_TEST_DEVICE_NAME" 2>/dev/null || true
   sleep 10
   warm_simulator_for_tests
@@ -717,6 +727,9 @@ run_ui_shard() {
 
   if [ "$should_retry" = "1" ]; then
     echo "::warning::Shard '$shard' hit a $retry_reason; rebooting + retrying once."
+    if [ -f "$first_log" ] && is_lldb_version_store_failure "$first_log"; then
+      clear_lldb_version_store
+    fi
     xcrun simctl shutdown "$IOS_TEST_DEVICE_NAME" 2>/dev/null || true
     sleep 10
     warm_simulator_for_tests
@@ -802,16 +815,18 @@ for entry in "${shard_results[@]}"; do
   shard="${entry%%:*}"
   status="${entry##*:}"
 
-  log_to_check="$DERIVED_DATA_PATH/ui-test-${shard}-attempt-2.log"
-  if [ ! -f "$log_to_check" ]; then
-    log_to_check="$DERIVED_DATA_PATH/ui-test-${shard}-attempt-1.log"
-  fi
-
   methods=0
-  if [ -f "$log_to_check" ]; then
-    methods="$(grep -cE "^Test Case '-\[VolumeArcAppUITests\." "$log_to_check" 2>/dev/null || true)"
-    methods="${methods:-0}"
-  fi
+  log_to_check=""
+  for candidate in \
+    "$DERIVED_DATA_PATH/ui-test-${shard}-attempt-1.log" \
+    "$DERIVED_DATA_PATH/ui-test-${shard}-attempt-2.log" \
+    "$DERIVED_DATA_PATH/ui-test-${shard}-crashed-attempt-3.log"; do
+    [ -f "$candidate" ] || continue
+    log_to_check="$candidate"
+    candidate_methods="$(grep -cE "^Test Case '-\[VolumeArcAppUITests\." "$candidate" 2>/dev/null || true)"
+    candidate_methods="${candidate_methods:-0}"
+    methods=$((methods + candidate_methods))
+  done
   total_methods=$((total_methods + methods))
 
   if [ "$status" != "0" ]; then
@@ -828,7 +843,7 @@ for entry in "${shard_results[@]}"; do
   if [ "$methods" -lt 1 ]; then
     ui_test_failed=1
     echo "  ✗ $shard (exit 0 but 0 methods executed — VOL-227 sanity failure)"
-    echo "::error::VOL-227 sanity check failed for shard '$shard' — 0 test methods executed. Inspect $log_to_check."
+    echo "::error::VOL-227 sanity check failed for shard '$shard' — 0 test methods executed. Inspect ${log_to_check:-the shard attempt logs}."
     continue
   fi
 

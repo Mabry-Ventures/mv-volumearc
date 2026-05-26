@@ -57,6 +57,14 @@ enum VolumeArcLaunchArguments {
         flagEnabled("-SeedFixtures")
     }
 
+    /// `-UseScreenshotStoreKitFixtures 1` — Debug-only screenshot hook.
+    /// Renders submitted subscription prices without depending on the
+    /// simulator StoreKit daemon, which can return an empty product list
+    /// even when the local `.storekit` catalog is attached.
+    static var useScreenshotStoreKitFixtures: Bool {
+        isUITestMode && flagEnabled("-UseScreenshotStoreKitFixtures")
+    }
+
     /// `-PerfTestMode 1` — VOL-99. Seeds a 50-session history and enables
     /// the full recent-sessions list on the Today tab so the scroll
     /// performance test (`VolumeArcPerfTests.testTodayScrollPerformance`)
@@ -253,10 +261,26 @@ struct VolumeArcApp: App {
         // visible alongside the rest of the platform's diagnostics.
         // The store emits at most one event per state change, never
         // per refresh, so this stays low-volume in production.
-        let subscriptionStore = StoreKitSubscriptionStore(
+        let subscriptionStore: StoreKitSubscriptionStore
+        #if DEBUG
+        if VolumeArcLaunchArguments.useScreenshotStoreKitFixtures {
+            subscriptionStore = StoreKitSubscriptionStore.screenshotFixture(
+                productIDs: VolumeArcPremiumCatalog.subscriptionProductIDs,
+                productDisplays: VolumeArcPremiumCatalog.screenshotProductDisplays,
+                telemetry: telemetrySink
+            )
+        } else {
+            subscriptionStore = StoreKitSubscriptionStore(
+                productIDs: VolumeArcPremiumCatalog.subscriptionProductIDs,
+                telemetry: telemetrySink
+            )
+        }
+        #else
+        subscriptionStore = StoreKitSubscriptionStore(
             productIDs: VolumeArcPremiumCatalog.subscriptionProductIDs,
             telemetry: telemetrySink
         )
+        #endif
         // VOL-91: construct AI runtime AFTER the subscription store so the
         // factory can gate coach tier + voice transport on the user's
         // premium entitlement. Order of the factory calls matters — the
