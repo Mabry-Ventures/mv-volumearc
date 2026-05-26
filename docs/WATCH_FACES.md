@@ -18,6 +18,8 @@ Once at least one export is bundled, the iOS app exposes the pack under Profile 
 
 Failed attempts record `watch.face_pack/install_failed` with a reason.
 
+If no valid `.watchface` exports are bundled, Profile hides the Watch Faces row entirely. That is the v1-safe behavior until Apple-generated face-sharing containers are available; the app must not expose an install row backed by placeholder or hand-authored files.
+
 ## Export Contract
 
 Apple's face-sharing flow produces the installable `.watchface` containers. Do not hand-author placeholder files; the system rejects invalid containers.

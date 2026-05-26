@@ -133,7 +133,7 @@ public struct VAButton: View {
                         .tint(foregroundColor)
                 } else if let icon {
                     Image(systemName: icon)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(VA.Typography.buttonIcon)
                         .accessibilityHidden(true)
                 }
                 Text(title)
@@ -276,7 +276,7 @@ public struct VAMetricDisplay: View {
                 }
                 if trend != .none {
                     Image(systemName: trendIcon)
-                        .font(.system(size: 13, weight: .bold))
+                        .font(VA.Typography.metricTrendIcon)
                         .foregroundStyle(trendColor)
                 }
             }
@@ -407,7 +407,7 @@ public struct VAEmptyState: View {
     public var body: some View {
         VStack(spacing: VA.Space.lg) {
             Image(systemName: icon)
-                .font(.system(size: 48, weight: .light))
+                .font(VA.Typography.emptyStateIcon)
                 .foregroundStyle(VA.Colors.textTertiary)
 
             VStack(spacing: VA.Space.sm) {
@@ -471,7 +471,7 @@ public struct VAErrorState: View {
     public var body: some View {
         VStack(spacing: VA.Space.lg) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 44, weight: .medium))
+                .font(VA.Typography.errorStateIcon)
                 .foregroundStyle(VA.Colors.warning)
 
             VStack(spacing: VA.Space.sm) {
@@ -647,8 +647,8 @@ public struct VACoachBubble: View {
                 ))
                 .frame(width: 32, height: 32)
             Image(systemName: "waveform")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.white)
+                .font(VA.Typography.coachAvatarIcon)
+                .foregroundStyle(VA.Colors.textOnPrimary)
         }
     }
 

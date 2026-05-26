@@ -125,6 +125,24 @@ public enum VA {
         /// Large camera unavailable glyph.
         public static let cameraUnavailableIcon = Font.system(size: 44, weight: .semibold)
 
+        /// Compact glyph inside primary buttons.
+        public static let buttonIcon = Font.system(size: 15, weight: .semibold)
+
+        /// Small trend glyph in metric cards.
+        public static let metricTrendIcon = Font.system(size: 13, weight: .bold)
+
+        /// Large empty-state glyph.
+        public static let emptyStateIcon = Font.system(size: 48, weight: .light)
+
+        /// Large error-state glyph.
+        public static let errorStateIcon = Font.system(size: 44, weight: .medium)
+
+        /// Compact coach avatar glyph.
+        public static let coachAvatarIcon = Font.system(size: 14, weight: .semibold)
+
+        /// Toast leading glyph.
+        public static let toastIcon = Font.system(size: 20, weight: .semibold)
+
         // MARK: Widget / Live Activity scale
         //
         // Widget surfaces intentionally use fixed point sizes rather than

@@ -1,6 +1,6 @@
 {
   "target": "VolumeArcCore",
   "threshold": 80,
-  "note": "Placeholder. Live trend data lives on the `metrics` branch — main is protected and bot pushes are rejected. See docs/TESTING.md#coverage-artifacts. Live URL: https://raw.githubusercontent.com/Mabry-Ventures/mv-volumearc/metrics/coverage-trend.json",
+  "note": "Placeholder. Live trend data lives at coverage-trend.json on the `metrics` branch — main is protected and bot pushes are rejected. Because this repository is private, unauthenticated raw.githubusercontent.com badge reads return 404. See docs/TESTING.md#coverage-artifacts for authenticated inspection commands.",
   "records": []
 }
