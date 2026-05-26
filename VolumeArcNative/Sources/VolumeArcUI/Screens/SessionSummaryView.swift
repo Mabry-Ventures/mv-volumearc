@@ -84,8 +84,8 @@ public struct SessionSummaryView: View {
                     .opacity(hasAppeared ? 1 : 0)
 
                 Image(systemName: "checkmark")
-                    .font(.system(size: 52, weight: .bold))
-                    .foregroundStyle(Color.white)
+                    .font(VA.Typography.display)
+                    .foregroundStyle(VA.Colors.textOnPrimary)
                     .scaleEffect(hasAppeared ? 1 : 0.5)
                     .opacity(hasAppeared ? 1 : 0)
             }
@@ -155,7 +155,7 @@ public struct SessionSummaryView: View {
             VStack(alignment: .leading, spacing: VA.Space.xs) {
                 HStack {
                     Image(systemName: icon)
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(VA.Typography.headline)
                         .foregroundStyle(color)
                     Spacer()
                 }

@@ -142,7 +142,7 @@ public struct AIRelayCoachProvider: AICoachProvider {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(tier.rawValue, forHTTPHeaderField: "X-Coach-Tier")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-        request.timeoutInterval = 60
+        request.timeoutInterval = 30
 
         // VOL-64: render the prompt on-device and send it pre-rendered so the
         // template marker + system prompt are the single source of truth. Worker
@@ -255,6 +255,10 @@ public struct LocalHeuristicAICoachProvider: AICoachProvider {
     }
 
     public func coachResponse(for prompt: String, context: String) async throws -> String {
+        if let redFlagResponse = medicalRedFlagResponse(from: "\(prompt)\n\(context)") {
+            return redFlagResponse
+        }
+
         // Route through the template so the same intent classification and
         // context shape used by the cloud path also drive the offline path.
         let intent = CoachPromptTemplate.inferIntent(from: prompt)
@@ -362,6 +366,46 @@ public struct LocalHeuristicAICoachProvider: AICoachProvider {
                 """
         }
         return "Log a couple of sets so I have something to work with, then ask me again."
+    }
+
+    private func medicalRedFlagResponse(from text: String) -> String? {
+        let redFlagPatterns = [
+            "\\bchest\\s+pain\\b",
+            "\\bdizz\\w*\\b",
+            "\\bfaint\\w*\\b",
+            "\\bsyncope\\b",
+            "\\bpassed\\s+out\\b",
+            "\\bsevere\\s+shortness\\s+of\\s+breath\\b",
+            "\\bshort\\s+of\\s+breath\\b",
+            "\\bpregnan\\w*\\b",
+            "\\beating\\s+disorder\\b",
+            "\\bhaven'?t\\s+eaten\\b",
+            "\\bcardiac\\s+event\\b",
+            "\\bheart\\s+attack\\b",
+        ]
+        let minorSafetyConcern =
+            containsPattern("\\b(i\\s*am|i\\W?m|age(?:d)?|as\\s+a)\\s+1[0-7]\\b", in: text) ||
+            containsPattern("\\bunder\\s+18\\b", in: text) ||
+            containsPattern("\\bminor\\b", in: text)
+        let strengthRisk =
+            containsPattern("\\b(max|1\\s*rm|one[- ]rep|max|pr|personal\\s+record|heavy|heavier|attempt)\\b", in: text)
+
+        guard redFlagPatterns.contains(where: { containsPattern($0, in: text) }) ||
+            (minorSafetyConcern && strengthRisk) else {
+            return nil
+        }
+        return String(
+            localized: """
+            Stop the session now and seek medical care before training again. \
+            If symptoms are severe or include chest pain, fainting, or severe \
+            shortness of breath, use emergency care.
+            """,
+            comment: "Safety response when medical red-flag terms are detected in coach input"
+        )
+    }
+
+    private func containsPattern(_ pattern: String, in text: String) -> Bool {
+        text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     private func extractWeeklySchedule(from context: String) -> [String] {

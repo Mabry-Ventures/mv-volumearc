@@ -131,6 +131,63 @@ final class FallbackCoachProviderTests: XCTestCase {
         XCTAssertEqual(result, "fallback-saved-the-day")
     }
 
+    func testFallbackEmitsNotificationForUIBanner() async throws {
+        let notificationExpectation = expectation(description: "fallback notification")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .coachFallbackUsed,
+            object: nil,
+            queue: nil
+        ) { notification in
+            XCTAssertEqual(
+                notification.userInfo?[CoachFallbackNotificationUserInfoKey.reason] as? String,
+                "relay_unavailable"
+            )
+            XCTAssertEqual(
+                notification.userInfo?[CoachFallbackNotificationUserInfoKey.path] as? String,
+                "non_streaming"
+            )
+            notificationExpectation.fulfill()
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        let primary = StubProvider(throwing: AIRuntimeIntegrationError.relayUnavailable(reason: "no config"))
+        let fallback = StubProvider(response: "fallback-saved-the-day")
+        let wrapper = FallbackCoachProvider(primary: primary, fallback: fallback)
+        _ = try await wrapper.coachResponse(for: "q", context: "ctx")
+        await fulfillment(of: [notificationExpectation], timeout: 1)
+    }
+
+    func testStreamingFallbackEmitsNotificationForUIBanner() async throws {
+        let notificationExpectation = expectation(description: "streaming fallback notification")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .coachFallbackUsed,
+            object: nil,
+            queue: nil
+        ) { notification in
+            XCTAssertEqual(
+                notification.userInfo?[CoachFallbackNotificationUserInfoKey.reason] as? String,
+                "relay_unavailable"
+            )
+            XCTAssertEqual(
+                notification.userInfo?[CoachFallbackNotificationUserInfoKey.path] as? String,
+                "streaming"
+            )
+            notificationExpectation.fulfill()
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        let primary = StubProvider(throwing: AIRuntimeIntegrationError.relayUnavailable(reason: "no config"))
+        let fallback = StubProvider(response: "fallback-saved-the-day")
+        let wrapper = FallbackCoachProvider(primary: primary, fallback: fallback)
+
+        var collected = ""
+        for try await chunk in wrapper.streamCoachResponse(for: "q", context: "ctx") {
+            collected += chunk
+        }
+        XCTAssertEqual(collected, "fallback-saved-the-day")
+        await fulfillment(of: [notificationExpectation], timeout: 1)
+    }
+
     func testNonFallbackEligibleErrorPropagates() async {
         let primary = StubProvider(throwing: AIRuntimeIntegrationError.relayRequestFailed(statusCode: 400, message: "bad"))
         let fallback = StubProvider(response: "should-not-be-used")
