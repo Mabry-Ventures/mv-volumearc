@@ -26,7 +26,7 @@ All measurements are taken on an **iPhone 17 iOS Simulator** running the host `V
 
 Release/archive size is still measured from the exported IPA by `scripts/check_ipa_size.sh`. That gate uses the `ipa_size_*` and `app_size_*` metrics in `performance-budgets.json` and should run only after a real archive/export because compression, signing, and device slices matter.
 
-Pull requests get a lighter proxy via `scripts/check_pr_size_proxy.sh`. The Build & Test job runs it after `scripts/build_all_targets.sh`, using the already-built Debug simulator products under `.build/derived-data`. The proxy compares the `pr_size_proxy_*` metrics in `performance-budgets.json` and is warning-only on PRs; it is meant to catch obvious asset or dependency bloat before a release archive, not to replace the signed IPA measurement.
+Pull requests get a lighter proxy via `scripts/check_pr_size_proxy.sh`. The separate `PR bundle size proxy (VOL-215)` CI job runs `scripts/build_all_targets.sh`, measures the Debug simulator products under `.build/derived-data`, and compares the `pr_size_proxy_*` metrics in `performance-budgets.json`. This is a non-required PR signal meant to catch obvious asset or dependency bloat before a release archive; it does not replace the signed IPA measurement.
 
 ## Test anatomy
 

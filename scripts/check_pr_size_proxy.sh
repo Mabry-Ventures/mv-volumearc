@@ -127,13 +127,13 @@ for metric_id in sorted(measured):
     value = measured[metric_id]
     metric = budget_by_id.get(metric_id)
     if metric is None:
-        print(f"INFO: budget '{metric_id}' not in performance-budgets.json yet; skipping.")
+        failures.append(f"budget '{metric_id}' is missing in performance-budgets.json")
         summary_rows.append((metric_id, value, None, None, "no-budget"))
         continue
     budget = metric.get("budget")
     fail_threshold = metric.get("failThreshold")
     if budget is None or fail_threshold is None:
-        print(f"WARN: metric '{metric_id}' missing budget/failThreshold; skipping")
+        failures.append(f"metric '{metric_id}' is missing budget/failThreshold")
         summary_rows.append((metric_id, value, budget, fail_threshold, "malformed"))
         continue
     over_budget = value > budget

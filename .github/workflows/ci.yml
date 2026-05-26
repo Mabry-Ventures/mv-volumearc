@@ -316,11 +316,6 @@ jobs:
       - name: Build all targets (Debug)
         run: ./scripts/build_all_targets.sh
 
-      - name: PR bundle size proxy (warning-only, VOL-215)
-        if: github.event_name == 'pull_request'
-        continue-on-error: true
-        run: ./scripts/check_pr_size_proxy.sh
-
       - name: Run tests
         run: ./scripts/test_apple_targets.sh
 
@@ -743,6 +738,33 @@ jobs:
 
       - name: Validate release configuration
         run: ./scripts/validate_release_config.sh
+
+  pr-size-proxy:
+    name: PR bundle size proxy (VOL-215)
+    # VOL-215: advisory PR-time size signal. Keep this out of the required
+    # Build & Test job so size drift is visible without weakening that gate.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, mv-volumearc-runner]
+    timeout-minutes: 45
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Prepare Ruby toolchain
+        run: bash ./.github/scripts/prepare_ruby_toolchain.sh xcodeproj
+        shell: bash
+
+      - name: Install Ruby bundle
+        run: bundle install --quiet
+
+      - name: Build all targets (Debug)
+        run: ./scripts/build_all_targets.sh
+
+      - name: Check PR bundle size proxy
+        run: ./scripts/check_pr_size_proxy.sh
 
   perf-regression:
     # VOL-99: performance regression suite. Tag-gated because each
