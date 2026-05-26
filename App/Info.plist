@@ -50,21 +50,15 @@
 		<string>processing</string>
 	</array>
 
-	<!-- HealthKit privacy copy kept here so static plist checks can
-	     verify the authorization path even before build-setting
-	     `INFOPLIST_KEY_*` values are merged by Xcode. -->
-	<key>NSHealthShareUsageDescription</key>
-	<string>VolumeArc reads your completed workouts, heart-rate variability, sleep, Workout Effort, wrist temperature, and respiratory rate from Apple Health to show your training history, calculate readiness, and let the AI coach reference your recovery trend.</string>
-	<key>NSHealthUpdateUsageDescription</key>
-	<string>VolumeArc writes completed workouts so your training history stays in sync with Apple Health.</string>
-
 	<!-- VOL-126: App Store Connect validation requires either an explicit
-	     launch screen or UIRequiresFullScreen=YES. Empty UILaunchScreen
-	     dict is the modern SwiftUI default — iOS renders a generic
-	     splash that matches the app's window background while the first
-	     scene loads. No storyboard/xib needed. -->
+	     launch screen or UIRequiresFullScreen=YES. Use a named dynamic
+	     color from Assets.xcassets so the SwiftUI app launches on a
+	     branded, light/dark-aware background without a storyboard/xib. -->
 	<key>UILaunchScreen</key>
-	<dict/>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
 
 	<!-- VOL-126 / VOL-131: App Store Connect validation requires interface
 	     orientations to be declared. v1 is iPhone-only

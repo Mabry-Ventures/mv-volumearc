@@ -98,7 +98,7 @@ public struct PaywallView: View {
     private var hero: some View {
         VStack(spacing: VA.Space.md) {
             Image(systemName: "sparkles")
-                .font(.system(size: 48, weight: .semibold))
+                .font(VA.Typography.display)
                 .foregroundStyle(VA.Colors.primary)
                 .vaAppear()
 
@@ -137,7 +137,7 @@ public struct PaywallView: View {
                 ForEach(premiumFeatures) { feature in
                     HStack(alignment: .top, spacing: VA.Space.md) {
                         Image(systemName: feature.icon)
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(VA.Typography.title2)
                             .foregroundStyle(VA.Colors.primary)
                             .frame(width: 28)
                         VStack(alignment: .leading, spacing: 2) {
@@ -245,7 +245,7 @@ public struct PaywallView: View {
         } label: {
             HStack(spacing: VA.Space.md) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(VA.Typography.title2)
                     .foregroundStyle(isSelected ? VA.Colors.primary : VA.Colors.textTertiary)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -257,8 +257,8 @@ public struct PaywallView: View {
                             .foregroundStyle(VA.Colors.textPrimary)
                         if isYearly {
                             Text(String(localized: "SAVE", comment: "Paywall savings badge on the yearly plan"))
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(Color.white)
+                                .font(VA.Typography.caption)
+                                .foregroundStyle(VA.Colors.textOnPrimary)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(VA.Colors.success)
