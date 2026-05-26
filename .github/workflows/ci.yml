@@ -316,6 +316,11 @@ jobs:
       - name: Build all targets (Debug)
         run: ./scripts/build_all_targets.sh
 
+      - name: PR bundle size proxy (warning-only, VOL-215)
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        run: ./scripts/check_pr_size_proxy.sh
+
       - name: Run tests
         run: ./scripts/test_apple_targets.sh
 

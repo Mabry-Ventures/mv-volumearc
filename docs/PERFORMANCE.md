@@ -22,6 +22,12 @@ All measurements are taken on an **iPhone 17 iOS Simulator** running the host `V
 3. **Trend:** on success, the same script appends a new entry to `performance-trend.json` with the commit SHA, ref, and measured values. The file is committed back by CI so the project's perf history is visible in git.
 4. **CI:** the suite runs as a hard gate on **tag builds** (`on: push: tags: ['v*']`) and as a warning-only signal on same-repo PRs after the normal Build & Test job — see the `perf-regression` job in `.github/workflows/ci.yml`. PR runs set `PERF_SKIP_TREND_WRITE=1` so they surface drift in the job summary without mutating `docs/performance-trend.json`.
 
+## Bundle Size Signals
+
+Release/archive size is still measured from the exported IPA by `scripts/check_ipa_size.sh`. That gate uses the `ipa_size_*` and `app_size_*` metrics in `performance-budgets.json` and should run only after a real archive/export because compression, signing, and device slices matter.
+
+Pull requests get a lighter proxy via `scripts/check_pr_size_proxy.sh`. The Build & Test job runs it after `scripts/build_all_targets.sh`, using the already-built Debug simulator products under `.build/derived-data`. The proxy compares the `pr_size_proxy_*` metrics in `performance-budgets.json` and is warning-only on PRs; it is meant to catch obvious asset or dependency bloat before a release archive, not to replace the signed IPA measurement.
+
 ## Test anatomy
 
 The four measurement tests live in `Tests/VolumeArcAppPerfTests/VolumeArcPerfTests.swift`:
