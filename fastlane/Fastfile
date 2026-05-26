@@ -272,6 +272,7 @@ platform :ios do
   # XCTest attachments from the xcresult bundle. Do not add screenshot
   # generation to the beta lane — only release.
   lane :screenshots do
+    ENV["VOLUMEARC_RUN_SCREENSHOT_CAPTURE"] = "1"
     helper_path = File.expand_path(
       "../Tests/VolumeArcAppUITests/SnapshotHelper.swift",
       __dir__

@@ -35,7 +35,7 @@ When you change the **implementation status** of a system (a stub becomes real, 
 - Enum display labels live in `VolumeArcNative/Sources/VolumeArcUI/LocalizedLabels.swift`, not inline in views.
 - Every visual property comes from `VA.Colors`, `VA.Typography`, `VA.Space`, `VA.Radius`, or `VA.Shadow` — never hardcode.
 - Every haptic goes through `VAHaptics.*`.
-- Main is protected: every merge requires green CI (build + unit/integration tests + UI smoke tests + SwiftLint + release validation) plus the AI review gate. **As of 2026-05-20: Codex Code Review is the sole AI reviewer** — CodeRabbit Pro is paused while the org's CodeRabbit subscription credits are restored (VOL-227 round 4). Re-enable CodeRabbit by un-commenting the `coderabbit-review` job in `.github/workflows/ai-review-gate.yml` once credits are back.
+- Main is protected: every merge requires green CI (build + unit/integration tests + UI smoke tests + SwiftLint + release validation) plus the AI review gate. **As of 2026-05-25: CodeRabbit Pro and Codex Code Review are both active**; `.github/workflows/ai-review-gate.yml` requests both reviewers and waits for both current-head review signals.
 
 ## Production-readiness status
 

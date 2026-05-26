@@ -37,6 +37,7 @@ public final class WorkoutDashboardModel: ObservableObject {
 
     @Published public var coachMessages: [CoachMessage] = []
     @Published public private(set) var isCoachStreaming: Bool = false
+    @Published public private(set) var coachFallbackNotice: String?
 
     @Published public var isOnboardingComplete: Bool = false
     @Published public private(set) var isNetworkReachable: Bool = true
@@ -514,89 +515,6 @@ public final class WorkoutDashboardModel: ObservableObject {
         await refresh()
     }
 
-    // MARK: - Coach
-    /// Send a prompt to the AI coach and stream the response into `coachMessages` token-by-token.
-    public func askCoach(_ prompt: String) async {
-        guard !prompt.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-
-        let userMessage = CoachMessage(id: UUID(), sender: .user, content: prompt)
-        coachMessages.append(userMessage)
-
-        isCoachStreaming = true
-        defer { isCoachStreaming = false }
-
-        let context = buildCoachContext()
-
-        // VOL-124 / VOL-197: redact PII from the free-text question before it
-        // leaves the device for the relay. In `.standard` mode this is a no-op;
-        // in `.strict` mode it strips email / phone / name / street-address
-        // tokens. This is symmetric with `buildCoachContext()`, which already
-        // redacts the structured context via `asPromptBlock(privacyMode:)`.
-        // The user still sees the original text in `userMessage` above — only
-        // the outbound copy sent to the provider is redacted. Before this, the
-        // strict-mode redactor was only applied inside the typed-`CoachContext`
-        // template overloads, never on the relay path's free-text question, so
-        // the privacy-policy claim ("redacts … before transmission") was
-        // unbacked on the cloud path.
-        let outboundPrompt = PromptPrivacyRedactor.redactQuestion(
-            prompt,
-            privacyMode: athlete.privacyMode
-        )
-
-        // Create a placeholder message we'll append tokens to as they arrive.
-        let streamingID = UUID()
-        coachMessages.append(CoachMessage(id: streamingID, sender: .coach, content: ""))
-
-        var accumulated = ""
-        do {
-            let stream = aiProvider.streamCoachResponse(for: outboundPrompt, context: context)
-            for try await chunk in stream {
-                accumulated += chunk
-                if let index = coachMessages.firstIndex(where: { $0.id == streamingID }) {
-                    coachMessages[index] = CoachMessage(
-                        id: streamingID,
-                        sender: .coach,
-                        content: accumulated,
-                        timestamp: coachMessages[index].timestamp
-                    )
-                }
-            }
-
-            // Persist the full response as a coach memory for future prompt grounding.
-            #if canImport(SwiftData)
-            if !accumulated.isEmpty {
-                try? coachMemoryRepository?.append(
-                    content: "User asked: \(prompt)\nCoach said: \(accumulated)",
-                    theme: inferTheme(from: prompt)
-                )
-            }
-            #endif
-
-            telemetrySink.record(TelemetryEvent(
-                category: "coach",
-                name: "ask_complete",
-                severity: .info,
-                message: "Coach responded (\(accumulated.count) chars)"
-            ))
-        } catch {
-            // Replace the placeholder with a user-visible error and keep the conversation alive.
-            if let index = coachMessages.firstIndex(where: { $0.id == streamingID }) {
-                coachMessages[index] = CoachMessage(
-                    id: streamingID,
-                    sender: .coach,
-                    content: "I'm having trouble reaching my knowledge base. Try again in a moment."
-                )
-            }
-
-            telemetrySink.record(TelemetryEvent(
-                category: "coach",
-                name: "ask_failed",
-                severity: .warning,
-                message: error.localizedDescription
-            ))
-        }
-    }
-
     /// Pattern-match the user's prompt to infer a memory theme for organization.
     private func inferTheme(from prompt: String) -> String {
         let lowered = prompt.lowercased()
@@ -774,6 +692,116 @@ public extension WorkoutDashboardModel {
             ))
             return false
         }
+    }
+}
+
+// MARK: - Coach
+
+extension WorkoutDashboardModel {
+    /// Send a prompt to the AI coach and stream the response into `coachMessages` token-by-token.
+    public func askCoach(_ prompt: String) async {
+        guard !prompt.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+
+        coachMessages.append(CoachMessage(id: UUID(), sender: .user, content: prompt))
+        coachFallbackNotice = nil
+        isCoachStreaming = true
+        let fallbackObserver = makeCoachFallbackObserver()
+        defer {
+            NotificationCenter.default.removeObserver(fallbackObserver)
+            isCoachStreaming = false
+        }
+
+        let context = buildCoachContext()
+        let outboundPrompt = PromptPrivacyRedactor.redactQuestion(prompt, privacyMode: athlete.privacyMode)
+        let streamingID = appendEmptyCoachMessage()
+
+        do {
+            let accumulated = try await streamCoachResponse(
+                prompt: outboundPrompt,
+                context: context,
+                streamingID: streamingID
+            )
+            persistCoachMemory(prompt: prompt, response: accumulated)
+            recordCoachAskComplete(characterCount: accumulated.count)
+        } catch {
+            replaceCoachMessage(
+                id: streamingID,
+                content: String(
+                    localized: "I'm having trouble reaching my knowledge base. Try again in a moment.",
+                    comment: "Coach message shown when coach response fails and fallback content is unavailable"
+                )
+            )
+            recordCoachAskFailure(error)
+        }
+    }
+
+    private func makeCoachFallbackObserver() -> NSObjectProtocol {
+        NotificationCenter.default.addObserver(
+            forName: .coachFallbackUsed,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.coachFallbackNotice = String(
+                    localized: "Coach is offline — quick local recommendation.",
+                    comment: "Coach banner shown when relay response falls back to local heuristic"
+                )
+            }
+        }
+    }
+
+    private func appendEmptyCoachMessage() -> UUID {
+        let streamingID = UUID()
+        coachMessages.append(CoachMessage(id: streamingID, sender: .coach, content: ""))
+        return streamingID
+    }
+
+    private func streamCoachResponse(prompt: String, context: String, streamingID: UUID) async throws -> String {
+        var accumulated = ""
+        let stream = aiProvider.streamCoachResponse(for: prompt, context: context)
+        for try await chunk in stream {
+            accumulated += chunk
+            replaceCoachMessage(id: streamingID, content: accumulated)
+        }
+        return accumulated
+    }
+
+    private func replaceCoachMessage(id: UUID, content: String) {
+        guard let index = coachMessages.firstIndex(where: { $0.id == id }) else { return }
+        coachMessages[index] = CoachMessage(
+            id: id,
+            sender: .coach,
+            content: content,
+            timestamp: coachMessages[index].timestamp
+        )
+    }
+
+    private func persistCoachMemory(prompt: String, response: String) {
+        #if canImport(SwiftData)
+        guard !response.isEmpty else { return }
+        try? coachMemoryRepository?.append(
+            content: "User asked: \(prompt)\nCoach said: \(response)",
+            theme: inferTheme(from: prompt)
+        )
+        #endif
+    }
+
+    private func recordCoachAskComplete(characterCount: Int) {
+        telemetrySink.record(TelemetryEvent(
+            category: "coach",
+            name: "ask_complete",
+            severity: .info,
+            message: "Coach responded (\(characterCount) chars)"
+        ))
+    }
+
+    private func recordCoachAskFailure(_ error: Error) {
+        telemetrySink.record(TelemetryEvent(
+            category: "coach",
+            name: "ask_failed",
+            severity: .warning,
+            message: error.localizedDescription
+        ))
     }
 }
 

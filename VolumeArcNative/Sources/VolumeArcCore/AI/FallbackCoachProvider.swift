@@ -24,6 +24,15 @@
 
 import Foundation
 
+public extension Notification.Name {
+    static let coachFallbackUsed = Notification.Name("VolumeArcCoachFallbackUsed")
+}
+
+public enum CoachFallbackNotificationUserInfoKey {
+    public static let reason = "reason"
+    public static let path = "path"
+}
+
 public struct FallbackCoachProvider: AICoachProvider {
     private let primary: AICoachProvider
     private let fallback: AICoachProvider
@@ -156,5 +165,13 @@ public struct FallbackCoachProvider: AICoachProvider {
                 "path": path
             ]
         ))
+        NotificationCenter.default.post(
+            name: .coachFallbackUsed,
+            object: nil,
+            userInfo: [
+                CoachFallbackNotificationUserInfoKey.reason: reason,
+                CoachFallbackNotificationUserInfoKey.path: path
+            ]
+        )
     }
 }

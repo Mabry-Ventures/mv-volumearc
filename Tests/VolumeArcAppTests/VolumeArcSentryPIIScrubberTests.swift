@@ -354,6 +354,18 @@ final class VolumeArcSentryPIIScrubberTests: XCTestCase {
         XCTAssertNil(SentryPIIScrubber.scrub(breadcrumb: crumb))
     }
 
+    func testScrubBreadcrumbDropsWorkoutNotesCategory() {
+        let crumb = Breadcrumb(level: .info, category: "workout.notes")
+        crumb.message = "Left knee felt sharp on set 3"
+        XCTAssertNil(SentryPIIScrubber.scrub(breadcrumb: crumb))
+    }
+
+    func testScrubBreadcrumbDropsProfileNameCategory() {
+        let crumb = Breadcrumb(level: .info, category: "profile.name")
+        crumb.message = "Updated athlete name to Jane Lifter"
+        XCTAssertNil(SentryPIIScrubber.scrub(breadcrumb: crumb))
+    }
+
     func testScrubBreadcrumbKeepsOtherCategoriesButScrubsMessage() {
         let crumb = Breadcrumb(level: .info, category: "navigation")
         crumb.message = "Opened coach with email user@example.com"

@@ -6,7 +6,7 @@ VolumeArc currently ships with **540+ test functions** across unit + integration
 
 - 80% line-coverage gate enforced on `VolumeArcCore` (VOL-52), targeted to rise to **90%** under [VOL-140](https://linear.app/mabry-ventures/issue/VOL-140) (sharpened by [VOL-205](https://linear.app/mabry-ventures/issue/VOL-205)). New gates: `VolumeArcUI` (≥85% target, **18%** staged floor after the VOL-135 snapshot ratchet), `VolumeArcCoreWatch` (≥85% target, **25%** Phase A floor — measured baseline 28.77% from [VOL-138](https://linear.app/mabry-ventures/issue/VOL-138) Phase A; ratchets up once `WatchWorkoutModel` pure logic is extracted), Widgets (≥75% target — view-layer snapshot coverage started under [VOL-139](https://linear.app/mabry-ventures/issue/VOL-139); line-coverage gate remains pending a dedicated target).
 - 6-metric performance budget (cold launch, scroll fps, scroll hitches, memory, coach P50, coach P95) tag-gated in CI (VOL-99).
-- 33-fixture coach eval matrix with hermetic template-layer assertions in CI; response-layer harness runs on nightly cron (`coach-evals-nightly.yml`) against the staging relay through the VOL-244 eval attestation broker.
+- 47-fixture coach eval matrix with hermetic template-layer assertions in CI; response-layer harness runs on nightly cron (`coach-evals-nightly.yml`) against the staging relay through the VOL-244 eval attestation broker.
 - User-journey catalog at [`USER_JOURNEYS.md`](USER_JOURNEYS.md); current coverage **56%** (39/69), target **100%** under [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141) (sharpened by [VOL-200](https://linear.app/mabry-ventures/issue/VOL-200) — CI parser gate).
 - Visual regression: SnapshotTesting is wired with bundled baselines for VAButton, the next-workout widget, core VAUI card/toast surfaces, the active-workout Live Activity lock-screen/banner and watch surfaces, coach transcript bubbles, the Premium paywall loaded-empty/failure shell, and the full onboarding flow; RootDashboard tab and remaining Live Activity matrices continue under [VOL-135](https://linear.app/mabry-ventures/issue/VOL-135).
 - Exploratory UAT: [`UAT_AGENT.md`](UAT_AGENT.md) documents the nightly LLM-driven XCUITest bridge from [VOL-169](https://linear.app/mabry-ventures/issue/VOL-169). It reads screenshots + accessibility trees, executes bounded safe actions, uploads transcripts, and posts a GitHub issue report.
@@ -36,7 +36,7 @@ Tests/VolumeArcAppTests/
 ├── VolumeArcRelaySessionTests.swift              # secure-store and relay error-description coverage
 ├── VolumeArcRelayURLValidationTests.swift        # 17 tests
 ├── VolumeArcSecureStoreFallbackTests.swift       # 5 tests
-└── VolumeArcSentryPIIScrubberTests.swift         # 33 tests (VOL-72)
+└── VolumeArcSentryPIIScrubberTests.swift         # 35 tests (VOL-72)
 
 Tests/VolumeArcAppUITests/
 ├── VolumeArcAppUITests.swift                     # launch/navigation smoke tests

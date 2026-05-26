@@ -9,10 +9,10 @@ final class VolumeArcScreenshotTests: XCTestCase {
     @MainActor
     func testCaptureAppStoreScreenshots() throws {
         try XCTSkipIf(
-            true,
-            "VOL-230: screenshot pipeline times out after 55s. Pre-existing " +
-            "failure exposed by VOL-227 unblocking UI test execution. " +
-            "Investigate the Snapshot helper or the workout-screenshot path."
+            ProcessInfo.processInfo.environment["VOLUMEARC_RUN_SCREENSHOT_CAPTURE"] != "1",
+            "App Store screenshot capture is an explicit release-lane/manual " +
+            "opt-in. Set VOLUMEARC_RUN_SCREENSHOT_CAPTURE=1 when running " +
+            "`fastlane ios screenshots` or the screenshot UI test directly."
         )
         let app = VolumeArcAppUITestSupport.makeSeededApp()
         setupSnapshot(app)

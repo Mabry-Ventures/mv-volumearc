@@ -205,7 +205,7 @@ Commit the updated `Package.resolved` alongside the generator change.
 
 ### Screenshots lane (VOL-96)
 
-`fastlane ios screenshots` drives `snapshot` against the device matrix declared in [`fastlane/Snapfile`](../fastlane/Snapfile). Output lives in `fastlane/screenshots/` and is picked up automatically by `deliver` during the `release` lane.
+`fastlane ios screenshots` drives `snapshot` against the device matrix declared in [`fastlane/Snapfile`](../fastlane/Snapfile). Output lives in `fastlane/screenshots/` and is picked up automatically by `deliver` during the `release` lane. The UI test is skipped in ordinary CI unless `VOLUMEARC_RUN_SCREENSHOT_CAPTURE=1` is present; the fastlane screenshots lane sets that flag automatically, and direct `xcodebuild` screenshot-test runs must export it manually.
 
 Current matrix:
 

@@ -39,6 +39,8 @@ enum SentryPIIScrubber {
     static let breadcrumbCategoryDenyList: Set<String> = [
         "user-input",
         "coach.memory",
+        "profile.name",
+        "workout.notes",
     ]
 
     /// Exact-match keys whose values are always redacted, regardless of

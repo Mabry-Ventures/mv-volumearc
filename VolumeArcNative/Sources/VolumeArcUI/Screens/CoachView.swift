@@ -24,6 +24,7 @@ public struct CoachView: View {
         VStack(spacing: 0) {
             coachHeader
             messageList
+            fallbackNotice
             quickPromptRail
             composer
         }
@@ -235,6 +236,26 @@ public struct CoachView: View {
             .padding(.vertical, VA.Space.sm)
         }
         .background(VA.Colors.surfaceGrouped)
+    }
+
+    @ViewBuilder
+    private var fallbackNotice: some View {
+        if let notice = model.coachFallbackNotice {
+            HStack(alignment: .firstTextBaseline, spacing: VA.Space.sm) {
+                Image(systemName: "wifi.slash")
+                    .foregroundStyle(VA.Colors.warning)
+                    .accessibilityHidden(true)
+                Text(notice)
+                    .font(VA.Typography.footnote)
+                    .foregroundStyle(VA.Colors.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, VA.Space.lg)
+            .padding(.vertical, VA.Space.sm)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(VA.Colors.warning.opacity(0.12))
+            .accessibilityIdentifier("coach.fallbackBanner")
+        }
     }
 
     private var suggestedPrompts: [String] {
