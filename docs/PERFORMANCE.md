@@ -20,7 +20,7 @@ All measurements are taken on an **iPhone 17 iOS Simulator** running the host `V
 1. **Local:** `./scripts/test_performance.sh` regenerates the Xcode project, boots an iPhone 17 simulator, and runs the `VolumeArcAppPerfTests` scheme with `-enablePerformanceTestsDiagnostics YES`. The resulting `.xcresult` bundle lands under `.build/perf-results.xcresult`.
 2. **Gate:** `./scripts/check_performance.sh` parses the bundle with `xcrun xcresulttool get-result-bundle --format json`, extracts each metric's mean / percentiles, and compares against `performance-budgets.json`. A metric above `failThreshold` exits nonzero.
 3. **Trend:** on success, the same script appends a new entry to `performance-trend.json` with the commit SHA, ref, and measured values. The file is committed back by CI so the project's perf history is visible in git.
-4. **CI:** the suite runs on **tag builds only** (`on: push: tags: ['v*']`) — see the `perf-regression` job in `.github/workflows/ci.yml`. Running it on every PR would roughly triple CI time because each `measure()` call runs the test N iterations (3-5) per metric.
+4. **CI:** the suite runs as a hard gate on **tag builds** (`on: push: tags: ['v*']`) and as a warning-only signal on same-repo PRs after the normal Build & Test job — see the `perf-regression` job in `.github/workflows/ci.yml`. PR runs set `PERF_SKIP_TREND_WRITE=1` so they surface drift in the job summary without mutating `docs/performance-trend.json`.
 
 ## Test anatomy
 
