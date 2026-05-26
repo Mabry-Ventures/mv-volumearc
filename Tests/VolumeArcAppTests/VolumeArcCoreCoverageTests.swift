@@ -10,11 +10,32 @@
 // process-wide standard suite is never mutated.
 import XCTest
 import VolumeArcCore
+@_spi(Testing) import VolumeArcUI
 #if canImport(HealthKit)
 import HealthKit
 #endif
 
 final class VolumeArcCoreCoverageTests: XCTestCase {
+
+    // MARK: - Onboarding defaults
+
+    func testOnboardingResultPersistsSelectedPrivacyMode() {
+        let defaults = OnboardingResult(
+            name: "Maya",
+            advancementLevel: .advanced,
+            weeklyDays: 5,
+            sessionMinutes: 75,
+            coachingStyle: .minimal,
+            privacyMode: .strict
+        ).toDefaults()
+
+        XCTAssertEqual(defaults.name, "Maya")
+        XCTAssertEqual(defaults.coachingStyle, .minimal)
+        XCTAssertEqual(defaults.privacyMode, .strict)
+        XCTAssertEqual(defaults.advancementLevel, .advanced)
+        XCTAssertEqual(defaults.sessionTimeBudgetMinutes, 75)
+        XCTAssertEqual(defaults.weeklyTrainingDays, 5)
+    }
 
     // MARK: - WatchConnectivity payload + dictionary round-trip
 
