@@ -95,6 +95,56 @@
       "failThreshold": 8,
       "budgetSource": "VOL-215 Phase 1 starter floor (2026-05-18). The watch widget extension (`VolumeArcWatchWidgets.appex`) is a small WidgetKit extension; 5MB is generous for the current size. Ratchet down once measured.",
       "description": "Size on disk of the `VolumeArcWatchWidgets.appex` extension inside the watch app's `PlugIns/` directory."
+    },
+    {
+      "id": "pr_size_proxy_total_mb",
+      "test": "scripts/check_pr_size_proxy.sh",
+      "metric": "debug_simulator_unique_bundle_size_sum",
+      "units": "megabytes",
+      "budget": 150,
+      "failThreshold": 190,
+      "budgetSource": "VOL-215 Phase 2 PR-time proxy starter floor (2026-05-26). Seeded from a local Debug simulator measurement of 124.1MB after `scripts/build_all_targets.sh`; intentionally separate from release IPA budgets because simulator builds include different slices/debug layout and are not compressed IPA archives.",
+      "description": "PR-time size drift proxy: unique on-disk sum of the Debug simulator VolumeArc.app, iOS widget, watch app, and watch widget products, avoiding double-counting nested bundles."
+    },
+    {
+      "id": "pr_size_proxy_iphone_app_mb",
+      "test": "scripts/check_pr_size_proxy.sh",
+      "metric": "debug_simulator_iphone_app_bundle_size",
+      "units": "megabytes",
+      "budget": 135,
+      "failThreshold": 170,
+      "budgetSource": "VOL-215 Phase 2 PR-time proxy starter floor (2026-05-26). Seeded from a local Debug simulator measurement of 112.7MB; ratchet after a few CI samples.",
+      "description": "PR-time size drift proxy for the Debug iOS simulator `VolumeArc.app` bundle."
+    },
+    {
+      "id": "pr_size_proxy_ios_widget_mb",
+      "test": "scripts/check_pr_size_proxy.sh",
+      "metric": "debug_simulator_ios_widget_bundle_size",
+      "units": "megabytes",
+      "budget": 3,
+      "failThreshold": 8,
+      "budgetSource": "VOL-215 Phase 2 PR-time proxy starter floor (2026-05-26). Seeded from a local Debug simulator measurement of 1.0MB; ratchet after a few CI samples.",
+      "description": "PR-time size drift proxy for the Debug iOS simulator `VolumeArcWidgets.appex` bundle."
+    },
+    {
+      "id": "pr_size_proxy_watch_app_mb",
+      "test": "scripts/check_pr_size_proxy.sh",
+      "metric": "debug_watchsimulator_watch_app_bundle_size",
+      "units": "megabytes",
+      "budget": 15,
+      "failThreshold": 25,
+      "budgetSource": "VOL-215 Phase 2 PR-time proxy starter floor (2026-05-26). Seeded from a local Debug watchsimulator measurement of 10.4MB; ratchet after a few CI samples.",
+      "description": "PR-time size drift proxy for the Debug watchsimulator `VolumeArcWatch.app` bundle."
+    },
+    {
+      "id": "pr_size_proxy_watch_widget_mb",
+      "test": "scripts/check_pr_size_proxy.sh",
+      "metric": "debug_watchsimulator_watch_widget_bundle_size",
+      "units": "megabytes",
+      "budget": 3,
+      "failThreshold": 8,
+      "budgetSource": "VOL-215 Phase 2 PR-time proxy starter floor (2026-05-26). Seeded from a local Debug watchsimulator measurement of 1.2MB; ratchet after a few CI samples.",
+      "description": "PR-time size drift proxy for the Debug watchsimulator `VolumeArcWatchWidgets.appex` bundle."
     }
   ]
 }
