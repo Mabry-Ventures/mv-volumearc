@@ -24,10 +24,12 @@ final class VolumeArcAppConfigurationTests: XCTestCase {
 
     #if DEBUG && canImport(StoreKit)
     func testScreenshotPremiumCatalogMatchesStoreKitFixturePrices() throws {
-        let storeKitURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("VolumeArcAppUITests/VolumeArcTests.storekit")
+        let storeKitURL = try XCTUnwrap(
+            Bundle(for: Self.self).url(
+                forResource: "VolumeArcTests",
+                withExtension: "storekit"
+            )
+        )
         let data = try Data(contentsOf: storeKitURL)
         let root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let groups = try XCTUnwrap(root["subscriptionGroups"] as? [[String: Any]])
