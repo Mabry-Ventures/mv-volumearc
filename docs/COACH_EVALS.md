@@ -5,7 +5,7 @@ Regression protection for the AI coach's prompt quality. Two layers:
 | Layer | Where | When it runs | What it catches |
 |-------|-------|--------------|-----------------|
 | Template-layer (hermetic) | `Tests/VolumeArcAppTests/Evals/CoachEvalTests.swift` | Every PR via `scripts/test_apple_targets.sh` | Any regression that bypasses `CoachPromptTemplate.render`, drops the template marker, changes intent envelopes, strips the system prompt persona, or mutates the renderer's determinism. No network, no model call, no Gemini budget burned. |
-| Response-layer (staging live relay) | `scripts/run_coach_evals.sh` | Nightly cron + manual dispatch | Posts every fixture to the staging relay through the VOL-244 eval attestation broker, then checks the streamed Gemini response against the fixture's response-quality assertions. Production relay auth remains App Attest-only. |
+| Response-layer (staging live relay) | `scripts/run_coach_evals.sh` | Nightly cron + manual dispatch; five-fixture warning-only smoke on same-repo PRs that touch coach/relay/eval files | Posts fixtures to the staging relay through the VOL-244 eval attestation broker, then checks the streamed Gemini response against the fixture's response-quality assertions. Production relay auth remains App Attest-only. |
 
 Fixtures remain the single source of truth. They live at `Tests/Evals/CoachEvalFixtures/*.json` and get bundled into the iOS test target as a folder reference. The response-layer runner sends the same fixture payload shape to the relay, with `prompt` and `system` set to empty strings so the Worker fallback template remains under test.
 
@@ -82,6 +82,8 @@ export VOLUMEARC_EVAL_ATTEST_BROKER_TOKEN="<broker token>"
 
 # Optional.
 export VOLUMEARC_EVAL_OUTPUT_DIR=".build/coach-evals/manual-run"
+export VOLUMEARC_EVAL_FIXTURE_IDS="progression-with-high-recovery,planning-week-upper-lower"
+export VOLUMEARC_EVAL_FIXTURE_LIMIT=5
 
 ./scripts/run_coach_evals.sh
 ```
@@ -162,9 +164,19 @@ The `Last template-run` and `Last response-run` columns are hand-updated when yo
 
 The XCTest bundle reads fixtures as a bundled folder reference (`Bundle(for:).url(forResource: "CoachEvalFixtures")`). A top-level `Tests/Evals/` location keeps them out of the platform-specific test bundle path without orphaning them from the rest of the Tests tree. The Xcode project generator wires the folder in as a test-target resource so changes to the fixtures are always part of the build graph.
 
-## Nightly CI (VOL-147)
+## CI (VOL-147)
 
-The response-layer eval workflow runs on a cron at **07:00 UTC daily** via [`.github/workflows/coach-evals-nightly.yml`](../.github/workflows/coach-evals-nightly.yml). The job:
+The response-layer eval workflow runs on a cron at **07:00 UTC daily** via [`.github/workflows/coach-evals-nightly.yml`](../.github/workflows/coach-evals-nightly.yml). It also runs a warning-only five-fixture smoke on same-repo PRs that touch coach prompts, relay code, eval fixtures, or the eval runner.
+
+The PR smoke uses:
+
+```bash
+VOLUMEARC_EVAL_FIXTURE_IDS="progression-with-high-recovery,planning-week-upper-lower,redflag-chest-pain-mid-set,injection-question-ignore-system,injection-pain-bypass"
+```
+
+That sample exercises the ordinary progression path, weekly-plan horizon guardrail, medical escalation, prompt injection rejection, and pain-bypass guardrail without burning the full nightly Gemini budget.
+
+The full nightly job:
 
 1. Pre-flights `node`, `jq`, `VOLUMEARC_EVAL_RELAY_BASE_URL`, and `VOLUMEARC_EVAL_ATTEST_BROKER_TOKEN`.
 2. Runs `scripts/run_coach_evals.sh`, which bootstraps an ephemeral eval key with the staging broker and sends all fixtures through `/v1/coach`.

@@ -14,6 +14,8 @@ const outputDir = process.env.VOLUMEARC_EVAL_OUTPUT_DIR ??
 const brokerToken = process.env.VOLUMEARC_EVAL_ATTEST_BROKER_TOKEN ?? "";
 const deviceIdBase = process.env.VOLUMEARC_EVAL_DEVICE_ID ?? "coach-eval-harness";
 const httpTimeoutMs = positiveInt(process.env.VOLUMEARC_EVAL_HTTP_TIMEOUT_MS, 60_000);
+const fixtureLimit = optionalPositiveInt(process.env.VOLUMEARC_EVAL_FIXTURE_LIMIT);
+const fixtureIDs = csvSet(process.env.VOLUMEARC_EVAL_FIXTURE_IDS);
 
 const encoder = new TextEncoder();
 const subtle = webcrypto.subtle;
@@ -22,10 +24,7 @@ async function main() {
   await preflight();
   await fs.mkdir(outputDir, { recursive: true });
 
-  const fixtureFiles = (await fs.readdir(fixturesDir))
-    .filter((name) => name.endsWith(".json"))
-    .sort()
-    .map((name) => path.join(fixturesDir, name));
+  const fixtureFiles = await selectedFixtureFiles();
   if (fixtureFiles.length === 0) {
     throw configError(`no fixture files found under ${fixturesDir}`);
   }
@@ -59,6 +58,44 @@ async function main() {
   if (failed > 0) {
     process.exitCode = 1;
   }
+}
+
+async function selectedFixtureFiles() {
+  const allFiles = (await fs.readdir(fixturesDir))
+    .filter((name) => name.endsWith(".json"))
+    .sort()
+    .map((name) => path.join(fixturesDir, name));
+  if (fixtureIDs.size === 0 && fixtureLimit === null) {
+    return allFiles;
+  }
+
+  const selected = [];
+  const matchedIDs = new Set();
+  for (const fixturePath of allFiles) {
+    const fixtureName = path.basename(fixturePath, ".json");
+    let shouldRun = fixtureIDs.size === 0;
+    if (fixtureIDs.size > 0) {
+      const fixture = JSON.parse(await fs.readFile(fixturePath, "utf8"));
+      for (const candidate of [fixtureName, fixture.id].filter(Boolean)) {
+        if (fixtureIDs.has(candidate)) {
+          shouldRun = true;
+          matchedIDs.add(candidate);
+        }
+      }
+    }
+    if (shouldRun) {
+      selected.push(fixturePath);
+    }
+    if (fixtureLimit !== null && selected.length >= fixtureLimit) {
+      break;
+    }
+  }
+
+  const missing = [...fixtureIDs].filter((id) => !matchedIDs.has(id));
+  if (missing.length > 0) {
+    throw configError(`requested fixture id(s) not found: ${missing.join(", ")}`);
+  }
+  return selected;
 }
 
 async function preflight() {
@@ -429,6 +466,20 @@ function normalizeLower(value) {
 function positiveInt(value, fallback) {
   const parsed = Number.parseInt(value ?? "", 10);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function optionalPositiveInt(value) {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function csvSet(value) {
+  return new Set(
+    String(value ?? "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean),
+  );
 }
 
 function configError(message) {

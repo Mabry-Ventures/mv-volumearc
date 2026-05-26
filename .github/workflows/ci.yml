@@ -741,22 +741,26 @@ jobs:
 
   perf-regression:
     # VOL-99: performance regression suite. Tag-gated because each
-    # measured test runs multiple iterations — running it on every PR
-    # would balloon CI time for no signal on non-perf changes. The gate
-    # hard-fails tag builds (preventing TestFlight deploy) when any
-    # metric exceeds its fail threshold declared in
-    # `docs/performance-budgets.json`.
+    # measured test runs multiple iterations. Tag builds remain the
+    # hard gate (preventing TestFlight deploy) when any metric exceeds
+    # its fail threshold declared in `docs/performance-budgets.json`.
+    # Same-repo PRs now run the same suite warning-only so perf drift is
+    # visible before merge without blocking release work on simulator
+    # variance.
     name: Performance budgets (VOL-99)
     needs: build-and-test
-    # VOL-132 (defense in depth): the tag-only filter already prevents
-    # fork PRs from triggering this job (forks can't push tags upstream),
-    # but combining with the explicit fork guard keeps the same security
-    # posture if the tag filter is ever loosened.
+    # VOL-132 (defense in depth): fork PRs must not execute privileged
+    # self-hosted runner work. Same-repo PRs run warning-only; tags run
+    # hard-fail as the release gate.
     if: |
-      startsWith(github.ref, 'refs/tags/v') &&
+      (
+        startsWith(github.ref, 'refs/tags/v') ||
+        github.event_name == 'pull_request'
+      ) &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: [self-hosted, mv-volumearc-runner]
     timeout-minutes: 45
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
     permissions:
       contents: read
 
@@ -805,6 +809,8 @@ jobs:
         run: ./scripts/test_performance.sh
 
       - name: Enforce performance budgets
+        env:
+          PERF_SKIP_TREND_WRITE: ${{ github.event_name == 'pull_request' && '1' || '0' }}
         run: ./scripts/check_performance.sh
 
       - name: Upload perf xcresult on failure
