@@ -2,10 +2,11 @@ import AppIntents
 import Foundation
 import VolumeArcCore
 
-// VOL-212: App Intent phrases, descriptions, parameter titles, and
-// dialogs use `LocalizedStringResource` so the strings ship through
-// the App Intents string-catalog mechanism. The catalog's translator
-// view picks up the "comment" parameter where applicable.
+// VOL-212: App Intent titles, descriptions, parameter titles, dialogs,
+// and shortcut short titles use `LocalizedStringResource` so the strings
+// ship through the App Intents string-catalog mechanism. Shortcut phrases
+// use Apple's `AppShortcutPhrase` interpolation so `.applicationName`
+// remains a system token.
 //
 // Telemetry: each intent's `perform()` attaches `?source=intent&intent=<name>`
 // to the outgoing deep link. The app's URL handler in
@@ -185,7 +186,7 @@ struct VolumeArcShortcuts: AppShortcutsProvider {
                 "Start my next workout in \(.applicationName)",
                 "Open today’s workout in \(.applicationName)",
             ],
-            shortTitle: "Start Workout",
+            shortTitle: LocalizedStringResource("Start Workout", comment: "App Shortcut short title - start next workout"),
             systemImageName: "figure.strengthtraining.traditional"
         )
 
@@ -195,7 +196,7 @@ struct VolumeArcShortcuts: AppShortcutsProvider {
                 "Ask \(.applicationName) coach",
                 "Check my next set in \(.applicationName)",
             ],
-            shortTitle: "Ask Coach",
+            shortTitle: LocalizedStringResource("Ask Coach", comment: "App Shortcut short title - ask coach"),
             systemImageName: "waveform.and.mic"
         )
 
@@ -205,7 +206,7 @@ struct VolumeArcShortcuts: AppShortcutsProvider {
                 "Open my training signals in \(.applicationName)",
                 "Show readiness in \(.applicationName)",
             ],
-            shortTitle: "Open Signals",
+            shortTitle: LocalizedStringResource("Open Signals", comment: "App Shortcut short title - open signals"),
             systemImageName: "chart.line.uptrend.xyaxis"
         )
 
@@ -215,7 +216,7 @@ struct VolumeArcShortcuts: AppShortcutsProvider {
                 "Start my live session in \(.applicationName)",
                 "Begin my workout session in \(.applicationName)",
             ],
-            shortTitle: "Start Session",
+            shortTitle: LocalizedStringResource("Start Session", comment: "App Shortcut short title - start workout session"),
             systemImageName: "play.circle.fill"
         )
 
@@ -225,7 +226,7 @@ struct VolumeArcShortcuts: AppShortcutsProvider {
                 "Log my recommended set in \(.applicationName)",
                 "Save my next set in \(.applicationName)",
             ],
-            shortTitle: "Log Set",
+            shortTitle: LocalizedStringResource("Log Set", comment: "App Shortcut short title - log recommended set"),
             systemImageName: "plus.circle.fill"
         )
 
@@ -235,7 +236,7 @@ struct VolumeArcShortcuts: AppShortcutsProvider {
                 "Sync \(.applicationName)",
                 "Refresh my data in \(.applicationName)",
             ],
-            shortTitle: "Sync",
+            shortTitle: LocalizedStringResource("Sync", comment: "App Shortcut short title - sync VolumeArc"),
             systemImageName: "arrow.triangle.2.circlepath"
         )
     }
