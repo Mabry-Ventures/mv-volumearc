@@ -105,7 +105,12 @@ public final class WorkoutDashboardModel: ObservableObject {
     public let subscriptionStore: StoreKitSubscriptionStore?
     #endif
 
-    var activeWorkoutID: String?
+    // VOL-256: `public private(set)` so VolumeArcAppTests can read the
+    // rehydrated workout ID across the crash-recovery integration tests
+    // without `@testable import` (which the test target deliberately
+    // avoids to keep production access modeled honestly), while still
+    // forbidding outside-module mutation.
+    public private(set) var activeWorkoutID: String?
     var completedWatchFormCheckSessionIDs: Set<String> = []
 
     // MARK: - Initializers
