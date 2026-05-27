@@ -86,6 +86,37 @@ enum VolumeArcSentryConfiguration {
             options.enableMetricKit = true
             options.attachScreenshot = false
 
+            // VOL-250: enable the auto-instrumentation flags Sentry leaves
+            // off-by-default. Without them, the 0.2 traces sample rate
+            // generates very little signal because no spans are auto-opened
+            // around URLSession / file I/O / view lifecycle.
+            //
+            // - `enableAutoPerformanceTracing`: opens spans around URLSession,
+            //   file I/O, Core Data / SwiftData. This is what populates the
+            //   `coach.request`, `cloudkit.sync`, and `paywall.products.fetch`
+            //   transactions we want to budget against.
+            // - `attachStacktrace`: include a stack frame on warning/info
+            //   events, not just on crashes. Cheap context for breadcrumb
+            //   triage when an `error`-severity capture is missing direct
+            //   stack info.
+            // - `enableTimeToFullDisplayTracing`: TTFD metric separate from
+            //   TTID. Captures the "app is interactive" moment after the
+            //   first frame paints, which is the real cold-launch
+            //   user-perceived budget (4.0s fail in
+            //   `docs/performance-budgets.json`).
+            // - `enableUserInteractionTracing`: auto-spans for tap-to-paint
+            //   latency. Surfaces "tapped Start Workout but UI took 800ms to
+            //   respond" without manual instrumentation.
+            // - `enableWatchdogTerminationTracking`: captures the 8s+
+            //   main-thread hangs that iOS kills via watchdog. Distinct from
+            //   `enableAppHangTracking` (the 5s ANR) because watchdog kills
+            //   never reach `applicationWillTerminate`.
+            options.enableAutoPerformanceTracing = true
+            options.attachStacktrace = true
+            options.enableTimeToFullDisplayTracing = true
+            options.enableUserInteractionTracing = true
+            options.enableWatchdogTerminationTracking = true
+
             // VOL-72: strip email/phone/device-identifier/session-token
             // patterns from crash events and breadcrumbs before they
             // leave the device. Also drops breadcrumbs from the
@@ -99,13 +130,50 @@ enum VolumeArcSentryConfiguration {
             options.beforeBreadcrumb = { crumb in
                 SentryPIIScrubber.scrub(breadcrumb: crumb)
             }
+            // VOL-252: three-way environment classification so TestFlight
+            // crashes don't pollute the `production` cohort in Sentry's
+            // crash-rate / error-budget dashboards. See `resolveEnvironment`
+            // for the signal hierarchy. `debug = true` is still gated on
+            // `#if DEBUG` since TestFlight builds are Release and shouldn't
+            // dump SDK debug logs.
             #if DEBUG
             options.debug = true
-            options.environment = "development"
-            #else
-            options.environment = "production"
             #endif
+            options.environment = Self.resolveEnvironment()
         }
+    }
+
+    /// VOL-252. Three-way environment classification.
+    ///
+    /// - `development`: any Debug build (simulator, dev device).
+    /// - `testflight`: non-Debug build whose receipt URL ends in
+    ///   `sandboxReceipt` — Apple uses this for both TestFlight and the
+    ///   StoreKit sandbox. For our purposes both are "beta" tier and
+    ///   should be separated from production users.
+    /// - `production`: a non-Debug build with a real App Store receipt.
+    ///
+    /// Pure overload `resolveEnvironment(isDebugBuild:receiptURL:)` exists
+    /// so the unit suite can exercise every branch without mocking
+    /// `Bundle.main` / `#if DEBUG`.
+    static func resolveEnvironment(bundle: Bundle = .main) -> String {
+        #if DEBUG
+        let isDebugBuild = true
+        #else
+        let isDebugBuild = false
+        #endif
+        return resolveEnvironment(
+            isDebugBuild: isDebugBuild,
+            receiptURL: bundle.appStoreReceiptURL
+        )
+    }
+
+    static func resolveEnvironment(
+        isDebugBuild: Bool,
+        receiptURL: URL?
+    ) -> String {
+        if isDebugBuild { return "development" }
+        if receiptURL?.lastPathComponent == "sandboxReceipt" { return "testflight" }
+        return "production"
     }
 
     static var isConfigured: Bool {
