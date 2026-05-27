@@ -137,6 +137,36 @@ npx wrangler secret put GEMINI_API_KEY      # Google AI Studio key
 npx wrangler secret put EVAL_ATTEST_BROKER_TOKEN  # staging only
 ```
 
+### Staging Worker (VOL-245)
+
+`staging-relay.volumearc.app` is a separate Worker (`volumearc-ai-relay-staging`) that hosts the coach-eval attestation broker. Production (`relay.volumearc.app`) explicitly forbids the broker per `relay/wrangler.toml:44-47`, so the eval harness needs its own host. Config is checked in at `relay/wrangler.staging.toml`; deploy with:
+
+```bash
+cd relay
+npx wrangler deploy -c wrangler.staging.toml
+```
+
+The staging Worker shares production's source code (`src/`) but uses isolated infrastructure:
+
+- **KV namespace**: `RATE_LIMIT_STAGING` (id `186d7005f20a436b90c40d37ca175982`). Test traffic never touches production rate-limit state.
+- **Durable Objects**: same `APP_ATTEST_STATE` + `EVAL_ATTEST_STATE` class names as production, but instantiated under the staging Worker so the SQLite state is isolated.
+- **`EVAL_ATTEST_BROKER_ENABLED=true`** + **`EVAL_ATTEST_BROKER_ALLOWED_HOSTS=staging-relay.volumearc.app`** vars enable the broker endpoints. The broker fails closed unless the request host matches the allowlist AND the bootstrap Bearer token matches `EVAL_ATTEST_BROKER_TOKEN`.
+
+Two secrets must be set after `wrangler deploy -c wrangler.staging.toml`:
+
+```bash
+cd relay
+npx wrangler secret put GEMINI_API_KEY -c wrangler.staging.toml          # same value as production
+npx wrangler secret put EVAL_ATTEST_BROKER_TOKEN -c wrangler.staging.toml # cryptographically random; mirrored to GH secret
+```
+
+The same `EVAL_ATTEST_BROKER_TOKEN` value must also be set as the GitHub repo secret `VOLUMEARC_EVAL_ATTEST_BROKER_TOKEN`, plus the staging host as `VOLUMEARC_EVAL_RELAY_BASE_URL`. The `coach-evals-nightly.yml` workflow reads both and fails closed if either is missing.
+
+To **rotate** the broker token: regenerate, set on the staging Worker, set as the GH secret, in that order. The Worker honors the latest value; the GH secret feeds new workflow runs only. There is no live-rollover requirement because the broker key TTL (`EVAL_ATTEST_BROKER_KEY_TTL_SECONDS`, default 24h) bounds how long any given attestation key remains valid.
+
+To **decommission**: `wrangler delete -c wrangler.staging.toml`, delete the two GH secrets, and (optionally) `wrangler kv namespace delete` the staging KV namespace. Production is unaffected.
+
+
 Env vars (non-secret, live in `wrangler.toml`):
 - `MODEL_DEFAULT`, `MODEL_PREMIUM`, `MAX_OUTPUT_TOKENS`, `REQUEST_TIMEOUT_MS`, `RATE_LIMIT_MAX_REQUESTS`, `RATE_LIMIT_WINDOW_SECONDS`
 - `APPLE_TEAM_ID`, `APPLE_BUNDLE_ID` (or a full `APPLE_APP_ID`) for App Attest app-ID hash validation
