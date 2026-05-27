@@ -16,12 +16,26 @@
 #                    18.48%. The 85% target remains a staged follow-up
 #                    once more screen snapshots and testable view-model
 #                    extraction land.)
-#   - VolumeArcCoreWatch: 2% (VOL-138 Phase A; uses XCRESULT=.../TestResults-watch.xcresult
+#   - VolumeArcCoreWatch: 25% (VOL-138 Phase A; CI enforces 25 at
+#                    `.github/workflows/ci.yml:365`. Uses XCRESULT=.../TestResults-watch.xcresult
 #                    against the `VolumeArcWatchTests` bundle. 85% is
 #                    the long-term target from the ticket — gated by
 #                    moving WatchWorkoutModel pure logic into
 #                    `VolumeArcCoreWatch`-only files first.)
-#   - Widgets:       pending VOL-139 (no dedicated test target yet)
+#                    (VOL-260 reconciled the stale "2%" doc value with
+#                    the CI-enforced 25%.)
+#   - VolumeArcWidgets: 5% (VOL-263 Phase A; CI gate added 2026-05-26.
+#                    `Widgets/VolumeArcWidgets.swift` is linked into
+#                    `VolumeArcAppTests` via
+#                    `add_selected_swift_sources` in
+#                    `generate_xcode_project.rb:604`, so the existing
+#                    12 `NextWorkoutWidgetSnapshotTests` exercise the
+#                    widget views during the unit-test run. Phase B
+#                    ratchets to 25 with real-baseline margin once the
+#                    first run lands; Phase B also adds
+#                    `VolumeArcWatchWidgets`.)
+#   - VolumeArcWatchWidgets: pending VOL-263 Phase B (4 widget files,
+#                    no dedicated coverage step yet)
 # The 90%+ commitment in `docs/PLATFORM.md` is the target end-state;
 # per VOL-140 / VOL-205 the ratchet path is one PR per bump so the
 # main merge train doesn't stall on a single coverage cliff.
