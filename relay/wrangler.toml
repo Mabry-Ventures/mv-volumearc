@@ -55,12 +55,25 @@ enabled = true
 # Model selection. Can be overridden per-request via X-Coach-Tier header
 # (`flash-lite` default / `pro` premium). Swapping models here is a deploy
 # away — no iOS release needed.
-# Gemini 3.1 is currently shipped as -preview. These tags are documented
-# in Google AI Studio. Switch to unqualified names (or -latest aliases)
-# once Google promotes them to stable. Swapping a model is a deploy, no
-# iOS release.
-MODEL_DEFAULT = "gemini-3.1-flash-lite-preview"
-MODEL_PREMIUM = "gemini-3.1-pro-preview"
+#
+# **2026-05-27 hotfix.** Google retired the `-preview` suffix names while
+# Gemini 3.1 went GA. The previous `gemini-3.1-flash-lite-preview` /
+# `gemini-3.1-pro-preview` defaults now return HTTP 404 with
+# `"This model models/gemini-3.1-flash-lite-preview is no longer available."`
+# Production `/v1/coach` was returning 502s for every request until this
+# PR. Confirmed via `GET https://generativelanguage.googleapis.com/v1beta/models`
+# that:
+#   * `gemini-3.1-flash-lite` is the GA replacement for flash-lite-preview
+#   * No GA Pro yet (3.1-pro is still preview-only), so the Premium tier
+#     points at `gemini-flash-latest` — the documented Google alias that
+#     auto-tracks the newest stable Flash model. Switching to a stable
+#     `gemini-3.x-pro` is a one-line follow-up when Google ships one.
+# Future deprecation regressions should be caught earlier by the nightly
+# coach-eval workflow (VOL-245); the previous miss happened because the
+# nightly workflow was failing on a missing-secret config error before
+# the evals could surface the upstream-model issue.
+MODEL_DEFAULT = "gemini-3.1-flash-lite"
+MODEL_PREMIUM = "gemini-flash-latest"
 MAX_OUTPUT_TOKENS = "800"
 REQUEST_TIMEOUT_MS = "45000"
 RATE_LIMIT_MAX_REQUESTS = "30"
