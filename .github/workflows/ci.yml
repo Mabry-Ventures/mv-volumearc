@@ -366,6 +366,31 @@ jobs:
           COVERAGE_SUMMARY_JSON: .build/coverage-summary-volumearcwatch.json
         run: ./scripts/check_coverage.sh
 
+      # VOL-263: VolumeArcWidgets coverage gate. The widget extension
+      # source `Widgets/VolumeArcWidgets.swift` is linked into
+      # `VolumeArcAppTests` via `add_selected_swift_sources` (see
+      # `scripts/generate_xcode_project.rb:604`), so the existing 12
+      # `NextWorkoutWidgetSnapshotTests` already exercise the widget
+      # `NextWorkoutWidgetView` lines during the unit test run.
+      #
+      # Phase A floor: **5%**. Intentionally conservative — the
+      # baseline measurement isn't known yet, and a too-tight gate
+      # would fail every PR until ratcheted manually. The first
+      # green run on `main` exposes the real baseline in the
+      # coverage trend artifact; a follow-up ticket bumps the floor
+      # to 25 with appropriate margin (Phase B pattern, matches
+      # VolumeArcUI's 18% / VolumeArcCoreWatch's 25% staged shape).
+      #
+      # `VolumeArcWatchWidgets` (separate target, 4 watchOS-side
+      # widget files) is intentionally not gated here — phase B
+      # adds it after the iOS-side baseline is calibrated.
+      - name: Coverage gate (VolumeArcWidgets >= 5% — Phase A floor, VOL-263)
+        env:
+          COVERAGE_TARGET: VolumeArcWidgets
+          COVERAGE_THRESHOLD: '5'
+          COVERAGE_SUMMARY_JSON: .build/coverage-summary-volumearcwidgets.json
+        run: ./scripts/check_coverage.sh
+
       # VOL-200 Phase 1: user-journey coverage gate. Parses
       # `docs/USER_JOURNEYS.md`, counts rows with paired XCUITests vs.
       # `[ ]` (uncovered), and fails the build below the threshold.
