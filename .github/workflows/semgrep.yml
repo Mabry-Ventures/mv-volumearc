@@ -102,16 +102,20 @@ jobs:
             --exclude 'marketing/node_modules' \
             .
 
-      - name: Upload SARIF to GitHub Security tab
-        # `if: always()` so a Semgrep non-zero exit (findings present)
-        # still uploads the SARIF report. The `continue-on-error: true`
-        # above is what keeps the workflow status green during the
-        # observation window — SARIF upload is independent of that gate.
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: semgrep.sarif
-          category: semgrep
+      # NOTE: SARIF upload to GitHub Code Scanning is intentionally NOT
+      # wired here. Code Scanning on private repos requires GitHub
+      # Advanced Security (GHAS) — the same cost block that made us
+      # pivot from CodeQL to Semgrep in the first place (see
+      # docs/CONTRIBUTING.md Security tooling section). Without GHAS,
+      # `github/codeql-action/upload-sarif` fails with:
+      # "Code Security must be enabled for this repository to use
+      # code scanning."
+      #
+      # Findings are surfaced via the artifact upload below — reviewers
+      # download `semgrep-sarif-<run_id>.zip` from the run page or
+      # inspect the workflow log directly (Semgrep prints summary
+      # findings inline). If GHAS is enabled later, restore the
+      # upload-sarif step from git history (commit 9c7afd0).
 
       - name: Archive Semgrep SARIF artifact
         if: always()
