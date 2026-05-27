@@ -344,19 +344,22 @@ A `Tests/.swiftlint.yml` override disables `implicitly_unwrapped_optional`, `for
 - `./scripts/test_apple_targets.sh` runs both `VolumeArcAppTests` and `VolumeArcAppUITests`
 - CI runs both schemes on every PR
 
-## Security tooling (VOL-143)
+## Security tooling (VOL-143, VOL-253)
 
-The active security workflow runs on the self-hosted runner per the "zero GitHub-hosted jobs" policy:
+Two security workflows run on the self-hosted runner per the "zero GitHub-hosted jobs" policy:
 
 | Workflow | What | Triggers |
 |---|---|---|
 | `trufflehog.yml` | Secret-leak detection. Scans diffs on PRs and full history on main. Catches committed `.env`s, API keys, JWTs. | PRs against main · push to main · weekly cron · manual dispatch |
+| `semgrep.yml` (VOL-253) | SAST. Runs the public `p/owasp-top-ten`, `p/secrets`, `p/swift` rulesets. Catches CWE patterns the style linter and secret scanner miss: unsafe memory access, race conditions on shared state, weak TLS configuration, sensitive-data logging, etc. SARIF uploaded to the GitHub Security tab. | PRs against main · push to main · weekly cron |
 
-CodeQL static analysis is **not** wired into the repo: GitHub Code Scanning requires GitHub Advanced Security (GHAS) on private repos, and the cost/benefit doesn't pencil out for this codebase right now. SAST coverage is provided by **CodeRabbit Pro + Codex on every PR** via the AI Review Gate, plus PR-time review by the operator. If GHAS is enabled later, restore `.github/workflows/codeql.yml` from git history (it existed through commit `bcdf079`).
+**Semgrep rollout** is non-blocking (`continue-on-error: true` on the scan step) for a 1-week observation window starting at the VOL-253 merge. After the window, remove the `continue-on-error` and add `Semgrep scan` to the ruleset's required-status-checks list. SARIF upload runs unconditionally so findings appear in the Security tab from day one — only the merge gate is deferred.
 
-Findings surface via GitHub's Security tab (Trufflehog → Secret Scanning when configured to upload SARIF). PR-time Trufflehog failures should block merge — credentials in a PR diff is a near-certain leak even if the commit is "private".
+CodeQL static analysis is **not** wired into the repo: GitHub Code Scanning requires GitHub Advanced Security (GHAS) on private repos (~$49/active-user/month) and the cost/benefit doesn't pencil out for this codebase right now. Semgrep covers the same OWASP / CWE pattern surface via the public rulesets above. The AI Review Gate (CodeRabbit Pro + Codex on every PR) provides a third layer of SAST-style coverage. If GHAS pricing changes or the repo goes public, revisit and restore `.github/workflows/codeql.yml` from git history (it existed through commit `bcdf079`).
 
-The trufflehog workflow shells out to the Homebrew-installed binary rather than the upstream `trufflesecurity/trufflehog@v3` action because the action runs inside a Docker container and the self-hosted Apple Silicon runner doesn't ship Docker. Update path: `brew upgrade trufflehog`.
+Findings surface via GitHub's Security tab (Trufflehog → Secret Scanning, Semgrep → Code Scanning Alerts). PR-time Trufflehog failures should block merge — credentials in a PR diff is a near-certain leak even if the commit is "private". Semgrep findings during the observation window are advisory; review them in the Security tab and flip individual finding suppressions only with PR-level justification.
+
+Both workflows shell out to the Homebrew-installed binary rather than the upstream Docker-based actions because the self-hosted Apple Silicon runner doesn't ship Docker. Update path: `brew upgrade trufflehog`, `brew upgrade semgrep`.
 
 ## Documentation
 

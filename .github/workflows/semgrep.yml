@@ -1,0 +1,123 @@
+name: Semgrep SAST
+
+# VOL-253: Semgrep static analysis. Covers OWASP / CWE patterns the
+# SwiftLint style linter and Trufflehog secret scanner don't:
+# unsafe memory access, race conditions on shared state, missing TLS
+# cert validation, sensitive-data logging, etc.
+#
+# Pivoted from CodeQL because CodeQL on private repos requires GHAS
+# (~$49/active-user/month per Microsoft's published pricing); see
+# `docs/CONTRIBUTING.md` Security tooling section. Semgrep is free OSS,
+# runs in GH Actions on private repos, and ships public rulesets for
+# OWASP Top 10, Swift, and secrets that cover the same risk surface.
+#
+# Runner: self-hosted per the "zero GitHub-hosted jobs" policy. Semgrep
+# itself is platform-independent Python; no Xcode requirement on this
+# job, but consistency with the rest of the CI fleet keeps the runner
+# topology coherent and avoids credit spend on GH-hosted macOS minutes.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  schedule:
+    # Mondays 09:00 UTC, matches dependabot.yml + (future) codeql cadence.
+    - cron: '0 9 * * 1'
+
+# Workflow-specific concurrency group; same VOL-184 / VOL-192 rationale
+# as ci.yml / ai-review-gate.yml / trufflehog.yml.
+concurrency:
+  group: semgrep-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: read
+  actions: read
+
+jobs:
+  semgrep:
+    name: Semgrep scan
+    # VOL-132 fork guard pattern; mirrors ci.yml:57 + ai-review-gate.yml.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, mv-volumearc-runner]
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Resolve Semgrep binary
+        id: resolve_semgrep
+        # The self-hosted runner has Homebrew on $PATH (see ci.yml's PATH
+        # env block). Install / upgrade via brew so the version tracks with
+        # the same channel `brew upgrade trufflehog` uses for the secret
+        # scanner. If brew isn't available for any reason, fall back to a
+        # pinned pipx install. Either way the binary is on $PATH for the
+        # next step.
+        run: |
+          set -euo pipefail
+          if command -v semgrep >/dev/null 2>&1; then
+            echo "Semgrep already installed: $(semgrep --version)"
+          else
+            if command -v brew >/dev/null 2>&1; then
+              brew install semgrep || brew upgrade semgrep
+            else
+              python3 -m pip install --user --upgrade semgrep
+              echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+            fi
+          fi
+          semgrep --version
+
+      - name: Run Semgrep
+        # VOL-253: initial rollout is non-blocking for a 1-week
+        # observation window so we can calibrate false-positive volume
+        # before promoting Semgrep to a required check. After the
+        # observation window, remove `continue-on-error` and add
+        # `Semgrep scan` to the ruleset's required-status-checks list.
+        continue-on-error: true
+        env:
+          # SEMGREP_RULES uses Semgrep registry shortnames. p/owasp-top-ten
+          # is the canonical OWASP A1-A10 ruleset; p/secrets adds a second
+          # pass on credentials (defense in depth alongside Trufflehog);
+          # p/swift catches Swift-specific patterns (force unwrap on
+          # untrusted input, weak TLS configuration, etc.).
+          SEMGREP_RULES: "p/owasp-top-ten p/secrets p/swift"
+        run: |
+          set -euo pipefail
+          semgrep scan \
+            --config "$SEMGREP_RULES" \
+            --sarif --output semgrep.sarif \
+            --error \
+            --metrics off \
+            --timeout 120 \
+            --max-target-bytes 5000000 \
+            --exclude '.build' \
+            --exclude 'DerivedData' \
+            --exclude 'marketing/.next' \
+            --exclude 'relay/node_modules' \
+            --exclude 'marketing/node_modules' \
+            .
+
+      - name: Upload SARIF to GitHub Security tab
+        # `if: always()` so a Semgrep non-zero exit (findings present)
+        # still uploads the SARIF report. The `continue-on-error: true`
+        # above is what keeps the workflow status green during the
+        # observation window — SARIF upload is independent of that gate.
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+      - name: Archive Semgrep SARIF artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-sarif-${{ github.run_id }}
+          path: semgrep.sarif
+          retention-days: 30
+          if-no-files-found: warn
