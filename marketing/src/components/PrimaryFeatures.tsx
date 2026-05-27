@@ -25,25 +25,30 @@ interface CustomAnimationProps {
   changeCount: number
 }
 
+// VOL-247 (2026-05-26 copy pass): rewrote each feature description in
+// consumer-benefit language. The previous copy ("three-tier provider
+// chain", "streaming SSE", "Gemini Flash Lite", "heuristic engine", "20-
+// fixture eval matrix", "HRV trend", "training load") leaked engineering
+// implementation onto the homepage. Architecture lives in `docs/PLATFORM.md`.
 const features = [
   {
-    name: 'AI coach with on-device fallback',
+    name: 'A coach that works everywhere',
     description:
-      'A three-tier provider chain. Premium routes to Gemini Pro via streaming SSE. Free routes to Gemini Flash Lite. Both fall back to Apple Foundation Models on-device when the network drops, then to a heuristic engine offline. Every prompt is template-validated against a 20-fixture eval matrix.',
+      'Asks better questions when you upgrade. Falls back gracefully when the network drops — on-device coaching keeps the session going even with no signal.',
     icon: CoachIcon,
     screen: CoachScreen,
   },
   {
-    name: 'Apple Watch as the primary surface',
+    name: 'Lead from the wrist',
     description:
-      'Start, log, and finish a session entirely from the watch — real HKWorkoutSession, native rest timer, set decisions, coach cues. Offline payload queue replays to the phone the moment connectivity returns.',
+      'Start, log, and finish a session entirely from your Apple Watch. Leave the phone at home — your sets queue locally and sync the moment you reconnect.',
     icon: WatchIcon,
     screen: WatchScreen,
   },
   {
-    name: 'Readiness from real recovery data',
+    name: 'Readiness from your real recovery',
     description:
-      'Five-factor readiness score derived from HRV trend, sleep debt, training load, recovery, and recent volume — all from HealthKit. The coach reads this context before answering, so the prescription matches the body that opened the app.',
+      'A daily readiness score built from your sleep, heart-rate variability, and recent training stress — pulled straight from Apple Health. Your coach reads it before answering.',
     icon: ReadinessIcon,
     screen: ReadinessScreen,
   },

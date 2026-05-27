@@ -112,9 +112,13 @@ public struct PaywallView: View {
             // Live Activities are free per `docs/PLATFORM.md` (VOL-91);
             // promising them as Premium value is paid-subscription
             // misrepresentation and an App Review risk.
+            // VOL-247 (copy pass): coach-voice rewrite of the hero
+            // description. The localized comment translators see is
+            // intentionally short; this contextual note lives next to the
+            // call so it doesn't push the source line past line_length.
             Text(String(
-                localized: "Unlock the Gemini Pro coach and live voice coaching — the full AI prescription your training deserves.",
-                comment: "Paywall hero description"
+                localized: "Coaching that reads your full training history, talks back between sets, and adapts as you recover.",
+                comment: "Paywall hero description — Premium unlocks (Pro coach + live voice)"
             ))
                 .font(VA.Typography.body)
                 .foregroundStyle(VA.Colors.textSecondary)
@@ -176,11 +180,19 @@ public struct PaywallView: View {
     // entitlement matrix at `VolumeArcAIRuntimeFactory`.
     static var premiumFeatures: [PremiumFeature] {
         [
+            // VOL-247 (copy pass): user-facing title drops "Gemini" — the
+            // routing is still Gemini Pro and is documented in PLATFORM.md
+            // but the model name doesn't belong on the paywall surface.
+            // Description: replaced "reasoning-grade coaching prescriptions"
+            // jargon with coach-voice language.
             PremiumFeature(
                 icon: "brain.head.profile",
-                title: String(localized: "AI Coach — Gemini Pro tier", comment: "Premium feature name — AI coach Pro tier"),
+                title: String(
+                    localized: "AI Coach — Pro tier",
+                    comment: "Premium feature name — AI coach Pro tier"
+                ),
                 description: String(
-                    localized: "Reasoning-grade coaching prescriptions. Pro reads more of your history and writes a deeper plan.",
+                    localized: "Looks at your full training history before answering, so advice fits your patterns — not just your last set.",
                     comment: "Premium feature description — AI coach Pro tier"
                 )
             ),
