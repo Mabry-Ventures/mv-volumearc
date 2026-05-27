@@ -475,6 +475,79 @@ if ! grep -F "DEBUG_INFORMATION_FORMAT = dwarf-with-dsym" "$tmp_settings" >/dev/
   exit 1
 fi
 
+# VOL-249: binary-hardening Release-only build-setting assertions.
+#
+# Each check fails on an *explicit unsafe override*, not on the setting's
+# absence. The Xcode 26 defaults for a Release configuration are all safe
+# (STRIP_INSTALLED_PRODUCT=YES, SWIFT_OPTIMIZATION_LEVEL=-O,
+# GCC_OPTIMIZATION_LEVEL=s, ONLY_ACTIVE_ARCH=NO, DEAD_CODE_STRIPPING=YES,
+# COPY_PHASE_STRIP=YES, ENABLE_BITCODE absent / NO), so the project
+# generator doesn't currently set them explicitly. These assertions catch
+# the regression where a future contributor adds an explicit unsafe value
+# in `generate_xcode_project.rb` or a target-level override slips in.
+#
+# `tmp_settings` is the `xcodebuild -showBuildSettings -configuration Release`
+# dump captured above; each setting appears as `    KEY = VALUE` with
+# resolved value.
+
+# ENABLE_BITCODE must not be YES. Apple deprecated bitcode in Xcode 14; a
+# YES setting re-enables Apple-side recompilation of the binary, which is
+# a supply-chain risk surface.
+if grep -F "ENABLE_BITCODE = YES" "$tmp_settings" >/dev/null 2>&1; then
+  echo "FAIL: ENABLE_BITCODE is YES in Release — Apple deprecated bitcode in Xcode 14; re-enabling it is a supply-chain risk" >&2
+  exit 1
+fi
+
+# STRIP_INSTALLED_PRODUCT must not be NO. Debug symbols belong in the
+# dSYM (kept separately for symbolication, never shipped with the app);
+# leaving them in the installed binary inflates IPA size and makes
+# reverse engineering trivial.
+if grep -F "STRIP_INSTALLED_PRODUCT = NO" "$tmp_settings" >/dev/null 2>&1; then
+  echo "FAIL: STRIP_INSTALLED_PRODUCT is NO in Release — debug symbols belong in dSYM, not in the shipped binary" >&2
+  exit 1
+fi
+
+# SWIFT_OPTIMIZATION_LEVEL must not be -Onone in Release. -Onone produces
+# unoptimized code with full debug symbols; this is correct for Debug,
+# never for Release. Allowed values: -O, -Owholemodule, -Osize.
+if grep -E "^[[:space:]]+SWIFT_OPTIMIZATION_LEVEL = -Onone" "$tmp_settings" >/dev/null 2>&1; then
+  echo "FAIL: SWIFT_OPTIMIZATION_LEVEL is -Onone in Release — must be -O, -Owholemodule, or -Osize" >&2
+  exit 1
+fi
+
+# GCC_OPTIMIZATION_LEVEL must not be 0 in Release. Same reasoning as
+# Swift: 0 disables compiler optimizations, expanding binary size and
+# the reverse-engineering surface.
+if grep -E "^[[:space:]]+GCC_OPTIMIZATION_LEVEL = 0" "$tmp_settings" >/dev/null 2>&1; then
+  echo "FAIL: GCC_OPTIMIZATION_LEVEL is 0 in Release — must be s or 3" >&2
+  exit 1
+fi
+
+# ONLY_ACTIVE_ARCH must not be YES in Release. The archive needs every
+# device architecture (arm64 / arm64e) so the signed IPA is universal.
+# ONLY_ACTIVE_ARCH=YES is correct for Debug iterations on a single
+# device but ships a single-arch binary if leaked into Release.
+if grep -F "ONLY_ACTIVE_ARCH = YES" "$tmp_settings" >/dev/null 2>&1; then
+  echo "FAIL: ONLY_ACTIVE_ARCH is YES in Release — Release archives must include every device architecture" >&2
+  exit 1
+fi
+
+# DEAD_CODE_STRIPPING must not be NO. Removes unreachable symbols at
+# link time, shrinking IPA size and reducing the function-graph surface
+# available for ROP/JOP attacks.
+if grep -F "DEAD_CODE_STRIPPING = NO" "$tmp_settings" >/dev/null 2>&1; then
+  echo "FAIL: DEAD_CODE_STRIPPING is NO in Release — must be YES" >&2
+  exit 1
+fi
+
+# COPY_PHASE_STRIP must not be NO. The strip phase needs to run on
+# copied resources / nested frameworks during Release builds so debug
+# symbols don't leak in through dependencies.
+if grep -F "COPY_PHASE_STRIP = NO" "$tmp_settings" >/dev/null 2>&1; then
+  echo "FAIL: COPY_PHASE_STRIP is NO in Release — must be YES" >&2
+  exit 1
+fi
+
 # VERSION file must exist
 [[ -f "VERSION" ]] || {
   echo "FAIL: Missing VERSION file at repo root" >&2
