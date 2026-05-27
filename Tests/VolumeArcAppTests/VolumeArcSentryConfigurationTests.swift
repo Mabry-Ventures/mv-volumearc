@@ -72,5 +72,58 @@ final class VolumeArcSentryConfigurationTests: XCTestCase {
         let versionAndBuild = parts[1]
         XCTAssertTrue(versionAndBuild.contains("+"), "Version+build should have a '+' separator")
     }
+
+    // MARK: - VOL-252: three-way environment classification
+
+    func testEnvironmentIsDevelopmentForDebugBuilds() {
+        // Debug always wins, regardless of receipt URL — devs running
+        // tests against a sandboxReceipt-bearing dev device must not be
+        // misclassified as TestFlight.
+        let env = VolumeArcSentryConfiguration.resolveEnvironment(
+            isDebugBuild: true,
+            receiptURL: URL(fileURLWithPath: "/private/var/mobile/Containers/Data/Application/X/StoreKit/sandboxReceipt")
+        )
+        XCTAssertEqual(env, "development")
+    }
+
+    func testEnvironmentIsTestFlightForSandboxReceipt() {
+        let env = VolumeArcSentryConfiguration.resolveEnvironment(
+            isDebugBuild: false,
+            receiptURL: URL(fileURLWithPath: "/private/var/containers/Bundle/Application/X/sandboxReceipt")
+        )
+        XCTAssertEqual(env, "testflight")
+    }
+
+    func testEnvironmentIsProductionForAppStoreReceipt() {
+        let env = VolumeArcSentryConfiguration.resolveEnvironment(
+            isDebugBuild: false,
+            receiptURL: URL(fileURLWithPath: "/private/var/containers/Bundle/Application/X/receipt")
+        )
+        XCTAssertEqual(env, "production")
+    }
+
+    func testEnvironmentIsProductionWhenReceiptMissing() {
+        // Defensive default — a Release build with no receipt URL falls to
+        // "production" so we don't accidentally drop crash data into the
+        // wrong bucket. This is the conservative direction (false negative
+        // on testflight-bucket attribution beats false negative on
+        // production crash visibility).
+        let env = VolumeArcSentryConfiguration.resolveEnvironment(
+            isDebugBuild: false,
+            receiptURL: nil
+        )
+        XCTAssertEqual(env, "production")
+    }
+
+    func testBundleOverloadDelegatesToPureFormForEnvironment() {
+        // The `Bundle.main` overload should produce one of the three
+        // documented values. We don't pin which value because that depends
+        // on the test runner's build configuration.
+        let env = VolumeArcSentryConfiguration.resolveEnvironment()
+        XCTAssertTrue(
+            ["development", "testflight", "production"].contains(env),
+            "Bundle-form environment '\(env)' must be one of development/testflight/production"
+        )
+    }
 }
 #endif
