@@ -22,7 +22,15 @@ opt_in_rules:
   - empty_string
   - fatal_error_message
   - first_where
+  # VOL-261: the three force-* rules form one cohesive set. `force_unwrapping`
+  # catches `x!`, `force_try` catches `try!`, `force_cast` catches `as!`.
+  # All three are opt-in at the SwiftLint default, so prior to VOL-261 only
+  # postfix `!` was flagged. Pair them so the prevention surface is complete.
+  # Each requires the same "is the unsafe operation actually justified here?"
+  # judgment, so they belong together. Severity is bumped to `error` below.
   - force_unwrapping
+  - force_try
+  - force_cast
   - implicitly_unwrapped_optional
   - last_where
   - modifier_order
@@ -33,6 +41,21 @@ opt_in_rules:
   - sorted_first_last
   - unowned_variable_capture
   - vertical_whitespace_closing_braces
+
+# VOL-261: promote the three force-* rules to `error`. With `--strict` in
+# CI, opt-in rules at the default `warning` severity would still fail the
+# build, but explicit error severity also fails non-strict invocations
+# (e.g. SwiftLint run from Xcode locally during dev). 12 pre-existing
+# occurrences are documented with per-line `// swiftlint:disable:next`
+# comments explaining why each is defensible — see the audit-traceable
+# count in `docs/AUDIT.md` and grep `force_unwrapping` / `force_try` /
+# `force_cast` for the disable sites.
+force_unwrapping:
+  severity: error
+force_try:
+  severity: error
+force_cast:
+  severity: error
 
 # Length thresholds (VOL-87 / VOL-113): warnings sized so all current
 # sources clear, so CI can run with `--strict` and surface real
