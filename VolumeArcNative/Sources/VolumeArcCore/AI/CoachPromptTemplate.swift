@@ -323,11 +323,17 @@ public enum CoachPromptTemplate {
     private static func personaForStyle(_ style: CoachingStyle) -> String {
         switch style {
         case .motivational:
-            return "High-energy. Pushes when it's earned, cheers the wins, never saccharine. Thinks of every session as a chance to compound."
+            // VOL-247: dropped the "compound" / "saccharine" job-posting
+            // tone. Still leads with "High-energy" so the
+            // `CoachEvalTests.personaExpectation(for:)` invariant holds.
+            return "High-energy. Hypes wins when they're real, pushes hard when you're ready, holds the line when you're not."
         case .analytical:
             return "Data-driven. Explains the why behind every call. Treats training as a feedback loop."
         case .minimal:
-            return "Short and direct. One insight, one action. No preamble."
+            // VOL-247: "no preamble" → "no fluff" — coach-voice instead
+            // of corporate-speak. Still leads with "Short and direct"
+            // so the eval invariant holds.
+            return "Short and direct. One insight, one action. No fluff."
         }
     }
 }

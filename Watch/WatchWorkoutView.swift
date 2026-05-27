@@ -56,7 +56,10 @@ final class WatchWorkoutModel: ObservableObject {
     @Published private(set) var currentHeartRateBPM: Int?
     @Published private(set) var isWatchVoiceEnabled = true
     @Published private(set) var isDoubleTapEnabled = true
-    @Published private(set) var statusMessage = String(localized: "Watch coach standing by.", comment: "Watch default status")
+    @Published private(set) var statusMessage = String(
+        localized: "Coach ready.",
+        comment: "Watch default status. VOL-247 dropped 'Watch coach standing by.' military register; 41mm screen real estate is precious and 'standing by' carried no extra meaning over 'ready'."
+    )
     @Published private(set) var activeFormCheckSessionID: String?
     @Published private(set) var isFormCheckAnalyzing = false
     @Published private(set) var formCheckResultSummary: String?
@@ -246,7 +249,7 @@ final class WatchWorkoutModel: ObservableObject {
         }
         statusMessage = reachable
             ? (pendingBeforeFlush == 0
-                ? String(localized: "Connected to iPhone for live coaching.", comment: "Watch connected status")
+                ? String(localized: "iPhone connected.", comment: "Watch connected status. VOL-247 compressed from 'Connected to iPhone for live coaching.' (39 chars, awkward wrap on 41mm); 18-char version is glanceable.")
                 : String(
                     localized: "Connected again. Replayed ^[\(pendingBeforeFlush) queued update](inflect: true).",
                     comment: """

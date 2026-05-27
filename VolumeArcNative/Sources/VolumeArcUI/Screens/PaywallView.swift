@@ -113,8 +113,8 @@ public struct PaywallView: View {
             // promising them as Premium value is paid-subscription
             // misrepresentation and an App Review risk.
             Text(String(
-                localized: "Unlock the Gemini Pro coach and live voice coaching — the full AI prescription your training deserves.",
-                comment: "Paywall hero description"
+                localized: "Coaching that reads your full training history, talks back between sets, and adapts as you recover.",
+                comment: "Paywall hero description — describes the two Premium unlocks (Pro coach tier + live voice) in coach-voice, no model names or 'prescription' jargon (VOL-247)"
             ))
                 .font(VA.Typography.body)
                 .foregroundStyle(VA.Colors.textSecondary)
@@ -178,10 +178,10 @@ public struct PaywallView: View {
         [
             PremiumFeature(
                 icon: "brain.head.profile",
-                title: String(localized: "AI Coach — Gemini Pro tier", comment: "Premium feature name — AI coach Pro tier"),
+                title: String(localized: "AI Coach — Pro tier", comment: "Premium feature name — AI coach Pro tier. VOL-247 dropped 'Gemini' from the user-facing title; the routing under the hood is still Gemini Pro and is documented in PLATFORM.md."),
                 description: String(
-                    localized: "Reasoning-grade coaching prescriptions. Pro reads more of your history and writes a deeper plan.",
-                    comment: "Premium feature description — AI coach Pro tier"
+                    localized: "Looks at your full training history before answering, so advice fits your patterns — not just your last set.",
+                    comment: "Premium feature description — AI coach Pro tier. VOL-247 replaced 'reasoning-grade coaching prescriptions' jargon with coach-voice language."
                 )
             ),
             PremiumFeature(

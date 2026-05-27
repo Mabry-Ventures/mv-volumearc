@@ -29,7 +29,14 @@ final class VolumeArcPaywallFeatureContractTests: XCTestCase {
         XCTAssertEqual(
             titles,
             [
-                "AI Coach — Gemini Pro tier",
+                // VOL-247 (2026-05-26 copy pass) dropped "Gemini" from the
+                // user-facing title — the underlying routing is still
+                // Gemini Pro, documented in `docs/PLATFORM.md`, but
+                // mentioning the model name on the paywall is the kind
+                // of engineering-voice tell the audit flagged. The
+                // Premium scope is unchanged (Pro coach tier + live voice);
+                // only the rendered label changed.
+                "AI Coach — Pro tier",
                 "Live Voice Coaching",
             ],
             """

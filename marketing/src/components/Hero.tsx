@@ -122,10 +122,9 @@ export function Hero() {
               </span>
             </h1>
             <p className="mt-6 text-lg text-gray-600">
-              VolumeArc is an AI-powered strength coach for iPhone and Apple
-              Watch. The watch leads the session. Readiness comes from your
-              real recovery data. Your history follows you across every Apple
-              device — privately, and on-device when it matters.
+              Strength coach on your wrist. Reads your recovery from Apple
+              Health, talks back between sets, and keeps your data private —
+              on-device when it matters.
             </p>
             <div className="mt-8 flex flex-wrap gap-x-6 gap-y-4">
               <AppStoreLink />

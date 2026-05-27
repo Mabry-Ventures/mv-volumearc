@@ -152,8 +152,8 @@ public struct OnboardingView: View {
                     .foregroundStyle(VA.Colors.textPrimary)
                     .multilineTextAlignment(.center)
                 Text(String(
-                    localized: "An AI coach that knows your training, adapts to your recovery, and helps you make the right call on every set.",
-                    comment: "Onboarding welcome step description"
+                    localized: "A strength coach that adapts to your recovery and guides every set.",
+                    comment: "Onboarding welcome step description. VOL-247 tightened 19-word verbose copy to 11-word coach-voice — same promise, less padding."
                 ))
                     .font(VA.Typography.body)
                     .foregroundStyle(VA.Colors.textSecondary)
@@ -368,10 +368,10 @@ public struct OnboardingView: View {
                         symbol: "sparkles",
                         text: String(
                             localized: """
-                            Coach prescription uses your recent workout volume + readiness \
+                            Your coach uses your recent workouts and recovery \
                             signals to suggest the next session.
                             """,
-                            comment: "Onboarding permissions step — why VolumeArc needs the HealthKit data"
+                            comment: "Onboarding permissions step — why VolumeArc needs the HealthKit data. VOL-247 replaced 'Coach prescription' jargon with everyday language."
                         )
                     )
                     healthRationaleBullet(
