@@ -63,6 +63,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: npm audit (VOL-254)
+        # Wave-B audit hardening: runs `npm audit` against the installed
+        # tree and surfaces moderate-or-higher findings. Rolled out as
+        # warn-only (`continue-on-error: true`) for a 1-week observation
+        # window so we calibrate against the existing lockfile state
+        # before promoting to a hard gate. After the window — and after
+        # any actionable findings are addressed via Dependabot (VOL-248)
+        # or direct upgrades — remove `continue-on-error` to flip the
+        # step to blocking. Tunable via NPM_AUDIT_LEVEL if we need to
+        # raise the bar later (e.g. `high` only).
+        continue-on-error: true
+        env:
+          NPM_AUDIT_LEVEL: moderate
+        run: |
+          set -euo pipefail
+          npm audit --audit-level="$NPM_AUDIT_LEVEL"
+
       - name: Lint
         run: npm run lint
 
@@ -80,6 +97,25 @@ jobs:
         # generates `next-env.d.ts`). Run typecheck locally via
         # `npm run typecheck` once you've built once.
         run: npm run build
+
+      - name: Generate SBOM (VOL-254)
+        # Wave-B audit hardening: CycloneDX SBOM for supply-chain
+        # auditing. `npm sbom` is built into npm 10.5+ (Node 22 ships
+        # 10.x). Output uploaded as an artifact so security review can
+        # diff supply-chain composition release-over-release. Failure
+        # is informational only — SBOM generation issues should not
+        # block the marketing deploy gate.
+        continue-on-error: true
+        run: npm sbom --sbom-format=cyclonedx > marketing-sbom.cyclonedx.json
+
+      - name: Upload SBOM artifact (VOL-254)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: marketing-sbom-${{ github.run_id }}
+          path: marketing/marketing-sbom.cyclonedx.json
+          retention-days: 90
+          if-no-files-found: warn
 
       - name: Check links (VOL-217 Phase 1)
         # Static link guard: walks `.next/server/app/**/*.html` from the
