@@ -32,3 +32,34 @@ updates:
         update-types:
           - "minor"
           - "patch"
+
+  # VOL-248: marketing site (Next.js 16 + Tailwind + shadcn/ui).
+  # Public-facing, handles user-submitted contact-form payloads + proxies to
+  # Resend. Transitive npm deps need automated CVE coverage just like Swift /
+  # bundler. Weekly cadence + minor-and-patch grouping matches the
+  # surrounding ecosystems above.
+  - package-ecosystem: "npm"
+    directory: "/marketing"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      marketing-npm-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # VOL-248: Cloudflare Worker (`relay/`) sits in the critical security path
+  # for App Attest verification + the Gemini proxy. Any vulnerable
+  # transitive dep here is a direct production risk, so the same weekly
+  # cadence applies.
+  - package-ecosystem: "npm"
+    directory: "/relay"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      relay-npm-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"

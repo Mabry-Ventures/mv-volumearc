@@ -29,7 +29,15 @@ concurrency:
 jobs:
   request-ai-reviews:
     name: Request AI Reviews
-    if: github.event_name == 'pull_request_target' && !github.event.pull_request.draft
+    # VOL-251: fork-PR guard. This job auto-requests Codex + CodeRabbit reviews,
+    # which spend billed AI-reviewer minutes. Fork PRs must not be able to
+    # consume those credits, and the job runs on the self-hosted runner with
+    # `pull-requests: write` / `issues: write` token scopes — same surface
+    # ci.yml:57 already gates. Same-repo check mirrors that pattern.
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      !github.event.pull_request.draft &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, mv-volumearc-runner]
     steps:
       - name: Request AI reviews for current head SHA
@@ -68,8 +76,19 @@ jobs:
 
   ai-review:
     name: ${{ matrix.ai_name }} Code Review
+    # VOL-251: fork-PR guard. For `pull_request_target` events we know the
+    # PR head repo and can refuse to run on fork PRs (matches the
+    # `request-ai-reviews` guard above and the ci.yml:57 pattern). Comment
+    # events (`issue_comment`, `pull_request_review`,
+    # `pull_request_review_comment`) carry the comment in the base repo
+    # regardless of PR origin, and we need them to run so the gate can
+    # observe bot responses — leave those event branches unchanged. The
+    # main risk surface (billed AI reviewer minutes) is already covered
+    # because triggers only fire on comments the upstream-gated
+    # `request-ai-reviews` job posts.
     if: >-
-      github.event_name == 'pull_request_target' ||
+      (github.event_name == 'pull_request_target' &&
+        github.event.pull_request.head.repo.full_name == github.repository) ||
       github.event_name == 'issue_comment' ||
       github.event_name == 'pull_request_review' ||
       github.event_name == 'pull_request_review_comment'
