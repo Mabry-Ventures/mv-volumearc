@@ -182,6 +182,10 @@ Every bypass should be documented in `docs/incident-log.md` with the reason and 
 
 The `mv-shared` self-hosted CI runner is privileged (Apple Developer signing identity, Keychain, decoded SSH key, persistent DerivedData) so PRs from external forks **do not run CI** (VOL-132). The `Build & Test`, `Performance budgets`, and `Deploy to TestFlight` jobs all carry an `if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository` guard that skips them on fork PRs.
 
+The AI review gate (`.github/workflows/ai-review-gate.yml`) carries the same fork guard (VOL-251) on both the `request-ai-reviews` job (which would otherwise spend billed Codex + CodeRabbit minutes on fork PRs) and the `pull_request_target` branch of the `ai-review` job. Comment-event branches (`issue_comment`, `pull_request_review`, `pull_request_review_comment`) remain unguarded so the gate can still observe bot responses to upstream-only review requests.
+
+**New workflow files MUST replicate the same guard** on any job that runs on the self-hosted runner or consumes billed resources. Use ci.yml:57 as the canonical pattern. The check is one of the things the AI review gate looks for on new workflow files.
+
 External contributors should ask a maintainer to push their branch directly into the upstream repo — that branch then triggers CI normally. Until then the AI review gate will time out (no `Build & Test` signal), which is the correct behavior.
 
 ### Runner policy: zero GitHub-hosted jobs
