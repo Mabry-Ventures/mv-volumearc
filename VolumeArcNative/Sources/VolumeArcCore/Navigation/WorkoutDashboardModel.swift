@@ -288,17 +288,7 @@ public final class WorkoutDashboardModel: ObservableObject {
             self.activeProgram = snapshot.activeProgram
             self.coachMemory = snapshot.coachMemory
 
-            if let active = snapshot.activeWorkout {
-                self.activeWorkoutID = active.identifier
-                self.activeWorkoutTitle = active.title
-                self.isSessionActive = true
-                self.loggedSetCountThisSession = active.completedSetCount
-            } else {
-                self.activeWorkoutID = nil
-                self.activeWorkoutTitle = nil
-                self.isSessionActive = false
-                self.loggedSetCountThisSession = 0
-            }
+            applyActiveWorkoutRecoverySnapshot(snapshot.activeWorkout)
 
             self.isOnboardingComplete = snapshot.isOnboardingComplete
             self.hasLoadedInitialData = true
@@ -327,6 +317,48 @@ public final class WorkoutDashboardModel: ObservableObject {
         return true
         #endif
     }
+
+    #if canImport(SwiftData)
+    /// VOL-256: active-workout recovery contract. When the dashboard
+    /// boots and finds a `WorkoutRecord` with `completedAt == nil` (the
+    /// user crashed / was memory-killed mid-session), silently restore
+    /// the session state. The Today tab's `quickActionsRow` then renders
+    /// "Continue Session" via the existing `model.isSessionActive` gate.
+    /// Silent restoration is intentional — a strength athlete who lost
+    /// a set to a crash wants the workout back, not a "Resume / Discard?"
+    /// prompt that risks accidental discard.
+    ///
+    /// Emits a single `workout.active_session.recovered` `.info` event
+    /// on the `wasActive == false → true` transition. The guard
+    /// deduplicates against the polling refresh loop so only a real
+    /// recovery counts.
+    private func applyActiveWorkoutRecoverySnapshot(_ active: DashboardRefreshSnapshot.ActiveWorkout?) {
+        guard let active else {
+            self.activeWorkoutID = nil
+            self.activeWorkoutTitle = nil
+            self.isSessionActive = false
+            self.loggedSetCountThisSession = 0
+            return
+        }
+        let wasActive = self.isSessionActive
+        self.activeWorkoutID = active.identifier
+        self.activeWorkoutTitle = active.title
+        self.isSessionActive = true
+        self.loggedSetCountThisSession = active.completedSetCount
+        if wasActive == false {
+            telemetrySink.record(TelemetryEvent(
+                category: "workout",
+                name: "active_session.recovered",
+                severity: .info,
+                message: "Restored an in-progress workout session from persistence on dashboard refresh.",
+                metadata: [
+                    "workout_id": active.identifier,
+                    "completed_sets": String(active.completedSetCount)
+                ]
+            ))
+        }
+    }
+    #endif
 
     // MARK: - Dashboard actions
     /// Start a new workout session.
