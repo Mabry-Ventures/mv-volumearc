@@ -1,0 +1,86 @@
+#:schema node_modules/wrangler/config-schema.json
+# VOL-245: staging-only relay Worker that hosts the coach-eval attestation
+# broker. Separate from production (`wrangler.toml`) so:
+#
+#   * Production `relay.volumearc.app` keeps App-Attest-only auth per
+#     VOL-226 / wrangler.toml:44-47.
+#   * Staging gets the broker endpoints (`/v1/eval-attest/bootstrap` +
+#     `/v1/eval-attest/challenge`) enabled, with an isolated KV namespace +
+#     Durable Object so test traffic never mixes with production state.
+#
+# Deploy with: `wrangler deploy -c wrangler.staging.toml`
+name = "volumearc-ai-relay-staging"
+main = "src/worker.ts"
+compatibility_date = "2026-04-23"
+compatibility_flags = ["nodejs_compat"]
+
+# Staging custom domain. volumearc.app is on Cloudflare DNS, so
+# `custom_domain = true` auto-provisions the DNS record + TLS cert on
+# the first deploy. Matches the example host in wrangler.toml:75.
+[[routes]]
+pattern = "staging-relay.volumearc.app"
+custom_domain = true
+
+# VOL-245: dedicated staging KV namespace so production rate-limit state
+# is never touched by eval traffic. Created via
+# `wrangler kv namespace create RATE_LIMIT_STAGING`.
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "186d7005f20a436b90c40d37ca175982"
+
+# VOL-245: dedicated staging Durable Object namespaces. The worker code
+# references `APP_ATTEST_STATE` + `EVAL_ATTEST_STATE` bindings; using the
+# same binding names but separate underlying objects keeps the code
+# identical between prod and staging while keeping the data isolated.
+[[durable_objects.bindings]]
+name = "APP_ATTEST_STATE"
+class_name = "AppAttestState"
+
+[[durable_objects.bindings]]
+name = "EVAL_ATTEST_STATE"
+class_name = "EvalAttestState"
+
+[[migrations]]
+tag = "v1_app_attest_state"
+new_sqlite_classes = ["AppAttestState"]
+
+[[migrations]]
+tag = "v2_eval_attest_state"
+new_sqlite_classes = ["EvalAttestState"]
+
+[observability]
+enabled = true
+
+# Secrets (configured via `wrangler secret put <NAME> -c wrangler.staging.toml`):
+#   GEMINI_API_KEY            — shared with production (set after first deploy)
+#   EVAL_ATTEST_BROKER_TOKEN  — staging-only broker token; the GH repo secret
+#                               `VOLUMEARC_EVAL_ATTEST_BROKER_TOKEN` carries
+#                               the same value so the coach-evals-nightly.yml
+#                               workflow can authorize bootstrap requests
+
+[vars]
+# Mirror production model selection so eval responses are representative.
+MODEL_DEFAULT = "gemini-3.1-flash-lite-preview"
+MODEL_PREMIUM = "gemini-3.1-pro-preview"
+MAX_OUTPUT_TOKENS = "800"
+REQUEST_TIMEOUT_MS = "45000"
+RATE_LIMIT_MAX_REQUESTS = "30"
+RATE_LIMIT_WINDOW_SECONDS = "600"
+
+# App Attest validation — same Apple Team + Bundle as production. Real-device
+# App Attest assertions are still rejected because the worker only accepts
+# bootstrap challenges from clients that the broker token authorizes; the
+# `EVAL_ATTEST_BROKER_ALLOWED_HOSTS` check below pins the host envelope.
+APPLE_TEAM_ID = "A886EMZZW6"
+APPLE_BUNDLE_ID = "com.mabryventures.VolumeArc"
+
+# VOL-245: enable the coach-eval attestation broker. The broker fails closed
+# unless ALL THREE conditions hold:
+#   1. EVAL_ATTEST_BROKER_ENABLED is "true"
+#   2. The request `Host` header is on EVAL_ATTEST_BROKER_ALLOWED_HOSTS
+#   3. The bootstrap `Authorization: Bearer <token>` matches the
+#      EVAL_ATTEST_BROKER_TOKEN secret
+# Keeping production untouched: `wrangler.toml` does not set any of these.
+EVAL_ATTEST_BROKER_ENABLED = "true"
+EVAL_ATTEST_BROKER_ALLOWED_HOSTS = "staging-relay.volumearc.app"
+EVAL_ATTEST_BROKER_KEY_TTL_SECONDS = "86400"
