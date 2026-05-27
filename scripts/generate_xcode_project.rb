@@ -600,6 +600,14 @@ add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   # target exposes no testable Swift module, so the source is compiled into
   # the test bundle. Guarded by `#if canImport(HealthKit)` inside the file.
   'Health/HealthKitRecoveryReader.swift',
+  # VOL-255: `VolumeArcMetricKitSubscriberTests` exercises the
+  # pure `PayloadSnapshot` / `DiagnosticSnapshot` derivation against
+  # a fake `MXMetricManaging`. MetricKit doesn't expose public
+  # `MXMetricPayload` / `MXDiagnosticPayload` initializers, so the
+  # tests target the static `snapshot(for:)` helpers via partial
+  # protocol fakes rather than constructing real payloads.
+  # Guarded by `#if canImport(MetricKit)` inside the file.
+  'VolumeArcMetricKitSubscriber.swift',
 ])
 add_selected_swift_sources(widgets_group, app_tests_target, ROOT.join('Widgets'), [
   'VolumeArcWidgets.swift',

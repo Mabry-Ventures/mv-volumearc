@@ -139,6 +139,11 @@ struct VolumeArcApp: App {
     /// `telemetrySink` defined in `init`'s scope is not reachable
     /// from `.onAppear`'s body-scope closure.
     private let telemetrySink: any TelemetrySink
+    /// VOL-255: strong-ref the MetricKit subscriber (MXMetricManager
+    /// holds it weakly; without this it deallocates after init).
+    #if canImport(MetricKit)
+    private let metricKitSubscriber: VolumeArcMetricKitSubscriber
+    #endif
     /// VOL-176: handler that turns the Profile feedback sheet's
     /// (category, description) tuple into a Sentry user-feedback +
     /// telemetry confirmation. Captured by the closure passed to
@@ -229,6 +234,15 @@ struct VolumeArcApp: App {
         // `telemetrySink` above lives in init's scope only; the body
         // closure that runs `scheduleAll()` lives at a different scope.
         self.telemetrySink = telemetrySink
+
+        // VOL-255: MetricKit → telemetry fanout (parallel to Sentry's
+        // enableMetricKit forwarding). Retained as an instance property
+        // so it outlives `init`.
+        #if canImport(MetricKit)
+        let metricKitSubscriber = VolumeArcMetricKitSubscriber(telemetrySink: telemetrySink)
+        metricKitSubscriber.register()
+        self.metricKitSubscriber = metricKitSubscriber
+        #endif
         // VOL-61: single `FeatureFlagProvider` + `FlagGateTelemetry`
         // constructed once and threaded by explicit DI into every gating
         // surface — the runtime factory (voice + Foundation Models), the
