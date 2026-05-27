@@ -151,9 +151,11 @@ public struct OnboardingView: View {
                     .font(VA.Typography.title)
                     .foregroundStyle(VA.Colors.textPrimary)
                     .multilineTextAlignment(.center)
+                // VOL-247 (copy pass): tightened the prior 19-word verbose
+                // copy to 11-word coach-voice — same promise, less padding.
                 Text(String(
                     localized: "A strength coach that adapts to your recovery and guides every set.",
-                    comment: "Onboarding welcome step description. VOL-247 tightened 19-word verbose copy to 11-word coach-voice — same promise, less padding."
+                    comment: "Onboarding welcome step description"
                 ))
                     .font(VA.Typography.body)
                     .foregroundStyle(VA.Colors.textSecondary)
@@ -366,12 +368,14 @@ public struct OnboardingView: View {
                     )
                     healthRationaleBullet(
                         symbol: "sparkles",
+                        // VOL-247 (copy pass): replaced "Coach prescription"
+                        // jargon with everyday language.
                         text: String(
                             localized: """
                             Your coach uses your recent workouts and recovery \
                             signals to suggest the next session.
                             """,
-                            comment: "Onboarding permissions step — why VolumeArc needs the HealthKit data. VOL-247 replaced 'Coach prescription' jargon with everyday language."
+                            comment: "Onboarding permissions step — why VolumeArc needs the HealthKit data"
                         )
                     )
                     healthRationaleBullet(
