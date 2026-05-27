@@ -11,7 +11,7 @@
     "codeCoverage": true,
     "targetForVariableExpansion": {
       "containerPath": "container:VolumeArcApple.xcodeproj",
-      "identifier": "2406C0E7A4282B48CD0BC114",
+      "identifier": "E653DF58E355F9C13015AA84",
       "name": "VolumeArcApp"
     }
   },
@@ -20,7 +20,7 @@
       "parallelizable": true,
       "target": {
         "containerPath": "container:VolumeArcApple.xcodeproj",
-        "identifier": "5215E5033D4589037C3BFC4D",
+        "identifier": "26AEBE8C5CDCDB30E3A87C97",
         "name": "VolumeArcAppTests"
       }
     },

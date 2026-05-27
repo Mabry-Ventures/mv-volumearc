@@ -139,6 +139,16 @@ struct VolumeArcApp: App {
     /// `telemetrySink` defined in `init`'s scope is not reachable
     /// from `.onAppear`'s body-scope closure.
     private let telemetrySink: any TelemetrySink
+    /// VOL-255: keeps the MetricKit subscriber alive for the lifetime
+    /// of the app process. `MXMetricManager` holds a weak reference to
+    /// its subscribers, so without a strong reference here the
+    /// subscriber would deallocate immediately after `init` returns and
+    /// MetricKit would silently stop forwarding payloads to our
+    /// telemetry fanout. Optional because `MetricKit` is not available
+    /// on every platform target this module compiles against.
+    #if canImport(MetricKit)
+    private let metricKitSubscriber: VolumeArcMetricKitSubscriber
+    #endif
     /// VOL-176: handler that turns the Profile feedback sheet's
     /// (category, description) tuple into a Sentry user-feedback +
     /// telemetry confirmation. Captured by the closure passed to
@@ -229,6 +239,20 @@ struct VolumeArcApp: App {
         // `telemetrySink` above lives in init's scope only; the body
         // closure that runs `scheduleAll()` lives at a different scope.
         self.telemetrySink = telemetrySink
+
+        // VOL-255: subscribe to Apple's MetricKit so battery / thermal /
+        // hang / scroll-hitch / animation payloads route into the
+        // VolumeArc telemetry fanout alongside everything else. Sentry's
+        // built-in `enableMetricKit` keeps doing its own forwarding to
+        // the Sentry UI; this is the parallel path that reaches our
+        // `UserDefaultsTelemetrySink` + `OSLogTelemetrySink` + the
+        // diagnostics overlay. Retained as an instance property so it
+        // outlives `init` (MetricKit holds a weak reference).
+        #if canImport(MetricKit)
+        let metricKitSubscriber = VolumeArcMetricKitSubscriber(telemetrySink: telemetrySink)
+        metricKitSubscriber.register()
+        self.metricKitSubscriber = metricKitSubscriber
+        #endif
         // VOL-61: single `FeatureFlagProvider` + `FlagGateTelemetry`
         // constructed once and threaded by explicit DI into every gating
         // surface — the runtime factory (voice + Foundation Models), the

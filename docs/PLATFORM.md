@@ -150,6 +150,8 @@ Schema: current `VolumeArcSchemaV3` with `VolumeArcSchemaMigrationPlan` bridging
 
 Fanout sink: `InMemoryTelemetrySink` (bootstrap) + `UserDefaultsTelemetrySink` (persistent, NSLock-guarded) + `OSLogTelemetrySink` + `SentryTelemetrySink` (when configured). Startup signals surface degraded persistence, missing AI relay, missing CloudKit config, or missing Sentry DSN. `SentryTelemetrySink` forwards events as breadcrumbs and captures `.error` severity as Sentry messages.
 
+**MetricKit (VOL-255).** `VolumeArcMetricKitSubscriber` (in `App/`) registers as an `MXMetricManagerSubscriber` at launch and routes Apple's daily metric payloads (CPU / GPU / memory / animation / scroll hitches / app launch / responsiveness / disk I/O / cellular / network) and per-incident diagnostic payloads (crashes / hangs / CPU exceptions / disk-write exceptions / app-launch diagnostics) into the same fanout. Metric payloads record as `metrickit.metric_payload.received` at `.info` severity; diagnostic payloads as `metrickit.diagnostic_payload.received` at `.error` severity, with `kinds` metadata enumerating the per-record counts. This is the VolumeArc-internal mirror of Sentry's `enableMetricKit = true` forwarding — Sentry still gets a copy in its UI; VolumeArc gets one in `UserDefaultsTelemetrySink`, `OSLogTelemetrySink`, and the in-app diagnostics overlay.
+
 ## Notifications
 
 **Notification scheduler** (`VolumeArcNotificationScheduler.swift`): Schedules local notifications for rest timer expiration and workout reminders from the training plan. Registers actionable notification categories (`REST_TIMER` with Dismiss, `WORKOUT_REMINDER` with Start Workout / Dismiss). Called from rest timer completion handlers and the training plan scheduler.
