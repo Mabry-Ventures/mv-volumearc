@@ -289,10 +289,43 @@ public final class WorkoutDashboardModel: ObservableObject {
             self.coachMemory = snapshot.coachMemory
 
             if let active = snapshot.activeWorkout {
+                // VOL-256: active-workout recovery contract. When the
+                // model boots and finds a `WorkoutRecord` with
+                // `completedAt == nil` (i.e., the user crashed / was
+                // memory-killed mid-session), we silently restore the
+                // session state — `isSessionActive = true`,
+                // `activeWorkoutID` rehydrated, completed set count
+                // preserved. The Today tab's `quickActionsRow` then
+                // renders "Continue Session" instead of "Start
+                // Workout" via the existing
+                // `model.isSessionActive` gate. Silent restoration is
+                // intentional: a strength athlete who crashes mid-set
+                // wants their workout back, not a "Resume / Discard?"
+                // prompt that risks accidental discard.
+                //
+                // Telemetry: emit one `.info` event per refresh that
+                // restores a session that wasn't already active in
+                // the model. The `wasActive` guard de-duplicates so
+                // the periodic refresh loop doesn't fire the event
+                // on every poll; only the "active appeared from
+                // nowhere" transition counts as a recovery.
+                let wasActive = self.isSessionActive
                 self.activeWorkoutID = active.identifier
                 self.activeWorkoutTitle = active.title
                 self.isSessionActive = true
                 self.loggedSetCountThisSession = active.completedSetCount
+                if wasActive == false {
+                    telemetrySink.record(TelemetryEvent(
+                        category: "workout",
+                        name: "active_session.recovered",
+                        severity: .info,
+                        message: "Restored an in-progress workout session from persistence on dashboard refresh.",
+                        metadata: [
+                            "workout_id": active.identifier,
+                            "completed_sets": String(active.completedSetCount)
+                        ]
+                    ))
+                }
             } else {
                 self.activeWorkoutID = nil
                 self.activeWorkoutTitle = nil

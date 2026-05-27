@@ -588,6 +588,98 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         )
     }
 
+    // MARK: - VOL-256: active-workout crash recovery
+
+    /// VOL-256 contract: a `WorkoutRecord` with `completedAt == nil`
+    /// persisted in SwiftData survives crashes. On the next dashboard
+    /// refresh (simulated here by constructing a fresh model + calling
+    /// `refresh()`), the model rehydrates `isSessionActive`,
+    /// `activeWorkoutID`, `activeWorkoutTitle`, and
+    /// `loggedSetCountThisSession` from the persisted record. The
+    /// Today tab's quick-actions row then surfaces "Continue Session"
+    /// via the existing `model.isSessionActive` gate.
+    ///
+    /// This is the crash-recovery path: the SwiftData persistence
+    /// survives, the model construction does not. If a regression
+    /// removed the `loadActiveWorkout` query or the
+    /// `if let active = snapshot.activeWorkout` branch in
+    /// `WorkoutDashboardModel.refresh()`, this test fails.
+    func testRefreshRehydratesInProgressWorkoutAfterCrashSimulation() async throws {
+        // Stage 1: a previous launch started a workout but never
+        // completed it. Insert a `WorkoutRecord` whose `completedAt`
+        // is nil directly through the repository — same path the
+        // production `startWorkoutSession()` action takes.
+        let workout = try workoutRepository.createWorkout(
+            title: "Crashed Heavy Lower",
+            startedAt: Date(timeIntervalSince1970: 1_720_000_000)
+        )
+        let workoutID = workout.identifier
+        try workoutRepository.appendSet(
+            WorkoutSetPerformance(
+                weight: 225,
+                reps: 5,
+                rpe: 7.5,
+                completedAt: Date(timeIntervalSince1970: 1_720_000_300)
+            ),
+            forExercise: "back-squat",
+            to: workoutID
+        )
+
+        // Stage 2: simulate a crash by constructing a fresh
+        // `WorkoutDashboardModel`. The model's in-memory state starts
+        // empty — `isSessionActive` defaults to false. SwiftData
+        // persistence is durable, so the unfinished record is still
+        // on disk.
+        let telemetry = InMemoryTelemetrySink()
+        let model = makeDashboardModel(telemetrySink: telemetry)
+        XCTAssertFalse(model.isSessionActive, "Fresh model must start with no active session.")
+
+        // Stage 3: refresh — the dashboard refresh loader queries for
+        // workouts with `completedAt == nil` and the model rehydrates
+        // session state.
+        _ = await model.refresh()
+
+        XCTAssertTrue(model.isSessionActive, "Refresh must rehydrate isSessionActive from the persisted in-progress record.")
+        XCTAssertEqual(model.activeWorkoutID, workoutID)
+        XCTAssertEqual(model.activeWorkoutTitle, "Crashed Heavy Lower")
+        XCTAssertEqual(model.loggedSetCountThisSession, 1, "The pre-crash set must still count toward the rehydrated session.")
+
+        // Stage 4: the recovery emits a single telemetry event so
+        // crash-recovery rate is observable in production.
+        let recoveryEvents = telemetry.currentEvents.filter {
+            $0.category == "workout" && $0.name == "active_session.recovered"
+        }
+        XCTAssertEqual(recoveryEvents.count, 1, "Recovery must emit exactly one telemetry event per restoration transition.")
+        XCTAssertEqual(recoveryEvents.first?.metadata["workout_id"], workoutID)
+        XCTAssertEqual(recoveryEvents.first?.metadata["completed_sets"], "1")
+        XCTAssertEqual(recoveryEvents.first?.severity, .info)
+    }
+
+    /// Polling-refresh dedupe: once a session is already active in
+    /// the model, subsequent refreshes that re-observe the same
+    /// `activeWorkout` must NOT re-fire the `active_session.recovered`
+    /// event. Without this guard, the periodic refresh loop would
+    /// drown the telemetry stream in spurious "recovered" events.
+    func testRefreshDoesNotReemitRecoveryEventWhileSessionAlreadyActive() async throws {
+        let workout = try workoutRepository.createWorkout(
+            title: "Heavy Lower",
+            startedAt: Date(timeIntervalSince1970: 1_720_000_000)
+        )
+        let workoutID = workout.identifier
+        let telemetry = InMemoryTelemetrySink()
+        let model = makeDashboardModel(telemetrySink: telemetry)
+
+        _ = await model.refresh()  // First refresh — recovery event fires.
+        _ = await model.refresh()  // Second refresh — already active, must NOT re-fire.
+        _ = await model.refresh()  // Third refresh — same.
+
+        let recoveryEvents = telemetry.currentEvents.filter {
+            $0.category == "workout" && $0.name == "active_session.recovered"
+        }
+        XCTAssertEqual(recoveryEvents.count, 1, "Recovery event must dedupe across the polling refresh loop.")
+        XCTAssertEqual(model.activeWorkoutID, workoutID)
+    }
+
     func testRecordWorkoutDetailOpenedEmitsCatalogEventWithSessionMetadata() throws {
         let telemetry = InMemoryTelemetrySink()
         let model = makeDashboardModel(telemetrySink: telemetry)
