@@ -59,12 +59,19 @@ enabled = true
 #                               workflow can authorize bootstrap requests
 
 [vars]
-# Mirror production model selection so eval responses are representative.
-MODEL_DEFAULT = "gemini-3.1-flash-lite-preview"
-MODEL_PREMIUM = "gemini-3.1-pro-preview"
+# Mirror production model selection. Updated 2026-05-27 alongside the
+# production hotfix (PR #339) after Google retired the `-preview`
+# suffix on Gemini 3.1 flash-lite. Staying in sync with production so
+# eval responses are representative.
+MODEL_DEFAULT = "gemini-3.1-flash-lite"
+MODEL_PREMIUM = "gemini-flash-latest"
 MAX_OUTPUT_TOKENS = "800"
 REQUEST_TIMEOUT_MS = "45000"
-RATE_LIMIT_MAX_REQUESTS = "30"
+# VOL-245: staging rate limit raised from production's 30/10min to
+# 200/10min so the 47-fixture nightly eval run completes in a single
+# pass without hitting 429s. Rate limiting still applies as a runaway-
+# loop smoke check; production stays tight at 30/600.
+RATE_LIMIT_MAX_REQUESTS = "200"
 RATE_LIMIT_WINDOW_SECONDS = "600"
 
 # App Attest validation — same Apple Team + Bundle as production. Real-device
