@@ -2,7 +2,7 @@
 
 ## Test architecture
 
-VolumeArc currently ships with **540+ test functions** across unit + integration + XCUITest journey + performance suites (audited 2026-05-22; count: `find Tests -name '*.swift' -exec grep -h 'func test' {} \; | wc -l`). The headline shapes:
+VolumeArc currently ships with **735+ test functions** across unit + integration + XCUITest journey + performance suites (audited 2026-05-26 — VOL-260; count: `grep -rh "^[[:space:]]*func test" Tests --include="*.swift" | wc -l`). The headline shapes:
 
 - 80% line-coverage gate enforced on `VolumeArcCore` (VOL-52), targeted to rise to **90%** under [VOL-140](https://linear.app/mabry-ventures/issue/VOL-140) (sharpened by [VOL-205](https://linear.app/mabry-ventures/issue/VOL-205)). New gates: `VolumeArcUI` (≥85% target, **18%** staged floor after the VOL-135 snapshot ratchet), `VolumeArcCoreWatch` (≥85% target, **25%** Phase A floor — measured baseline 28.77% from [VOL-138](https://linear.app/mabry-ventures/issue/VOL-138) Phase A; ratchets up once `WatchWorkoutModel` pure logic is extracted), Widgets (≥75% target — view-layer snapshot coverage started under [VOL-139](https://linear.app/mabry-ventures/issue/VOL-139); line-coverage gate remains pending a dedicated target).
 - 6-metric performance budget (cold launch, scroll fps, scroll hitches, memory, coach P50, coach P95) tag-gated in CI (VOL-99).
