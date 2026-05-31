@@ -38,6 +38,14 @@ permissions:
   pull-requests: read
   actions: read
 
+# Mirror the ci.yml top-level PATH so brew (at /opt/homebrew/bin) is
+# visible to every step without per-step env overrides. Without this,
+# volumearc-runner's shell inherits the bare macOS PATH and `command -v
+# brew` fails, falling through to the python3 pip fallback which hits
+# the Xcode CLT stub at /usr/bin/python3 instead of the real interpreter.
+env:
+  PATH: /opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+
 jobs:
   semgrep:
     name: Semgrep scan
@@ -66,7 +74,10 @@ jobs:
             if command -v brew >/dev/null 2>&1; then
               brew install semgrep || brew upgrade semgrep
             else
-              python3 -m pip install --user --upgrade semgrep
+              # Use python3.13 explicitly — /usr/bin/python3 is the Xcode
+              # CLT stub on macOS and will open the App Store instead of
+              # running. python3.13 is installed via brew on the runner.
+              python3.13 -m pip install --user --upgrade semgrep
               echo "$HOME/.local/bin" >> "$GITHUB_PATH"
             fi
           fi
