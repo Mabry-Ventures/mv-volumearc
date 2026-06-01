@@ -96,7 +96,10 @@ final class VolumeArcHealthKitPermissionJourneyTests: XCTestCase {
 
                 for rationaleNeedle in [
                     "heart rate",            // VOL-127 bullet 1: what's read (watch HR)
-                    "Coach prescription",    // VOL-127 bullet 2: why we read it
+                    // VOL-247 copy pass (#334) reworded bullet 2 from the
+                    // "Coach prescription" jargon to everyday language:
+                    // "...recovery signals to suggest the next session."
+                    "suggest the next session",  // VOL-127 bullet 2: why we read it
                     "Apple Health on this device",  // VOL-127 bullet 3: on-device guarantee
                     "private iCloud database",      // VOL-127 bullet 4: CloudKit + revocation
                 ] {

@@ -20,7 +20,7 @@
       "parallelizable": true,
       "target": {
         "containerPath": "container:VolumeArcApple.xcodeproj",
-        "identifier": "26AEBE8C5CDCDB30E3A87C97",
+        "identifier": "67C9C54DA61F142E18A1B43D",
         "name": "VolumeArcAppTests"
       }
     },

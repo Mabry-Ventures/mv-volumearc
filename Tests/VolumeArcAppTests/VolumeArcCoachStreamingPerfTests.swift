@@ -67,7 +67,7 @@ final class VolumeArcCoachStreamingPerfTests: XCTestCase {
             // append work, not async overhead.
             let waiter = expectation(description: "stream completes")
             Task {
-                await model.askCoach(prompt: "synthetic 1000-token perf probe")
+                await model.askCoach("synthetic 1000-token perf probe")
                 waiter.fulfill()
             }
             wait(for: [waiter], timeout: 30)
