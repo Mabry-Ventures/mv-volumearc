@@ -1,60 +1,231 @@
-# CodeRabbit Pro configuration for VolumeArc
-# https://docs.coderabbit.ai/getting-started/configure-coderabbit
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# CodeRabbit Pro configuration aligned with Codex Code Review guidance.
+# CodeRabbit and Codex both consume AGENTS.md; keep Review guidelines there
+# focused on P0/P1 risks and use this file for CodeRabbit-specific behavior.
+inheritance: true
 
-language: en-US
-tone_instructions: "Be direct and concrete. Cite file:line. Flag launch-affecting issues (App Store, privacy, security) with higher severity than style nits. Skip the poem."
-
+language: "en-US"
 early_access: false
 
+tone_instructions: |
+  Be concise, specific, and evidence-driven. Lead with the highest-risk issue.
+  Prefer a few material findings over broad commentary. Avoid formatting-only
+  nits already covered by lint or formatters.
+
 reviews:
-  profile: assertive
+  profile: "chill"
   request_changes_workflow: true
   high_level_summary: true
-  poem: false
+  high_level_summary_in_walkthrough: false
   review_status: true
-  collapse_walkthrough: false
+  review_details: true
+  commit_status: true
+  fail_commit_status: true
+  collapse_walkthrough: true
+  changed_files_summary: true
+  sequence_diagrams: true
+  estimate_code_review_effort: true
+  assess_linked_issues: true
+  related_issues: true
+  related_prs: true
+  suggested_reviewers: true
+  auto_assign_reviewers: false
+  in_progress_fortune: false
+  poem: false
+  enable_prompt_for_ai_agents: true
+  abort_on_close: true
+  disable_cache: false
+
   auto_review:
     enabled: true
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 5
     drafts: false
-    base_branches:
-      - main
+    ignore_title_keywords:
+      - "wip"
+      - "draft"
+      - "do not review"
+      - "skip review"
+      - "[skip review]"
+    labels:
+      - "!wip"
+      - "!do-not-review"
+
   path_filters:
-    - "!VolumeArcApple.xcodeproj/**"
-    - "!**/*.pbxproj"
-    - "!**/*.generated.swift"
-    - "!build/**"
-    - "!.build/**"
-    - "!.claude/**"
-    - "!fastlane/report.xml"
-    - "!fastlane/*.log"
+    - "!**/node_modules/**"
+    - "!**/.next/**"
+    - "!**/.nuxt/**"
+    - "!**/.svelte-kit/**"
+    - "!**/.turbo/**"
+    - "!**/.vercel/**"
+    - "!**/dist/**"
+    - "!**/build/**"
+    - "!**/coverage/**"
+    - "!**/playwright-report/**"
+    - "!**/test-results/**"
+    - "!**/DerivedData/**"
+    - "!**/.build/**"
+    - "!**/vendor/**"
+    - "!**/*.min.*"
+    - "!**/*.snap"
+    - "!**/*.snapshot"
+    - "!**/*.generated.*"
+    - "!**/*.pb.swift"
+    - "!**/tmp/**"
+    - "!**/temp/**"
+
   path_instructions:
-    - path: "VolumeArcNative/Sources/VolumeArcCore/**/*.swift"
+    - path: "src/**/*.{ts,tsx,js,jsx}"
       instructions: |
-        Core module. No SwiftUI or UIKit imports allowed. Flag any Core file
-        that imports a UI framework. Enforce Sendable/actor boundaries for
-        anything crossing an async boundary. Flag `try!` or force-unwraps.
-    - path: "VolumeArcNative/Sources/VolumeArcUI/**/*.swift"
+        Review for correctness, typed error handling, auth/privacy boundaries, accessibility, performance regressions, and tests for changed behavior. Avoid style-only comments already covered by lint or formatting.
+    - path: "app/**/*.{ts,tsx,js,jsx}"
       instructions: |
-        UI module. Every visual property must come from `VA.Colors`,
-        `VA.Typography`, `VA.Space`, `VA.Radius`, or `VA.Shadow`. Every user-facing
-        string must use `String(localized:comment:)`. Every haptic must go
-        through `VAHaptics.*`. Enum display labels must live in
-        `LocalizedLabels.swift`, not inline.
-    - path: "scripts/generate_xcode_project.rb"
+        For app routes and pages, check metadata/SEO, server/client boundaries, hydration safety, accessibility, analytics/privacy behavior, caching, and conversion-path regressions.
+    - path: "components/**/*.{ts,tsx,js,jsx}"
       instructions: |
-        Custom (non-Apple-recognized) Info.plist keys cannot be expressed via
-        `INFOPLIST_KEY_*` — they must live in `App/Info.plist`. Array-valued keys
-        likewise. Flag any attempt to add custom keys to INFOPLIST_KEY_*.
-    - path: "docs/PLATFORM.md"
+        Review components for keyboard/focus support, responsive behavior, reduced-motion safety, accessible names, stable state handling, and design-system consistency.
+    - path: "**/*.swift"
       instructions: |
-        This is the canonical source of truth. Any PR that changes the
-        implementation status of a system must update the status table row
-        here in the same PR. Flag status drift between this file and code.
+        Review Swift changes for actor isolation, Sendable correctness, SwiftData/CloudKit safety, force unwraps, deterministic tests, platform availability checks, and user-facing copy/localization impacts.
     - path: ".github/workflows/**"
       instructions: |
-        Flag any silently skipped required steps (e.g., `|| true`, warning-only
-        lint, optional test runs on required paths). Required gates must
-        hard-fail, not warn.
+        Check CI changes for pinned or trusted actions, least-privilege permissions, explicit setup, deterministic caching, clear failure output, secret hygiene, and no host-specific assumptions.
+    - path: "**/*.{sql,prisma}"
+      instructions: |
+        Check schema and migration changes for destructive operations, missing indexes, transactional safety, reversibility where applicable, and backward compatibility.
+    - path: "**/*.{tf,tfvars,yml,yaml,json}"
+      instructions: |
+        Flag exposed secrets, overly broad permissions, public network exposure, invalid configuration, and infrastructure changes that lack an obvious rollback path.
+    - path: "docs/**"
+      instructions: |
+        Check documentation for accuracy, broken links, stale behavior claims, release/process drift, and consistency with changed code.
+    - path: "**/*.{test,spec}.{ts,tsx,js,jsx,swift}"
+      instructions: |
+        Verify tests assert behavior rather than implementation details, cover edge cases and failure paths, and remain deterministic in CI.
+    - path: "**/*"
+      instructions: |
+        Repository context: Mabry-Ventures/mv-volumearc. Prioritize high-signal findings: security, privacy, data loss, auth, billing, CI/release safety, broken user-visible behavior, missing validation, and missing tests. Suppress low-value formatting nits.
+
+  pre_merge_checks:
+    override_requested_reviewers_only: true
+    title:
+      mode: "warning"
+      requirements: "Use a concise, descriptive PR title. Include an issue key or conventional prefix when the repository uses one."
+    description:
+      mode: "warning"
+    issue_assessment:
+      mode: "warning"
+    custom_checks:
+      - name: "No hardcoded secrets"
+        mode: "error"
+        instructions: "Fail if the PR introduces hardcoded credentials, API keys, private keys, access tokens, or production secrets in committed files."
+      - name: "Tests for behavior changes"
+        mode: "warning"
+        instructions: "Warn when product behavior, data handling, public APIs, or critical workflows change without relevant automated tests or a documented reason tests are not needed."
+      - name: "External input safety"
+        mode: "warning"
+        instructions: "Warn when code that handles external input lacks validation, authorization checks, escaping, parameterized queries, or safe error handling."
+      - name: "Canonical docs stay current"
+        mode: "warning"
+        instructions: "Warn when behavior, architecture, pricing, privacy, release, or policy changes are not reflected in the relevant repository documentation."
+
+  finishing_touches:
+    docstrings:
+      enabled: true
+    unit_tests:
+      enabled: true
+    simplify:
+      enabled: false
+    custom:
+      - name: "cleanup stale imports"
+        enabled: true
+        instructions: "Remove unused imports, dead local variables, and unreachable branches introduced by this PR without changing behavior."
+
+  tools:
+    github-checks:
+      enabled: true
+      timeout_ms: 900000
+    actionlint:
+      enabled: true
+    gitleaks:
+      enabled: true
+    semgrep:
+      enabled: true
+    shellcheck:
+      enabled: true
+    trufflehog:
+      enabled: true
+    markdownlint:
+      enabled: true
+    yamllint:
+      enabled: true
+
+  slop_detection:
+    enabled: true
+    label: "needs-human-review"
 
 chat:
+  art: false
+  allow_non_org_members: false
   auto_reply: true
+  integrations:
+    jira:
+      usage: "auto"
+    linear:
+      usage: "auto"
+
+knowledge_base:
+  opt_out: false
+  web_search:
+    enabled: true
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "AGENTS.md"
+      - "AGENTS.override.md"
+      - "CLAUDE.md"
+      - "GEMINI.md"
+      - ".github/copilot-instructions.md"
+      - ".github/instructions/**"
+      - ".cursor/rules/**"
+  learnings:
+    scope: "auto"
+  issues:
+    scope: "auto"
+  pull_requests:
+    scope: "auto"
+  jira:
+    usage: "auto"
+    project_keys: []
+  linear:
+    usage: "auto"
+    team_keys: []
+  mcp:
+    usage: "auto"
+    disabled_servers: []
+  linked_repositories: []
+
+code_generation:
+  docstrings:
+    language: "en-US"
+    path_instructions:
+      - path: "**/*"
+        instructions: "Generate concise docstrings only where behavior is not obvious from names, types, and surrounding context."
+  unit_tests:
+    path_instructions:
+      - path: "**/*"
+        instructions: "Prefer fast deterministic tests that cover public behavior, edge cases, error paths, and regressions."
+
+issue_enrichment:
+  auto_enrich:
+    enabled: true
+  planning:
+    enabled: true
+    auto_planning:
+      enabled: true
+      labels:
+        - "feature"
+        - "enhancement"
+        - "bug"
+        - "!wip"
