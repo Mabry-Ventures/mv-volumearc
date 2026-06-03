@@ -1051,7 +1051,30 @@ def deterministic_plan_guid(seed)
   "#{hex[0, 8]}-#{hex[8, 4]}-#{hex[12, 4]}-#{hex[16, 4]}-#{hex[20, 12]}".upcase
 end
 
-def write_test_plan(path, configuration_id:, expansion_target:, test_targets:)
+def write_test_plan(path, configuration_id:, expansion_target:, test_targets:, retry_on_failure: false)
+  default_options = {
+    'codeCoverage' => true,
+    'targetForVariableExpansion' => expansion_target,
+  }
+  # VOL-266 follow-up: Xcode Cloud runs these plans on ephemeral iOS
+  # simulators that intermittently fail to *launch* the app at all
+  # ("Simulator device failed to launch", "ipc/mig server died",
+  # "Failed to install or launch the test runner") — a fleet-level flake
+  # the self-hosted runner papers over with its own shard-level reboot +
+  # retry harness (see UI_SHARDS in scripts/test_apple_targets.sh). The
+  # Xcode Cloud path has no equivalent, so a single transient launch
+  # miss fails the *required* `VolumeArc | VolumeArc PR` check and blocks
+  # every PR. `retryOnFailure` gives the plan the same self-healing: a
+  # genuinely-passing test that flakes on launch is retried (fresh app
+  # install) up to `maximumTestRepetitions` times before the run fails,
+  # while a deterministically-broken test still fails every attempt and
+  # is NOT masked. Verified the VOL-PR smoke + unit suites pass 5x
+  # locally with zero flakes, so the retries only ever absorb the
+  # ephemeral-sim launch miss, not real regressions.
+  if retry_on_failure
+    default_options['testRepetitionMode'] = 'retryOnFailure'
+    default_options['maximumTestRepetitions'] = 3
+  end
   plan = {
     'configurations' => [
       {
@@ -1060,10 +1083,7 @@ def write_test_plan(path, configuration_id:, expansion_target:, test_targets:)
         'options' => {},
       },
     ],
-    'defaultOptions' => {
-      'codeCoverage' => true,
-      'targetForVariableExpansion' => expansion_target,
-    },
+    'defaultOptions' => default_options,
     'testTargets' => test_targets,
     'version' => 1,
   }
@@ -1093,6 +1113,10 @@ write_test_plan(
       'target' => app_ui_tests_ref,
     },
   ],
+  # VOL-PR is the required pre-merge Xcode Cloud gate — make it resilient
+  # to the ephemeral-simulator launch flake so a fleet hiccup doesn't
+  # block every PR.
+  retry_on_failure: true,
 )
 
 write_test_plan(

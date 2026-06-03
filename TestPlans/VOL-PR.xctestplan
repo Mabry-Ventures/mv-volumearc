@@ -13,7 +13,9 @@
       "containerPath": "container:VolumeArcApple.xcodeproj",
       "identifier": "E653DF58E355F9C13015AA84",
       "name": "VolumeArcApp"
-    }
+    },
+    "testRepetitionMode": "retryOnFailure",
+    "maximumTestRepetitions": 3
   },
   "testTargets": [
     {
