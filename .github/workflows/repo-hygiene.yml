@@ -73,9 +73,9 @@ jobs:
         # Hard-fail if this lands anywhere other than a trusted Mabry
         # Ventures self-hosted account, so a GitHub-hosted fallback or a
         # misconfigured runner can never produce a misleading green/red
-        # for project-integrity. uid 505 = dedicated volumearc-runner
-        # (preferred); uid 502 = githubrunner flex pool (acceptable — the
-        # gates are platform-equivalent there). Anything else aborts.
+        # for project-integrity. Trust is keyed on the runner's
+        # admin-controlled REGISTRATION IDENTITY (runner name + account),
+        # with the numeric uid kept as a secondary, logged-only signal.
         shell: bash
         run: |
           set -euo pipefail
@@ -84,17 +84,32 @@ jobs:
           runner="${RUNNER_NAME:-unknown}"
           echo "Repo Hygiene preflight: uid=${uid} user=${user} runner=${runner}"
           echo "  GITHUB_WORKSPACE=${GITHUB_WORKSPACE}"
+          # VOL-266 follow-up: trust the runner by its admin-controlled
+          # REGISTRATION IDENTITY (runner name + account), not by a
+          # hardcoded numeric uid. A self-hosted runner can only carry the
+          # `mv-volumearc-runner` label and report `volumearc-runner` /
+          # `githubrunner` as its account if a repo admin registered it
+          # with a registration token — repo code (the generator etc.,
+          # which only runs in later steps) cannot forge either. The
+          # numeric uid is an OS-provisioning detail that legitimately
+          # shifts when a host is reprovisioned (volumearc-runner moved
+          # 505 -> 504 on 2026-06-02), so gating on it produced false
+          # rejections that blocked the *required* Repo Hygiene check
+          # fleet-wide. uid is kept as a logged, secondary signal only.
+          if [[ "${runner}" == "mv-volumearc-runner" && "${user}" == "volumearc-runner" ]]; then
+            echo "On dedicated volumearc-runner (runner=${runner} user=${user} uid=${uid})."
+          elif [[ "${runner}" =~ ^mv-shared-0[1-4]$ && "${user}" == "githubrunner" ]]; then
+            echo "::warning::Repo Hygiene is running on the shared flex pool (runner=${runner} user=${user} uid=${uid}) rather than the dedicated volumearc-runner. The 'mv-volumearc-runner' label matches both and these no-build gates run correctly on either, so this is allowed — noting it for visibility."
+          else
+            echo "::error::Repo Hygiene landed on an untrusted runner (runner=${runner} user=${user} uid=${uid}). Expected a Mabry Ventures self-hosted account — the dedicated volumearc-runner host or the mv-shared-0[1-4] githubrunner flex pool. A GitHub-hosted or unregistered runner must not run the project-integrity gates. Refusing to continue."
+            exit 1
+          fi
+          # Defense-in-depth: surface an unrecognized uid for visibility
+          # even when the registration identity is trusted, so a future
+          # reprovision is noticed in the logs without a hard fail.
           case "${uid}" in
-            505)
-              echo "On dedicated volumearc-runner (uid 505)."
-              ;;
-            502)
-              echo "::warning::Repo Hygiene is running on the shared flex pool (githubrunner uid 502, runner=${runner}) rather than the dedicated volumearc-runner (uid 505). The 'mv-volumearc-runner' label matches both and these no-build gates run correctly on either, so this is allowed — noting it for visibility."
-              ;;
-            *)
-              echo "::error::Repo Hygiene landed on an unexpected uid=${uid} (user=${user}, runner=${runner}). Expected a Mabry Ventures self-hosted account — volumearc-runner (uid 505) or the githubrunner flex pool (uid 502). A GitHub-hosted or misconfigured runner must not run the project-integrity gates. Refusing to continue."
-              exit 1
-              ;;
+            502|504|505) ;;
+            *) echo "::warning::Trusted runner ${runner} is on an unrecognized uid=${uid} (known: 502 flex pool, 504/505 dedicated). Allowed via registration identity; refresh the known-uid note if this host was reprovisioned." ;;
           esac
           # Workspace-ownership consistency: the runner agent creates
           # GITHUB_WORKSPACE during job setup (before this step), owned by
