@@ -10,10 +10,10 @@
 // preserves stable bubble identity:
 //   1. `appendEmptyCoachMessage()` creates a `CoachMessage` with a
 //      `UUID` and appends to `coachMessages` (one-time, O(1))
-//   2. For each chunk, `replaceCoachMessage(id:content:)` swaps the
-//      array element at that index with a new `CoachMessage` carrying
-//      the same UUID and the accumulated content (O(n) per token to
-//      copy the string, O(1) array work)
+//   2. The first visible token is published immediately; later chunks
+//      are micro-batched before `replaceCoachMessage(id:content:)`
+//      swaps the same array element with a new `CoachMessage` carrying
+//      the same UUID (O(n) string accumulation, bounded array publishes)
 //   3. `CoachView.swift:129` keys its `ForEach` on `\.element.id` —
 //      SwiftUI's diff sees the same identifier and re-renders only the
 //      bubble whose content changed; other bubbles in the transcript
@@ -43,7 +43,7 @@ import VolumeArcCore
 @MainActor
 final class VolumeArcCoachStreamingPerfTests: XCTestCase {
 
-    /// Stream 1000 tokens through the same code path that
+    /// Stream 1000 chunks through the same code path that
     /// `WorkoutDashboardModel.streamCoachResponse` uses for live coach
     /// responses. The 1000-token figure is intentional overkill (real
     /// responses cap at ~400 tokens under the current relay's
@@ -51,10 +51,10 @@ final class VolumeArcCoachStreamingPerfTests: XCTestCase {
     /// Gemini's SSE pacing) — exercising a 2.5× headroom ensures the
     /// contract holds for longer responses or larger context windows.
     ///
-    /// Asserts: 1000 token appends complete in under 250ms on the
-    /// test runner. That's ~250µs per token, which leaves a 10×
-    /// safety margin over the ~25µs observed locally. A regression to
-    /// O(n²) per token would push the total past 2-5 seconds.
+    /// Asserts: 1000 chunk appends complete in under 250ms on the
+    /// test runner. The model publishes the first visible token, then
+    /// micro-batches transcript updates so hosted CI variance does not
+    /// turn a long SSE response into 1000 main-actor publishes.
     func testStreamingAppendIsLinearInResponseLength() throws {
         let provider = StubStreamingCoachProvider(chunkCount: 1000)
         let model = try makeModel(aiProvider: provider)
