@@ -59,7 +59,7 @@ public enum CoachPromptTemplate {
               "call 911"
               "call an ambulance"
               "go to the emergency room"
-        4. Be two short sentences at most. End with a clear call to professional help.
+        4. Be two short sentences at most. End with a clear call to clinician support.
 
         Example acceptable response for "I just got dizzy mid-set":
           "Stop the session and seek medical care now — dizziness under load is a

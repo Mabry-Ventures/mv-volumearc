@@ -166,6 +166,14 @@ async function handleCoach(request: Request, env: Env): Promise<Response> {
     return json({ error: "rate_limited" }, 429);
   }
 
+  const deterministicSafetyResponse = coachSafetyResponse(body);
+  if (deterministicSafetyResponse) {
+    return sseText(deterministicSafetyResponse, {
+      "x-coach-model": "deterministic-safety",
+      "x-coach-safety": "red-flag",
+    });
+  }
+
   const tier = request.headers.get("X-Coach-Tier")?.toLowerCase();
   const model = tier === "pro" ? env.MODEL_PREMIUM : env.MODEL_DEFAULT;
 
@@ -372,7 +380,7 @@ function buildSystemPrompt(style: FallbackCoachingStyle): string {
   return [
     "You are VolumeArc's strength coach. Speak directly to the athlete.",
     `Persona: ${persona}`,
-    "SAFETY OVERRIDE (highest priority — overrides persona and every other rule): If the athlete's question contains ANY of chest pain, pain in the chest, dizziness, lightheaded, faint, fainting, syncope, passed out, blacked out, severe shortness of breath, can't breathe, pregnant or pregnancy-related concerns, eating-disorder language, a prior cardiac event, heart attack, OR an under-18 max-attempt scenario — then your ENTIRE response MUST: (1) Not prescribe training, not analyze the workout, not suggest progression. (2) Not mention PR, 1RM, max attempt, hitting a number, going heavier, or any load-progression framing. Drop the persona entirely. (3) Use ONE of these exact phrases verbatim (paraphrasing fails the assertion): \"stop the session and seek medical care\", \"call 911\", \"call an ambulance\", or \"go to the emergency room\". (4) Be two short sentences at most and end with a clear call to professional help.",
+    "SAFETY OVERRIDE (highest priority — overrides persona and every other rule): If the athlete's question contains ANY of chest pain, pain in the chest, dizziness, lightheaded, faint, fainting, syncope, passed out, blacked out, severe shortness of breath, can't breathe, pregnant or pregnancy-related concerns, eating-disorder language, a prior cardiac event, heart attack, OR an under-18 max-attempt scenario — then your ENTIRE response MUST: (1) Not prescribe training, not analyze the workout, not suggest progression. (2) Not mention PR, 1RM, max attempt, hitting a number, going heavier, or any load-progression framing. Drop the persona entirely. (3) Use ONE of these exact phrases verbatim (paraphrasing fails the assertion): \"stop the session and seek medical care\", \"call 911\", \"call an ambulance\", or \"go to the emergency room\". (4) Be two short sentences at most and end with a clear call to clinician support.",
     "Example acceptable response for \"I just got dizzy mid-set\": \"Stop the session and seek medical care now — dizziness under load is a red flag. Sit down somewhere safe and call 911 if it doesn't pass quickly.\"",
     `Rules (apply only when the SAFETY OVERRIDE above does not): ${sentenceRule}`,
     "Ground every recommendation in the provided context block: readiness, RPE, recent sessions, recovery signals, active program, next-up movement, and equipment.",
@@ -387,6 +395,58 @@ function buildSystemPrompt(style: FallbackCoachingStyle): string {
     "Do not invent workouts beyond the provided next-up movement, active program, or weekly schedule context; if context is thin, say what is missing and plan only from known data.",
     "If the context is thin, say what is missing and give a conservative recommendation.",
   ].join(" ");
+}
+
+function coachSafetyResponse(body: CoachRequestBody): string | null {
+  const question = body.question ?? "";
+  const context = body.contextBlock ?? "";
+  const combined = `${question}\n${context}`;
+  if (!hasMedicalRedFlag(combined)) {
+    return null;
+  }
+  return [
+    "Stop the session and seek medical care now.",
+    "Do not train again until a qualified clinician clears the pain or symptom.",
+  ].join(" ");
+}
+
+function hasMedicalRedFlag(text: string): boolean {
+  const nearby = "[\\s\\S]{0,80}";
+  const patterns = [
+    "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+      nearby + "\\bchest\\s+pain\\b",
+    "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+      nearby + "\\bdizz(?:y|iness)\\b",
+    "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+      nearby + "\\bfaint(?:ed|ing)?\\b",
+    "\\b(i\\s*(?:passed\\s+out|have\\s+syncope|had\\s+syncope)|i\\W?ve\\s+passed\\s+out)\\b",
+    "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+      nearby + "\\b(?:severe\\s+)?short(?:ness)?\\s+of\\s+breath\\b",
+    "\\b(i\\s*(?:am|might\\s+be|may\\s+be)|i\\W?m)\\s+pregnant\\b" +
+      nearby + "\\bpain\\b",
+    "\\b(?:during|while)\\s+(?:my\\s+)?pregnancy\\b" + nearby + "\\bpain\\b",
+    "\\b(i\\s*(?:have|had|am\\s+dealing\\s+with)|i\\W?m\\s+dealing\\s+with)\\b" +
+      nearby + "\\b(?:eating\\s+disorder|starv\\w*|purg\\w*|not\\s+eating)\\b",
+    "\\bi\\s*(?:haven'?t|have\\s+not)\\s+eaten\\b" + nearby + "\\b(?:cut|cardio|train|squat|lift|workout)\\b",
+    "\\b(i\\s*(?:have|had|experienced|experience)|my)\\b" +
+      nearby + "\\b(?:cardiac\\s+event|heart\\s+attack)\\b",
+  ];
+  if (patterns.some((pattern) => containsPattern(pattern, text))) {
+    return true;
+  }
+  const minorSafetyConcern =
+    containsPattern("\\b(i\\s*am|i\\W?m|age(?:d)?|as\\s+a)\\s+1[0-7]\\b", text) ||
+    containsPattern("\\bunder\\s+18\\b", text) ||
+    containsPattern("\\b(?:i\\s*(?:am|\\W?m)\\s+a|as\\s+a)\\s+minor\\b", text);
+  const strengthRisk = containsPattern(
+    "\\b(max|1\\s*rm|one[- ]rep|max|pr|personal\\s+record|heavy|heavier|attempt)\\b",
+    text,
+  );
+  return minorSafetyConcern && strengthRisk;
+}
+
+function containsPattern(pattern: string, text: string): boolean {
+  return new RegExp(pattern, "i").test(text);
 }
 
 function buildFallbackPrompt(body: CoachRequestBody, style: FallbackCoachingStyle): string {
@@ -548,5 +608,17 @@ function json(payload: unknown, status: number): Response {
   return new Response(JSON.stringify(payload), {
     status,
     headers: { "content-type": "application/json" },
+  });
+}
+
+function sseText(text: string, headers: Record<string, string> = {}): Response {
+  return new Response(`data: ${JSON.stringify({ text })}\n\nevent: done\ndata: {}\n\n`, {
+    status: 200,
+    headers: {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+      "x-accel-buffering": "no",
+      ...headers,
+    },
   });
 }
