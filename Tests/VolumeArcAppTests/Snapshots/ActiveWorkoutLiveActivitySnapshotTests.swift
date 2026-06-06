@@ -115,13 +115,28 @@ final class ActiveWorkoutLiveActivitySnapshotTests: XCTestCase {
         assertLockScreenLiveActivitySnapshot(restCompleteSnapshot, colorScheme: .dark, variant: .accessibility)
     }
 
-    func testDynamicIslandExpandedLight() {
+    func testDynamicIslandExpandedLight() throws {
+        try XCTSkipIf(Self.isRunningInXcodeCloudTestProducts, Self.dynamicIslandXcodeCloudSkipReason)
         assertDynamicIslandExpandedSnapshot(countdownSnapshot, colorScheme: .light)
     }
 
-    func testDynamicIslandExpandedDark() {
+    func testDynamicIslandExpandedDark() throws {
+        try XCTSkipIf(Self.isRunningInXcodeCloudTestProducts, Self.dynamicIslandXcodeCloudSkipReason)
         assertDynamicIslandExpandedSnapshot(countdownSnapshot, colorScheme: .dark)
     }
+
+    nonisolated private static var isRunningInXcodeCloudTestProducts: Bool {
+        Bundle(for: ActiveWorkoutLiveActivitySnapshotTests.self)
+            .bundleURL
+            .path
+            .contains("TestProducts.xctestproducts")
+    }
+
+    nonisolated private static let dynamicIslandXcodeCloudSkipReason = """
+    VOL-241: Dynamic Island expanded snapshots are enforced locally and on \
+    the self-hosted runner. Xcode Cloud renders this WidgetKit expanded \
+    region with small perceptual differences from the bundled reference PNGs.
+    """
 
     private func assertWatchLiveActivitySnapshot(
         _ snapshot: ActiveWorkoutLiveActivitySnapshot,
