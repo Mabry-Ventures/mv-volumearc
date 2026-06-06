@@ -53,7 +53,7 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
         self.onConnectAppleAccount = onConnectAppleAccount
         self.onResumeFromSavedProgress = onResumeFromSavedProgress
         self._step = State(initialValue: Self.initialStep())
-        self._result = State(initialValue: OnboardingResult())
+        self._result = State(initialValue: Self.initialResult())
         self._healthAuthorizationDidComplete = State(initialValue: false)
         self._notificationAuthorizationDidComplete = State(initialValue: false)
     }
@@ -131,6 +131,9 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
                   savedStep != .welcome else { return }
             didRecordResumeTelemetry = true
             onResumeFromSavedProgress?(savedStep.rawValue)
+        }
+        .onChange(of: result) { _, newResult in
+            Self.saveResult(newResult)
         }
     }
 
@@ -1013,7 +1016,21 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
         return savedStep
     }
 
+    private static func initialResult() -> OnboardingResult {
+        guard let data = OnboardingProgressStore.loadResultData(),
+              let result = try? JSONDecoder().decode(OnboardingResult.self, from: data) else {
+            return OnboardingResult()
+        }
+        return result
+    }
+
+    private static func saveResult(_ result: OnboardingResult) {
+        guard let data = try? JSONEncoder().encode(result) else { return }
+        OnboardingProgressStore.saveResultData(data)
+    }
+
     private func saveStep(_ nextStep: Step) {
+        Self.saveResult(result)
         step = nextStep
         OnboardingProgressStore.saveStepRaw(nextStep.rawValue)
     }
@@ -1034,7 +1051,7 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
 }
 
 /// Result of completing the onboarding flow.
-public struct OnboardingResult: Sendable {
+public struct OnboardingResult: Codable, Equatable, Sendable {
     public var name: String
     public var advancementLevel: AdvancementLevel
     public var weeklyDays: Int

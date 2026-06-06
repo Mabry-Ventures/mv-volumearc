@@ -171,12 +171,13 @@ final class WatchConnectivityCoordinatorTests: XCTestCase {
         let store = UserDefaultsWatchPendingPayloadStore(defaults: ephemeralDefaults())
         await store.enqueue(samplePayload(workoutID: "w-1", body: "first"))
         await store.enqueue(samplePayload(workoutID: "w-2", body: "second"))
+        await store.enqueue(samplePayload(workoutID: "w-3", body: "third"))
 
         // Transport reports reachable but the second send throws —
         // simulates a reconnect that goes flaky mid-flush. The
-        // throwing payload should be re-queued so a subsequent flush
-        // retries it; payloads already drained ahead of the failure
-        // are gone (the transport accepted them).
+        // throwing payload and untouched suffix should be re-queued
+        // so a subsequent flush retries them; payloads already drained
+        // ahead of the failure are gone (the transport accepted them).
         let transport = FakeTransport(reachable: true, failingAfter: 1)
         let telemetry = InMemoryTelemetrySink()
         let coordinator = WatchConnectivityCoordinator(
@@ -193,7 +194,9 @@ final class WatchConnectivityCoordinatorTests: XCTestCase {
         }
 
         let remaining = await coordinator.pendingPayloadCount()
-        XCTAssertEqual(remaining, 1, "Second payload should be re-queued for the next flush")
+        XCTAssertEqual(remaining, 2, "Failed and untouched payloads should be re-queued for the next flush")
+        let queuedBodies = await store.dequeueAll().map(\.body)
+        XCTAssertEqual(queuedBodies, ["second", "third"])
 
         let sent = await transport.sent
         XCTAssertEqual(sent.count, 1)
@@ -203,10 +206,10 @@ final class WatchConnectivityCoordinatorTests: XCTestCase {
             $0.category == "watch" && $0.name == "payload.replayed"
         }
         XCTAssertEqual(replayEvents.count, 1)
-        let requeueEvent = telemetry.currentEvents.first {
+        let requeueEvents = telemetry.currentEvents.filter {
             $0.category == "watch" && $0.name == "payload.queued"
         }
-        XCTAssertEqual(requeueEvent?.metadata["reason"], "replay_failed")
+        XCTAssertEqual(requeueEvents.map { $0.metadata["reason"] }, ["replay_failed", "replay_failed"])
     }
 
     // MARK: - UnavailableWatchSessionTransport (real type, not a fake)

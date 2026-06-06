@@ -231,6 +231,9 @@ performance_budgets = [
     for metric in budgets_doc["metrics"]
     if str(metric.get("test", "")).startswith("VolumeArcPerfTests.")
 ]
+if not performance_budgets:
+    print("FAIL: no VolumeArcPerfTests performance budgets were found.", file=sys.stderr)
+    sys.exit(1)
 
 for budget in performance_budgets:
     matches = [metric for metric in metrics if match_metric(metric, budget)]

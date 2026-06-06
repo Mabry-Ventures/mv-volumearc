@@ -32,6 +32,23 @@ mkdir -p "$WORK_DIR"
 
 hydrated_count=0
 
+download_artifact() {
+  local artifact_url="$1"
+  local archive_path="$2"
+  curl \
+    --fail \
+    --location \
+    --show-error \
+    --silent \
+    --connect-timeout 20 \
+    --max-time 300 \
+    --retry 3 \
+    --retry-delay 2 \
+    --retry-connrefused \
+    "$artifact_url" \
+    --output "$archive_path"
+}
+
 while IFS=$'\t' read -r target_name artifact_url expected_checksum; do
   [ -z "$target_name" ] && continue
 
@@ -49,14 +66,14 @@ while IFS=$'\t' read -r target_name artifact_url expected_checksum; do
     cp "$cache_file" "$archive_path"
   else
     echo "Downloading $target_name XCFramework from $artifact_url"
-    curl --fail --location --show-error --silent "$artifact_url" --output "$archive_path"
+    download_artifact "$artifact_url" "$archive_path"
   fi
 
   actual_checksum="$(swift package compute-checksum "$archive_path")"
   if [ "$actual_checksum" != "$expected_checksum" ]; then
     if [ -f "$cache_file" ]; then
       echo "Cached $target_name artifact checksum mismatch; downloading a fresh copy."
-      curl --fail --location --show-error --silent "$artifact_url" --output "$archive_path"
+      download_artifact "$artifact_url" "$archive_path"
       actual_checksum="$(swift package compute-checksum "$archive_path")"
     fi
 

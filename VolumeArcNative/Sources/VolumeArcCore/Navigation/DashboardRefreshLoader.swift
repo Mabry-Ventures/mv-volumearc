@@ -126,11 +126,18 @@ public actor DashboardRefreshLoader {
         _ externalSessions: [RecentSession],
         limit: Int
     ) -> [RecentSession] {
-        Array(
-            (persistedSessions + externalSessions)
-                .sorted { $0.date > $1.date }
-                .prefix(limit)
-        )
+        var seenIdentifiers = Set<String>()
+        var merged: [RecentSession] = []
+
+        for session in (persistedSessions + externalSessions).sorted(by: { $0.date > $1.date }) {
+            if let identifier = session.identifier {
+                guard seenIdentifiers.insert(identifier).inserted else { continue }
+            }
+            merged.append(session)
+            guard merged.count < limit else { break }
+        }
+
+        return merged
     }
 
     private func loadProfile(in context: ModelContext) throws -> UserProfileRecord? {

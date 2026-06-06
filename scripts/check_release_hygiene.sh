@@ -44,8 +44,8 @@ placeholder_patterns = [
 ]
 placeholder_checked_files = %w[
   marketing/src/components/Pricing.tsx
-  marketing/src/app/terms/page.tsx
-  marketing/src/app/privacy/page.tsx
+  marketing/src/app/(main)/terms/page.tsx
+  marketing/src/app/(main)/privacy/page.tsx
   fastlane/metadata/en-US/description.txt
   fastlane/metadata/en-US/promotional_text.txt
   fastlane/metadata/en-US/release_notes.txt
@@ -111,7 +111,10 @@ current_docs.each do |path|
 end
 
 placeholder_checked_files.each do |path|
-  next unless File.file?(path)
+  unless File.file?(path)
+    failures << "#{path}: required placeholder/legal/App Store check input is missing"
+    next
+  end
 
   text = File.read(path, encoding: "UTF-8")
   placeholder_patterns.each do |pattern|
@@ -122,7 +125,10 @@ placeholder_checked_files.each do |path|
 end
 
 product_voice_checked_files.each do |path|
-  next unless File.file?(path)
+  unless File.file?(path)
+    failures << "#{path}: required product-voice check input is missing"
+    next
+  end
 
   text = File.read(path, encoding: "UTF-8")
   text.each_line.with_index(1) do |line, line_number|

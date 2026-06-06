@@ -37,6 +37,22 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         XCTAssertEqual(defaults.weeklyTrainingDays, 5)
     }
 
+    func testOnboardingProgressStorePersistsDraftResultData() {
+        OnboardingProgressStore.clear()
+        defer { OnboardingProgressStore.clear() }
+
+        let data = Data("draft-result".utf8)
+        OnboardingProgressStore.saveStepRaw(3)
+        OnboardingProgressStore.saveResultData(data)
+
+        XCTAssertEqual(OnboardingProgressStore.loadStepRaw(), 3)
+        XCTAssertEqual(OnboardingProgressStore.loadResultData(), data)
+
+        OnboardingProgressStore.clear()
+        XCTAssertNil(OnboardingProgressStore.loadStepRaw())
+        XCTAssertNil(OnboardingProgressStore.loadResultData())
+    }
+
     // MARK: - WatchConnectivity payload + dictionary round-trip
 
     func testWatchPayloadAsDictionaryAndBack() {
@@ -204,6 +220,50 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         await store.clear()
         let cleared = await store.load()
         XCTAssertNil(cleared)
+    }
+
+    func testActiveSessionStoresClearWhenSavedPlanIsEmpty() {
+        let workoutID = "active-empty"
+        let nonEmptyState = ActiveWorkoutSessionState(
+            workoutID: workoutID,
+            plan: WorkoutSessionPlan(
+                title: "Saved session",
+                exercises: [
+                    WeeklyWorkoutExercise(
+                        name: "Back Squat",
+                        sets: 1,
+                        reps: 5,
+                        weight: 225,
+                        targetRPE: 8,
+                        restSeconds: 150
+                    ),
+                ]
+            ),
+            activeExerciseIndex: 0,
+            loggedSetCountForActiveExercise: 0
+        )
+        let emptyState = ActiveWorkoutSessionState(
+            workoutID: workoutID,
+            plan: WorkoutSessionPlan(title: "Empty session", exercises: []),
+            activeExerciseIndex: 0,
+            loggedSetCountForActiveExercise: 0
+        )
+
+        let suite = "VOL-52.active.empty.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite) ?? .standard
+        defaults.removePersistentDomain(forName: suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let defaultsStore = UserDefaultsActiveSessionStateStore(defaults: defaults)
+        defaultsStore.save(nonEmptyState)
+        XCTAssertNotNil(defaultsStore.load(workoutID: workoutID))
+        defaultsStore.save(emptyState)
+        XCTAssertNil(defaultsStore.load(workoutID: workoutID))
+
+        let memoryStore = InMemoryActiveWorkoutSessionStateStore()
+        memoryStore.save(nonEmptyState)
+        XCTAssertNotNil(memoryStore.load(workoutID: workoutID))
+        memoryStore.save(emptyState)
+        XCTAssertNil(memoryStore.load(workoutID: workoutID))
     }
 
     func testWatchConnectivityCoordinatorEnqueuesOnFailure() async throws {
@@ -589,12 +649,13 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
     // MARK: - Session profiles
 
     func testWorkoutSessionProfileParseFallsBackToDefault() {
+        XCTAssertEqual(WorkoutSessionProfile.parse("leg-day"), .legDay)
         XCTAssertEqual(WorkoutSessionProfile.parse("Leg Day"), .legDay)
         XCTAssertEqual(WorkoutSessionProfile.parse("Upper Strength"), .upperStrength)
         XCTAssertEqual(WorkoutSessionProfile.parse("not-a-profile"), .defaultProfile)
     }
 
-    func testWorkoutSessionProfileRulesResolveLegDayOnTuesdayAndThursday() throws {
+    func testWorkoutSessionProfileRulesResolveLegDayOnLowerBodyScheduleDays() throws {
         let preferences = WorkoutSessionProfilePreferences(
             selectedProfile: .defaultProfile,
             legDayRuleEnabled: true,
@@ -602,11 +663,11 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         )
         let calendar = Calendar(identifier: .gregorian)
         let tuesday = try XCTUnwrap(DateComponents(calendar: calendar, year: 2026, month: 6, day: 2).date)
-        let thursday = try XCTUnwrap(DateComponents(calendar: calendar, year: 2026, month: 6, day: 4).date)
+        let friday = try XCTUnwrap(DateComponents(calendar: calendar, year: 2026, month: 6, day: 5).date)
         let wednesday = try XCTUnwrap(DateComponents(calendar: calendar, year: 2026, month: 6, day: 3).date)
 
         XCTAssertEqual(preferences.resolvedProfile(sessionMinutes: 60, date: tuesday, calendar: calendar), .legDay)
-        XCTAssertEqual(preferences.resolvedProfile(sessionMinutes: 60, date: thursday, calendar: calendar), .legDay)
+        XCTAssertEqual(preferences.resolvedProfile(sessionMinutes: 60, date: friday, calendar: calendar), .legDay)
         XCTAssertEqual(preferences.resolvedProfile(sessionMinutes: 60, date: wednesday, calendar: calendar), .defaultProfile)
     }
 

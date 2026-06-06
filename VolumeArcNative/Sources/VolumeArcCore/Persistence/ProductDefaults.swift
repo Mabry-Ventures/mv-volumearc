@@ -204,9 +204,11 @@ public final class UserDefaultsActiveSessionStateStore: ActiveWorkoutSessionStat
     }
 
     public func save(_ state: ActiveWorkoutSessionState) {
-        guard state.plan.isEmpty == false,
-              let data = try? JSONEncoder().encode(state)
-        else { return }
+        guard state.plan.isEmpty == false else {
+            clear(workoutID: state.workoutID)
+            return
+        }
+        guard let data = try? JSONEncoder().encode(state) else { return }
         defaults.set(data, forKey: key(for: state.workoutID))
     }
 
@@ -234,6 +236,10 @@ public final class InMemoryActiveWorkoutSessionStateStore: ActiveWorkoutSessionS
     public func save(_ state: ActiveWorkoutSessionState) {
         lock.lock()
         defer { lock.unlock() }
+        guard state.plan.isEmpty == false else {
+            states.removeValue(forKey: state.workoutID)
+            return
+        }
         states[state.workoutID] = state
     }
 
@@ -245,13 +251,37 @@ public final class InMemoryActiveWorkoutSessionStateStore: ActiveWorkoutSessionS
 }
 
 public enum WorkoutSessionProfile: String, CaseIterable, Codable, Sendable, Equatable {
-    case defaultProfile = "Default"
-    case legDay = "Leg Day"
-    case upperStrength = "Upper Strength"
-    case shortSession = "Short Session"
+    case defaultProfile = "default"
+    case legDay = "leg-day"
+    case upperStrength = "upper-strength"
+    case shortSession = "short-session"
 
     public static func parse(_ rawValue: String) -> WorkoutSessionProfile {
-        allCases.first { $0.rawValue == rawValue } ?? .defaultProfile
+        let normalized = rawValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        switch normalized {
+        case "default":
+            return .defaultProfile
+        case "leg-day", "leg day":
+            return .legDay
+        case "upper-strength", "upper strength":
+            return .upperStrength
+        case "short-session", "short session":
+            return .shortSession
+        default:
+            return .defaultProfile
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self = Self.parse(try container.decode(String.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
     }
 }
 
@@ -279,8 +309,8 @@ public struct WorkoutSessionProfilePreferences: Codable, Equatable, Sendable {
             return .shortSession
         }
 
-        let weekday = calendar.component(.weekday, from: date)
-        if legDayRuleEnabled, weekday == 3 || weekday == 5 {
+        let trainingWeekday = WeeklyWorkout.trainingWeekday(for: date, calendar: calendar)
+        if legDayRuleEnabled, trainingWeekday == 2 || trainingWeekday == 5 {
             return .legDay
         }
 

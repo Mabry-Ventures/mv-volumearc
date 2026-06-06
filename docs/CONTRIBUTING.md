@@ -355,7 +355,7 @@ A `Tests/.swiftlint.yml` override disables `implicitly_unwrapped_optional`, `for
 
 ## Security tooling (VOL-143, VOL-253)
 
-Two security workflows run on the self-hosted runner per the "zero GitHub-hosted jobs" policy:
+Security workflows run on the self-hosted runner because they inspect repository history and release gates. Portable GitHub API/web jobs may use GitHub-hosted Linux under the runner policy above.
 
 | Workflow | What | Triggers |
 |---|---|---|

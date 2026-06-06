@@ -157,6 +157,18 @@ final class VolumeArcSentryConfigurationTests: XCTestCase {
         XCTAssertNil(VolumeArcSentryConfiguration.validatedDSN(from: "$(SENTRY_DSN)"))
     }
 
+    func testValidatedDSNRejectsPlainHTTP() {
+        XCTAssertNil(VolumeArcSentryConfiguration.validatedDSN(
+            from: "http://publicKey@o123456.ingest.sentry.io/987654"
+        ))
+    }
+
+    func testValidatedDSNRejectsMissingPublicKey() {
+        XCTAssertNil(VolumeArcSentryConfiguration.validatedDSN(
+            from: "https://o123456.ingest.sentry.io/987654"
+        ))
+    }
+
     func testValidatedDSNRejectsWhitespaceContamination() {
         XCTAssertNil(VolumeArcSentryConfiguration.validatedDSN(
             from: " https://publicKey@o123456.ingest.sentry.io/987654"

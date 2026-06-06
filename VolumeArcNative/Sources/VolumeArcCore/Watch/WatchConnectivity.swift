@@ -473,14 +473,17 @@ public actor WatchConnectivityCoordinator {
     public func flushPendingIfReachable() async throws {
         guard await transport.isReachable() else { return }
         let pending = await payloadStore.dequeueAll()
-        for payload in pending {
+        for (index, payload) in pending.enumerated() {
             do {
                 try await transport.send(payload)
                 recordPayloadReplayed(payload)
             } catch {
-                // Put it back in the queue if sending still fails.
-                await payloadStore.enqueue(payload)
-                recordPayloadQueued(payload, reason: "replay_failed")
+                // Put the failed payload and every untouched payload back in
+                // original order so a partial replay cannot drop work.
+                for payloadToRequeue in pending[index...] {
+                    await payloadStore.enqueue(payloadToRequeue)
+                    recordPayloadQueued(payloadToRequeue, reason: "replay_failed")
+                }
                 throw error
             }
         }

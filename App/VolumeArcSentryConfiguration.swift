@@ -261,7 +261,10 @@ enum VolumeArcSentryConfiguration {
 
         guard let components = URLComponents(string: trimmed),
               let scheme = components.scheme?.lowercased(),
-              ["http", "https"].contains(scheme),
+              scheme == "https",
+              let publicKey = components.user,
+              publicKey.isEmpty == false,
+              components.password == nil,
               let host = components.host,
               host.isEmpty == false,
               components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).isEmpty == false

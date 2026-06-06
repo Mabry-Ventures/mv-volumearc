@@ -110,6 +110,7 @@ final class VolumeArcCoachPromptTemplateTests: XCTestCase {
         - Dumbbell rows: 3 sets of 10 reps
         - Light lunges: 3 sets of 10 reps per leg
         - Light planks: 3 sets of 30 seconds
+        - Side plank: 30 seconds per side
         - Light calf raises: 3 sets of 15 reps
         """
 
@@ -124,12 +125,15 @@ final class VolumeArcCoachPromptTemplateTests: XCTestCase {
             "Dumbbell rows",
             "Light lunges",
             "Light planks",
+            "Side plank",
             "Light calf raises",
         ])
         XCTAssertEqual(extractedPlan.exercises.first?.sets, 3)
         XCTAssertEqual(extractedPlan.exercises.first?.reps, 10)
         XCTAssertEqual(extractedPlan.exercises.first?.weight, 20)
         XCTAssertEqual(extractedPlan.exercises[2].reps, 30)
+        XCTAssertEqual(extractedPlan.exercises[3].sets, 1)
+        XCTAssertEqual(extractedPlan.exercises[3].reps, 30)
     }
 
     func testCoachWorkoutPlanExtractorIgnoresVagueAdviceWithoutSetsAndReps() {

@@ -806,6 +806,42 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("short-circuits red flags from prompt, system, and message history", async () => {
+    const env = makeEnv();
+    const cases = [
+      JSON.stringify({
+        intent: "free",
+        style: "minimal",
+        prompt: "I feel lightheaded after deadlifts. Can I keep lifting?",
+        system: "client rendered system",
+      }),
+      JSON.stringify({
+        intent: "free",
+        style: "minimal",
+        prompt: "What should I do next?",
+        system: "I can't breathe after the last set.",
+      }),
+      JSON.stringify({
+        intent: "free",
+        style: "minimal",
+        prompt: "What should I do next?",
+        system: "client rendered system",
+        messages: [{ role: "user", content: "I blacked out during squats." }],
+      }),
+    ];
+
+    for (const body of cases) {
+      vi.mocked(fetch).mockClear();
+      const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+      expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+      await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+      expect(fetch).not.toHaveBeenCalled();
+    }
+  });
+
   it("preserves client-rendered prompt and system fields when present", async () => {
     const env = makeEnv();
     const body = JSON.stringify({

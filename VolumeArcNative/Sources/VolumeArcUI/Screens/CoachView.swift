@@ -550,7 +550,7 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
             return String(localized: "Ready to review in Workouts.", comment: "Coach workout handoff empty summary")
         }
         return String(
-            localized: "\(plan.exercises.count) moves - \(firstExercise.name) first",
+            localized: "^[\(plan.exercises.count) move](inflect: true) - \(firstExercise.name) first",
             comment: "Coach workout handoff summary with exercise count and first lift"
         )
     }

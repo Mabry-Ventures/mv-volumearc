@@ -412,9 +412,10 @@ public struct TodayView: View {
 
     private var recentSessionsSection: some View {
         let count = weeklyVolumeSummary.currentWeekSessionCount
-        let subtitle = count == 1
-            ? String(localized: "1 session this week", comment: "Recent sessions subtitle, singular form")
-            : String(localized: "\(count) sessions this week", comment: "Recent sessions subtitle, zero or plural form")
+        let subtitle = String(
+            localized: "^[\(count) session](inflect: true) this week",
+            comment: "Recent sessions subtitle with current week session count"
+        )
         return VStack(alignment: .leading, spacing: VA.Space.md) {
             VASectionHeader(
                 String(localized: "Recent", comment: "Section header on Today tab for recent workout history"),
@@ -636,9 +637,10 @@ private extension TodayView {
             return "\(source) • \(session.durationMinutes)min"
         }
         let rpeText = String(format: "%.1f", session.averageRPE)
-        let setsText = session.completedSetCount == 1
-            ? String(localized: "1 set", comment: "Session summary set count, singular")
-            : String(localized: "\(session.completedSetCount) sets", comment: "Session summary set count, plural")
+        let setsText = String(
+            localized: "^[\(session.completedSetCount) set](inflect: true)",
+            comment: "Session summary set count"
+        )
         return "\(setsText) • \(session.durationMinutes)min • RPE \(rpeText)"
     }
 

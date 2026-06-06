@@ -223,8 +223,8 @@ require_plist_sentry_dsn() {
     echo "::error::VOL-133: expected configured Sentry DSN in ${plist}, got ${actual:-<empty>}"
     exit 1
   fi
-  if [[ ! "$actual" =~ ^https?://[^/]+/.+ ]]; then
-    echo "::error::VOL-133: expected Sentry DSN URL with project path in ${plist}, got ${actual}"
+  if [[ ! "$actual" =~ ^https://[^/@]+@[^/]+/.+ ]]; then
+    echo "::error::VOL-133: expected HTTPS Sentry DSN URL with public key and project path in ${plist}, got ${actual}"
     exit 1
   fi
 }

@@ -203,9 +203,10 @@ public struct WorkoutsView: View {
                         .font(VA.Typography.headline)
                         .foregroundStyle(VA.Colors.textPrimary)
                     let loggedSets = model.loggedSetCountThisSession
-                    let setsLoggedText = loggedSets == 1
-                        ? String(localized: "1 set logged", comment: "Active session subtitle, singular")
-                        : String(localized: "\(loggedSets) sets logged", comment: "Active session subtitle, zero or plural")
+                    let setsLoggedText = String(
+                        localized: "^[\(loggedSets) set](inflect: true) logged",
+                        comment: "Active session subtitle with logged set count"
+                    )
                     Text(setsLoggedText)
                     .font(VA.Typography.footnote)
                     .foregroundStyle(VA.Colors.textSecondary)
@@ -220,7 +221,7 @@ public struct WorkoutsView: View {
                         .monospacedDigit()
                 }
                 .accessibilityLabel(String(
-                    localized: "Session progress \(min(model.loggedSetCountThisSession, sessionTargetSetCount)) of \(sessionTargetSetCount) sets",
+                    localized: "Session progress \(min(model.loggedSetCountThisSession, sessionTargetSetCount)) of ^[\(sessionTargetSetCount) set](inflect: true)",
                     comment: "VoiceOver label for active session set progress"
                 ))
                 Button {
@@ -789,7 +790,7 @@ public struct WorkoutsView: View {
             )
         }
         return String(
-            localized: "\(workout.exercises.count) moves - \(firstExercise.name) first",
+            localized: "^[\(workout.exercises.count) move](inflect: true) - \(firstExercise.name) first",
             comment: "Workouts scheduled tomorrow card subtitle with co-designed exercise preview"
         )
     }
@@ -1157,7 +1158,8 @@ public struct WorkoutsView: View {
     }
 
     private var restDuration: TimeInterval {
-        VolumeArcRuntimeFlags.restTimerDurationOverride ?? 90
+        VolumeArcRuntimeFlags.restTimerDurationOverride
+            ?? TimeInterval(model.activeSessionExercise?.restSeconds ?? 90)
     }
 
     private var restDurationSeconds: Int {
@@ -1323,16 +1325,7 @@ public struct WorkoutsView: View {
     }
 
     private var resolvedSessionProfileDisplayName: String {
-        switch resolvedSessionProfile {
-        case .legDay:
-            return String(localized: "Leg Day", comment: "Session profile name")
-        case .upperStrength:
-            return String(localized: "Upper Strength", comment: "Session profile name")
-        case .shortSession:
-            return String(localized: "Short Session", comment: "Session profile name")
-        case .defaultProfile:
-            return String(localized: "Default", comment: "Session profile name")
-        }
+        resolvedSessionProfile.displayName
     }
 
     private var defaultStarterPlan: WorkoutSessionPlan {
@@ -1659,7 +1652,7 @@ private struct WorkoutBuilderDraft: Equatable {
             localized: """
             Review this workout draft for safety, flow, and effectiveness before I start it.
 
-            Profile: \(profile.rawValue)
+            Profile: \(profile.displayName)
             Readiness: \(readinessScore)/100
             Duration: \(plan.durationMinutes ?? durationMinutes) minutes
             Target RPE: \(plan.targetRPE ?? targetRPE)
@@ -1789,7 +1782,7 @@ private struct WorkoutBuilderSheet: View {
 
                 Picker(String(localized: "Session Profile", comment: "Workout builder profile picker"), selection: $draft.profile) {
                     ForEach(WorkoutSessionProfile.allCases, id: \.self) { profile in
-                        Text(profile.rawValue).tag(profile)
+                        Text(profile.displayName).tag(profile)
                     }
                 }
                 .pickerStyle(.menu)

@@ -244,7 +244,8 @@ public enum CoachPromptTemplate {
             || lowered.contains("tired") || lowered.contains("fatigue")
             || lowered.contains("sleep") || lowered.contains("sick")
             || lowered.contains("sore") || lowered.contains("tight")
-            || lowered.contains("run-down") || lowered.contains("rundown") {
+            || lowered.contains("run-down") || lowered.contains("rundown")
+            || lowered.contains("run down") {
             return .recovery
         }
         if lowered.contains("deload") || lowered.contains("back off")

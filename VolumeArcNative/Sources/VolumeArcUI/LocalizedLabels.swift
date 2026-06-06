@@ -122,6 +122,21 @@ public extension PrivacyMode {
     }
 }
 
+public extension WorkoutSessionProfile {
+    var displayName: String {
+        switch self {
+        case .defaultProfile:
+            return String(localized: "Default", comment: "Session profile name")
+        case .legDay:
+            return String(localized: "Leg Day", comment: "Session profile name")
+        case .upperStrength:
+            return String(localized: "Upper Strength", comment: "Session profile name")
+        case .shortSession:
+            return String(localized: "Short Session", comment: "Session profile name")
+        }
+    }
+}
+
 /// VOL-176: chip labels for the Feedback sheet's category picker. The
 /// `FeedbackBundle.Category` enum lives in `VolumeArcCore` (free of
 /// localization APIs by design); the UI maps each case to a `String(localized:)`

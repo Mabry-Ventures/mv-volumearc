@@ -2,7 +2,7 @@
 
 Last updated: 2026-06-06
 
-Design source: `/Users/jaredmabry/Downloads/VolumeArc.zip`.
+Design source: Claude Design export zip supplied with the release audit.
 
 The supplied Claude export is authoritative for iOS and watchOS parity. It does not include a marketing-site export, so marketing parity is judged against app tokens, product positioning, and current product voice.
 

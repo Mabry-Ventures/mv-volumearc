@@ -398,9 +398,7 @@ function buildSystemPrompt(style: FallbackCoachingStyle): string {
 }
 
 function coachSafetyResponse(body: CoachRequestBody): string | null {
-  const question = body.question ?? "";
-  const context = body.contextBlock ?? "";
-  const combined = `${question}\n${context}`;
+  const combined = coachSafetyScanText(body);
   if (!hasMedicalRedFlag(combined)) {
     return null;
   }
@@ -408,6 +406,21 @@ function coachSafetyResponse(body: CoachRequestBody): string | null {
     "Stop the session and seek medical care now.",
     "Do not train again until a qualified clinician clears the pain or symptom.",
   ].join(" ");
+}
+
+function coachSafetyScanText(body: CoachRequestBody): string {
+  const history = (body.messages ?? [])
+    .map((message) => message.content)
+    .filter((value) => value.trim().length > 0);
+  return [
+    body.system,
+    body.prompt,
+    body.question,
+    body.contextBlock,
+    ...history,
+  ]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join("\n");
 }
 
 function hasMedicalRedFlag(text: string): boolean {
@@ -418,13 +431,15 @@ function hasMedicalRedFlag(text: string): boolean {
     "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
       nearby + "\\bdizz(?:y|iness)\\b",
     "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+      nearby + "\\blightheaded\\b",
+    "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
       nearby + "\\bfaint(?:ed|ing)?\\b",
-    "\\b(i\\s*(?:passed\\s+out|have\\s+syncope|had\\s+syncope)|i\\W?ve\\s+passed\\s+out)\\b",
+    "\\b(i\\s*(?:passed\\s+out|blacked\\s+out|have\\s+syncope|had\\s+syncope)|i\\W?ve\\s+(?:passed|blacked)\\s+out)\\b",
     "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
       nearby + "\\b(?:severe\\s+)?short(?:ness)?\\s+of\\s+breath\\b",
-    "\\b(i\\s*(?:am|might\\s+be|may\\s+be)|i\\W?m)\\s+pregnant\\b" +
-      nearby + "\\bpain\\b",
-    "\\b(?:during|while)\\s+(?:my\\s+)?pregnancy\\b" + nearby + "\\bpain\\b",
+    "\\b(i\\s*(?:can'?t|cannot)\\s+breathe|hard\\s+to\\s+breathe)\\b",
+    "\\b(i\\s*(?:am|might\\s+be|may\\s+be)|i\\W?m)\\s+pregnant\\b",
+    "\\b(?:during|while)\\s+(?:my\\s+)?pregnancy\\b",
     "\\b(i\\s*(?:have|had|am\\s+dealing\\s+with)|i\\W?m\\s+dealing\\s+with)\\b" +
       nearby + "\\b(?:eating\\s+disorder|starv\\w*|purg\\w*|not\\s+eating)\\b",
     "\\bi\\s*(?:haven'?t|have\\s+not)\\s+eaten\\b" + nearby + "\\b(?:cut|cardio|train|squat|lift|workout)\\b",

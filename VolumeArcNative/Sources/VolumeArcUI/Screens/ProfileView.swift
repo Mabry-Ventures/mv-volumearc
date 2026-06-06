@@ -20,7 +20,7 @@ public struct ProfileView: View { // swiftlint:disable:this type_body_length
     @AppStorage(VolumeArcAppearancePreference.storageKey)
     private var appearancePreferenceRawValue = VolumeArcAppearancePreference.system.rawValue
     @AppStorage("volumearc.sessionProfiles.active")
-    private var activeSessionProfileName = "Default"
+    private var activeSessionProfileName = WorkoutSessionProfile.defaultProfile.rawValue
     @AppStorage(ProfileAvatarStorage.storageKey)
     private var profileAvatarImageData: Data?
     @State private var activeModal: ProfileModal?
@@ -573,19 +573,7 @@ public struct ProfileView: View { // swiftlint:disable:this type_body_length
     }
 
     private func localizedSessionProfileName(_ profile: String) -> String {
-        switch profile {
-        case "Leg Day":
-            return String(localized: "Leg Day", comment: "Session profile name")
-        case "Upper Strength":
-            return String(localized: "Upper Strength", comment: "Session profile name")
-        case "Short Session":
-            return String(localized: "Short Session", comment: "Session profile name")
-        default:
-            let trimmedProfile = profile.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmedProfile.isEmpty
-                ? String(localized: "Default", comment: "Session profile name")
-                : trimmedProfile
-        }
+        localizedSessionProfileDisplayName(profile)
     }
 
     private var hasPremiumEntitlement: Bool {
@@ -1277,7 +1265,7 @@ private struct EquipmentPreferencesSheet: View {
 private struct SessionProfilesSheet: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("volumearc.sessionProfiles.active")
-    private var activeProfileName = "Default"
+    private var activeProfileName = WorkoutSessionProfile.defaultProfile.rawValue
     @AppStorage("volumearc.sessionProfiles.customNames")
     private var customProfileNamesRaw = ""
     @AppStorage("volumearc.sessionProfiles.legDayRule")
@@ -1289,7 +1277,7 @@ private struct SessionProfilesSheet: View {
     @State private var weeklyTrainingDays: Int
     let saveDefaults: (Int, Int) -> Void
 
-    private let builtInProfileNames = ["Default", "Leg Day", "Upper Strength", "Short Session"]
+    private let builtInProfileNames = WorkoutSessionProfile.allCases.map(\.rawValue)
 
     init(athlete: AthleteProfile, saveDefaults: @escaping (Int, Int) -> Void) {
         _sessionMinutes = State(initialValue: athlete.sessionTimeBudgetMinutes)
@@ -1382,7 +1370,7 @@ private struct SessionProfilesSheet: View {
 
                 Section(String(localized: "Rules", comment: "Session profile rules section title")) {
                     Toggle(
-                        String(localized: "Leg Day on Tuesday and Thursday", comment: "Session profile weekday rule"),
+                        String(localized: "Leg Day on Tuesday and Friday", comment: "Session profile weekday rule"),
                         isOn: $isLegDayRuleEnabled
                     )
                     .accessibilityIdentifier("profile.sessionProfiles.rule.legDay")
@@ -1412,6 +1400,9 @@ private struct SessionProfilesSheet: View {
             }
         }
         .accessibilityIdentifier("profile.sessionProfiles.sheet")
+        .onAppear {
+            normalizeActiveProfileName()
+        }
     }
 
     private var profileNames: [String] {
@@ -1448,26 +1439,39 @@ private struct SessionProfilesSheet: View {
         let names = customProfileNames.filter { $0 != profile }
         customProfileNamesRaw = names.joined(separator: "\n")
         if activeProfileName == profile {
-            activeProfileName = "Default"
+            activeProfileName = WorkoutSessionProfile.defaultProfile.rawValue
         }
         VAHaptics.warning()
     }
 
     private func localizedProfileName(_ profile: String) -> String {
-        switch profile {
-        case "Leg Day":
-            return String(localized: "Leg Day", comment: "Session profile name")
-        case "Upper Strength":
-            return String(localized: "Upper Strength", comment: "Session profile name")
-        case "Short Session":
-            return String(localized: "Short Session", comment: "Session profile name")
-        default:
-            let trimmedProfile = profile.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmedProfile.isEmpty
-                ? String(localized: "Default", comment: "Session profile name")
-                : trimmedProfile
+        localizedSessionProfileDisplayName(profile)
+    }
+
+    private func normalizeActiveProfileName() {
+        let parsed = WorkoutSessionProfile.parse(activeProfileName)
+        if isBuiltInSessionProfileName(activeProfileName), activeProfileName != parsed.rawValue {
+            activeProfileName = parsed.rawValue
         }
     }
+}
+
+private func localizedSessionProfileDisplayName(_ profile: String) -> String {
+    let trimmedProfile = profile.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedProfile.isEmpty else {
+        return WorkoutSessionProfile.defaultProfile.displayName
+    }
+    if isBuiltInSessionProfileName(trimmedProfile) {
+        return WorkoutSessionProfile.parse(trimmedProfile).displayName
+    }
+    return trimmedProfile
+}
+
+private func isBuiltInSessionProfileName(_ profile: String) -> Bool {
+    let normalized = profile.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    let builtInValues = WorkoutSessionProfile.allCases.map(\.rawValue)
+    let legacyLabels = ["Default", "Leg Day", "Upper Strength", "Short Session"]
+    return (builtInValues + legacyLabels).contains { $0.lowercased() == normalized }
 }
 
 private struct NotificationRationaleSheet: View {

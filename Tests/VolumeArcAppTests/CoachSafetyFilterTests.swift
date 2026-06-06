@@ -76,6 +76,35 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertFalse(lowered.contains("finish the workout"))
     }
 
+    func testMedicalRedFlagsShortCircuitNonStreamingProvider() async throws {
+        let provider = SafetyFilteredCoachProvider(base: FailingIfCalledProvider())
+
+        let response = try await provider.coachResponse(
+            for: "I feel lightheaded and blacked out after squats. Can I keep going?",
+            context: "Readiness: 90/100 - peak recovery"
+        )
+        let lowered = response.lowercased()
+
+        XCTAssertTrue(lowered.contains("stop the session"))
+        XCTAssertTrue(lowered.contains("medical care"))
+    }
+
+    func testMedicalRedFlagsShortCircuitStreamingProvider() async throws {
+        let provider = SafetyFilteredCoachProvider(base: FailingIfCalledProvider())
+
+        var collected = ""
+        for try await chunk in provider.streamCoachResponse(
+            for: "I can't breathe after a set. What should I do?",
+            context: "Readiness: 90/100 - peak recovery"
+        ) {
+            collected += chunk
+        }
+        let lowered = collected.lowercased()
+
+        XCTAssertTrue(lowered.contains("stop the session"))
+        XCTAssertTrue(lowered.contains("medical care"))
+    }
+
     func testSafetyFilteredProviderBuffersUnsafeSymptomStream() async throws {
         let provider = SafetyFilteredCoachProvider(base: UnsafeStreamingProvider())
         var collected = ""
@@ -124,6 +153,29 @@ final class CoachSafetyFilterTests: XCTestCase {
         }
 
         XCTAssertEqual(chunks, ["alpha", " beta"])
+    }
+}
+
+private enum UnexpectedProviderCall: Error {
+    case called
+}
+
+private struct FailingIfCalledProvider: AICoachProvider {
+    func coachResponse(for prompt: String, context: String) async throws -> String {
+        _ = prompt
+        _ = context
+        throw UnexpectedProviderCall.called
+    }
+
+    func streamCoachResponse(
+        for prompt: String,
+        context: String
+    ) -> AsyncThrowingStream<String, Error> {
+        _ = prompt
+        _ = context
+        return AsyncThrowingStream { continuation in
+            continuation.finish(throwing: UnexpectedProviderCall.called)
+        }
     }
 }
 

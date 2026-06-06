@@ -105,6 +105,7 @@ public enum VolumeArcRuntimeFlags {
 
 public enum OnboardingProgressStore {
     private static let stepKey = "com.mabryventures.VolumeArc.onboarding.stepRaw"
+    private static let resultKey = "com.mabryventures.VolumeArc.onboarding.resultData"
 
     public static func loadStepRaw() -> Int? {
         guard UserDefaults.standard.object(forKey: stepKey) != nil else { return nil }
@@ -115,8 +116,17 @@ public enum OnboardingProgressStore {
         UserDefaults.standard.set(rawValue, forKey: stepKey)
     }
 
+    public static func loadResultData() -> Data? {
+        UserDefaults.standard.data(forKey: resultKey)
+    }
+
+    public static func saveResultData(_ data: Data) {
+        UserDefaults.standard.set(data, forKey: resultKey)
+    }
+
     public static func clear() {
         UserDefaults.standard.removeObject(forKey: stepKey)
+        UserDefaults.standard.removeObject(forKey: resultKey)
     }
 }
 

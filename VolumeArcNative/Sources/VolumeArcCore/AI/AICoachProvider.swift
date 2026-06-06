@@ -67,13 +67,13 @@ public enum CoachSafetyFilter {
     }
 
     public static func shouldBufferResponse(prompt: String, context: String) -> Bool {
-        medicalRedFlagResponse(from: prompt) != nil
+        medicalRedFlagResponse(prompt: prompt, context: context) != nil
             || hasRecoverySymptoms(prompt)
             || hasCurrentRecoverySymptoms(inContext: context)
     }
 
     public static func filteredResponse(prompt: String, context: String, response: String) -> String {
-        if let redFlagResponse = medicalRedFlagResponse(from: prompt) {
+        if let redFlagResponse = medicalRedFlagResponse(prompt: prompt, context: context) {
             return redFlagResponse
         }
         guard hasRecoverySymptoms(prompt) || hasCurrentRecoverySymptoms(inContext: context) else {
@@ -124,6 +124,10 @@ public enum CoachSafetyFilter {
         )
     }
 
+    public static func medicalRedFlagResponse(prompt: String, context: String) -> String? {
+        medicalRedFlagResponse(from: [prompt, context].joined(separator: "\n"))
+    }
+
     public static func medicalRedFlagResponse(from text: String) -> String? {
         let nearby = "[\\s\\S]{0,80}"
         let redFlagPatterns = [
@@ -132,11 +136,14 @@ public enum CoachSafetyFilter {
             "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
                 nearby + "\\bdizz(?:y|iness)\\b",
             "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+                nearby + "\\blightheaded\\b",
+            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
                 nearby + "\\bfaint(?:ed|ing)?\\b",
-            "\\b(i\\s*(?:passed\\s+out|have\\s+syncope|had\\s+syncope)|i\\W?ve\\s+passed\\s+out)\\b",
+            "\\b(i\\s*(?:passed\\s+out|blacked\\s+out|have\\s+syncope|had\\s+syncope)|i\\W?ve\\s+(?:passed|blacked)\\s+out)\\b",
             "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
                 nearby +
                 "\\b(?:severe\\s+)?short(?:ness)?\\s+of\\s+breath\\b",
+            "\\b(i\\s*(?:can'?t|cannot)\\s+breathe|hard\\s+to\\s+breathe)\\b",
             "\\b(i\\s*(?:am|might\\s+be|may\\s+be)|i\\W?m)\\s+pregnant\\b",
             "\\b(?:during|while)\\s+(?:my\\s+)?pregnancy\\b",
             "\\b(i\\s*(?:have|had|am\\s+dealing\\s+with)|i\\W?m\\s+dealing\\s+with)\\b" +
@@ -232,11 +239,21 @@ public struct SafetyFilteredCoachProvider: AICoachProvider {
     }
 
     public func coachResponse(for prompt: String, context: String) async throws -> String {
+        if let redFlagResponse = CoachSafetyFilter.medicalRedFlagResponse(prompt: prompt, context: context) {
+            return redFlagResponse
+        }
         let response = try await base.coachResponse(for: prompt, context: context)
         return CoachSafetyFilter.filteredResponse(prompt: prompt, context: context, response: response)
     }
 
     public func streamCoachResponse(for prompt: String, context: String) -> AsyncThrowingStream<String, Error> {
+        if let redFlagResponse = CoachSafetyFilter.medicalRedFlagResponse(prompt: prompt, context: context) {
+            return AsyncThrowingStream { continuation in
+                continuation.yield(redFlagResponse)
+                continuation.finish()
+            }
+        }
+
         guard CoachSafetyFilter.shouldBufferResponse(prompt: prompt, context: context) else {
             return base.streamCoachResponse(for: prompt, context: context)
         }
@@ -503,34 +520,64 @@ public struct LocalHeuristicAICoachProvider: AICoachProvider {
         if let score = extractReadinessScore(from: context) {
             switch score {
             case 80...:
-                return "Readiness is \(score). You can train, but keep the first set honest and stop if form or pain changes."
+                return String(
+                    localized: "Readiness is \(score). You can train, but keep the first set honest and stop if form or pain changes.",
+                    comment: "Offline coach readiness response for high readiness"
+                )
             case 60..<80:
-                return "Readiness is \(score). Keep the plan, skip heroics, and choose clean reps over more load."
+                return String(
+                    localized: "Readiness is \(score). Keep the plan, skip heroics, and choose clean reps over more load.",
+                    comment: "Offline coach readiness response for moderate readiness"
+                )
             case 40..<60:
-                return "Readiness is \(score). Back off today: hold load, trim volume, and leave several reps in reserve."
+                return String(
+                    localized: "Readiness is \(score). Back off today: hold load, trim volume, and leave several reps in reserve.",
+                    comment: "Offline coach readiness response for low readiness"
+                )
             default:
-                return "Readiness is \(score). Rest is the best call today; if you need to move, keep it light and easy."
+                return String(
+                    localized: "Readiness is \(score). Rest is the best call today; if you need to move, keep it light and easy.",
+                    comment: "Offline coach readiness response for very low readiness"
+                )
             }
         }
-        return "I need more context before calling intensity. Start easy, log how it feels, and stop if anything hurts."
+        return String(
+            localized: "I need more context before calling intensity. Start easy, log how it feels, and stop if anything hurts.",
+            comment: "Offline coach readiness response when context is missing"
+        )
     }
 
     private func progressionResponse(from context: String) -> String {
         if let score = extractReadinessScore(from: context), score >= 75 {
-            return "You can consider a small jump only if the last set moved cleanly at target RPE. If it was a grind, hold."
+            return String(
+                localized: "You can consider a small jump only if the last set moved cleanly at target RPE. If it was a grind, hold.",
+                comment: "Offline coach progression response when readiness supports a small increase"
+            )
         }
-        return "Hold the load. Progression needs a clean baseline; make today crisp and reassess next session."
+        return String(
+            localized: "Hold the load. Progression needs a clean baseline; make today crisp and reassess next session.",
+            comment: "Offline coach progression response when readiness is not high enough"
+        )
     }
 
     private func cueResponse(from context: String) -> String {
-        "Brace before the rep starts, move smoothly, and keep every rep pain-free. If form drifts, reduce load 5-10%."
+        String(
+            localized: "Brace before the rep starts, move smoothly, and keep every rep pain-free. If form drifts, reduce load 5-10%.",
+            comment: "Offline coach form cue response"
+        )
     }
 
     private func deloadResponse(from context: String) -> String {
         if let score = extractReadinessScore(from: context), score < 60 {
-            return "Readiness is \(score) — deload makes sense. Drop intensity 10-15% and cut volume in half."
+            return String(
+                localized: "Readiness is \(score) — deload makes sense. Drop intensity 10-15% and cut volume in half.",
+                comment: "Offline coach deload response when readiness is low"
+            )
         }
-        return "You might not need a full deload yet. Try a lighter top set today and reassess tomorrow."
+        return String(
+            localized: "You might not need a full deload yet. Try a lighter top set today and reassess tomorrow.",
+            comment: "Offline coach deload response when readiness does not demand deload"
+        )
     }
 
     private func planningResponse(from context: String) -> String {
@@ -575,13 +622,19 @@ public struct LocalHeuristicAICoachProvider: AICoachProvider {
 
     private func defaultResponse(from context: String) -> String {
         if context.contains("Readiness") {
-            return """
-            Based on what I can see, choose the lowest-risk option: clean reps, \
-            no grinding, and stop if pain shows up. Ask me about the exact lift \
-            and I can be more specific.
-            """
+            return String(
+                localized: """
+                Based on what I can see, choose the lowest-risk option: clean reps, \
+                no grinding, and stop if pain shows up. Ask me about the exact lift \
+                and I can be more specific.
+                """,
+                comment: "Offline coach default response when readiness context is available"
+            )
         }
-        return "Log a couple of sets so I have something to work with, then ask me again."
+        return String(
+            localized: "Log a couple of sets so I have something to work with, then ask me again.",
+            comment: "Offline coach default response when no useful context is available"
+        )
     }
 
     private func extractWeeklySchedule(from context: String) -> [String] {

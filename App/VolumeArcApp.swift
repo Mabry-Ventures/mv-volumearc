@@ -183,7 +183,7 @@ struct VolumeArcApp: App {
         #if DEBUG
         if VolumeArcLaunchArguments.useScreenshotStoreKitFixtures {
             let fixtureEntitlements: Set<String> = VolumeArcLaunchArguments.usePremiumEntitlementFixture
-                ? [VolumeArcPremiumCatalog.subscriptionProductIDs[0]]
+                ? Set(VolumeArcPremiumCatalog.subscriptionProductIDs.prefix(1))
                 : []
             subscriptionStore = StoreKitSubscriptionStore.screenshotFixture(
                 productIDs: VolumeArcPremiumCatalog.subscriptionProductIDs,

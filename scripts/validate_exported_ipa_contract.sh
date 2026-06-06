@@ -61,8 +61,8 @@ require_plist_sentry_dsn() {
     echo "FAIL: expected configured Sentry DSN in $plist, got ${actual:-<empty>}" >&2
     exit 1
   fi
-  if [[ ! "$actual" =~ ^https?://[^/]+/.+ ]]; then
-    echo "FAIL: expected Sentry DSN URL with project path in $plist, got $actual" >&2
+  if [[ ! "$actual" =~ ^https://[^/@]+@[^/]+/.+ ]]; then
+    echo "FAIL: expected HTTPS Sentry DSN URL with public key and project path in $plist, got $actual" >&2
     exit 1
   fi
 }

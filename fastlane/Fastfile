@@ -205,9 +205,9 @@ platform :ios do
         "SENTRY_DSN or VOLUMEARC_SENTRY_DSN must be set before TestFlight upload. " \
           "Refusing to ship a build without crash reporting."
       )
-    elsif sentry_dsn.include?("$(") || sentry_dsn !~ %r{\Ahttps?://[^/]+/.+}
+    elsif sentry_dsn.include?("$(") || sentry_dsn !~ %r{\Ahttps://[^/@]+@[^/]+/.+}
       UI.user_error!(
-        "SENTRY_DSN or VOLUMEARC_SENTRY_DSN must be a configured Sentry DSN URL, " \
+        "SENTRY_DSN or VOLUMEARC_SENTRY_DSN must be a configured HTTPS Sentry DSN URL with public key, " \
           "not a placeholder or malformed value."
       )
     end

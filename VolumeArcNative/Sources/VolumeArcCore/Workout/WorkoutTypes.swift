@@ -6,19 +6,19 @@ public enum WorkoutAction: String, Sendable, CaseIterable, Codable {
     case decrease
 }
 
-public enum AdvancementLevel: String, Sendable, CaseIterable {
+public enum AdvancementLevel: String, Sendable, CaseIterable, Codable {
     case beginner
     case intermediate
     case advanced
 }
 
-public enum CoachingStyle: String, Sendable, CaseIterable {
+public enum CoachingStyle: String, Sendable, CaseIterable, Codable {
     case motivational
     case analytical
     case minimal
 }
 
-public enum PrivacyMode: String, Sendable, CaseIterable {
+public enum PrivacyMode: String, Sendable, CaseIterable, Codable {
     case standard
     case strict
 }
@@ -84,18 +84,18 @@ public enum CoachWorkoutPlanExtractor {
         let trimmed = line
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "-* "))
-        guard trimmed.range(of: "set", options: .caseInsensitive) != nil,
-              trimmed.range(of: "rep", options: .caseInsensitive) != nil
-                || trimmed.range(of: "second", options: .caseInsensitive) != nil
+        let seconds = firstInt(matching: #"(\d+)\s*seconds?"#, in: trimmed)
+        guard trimmed.range(of: "rep", options: .caseInsensitive) != nil
+                || seconds != nil
         else { return nil }
 
         guard let name = exerciseName(from: trimmed),
               !name.isEmpty,
-              let sets = firstInt(matching: #"(\d+)\s*sets?"#, in: trimmed)
+              let sets = firstInt(matching: #"(\d+)\s*sets?"#, in: trimmed) ?? (seconds == nil ? nil : 1)
         else { return nil }
 
         let reps = firstInt(matching: #"(\d+)\s*reps?"#, in: trimmed)
-            ?? firstInt(matching: #"(\d+)\s*seconds?"#, in: trimmed)
+            ?? seconds
             ?? 1
         let targetRPE = conservativeResponse(response) ? 6 : 7
         let weight = firstInt(matching: #"(\d+)\s*(?:lb|lbs|pounds?)"#, in: trimmed)

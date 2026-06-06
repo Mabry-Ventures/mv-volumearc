@@ -20,9 +20,9 @@ References: [Gemini models](https://ai.google.dev/gemini-api/docs/models), [Gemi
 |---|---|---|---|
 | Free cloud coach | `gemini-3.1-flash-lite` | Pinned stable low-latency/cost model with deprecation monitor before May 7, 2027. | 47/47 response evals, latency budget, cost estimate, deprecation-date owner. |
 | Premium cloud coach | `gemini-3.5-flash` | Pinned stable model selected for best user experience first, cost second. | 47/47 response evals, latency budget, cost estimate, no announced shutdown date confirmed at release. |
-| Foundation Models | Same prompt contract and safety envelope as relay. | Hermetic evals, fallback tests, unavailable-device behavior. |
-| Local heuristic fallback | Deterministic, safe, useful when offline or relay fails. | Unit tests, journey tests, safety red-team fixtures. |
-| Voice path | No provider branding in normal UX; coaching language remains direct and useful. | Latency tests, interruption tests, fallback tests. |
+| Foundation Models | Apple Foundation Models on supported iOS 26+ devices. | Same prompt contract and safety envelope as relay; invisible fallback when unavailable. | Hermetic evals, fallback tests, unavailable-device behavior. |
+| Local heuristic fallback | `LocalHeuristicAICoachProvider` | Deterministic, safe, useful when offline or relay fails. | Unit tests, journey tests, safety red-team fixtures. |
+| Voice path | `AIRelayVoiceTransport` through selected coach-provider chain | No provider branding in normal UX; coaching language remains direct and useful. | Latency tests, interruption tests, fallback tests. |
 
 ## Branch Changes
 

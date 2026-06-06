@@ -758,8 +758,8 @@ if [[ -n "$BUILT_APP_BUNDLE" ]]; then
       echo "FAIL: Built production-signed app missing configured VolumeArcSentryDSN. TestFlight/App Store builds must initialize Sentry." >&2
       exit 1
     fi
-    if [[ ! "$built_sentry_dsn" =~ ^https?://[^/]+/.+ ]]; then
-      echo "FAIL: Built production-signed app VolumeArcSentryDSN must be a Sentry DSN URL with a project path." >&2
+    if [[ ! "$built_sentry_dsn" =~ ^https://[^/@]+@[^/]+/.+ ]]; then
+      echo "FAIL: Built production-signed app VolumeArcSentryDSN must be an HTTPS Sentry DSN URL with public key and project path." >&2
       exit 1
     fi
     built_relay_url="$(plutil -extract "VolumeArcAIRelayURL" raw -o - "$BUILT_APP_BUNDLE/Info.plist" 2>/dev/null || echo "")"

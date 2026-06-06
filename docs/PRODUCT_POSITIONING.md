@@ -93,6 +93,7 @@ The pitch: *"Real human coaches write the programs. VolumeArc runs them."*
 
 | Ticket | Scope | Priority |
 |---|---|---|
+| [VOL-269](https://linear.app/mabry-ventures/issue/VOL-269) | Publish post-fix green coach response eval trends before any paid-launch coach-quality claim. | P0 launch gate |
 | [VOL-270](https://linear.app/mabry-ventures/issue/VOL-270) | Add Claude Design full-surface visual parity gate. | P1 launch gate |
 | [VOL-271](https://linear.app/mabry-ventures/issue/VOL-271) | Raise v1 journey coverage to 100% and complete paired Watch UAT. | P1 launch gate |
 | [VOL-273](https://linear.app/mabry-ventures/issue/VOL-273) | Finalize pricing, legal, and marketing copy status. | P2 launch gate |

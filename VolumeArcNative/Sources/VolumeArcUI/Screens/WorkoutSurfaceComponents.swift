@@ -157,7 +157,7 @@ struct WorkoutIdleLibrary: View {
                             .font(VA.Typography.footnote)
                             .foregroundStyle(VA.Colors.textSecondary)
                         Text(String(
-                            localized: "\(duration) min · \(exercises) exercises",
+                            localized: "\(duration) min · ^[\(exercises) exercise](inflect: true)",
                             comment: "Workout library row duration and exercise count"
                         ))
                         .font(VA.Typography.footnote)
@@ -413,7 +413,7 @@ struct WorkoutHistorySection: View {
         let rpeText = String(format: "%.1f", session.averageRPE)
         let setsText = session.completedSetCount == 1
             ? String(localized: "1 set", comment: "Session summary set count, singular")
-            : String(localized: "\(session.completedSetCount) sets", comment: "Session summary set count, plural")
+            : String(localized: "^[\(session.completedSetCount) set](inflect: true)", comment: "Session summary set count")
         return "\(setsText) - \(session.durationMinutes)min - RPE \(rpeText)"
     }
 

@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(Security)
+import Security
+#endif
 
 public protocol NotificationStore: Sendable {}
 
@@ -43,30 +46,93 @@ public protocol AccountSessionStore: Sendable {
 public final class UserDefaultsAccountSessionStore: AccountSessionStore, @unchecked Sendable {
     private let defaults: UserDefaults
     private let key: String
+    private let keychainService: String
 
     public init(
         defaults: UserDefaults = .standard,
-        key: String = "com.mabryventures.VolumeArc.accountSession"
+        key: String = "com.mabryventures.VolumeArc.accountSession",
+        keychainService: String = "com.mabryventures.VolumeArc.accountSession"
     ) {
         self.defaults = defaults
         self.key = key
+        self.keychainService = keychainService
     }
 
     public func load() -> AccountSession? {
-        guard let data = defaults.data(forKey: key),
-              let session = try? JSONDecoder().decode(AccountSession.self, from: data)
-        else { return nil }
+        #if canImport(Security)
+        if let data = keychainData(),
+           let session = try? JSONDecoder().decode(AccountSession.self, from: data) {
+            defaults.removeObject(forKey: key)
+            return session
+        }
+        if let legacyData = defaults.data(forKey: key) {
+            defer { defaults.removeObject(forKey: key) }
+            guard let session = try? JSONDecoder().decode(AccountSession.self, from: legacyData) else {
+                return nil
+            }
+            saveKeychainData(legacyData)
+            return session
+        }
+        return nil
+        #else
+        guard let data = defaults.data(forKey: key) else { return nil }
+        guard let session = try? JSONDecoder().decode(AccountSession.self, from: data) else {
+            defaults.removeObject(forKey: key)
+            return nil
+        }
         return session
+        #endif
     }
 
     public func save(_ session: AccountSession) {
         guard let data = try? JSONEncoder().encode(session) else { return }
+        #if canImport(Security)
+        saveKeychainData(data)
+        defaults.removeObject(forKey: key)
+        #else
         defaults.set(data, forKey: key)
+        #endif
     }
 
     public func clear() {
         defaults.removeObject(forKey: key)
+        #if canImport(Security)
+        deleteKeychainData()
+        #endif
     }
+
+    #if canImport(Security)
+    private func keychainQuery() -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: key,
+        ]
+    }
+
+    private func keychainData() -> Data? {
+        var query = keychainQuery()
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        guard status == errSecSuccess else { return nil }
+        return item as? Data
+    }
+
+    private func saveKeychainData(_ data: Data) {
+        deleteKeychainData()
+        var query = keychainQuery()
+        query[kSecValueData as String] = data
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        SecItemAdd(query as CFDictionary, nil)
+    }
+
+    private func deleteKeychainData() {
+        SecItemDelete(keychainQuery() as CFDictionary)
+    }
+    #endif
 }
 
 public final class InMemoryAccountSessionStore: AccountSessionStore, @unchecked Sendable {
