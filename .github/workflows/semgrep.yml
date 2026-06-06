@@ -11,10 +11,10 @@ name: Semgrep SAST
 # runs in GH Actions on private repos, and ships public rulesets for
 # OWASP Top 10, Swift, and secrets that cover the same risk surface.
 #
-# Runner: self-hosted per the "zero GitHub-hosted jobs" policy. Semgrep
+# Runner: self-hosted per the runner policy in docs/CONTRIBUTING.md. Semgrep
 # itself is platform-independent Python; no Xcode requirement on this
-# job, but consistency with the rest of the CI fleet keeps the runner
-# topology coherent and avoids credit spend on GH-hosted macOS minutes.
+# job, but keeping security gates on the trusted runner fleet preserves the
+# same repository-history and secret-scanning boundary as Trufflehog.
 
 on:
   push:
