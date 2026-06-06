@@ -17,17 +17,11 @@ on:
 # via its GitHub App integration; this workflow is the build / typecheck /
 # lint gate that protects against red-build Vercel deploys.
 #
-# VOL-193: fork-PR guard added. Despite the earlier comment claiming
-# fork-safety via `pull_request` semantics, this workflow targets the
-# privileged `mv-volumearc-runner` macOS host — same host that holds
-# Apple Developer signing identity, Keychain, persistent caches, and
-# prior-job artifacts. A fork PR touching `marketing/**` carries
-# arbitrary code that executes during `npm ci` (postinstall scripts)
-# and `next build` on that runner; secret theft is not the only attack
-# surface. The guard below skips the job on PRs whose head repo
-# differs from the upstream; same-repo PRs and pushes to `main` run as
-# normal. Fork contributors should ask a maintainer to push their
-# branch into the upstream so CI can execute against trusted code.
+# VOL-274: marketing CI is pure Node/Playwright/Lighthouse work and runs
+# on GitHub-hosted Linux instead of the scarce Apple signing runner. The
+# fork guard remains so unknown branches do not spend CI minutes or run
+# arbitrary npm lifecycle scripts unless a maintainer first brings the
+# branch into the upstream repo.
 
 permissions:
   contents: read
@@ -37,7 +31,7 @@ jobs:
     name: build + lint + typecheck
     # VOL-193 fork-PR guard — mirrors `ci.yml` `build-and-test` (VOL-132).
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, mv-volumearc-runner]
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
       run:
@@ -118,12 +112,8 @@ jobs:
         run: npm run check:links
 
       # VOL-217 P2: pin the Playwright browser cache inside the job
-      # workspace. The default `~/Library/Caches/ms-playwright/` is
-      # not writable on the self-hosted `mv-volumearc-runner` (EPERM
-      # on `__dirlock`) because the runner home directory is shared
-      # across concurrent jobs and locked. Writing inside the
-      # repo's runner workspace (`$GITHUB_WORKSPACE/.playwright`) is
-      # always per-job and per-checkout safe.
+      # workspace so browser installs are per-checkout and cannot leak
+      # across jobs.
       - name: Run Playwright smoke
         timeout-minutes: 10
         env:
@@ -147,10 +137,8 @@ jobs:
         # avoid EPERM on the shared runner home dir). Without the
         # same `PLAYWRIGHT_BROWSERS_PATH` here, the script's
         # `chromium.executablePath()` returns a default-but-empty
-        # path; the script falls through to
-        # `/Applications/Google Chrome.app/...` which isn't
-        # installed on the self-hosted runner, and Lighthouse fails
-        # with `No Chrome installations found`.
+        # path and Lighthouse fails with `No Chrome installations
+        # found`.
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright
         run: npm run test:lighthouse

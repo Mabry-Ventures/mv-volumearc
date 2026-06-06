@@ -188,16 +188,21 @@ The AI review gate (`.github/workflows/ai-review-gate.yml`) carries the same for
 
 External contributors should ask a maintainer to push their branch directly into the upstream repo — that branch then triggers CI normally. Until then the AI review gate will time out (no `Build & Test` signal), which is the correct behavior.
 
-### Runner policy: zero GitHub-hosted jobs
+### Runner policy: Apple gates self-hosted, portable web CI GitHub-hosted
 
-**Every workflow in this repo runs on the self-hosted `mv-volumearc-runner` label** — there are no `runs-on: ubuntu-latest` / `macos-latest` jobs. The standard is enforced by code review: any new workflow file MUST use `runs-on: [self-hosted, mv-volumearc-runner]`.
+Apple build/test, release, repo-integrity, security, AI-review, response-eval, and UAT workflows run on the Mabry Ventures self-hosted runner fleet. Portable web-only jobs may use GitHub-hosted Linux when they do not need Apple signing credentials, Keychain access, local simulator runtimes, DerivedData, SPM caches, Homebrew-only tooling, or repo-persistent state. Today that exception is limited to the marketing CI workflow, which runs on `ubuntu-latest`.
 
-Rationale:
+Self-hosted rationale:
 
 - **Caching.** Persistent `~/Library/Developer/Xcode/DerivedData/`, SPM `SourcePackages/`, Homebrew, mise toolchains, etc. on the self-hosted runner cut a typical build from ~15 min (cold GitHub-hosted Mac) to ~3 min (warm cache).
 - **Signing.** The Apple Developer identity, App Store Connect API key, and provisioning profile live in the runner's Keychain — GitHub-hosted Macs would need credential injection on every run.
-- **Cost.** GitHub-hosted macOS is billed per minute and adds up under the Sprint-3 cadence; the dedicated machine amortizes.
 - **Determinism.** A single known-good Xcode + simulator runtime install across all workflows avoids "works on GitHub but not the deploy runner" drift.
+
+GitHub-hosted web-CI rationale:
+
+- **Isolation.** Marketing dependency install/build scripts do not need to run on the Apple signing host.
+- **Availability.** Node, Playwright, axe, and Lighthouse gates can run when the Apple runner fleet is busy or offline.
+- **Cost control.** Fork PRs remain guarded; same-repo marketing PRs spend GitHub-hosted Linux minutes instead of scarce Apple runner capacity.
 
 #### Runner fleet topology (`MVGHRUN01`)
 
