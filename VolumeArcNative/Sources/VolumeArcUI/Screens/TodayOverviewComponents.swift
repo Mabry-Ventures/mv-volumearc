@@ -4,6 +4,7 @@ import VolumeArcCore
 
 struct TodayOverviewMetrics: View {
     let readiness: ReadinessAssessment
+    let isHealthAuthorized: Bool
     let weeklyVolumeLoad: Double
     let sparklineValues: [Double]
     let trendLabel: String
@@ -28,48 +29,107 @@ struct TodayOverviewMetrics: View {
     private var readinessTile: some View {
         Button(action: onReadinessTap) {
             VACard(style: .glass) {
-                VStack(alignment: .leading, spacing: VA.Space.md) {
-                    Text(String(localized: "Readiness", comment: "Today overview card label for readiness"))
-                        .font(VA.Typography.footnote)
-                        .foregroundStyle(VA.Colors.textSecondary)
-
-                    HStack {
-                        Spacer(minLength: 0)
-                        ZStack {
-                            VAProgressRing(progress: Double(readiness.score) / 100, lineWidth: 9)
-                                .frame(width: 108, height: 108)
-                            VStack(spacing: VA.Space.xxs) {
-                                Text("\(readiness.score)")
-                                    .font(VA.Typography.title)
-                                    .foregroundStyle(VA.Colors.textPrimary)
-                                    .contentTransition(.numericText())
-                                Text(String(localized: "OF 100", comment: "Readiness score denominator label"))
-                                    .font(VA.Typography.caption)
-                                    .foregroundStyle(VA.Colors.textSecondary)
-                            }
-                        }
-                        Spacer(minLength: 0)
-                    }
-
-                    Text(readiness.brief)
-                        .font(VA.Typography.footnote)
-                        .foregroundStyle(VA.Colors.textSecondary)
-                        .lineLimit(3)
-                        .fixedSize(horizontal: false, vertical: true)
+                if isHealthAuthorized {
+                    connectedReadinessContent
+                } else {
+                    healthUnlockContent
                 }
             }
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(
-            localized: "Readiness score \(readiness.score) out of 100. \(readiness.brief)",
-            comment: "VoiceOver label describing the readiness overview card"
-        ))
-        .accessibilityHint(String(
-            localized: "Opens training signals",
-            comment: "VoiceOver hint for the tappable Today readiness card"
-        ))
+        .accessibilityLabel(readinessAccessibilityLabel)
+        .accessibilityHint(readinessAccessibilityHint)
         .accessibilityIdentifier("today.readinessTile")
+    }
+
+    private var connectedReadinessContent: some View {
+        VStack(alignment: .leading, spacing: VA.Space.md) {
+            Text(String(localized: "Readiness", comment: "Today overview card label for readiness"))
+                .font(VA.Typography.footnote)
+                .foregroundStyle(VA.Colors.textSecondary)
+
+            HStack {
+                Spacer(minLength: 0)
+                ZStack {
+                    VAProgressRing(progress: Double(readiness.score) / 100, lineWidth: 9)
+                        .frame(width: 108, height: 108)
+                    VStack(spacing: VA.Space.xxs) {
+                        Text("\(readiness.score)")
+                            .font(VA.Typography.title)
+                            .foregroundStyle(VA.Colors.textPrimary)
+                            .contentTransition(.numericText())
+                        Text(String(localized: "OF 100", comment: "Readiness score denominator label"))
+                            .font(VA.Typography.caption)
+                            .foregroundStyle(VA.Colors.textSecondary)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+
+            Text(readiness.brief)
+                .font(VA.Typography.footnote)
+                .foregroundStyle(VA.Colors.textSecondary)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var healthUnlockContent: some View {
+        VStack(alignment: .leading, spacing: VA.Space.md) {
+            Text(String(localized: "Readiness", comment: "Today overview card label for readiness"))
+                .font(VA.Typography.footnote)
+                .foregroundStyle(VA.Colors.textSecondary)
+
+            HStack(spacing: VA.Space.md) {
+                Image(systemName: "heart.text.square.fill")
+                    .font(VA.Typography.title)
+                    .foregroundStyle(VA.Colors.primary)
+                    .frame(width: 58, height: 58)
+                    .background(VA.Colors.primary.opacity(VA.Opacity.subtleFill), in: Circle())
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: VA.Space.xs) {
+                    Text(String(
+                        localized: "Grant Health to unlock",
+                        comment: "Today readiness fallback title when Apple Health is not connected"
+                    ))
+                    .font(VA.Typography.headline)
+                    .foregroundStyle(VA.Colors.textPrimary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.82)
+
+                    Text(String(
+                        localized: "Connect Apple Health to bring recovery, sleep, and training history into today's prescription.",
+                        comment: "Today readiness fallback body when Apple Health is not connected"
+                    ))
+                    .font(VA.Typography.footnote)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                    .lineLimit(4)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private var readinessAccessibilityLabel: String {
+        if isHealthAuthorized {
+            return String(
+                localized: "Readiness score \(readiness.score) out of 100. \(readiness.brief)",
+                comment: "VoiceOver label describing the readiness overview card"
+            )
+        }
+
+        return String(
+            localized: "Grant Health to unlock readiness. Connect Apple Health to bring recovery, sleep, and training history into today's prescription.",
+            comment: "VoiceOver label for the Today readiness fallback card"
+        )
+    }
+
+    private var readinessAccessibilityHint: String {
+        isHealthAuthorized
+            ? String(localized: "Opens training signals", comment: "VoiceOver hint for connected Today readiness card")
+            : String(localized: "Opens Profile to connect Apple Health", comment: "VoiceOver hint for disconnected Today readiness card")
     }
 
     private var weeklyVolumeTile: some View {

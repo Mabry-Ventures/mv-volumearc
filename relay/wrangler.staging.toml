@@ -59,12 +59,11 @@ enabled = true
 #                               workflow can authorize bootstrap requests
 
 [vars]
-# Mirror production model selection. Updated 2026-05-27 alongside the
-# production hotfix (PR #339) after Google retired the `-preview`
-# suffix on Gemini 3.1 flash-lite. Staying in sync with production so
-# eval responses are representative.
+# Mirror production model selection so eval responses are representative.
+# Free/default stays on stable `gemini-3.1-flash-lite`; premium pins to
+# stable `gemini-3.5-flash` instead of the hot-swapped latest alias.
 MODEL_DEFAULT = "gemini-3.1-flash-lite"
-MODEL_PREMIUM = "gemini-flash-latest"
+MODEL_PREMIUM = "gemini-3.5-flash"
 MAX_OUTPUT_TOKENS = "800"
 REQUEST_TIMEOUT_MS = "45000"
 # VOL-245: staging rate limit raised from production's 30/10min to

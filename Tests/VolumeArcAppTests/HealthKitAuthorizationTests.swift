@@ -131,6 +131,10 @@ final class HealthKitAuthorizationTests: XCTestCase {
             telemetry.currentEvents.contains { $0.category == "health" && $0.name == "auth_requested" },
             "Granted path must record `health.auth_requested`"
         )
+        XCTAssertTrue(
+            telemetry.currentEvents.contains { $0.category == "healthkit" && $0.name == "authorized" },
+            "Granted path must record the journey-level `healthkit.authorized` event"
+        )
     }
 
     // MARK: - Branch 3: denied (user tapped "Don't Allow")
@@ -155,6 +159,10 @@ final class HealthKitAuthorizationTests: XCTestCase {
         XCTAssertFalse(
             telemetry.currentEvents.contains { $0.category == "health" && $0.name == "auth_failed" },
             "Denied path must NOT record `health.auth_failed` — that's reserved for errors"
+        )
+        XCTAssertTrue(
+            telemetry.currentEvents.contains { $0.category == "healthkit" && $0.name == "denied" },
+            "Denied path must record the journey-level `healthkit.denied` event"
         )
     }
 

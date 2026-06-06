@@ -4,6 +4,12 @@ public enum VolumeArcRuntimeFlags {
     private static let deterministicModeKey = "com.mabryventures.VolumeArc.runtime.deterministicMode"
     private static let performanceTestModeKey = "com.mabryventures.VolumeArc.runtime.performanceTestMode"
     private static let simulatePermissionPromptsKey = "com.mabryventures.VolumeArc.runtime.simulatePermissionPrompts"
+    private static let suppressSubscriptionManageExternalURLKey =
+        "com.mabryventures.VolumeArc.runtime.suppressSubscriptionManageExternalURL"
+    private static let restTimerDurationOverrideKey =
+        "com.mabryventures.VolumeArc.runtime.restTimerDurationOverride"
+    private static let voicePromptTranscriptFixtureKey =
+        "com.mabryventures.VolumeArc.runtime.voicePromptTranscriptFixture"
 
     public static var isDeterministicMode: Bool {
         get { UserDefaults.standard.bool(forKey: deterministicModeKey) }
@@ -38,6 +44,53 @@ public enum VolumeArcRuntimeFlags {
         set { UserDefaults.standard.set(newValue, forKey: simulatePermissionPromptsKey) }
     }
 
+    /// VOL-271: deterministic UI tests prove the premium "Manage"
+    /// subscription tap path without leaving the host app for App Store /
+    /// Settings. Production leaves this false, so the Profile action opens
+    /// the Apple subscription-management URL after recording telemetry.
+    public static var suppressSubscriptionManageExternalURL: Bool {
+        get { UserDefaults.standard.bool(forKey: suppressSubscriptionManageExternalURLKey) }
+        set { UserDefaults.standard.set(newValue, forKey: suppressSubscriptionManageExternalURLKey) }
+    }
+
+    /// VOL-271: deterministic UI tests can shorten the active-session
+    /// rest timer without changing the athlete-facing production
+    /// default. The app target only sets this from `-UITestMode 1`
+    /// launches; `nil` means use the standard 90-second rest.
+    public static var restTimerDurationOverride: TimeInterval? {
+        get {
+            let value = UserDefaults.standard.double(forKey: restTimerDurationOverrideKey)
+            return value > 0 ? value : nil
+        }
+        set {
+            if let newValue, newValue > 0 {
+                UserDefaults.standard.set(newValue, forKey: restTimerDurationOverrideKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: restTimerDurationOverrideKey)
+            }
+        }
+    }
+
+    /// VOL-271: deterministic voice-journey tests can inject the text
+    /// that a speech-recognition pass would have produced. Production
+    /// leaves this nil and relies on the user's typed or dictated prompt.
+    public static var voicePromptTranscriptFixture: String? {
+        get {
+            guard let value = UserDefaults.standard.string(forKey: voicePromptTranscriptFixtureKey),
+                  !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            else { return nil }
+            return value
+        }
+        set {
+            if let newValue,
+               !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                UserDefaults.standard.set(newValue, forKey: voicePromptTranscriptFixtureKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: voicePromptTranscriptFixtureKey)
+            }
+        }
+    }
+
     /// VOL-109: convenience predicate for permission-prompt call sites.
     /// `true` when the site should fire the system prompt; `false` when
     /// it should silently no-op (test mode without simulation flag, or
@@ -47,5 +100,45 @@ public enum VolumeArcRuntimeFlags {
             return true
         }
         return simulatePermissionPrompts
+    }
+}
+
+public enum OnboardingProgressStore {
+    private static let stepKey = "com.mabryventures.VolumeArc.onboarding.stepRaw"
+
+    public static func loadStepRaw() -> Int? {
+        guard UserDefaults.standard.object(forKey: stepKey) != nil else { return nil }
+        return UserDefaults.standard.integer(forKey: stepKey)
+    }
+
+    public static func saveStepRaw(_ rawValue: Int) {
+        UserDefaults.standard.set(rawValue, forKey: stepKey)
+    }
+
+    public static func clear() {
+        UserDefaults.standard.removeObject(forKey: stepKey)
+    }
+}
+
+public enum CoachStreamRecoveryStore {
+    private static let inFlightKey = "com.mabryventures.VolumeArc.coach.streamInFlight"
+
+    public static func markInFlight() {
+        UserDefaults.standard.set(true, forKey: inFlightKey)
+        UserDefaults.standard.synchronize()
+    }
+
+    public static func clear() {
+        UserDefaults.standard.removeObject(forKey: inFlightKey)
+        UserDefaults.standard.synchronize()
+    }
+
+    @discardableResult
+    public static func consumeAbortedStream() -> Bool {
+        let wasInFlight = UserDefaults.standard.bool(forKey: inFlightKey)
+        if wasInFlight {
+            clear()
+        }
+        return wasInFlight
     }
 }

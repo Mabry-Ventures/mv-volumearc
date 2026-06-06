@@ -1,10 +1,16 @@
 #if canImport(SwiftUI)
+import Foundation
 import SwiftUI
+#if canImport(AuthenticationServices)
+import AuthenticationServices
+#endif
 import VolumeArcCore
+
+// swiftlint:disable file_length
 
 /// First-run onboarding experience.
 /// 6 steps: welcome → profile → preferences → coaching style → permissions → done.
-public struct OnboardingView: View {
+public struct OnboardingView: View { // swiftlint:disable:this type_body_length
     @Binding var isPresented: Bool
     let onComplete: (OnboardingResult) -> Void
     /// VOL-109: callback that fires the Apple Health authorization
@@ -16,6 +22,9 @@ public struct OnboardingView: View {
     /// callback keep compiling — a missing callback degrades the step
     /// to "informational only, just tap Continue to advance".
     let onRequestHealthAuthorization: (() async -> Bool)?
+    let onRequestNotificationAuthorization: (() async -> Bool)?
+    let onConnectAppleAccount: ((OnboardingAppleAccount) async -> Void)?
+    let onResumeFromSavedProgress: ((Int) -> Void)?
 
     @State private var step: Step
     @State private var result: OnboardingResult
@@ -24,39 +33,60 @@ public struct OnboardingView: View {
     /// any business logic — Continue advances unconditionally — so a
     /// "false" value just means we don't change the button label.
     @State private var healthAuthorizationDidComplete: Bool
+    @State private var notificationAuthorizationDidComplete: Bool
+    @State private var appleAccountDidConnect = false
+    @State private var appleAccountStatusMessage: String?
+    @State private var didRecordResumeTelemetry = false
 
     public init(
         isPresented: Binding<Bool>,
         onComplete: @escaping (OnboardingResult) -> Void,
-        onRequestHealthAuthorization: (() async -> Bool)? = nil
+        onRequestHealthAuthorization: (() async -> Bool)? = nil,
+        onRequestNotificationAuthorization: (() async -> Bool)? = nil,
+        onConnectAppleAccount: ((OnboardingAppleAccount) async -> Void)? = nil,
+        onResumeFromSavedProgress: ((Int) -> Void)? = nil
     ) {
         self._isPresented = isPresented
         self.onComplete = onComplete
         self.onRequestHealthAuthorization = onRequestHealthAuthorization
-        self._step = State(initialValue: .welcome)
+        self.onRequestNotificationAuthorization = onRequestNotificationAuthorization
+        self.onConnectAppleAccount = onConnectAppleAccount
+        self.onResumeFromSavedProgress = onResumeFromSavedProgress
+        self._step = State(initialValue: Self.initialStep())
         self._result = State(initialValue: OnboardingResult())
         self._healthAuthorizationDidComplete = State(initialValue: false)
+        self._notificationAuthorizationDidComplete = State(initialValue: false)
     }
 
     @_spi(Testing) public init(
         isPresented: Binding<Bool>,
         onComplete: @escaping (OnboardingResult) -> Void,
         onRequestHealthAuthorization: (() async -> Bool)? = nil,
+        onRequestNotificationAuthorization: (() async -> Bool)? = nil,
+        onConnectAppleAccount: ((OnboardingAppleAccount) async -> Void)? = nil,
+        onResumeFromSavedProgress: ((Int) -> Void)? = nil,
         snapshotStep: OnboardingSnapshotStep,
         snapshotResult: OnboardingResult = OnboardingResult(),
-        snapshotHealthAuthorizationDidComplete: Bool = false
+        snapshotHealthAuthorizationDidComplete: Bool = false,
+        // swiftlint:disable:next identifier_name
+        snapshotNotificationAuthorizationDidComplete: Bool = false
     ) {
         self._isPresented = isPresented
         self.onComplete = onComplete
         self.onRequestHealthAuthorization = onRequestHealthAuthorization
+        self.onRequestNotificationAuthorization = onRequestNotificationAuthorization
+        self.onConnectAppleAccount = onConnectAppleAccount
+        self.onResumeFromSavedProgress = onResumeFromSavedProgress
         self._step = State(initialValue: Step(snapshotStep: snapshotStep))
         self._result = State(initialValue: snapshotResult)
         self._healthAuthorizationDidComplete = State(initialValue: snapshotHealthAuthorizationDidComplete)
+        self._notificationAuthorizationDidComplete = State(initialValue: snapshotNotificationAuthorizationDidComplete)
     }
 
     public var body: some View {
         VStack(spacing: 0) {
             onboardingRootMarker
+            currentStepMarker
             progressBar
             // VOL-115: wrap the step content in a ScrollView so that text
             // fields inside the profile step can be scrolled past the
@@ -94,6 +124,14 @@ public struct OnboardingView: View {
             )
             .ignoresSafeArea()
         )
+        .task {
+            guard !didRecordResumeTelemetry,
+                  let savedStepRaw = OnboardingProgressStore.loadStepRaw(),
+                  let savedStep = Step(rawValue: savedStepRaw),
+                  savedStep != .welcome else { return }
+            didRecordResumeTelemetry = true
+            onResumeFromSavedProgress?(savedStep.rawValue)
+        }
     }
 
     // MARK: - Progress bar
@@ -111,6 +149,16 @@ public struct OnboardingView: View {
             .accessibilityElement(children: .ignore)
             .accessibilityIdentifier("onboarding.root")
             .accessibilityLabel(String(localized: "Onboarding", comment: "Accessibility label for the onboarding root marker"))
+    }
+
+    private var currentStepMarker: some View {
+        Text(verbatim: "\(step.rawValue)")
+            .font(.caption2)
+            .frame(width: 1, height: 1)
+            .opacity(0.01)
+            .accessibilityElement(children: .ignore)
+            .accessibilityIdentifier("onboarding.step.\(step.rawValue)")
+            .accessibilityLabel(Text(verbatim: "\(step.rawValue)"))
     }
 
     private var progressBar: some View {
@@ -141,9 +189,7 @@ public struct OnboardingView: View {
 
     private var welcomeStep: some View {
         VStack(spacing: VA.Space.xl) {
-            Image(systemName: "figure.strengthtraining.traditional.circle.fill")
-                .font(VA.Typography.onboardingIcon)
-                .foregroundStyle(VA.Colors.primary)
+            onboardingHeroPanel
                 .vaAppear()
 
             VStack(spacing: VA.Space.md) {
@@ -162,7 +208,110 @@ public struct OnboardingView: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: VA.Space.onboardingMaxWidth)
             }
+
+            onboardingProofPanel
         }
+    }
+
+    private var onboardingProofPanel: some View {
+        VACard(style: .accent) {
+            VStack(alignment: .leading, spacing: VA.Space.md) {
+                OnboardingProofRow(
+                    icon: "applewatch",
+                    title: String(localized: "Watch-first execution", comment: "Onboarding proof row title"),
+                    detail: String(localized: "Start, log, rest, and recover without breaking focus.", comment: "Onboarding proof row detail")
+                )
+                OnboardingProofRow(
+                    icon: "chart.line.uptrend.xyaxis",
+                    title: String(localized: "Readiness-aware training", comment: "Onboarding proof row title"),
+                    detail: String(localized: "Your plan adapts when recovery says to back off.", comment: "Onboarding proof row detail")
+                )
+                OnboardingProofRow(
+                    icon: "lock.shield.fill",
+                    title: String(localized: "Private by design", comment: "Onboarding proof row title"),
+                    detail: String(localized: "Health data stays on-device unless you choose Cloud Coach.", comment: "Onboarding proof row detail")
+                )
+            }
+        }
+        .frame(maxWidth: VA.Space.onboardingMaxWidth)
+    }
+
+    private var onboardingHeroPanel: some View {
+        ZStack(alignment: .topLeading) {
+            VA.Gradients.sunriseHero
+            VStack(alignment: .leading, spacing: VA.Space.lg) {
+                HStack(alignment: .center, spacing: VA.Space.md) {
+                    Image(systemName: "figure.strengthtraining.traditional")
+                        .font(VA.Typography.title)
+                        .foregroundStyle(VA.Colors.textOnPrimary)
+                        .frame(width: VA.Space.ctaIllustration, height: VA.Space.ctaIllustration)
+                        .background(VA.Colors.textOnPrimary.opacity(VA.Opacity.iconPanelPrimary), in: Circle())
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                        Text(String(localized: "Today", comment: "Onboarding hero mini dashboard label"))
+                            .font(VA.Typography.caption)
+                            .foregroundStyle(VA.Colors.textOnPrimary.opacity(VA.Opacity.textMutedOnPrimary))
+                        Text(String(localized: "Upper Strength", comment: "Onboarding hero sample workout title"))
+                            .font(VA.Typography.title2)
+                            .foregroundStyle(VA.Colors.textOnPrimary)
+                    }
+                    Spacer(minLength: VA.Space.sm)
+                    Text(String(localized: "84", comment: "Onboarding hero sample readiness score"))
+                        .font(VA.Typography.display)
+                        .foregroundStyle(VA.Colors.textOnPrimary)
+                        .monospacedDigit()
+                }
+
+                HStack(spacing: VA.Space.sm) {
+                    onboardingHeroStat(
+                        title: String(localized: "Next set", comment: "Onboarding hero stat title"),
+                        value: String(localized: "Back Squat", comment: "Onboarding hero stat value")
+                    )
+                    onboardingHeroStat(
+                        title: String(localized: "Target", comment: "Onboarding hero stat title"),
+                        value: String(localized: "225 x 5", comment: "Onboarding hero stat value")
+                    )
+                    onboardingHeroStat(
+                        title: String(localized: "Watch", comment: "Onboarding hero stat title"),
+                        value: String(localized: "Ready", comment: "Onboarding hero stat value")
+                    )
+                }
+            }
+            .padding(VA.Space.lg)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: VA.Radius.xl, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: VA.Radius.xl, style: .continuous)
+                .stroke(VA.Colors.textOnPrimary.opacity(VA.Opacity.strokeOnPrimary), lineWidth: VA.Space.border)
+        }
+        .vaShadow(.lg)
+        .frame(maxWidth: VA.Space.onboardingMaxWidth)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(String(
+            localized: "VolumeArc sample training dashboard. Readiness 84. Upper Strength. Back Squat 225 by 5.",
+            comment: "Onboarding hero accessibility summary"
+        ))
+    }
+
+    private func onboardingHeroStat(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: VA.Space.xxs) {
+            Text(title)
+                .font(VA.Typography.caption)
+                .foregroundStyle(VA.Colors.textOnPrimary.opacity(VA.Opacity.textMutedOnPrimary))
+                .lineLimit(1)
+            Text(value)
+                .font(VA.Typography.footnote)
+                .foregroundStyle(VA.Colors.textOnPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, VA.Space.sm)
+        .padding(.vertical, VA.Space.xs)
+        .background(
+            VA.Colors.textOnPrimary.opacity(VA.Opacity.iconPanelPrimary),
+            in: RoundedRectangle(cornerRadius: VA.Radius.sm, style: .continuous)
+        )
     }
 
     private var profileStep: some View {
@@ -183,7 +332,6 @@ public struct OnboardingView: View {
                 Text(String(localized: "Your name", comment: "Onboarding profile step — name field label"))
                     .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.textSecondary)
-                    .tracking(0.5)
                 TextField(
                     String(localized: "First name", comment: "Onboarding profile step — name field placeholder"),
                     text: $result.name
@@ -196,11 +344,12 @@ public struct OnboardingView: View {
                     )
             }
 
+            appleAccountCard
+
             VStack(alignment: .leading, spacing: VA.Space.md) {
                 Text(String(localized: "Experience level", comment: "Onboarding profile step — experience level label"))
                     .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.textSecondary)
-                    .tracking(0.5)
                 ForEach(AdvancementLevel.allCases, id: \.self) { level in
                     selectionRow(
                         title: level.displayName,
@@ -230,7 +379,6 @@ public struct OnboardingView: View {
                 Text(String(localized: "Days per week", comment: "Onboarding preferences — days per week field label"))
                     .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.textSecondary)
-                    .tracking(0.5)
                 HStack(spacing: VA.Space.sm) {
                     ForEach(2...6, id: \.self) { days in
                         Button {
@@ -255,7 +403,6 @@ public struct OnboardingView: View {
                 Text(String(localized: "Session time budget", comment: "Onboarding preferences — session length field label"))
                     .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.textSecondary)
-                    .tracking(0.5)
                 Picker("", selection: $result.sessionMinutes) {
                     Text(String(localized: "30 min", comment: "Session length option — 30 minutes")).tag(30)
                     Text(String(localized: "45 min", comment: "Session length option — 45 minutes")).tag(45)
@@ -286,7 +433,6 @@ public struct OnboardingView: View {
                 Text(String(localized: "Coach voice", comment: "Onboarding coaching style section label"))
                     .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.textSecondary)
-                    .tracking(0.5)
                 ForEach(CoachingStyle.allCases, id: \.self) { style in
                     selectionRow(
                         title: style.displayName,
@@ -303,7 +449,6 @@ public struct OnboardingView: View {
                 Text(String(localized: "Cloud coach privacy", comment: "Onboarding privacy mode section label"))
                     .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.textSecondary)
-                    .tracking(0.5)
                 ForEach(PrivacyMode.allCases, id: \.self) { mode in
                     selectionRow(
                         title: mode.displayName,
@@ -317,6 +462,131 @@ public struct OnboardingView: View {
             }
         }
     }
+
+    @ViewBuilder
+    private var appleAccountCard: some View {
+        #if canImport(AuthenticationServices)
+        if onConnectAppleAccount != nil {
+            VACard(style: .glass) {
+                VStack(alignment: .leading, spacing: VA.Space.md) {
+                    HStack(alignment: .top, spacing: VA.Space.sm) {
+                        Image(systemName: appleAccountDidConnect ? "person.crop.circle.badge.checkmark" : "person.crop.circle")
+                            .font(VA.Typography.title2)
+                            .foregroundStyle(VA.Colors.primary)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                            Text(String(
+                                localized: "Keep your profile in sync",
+                                comment: "Onboarding Apple account card title"
+                            ))
+                            .font(VA.Typography.headline)
+                            .foregroundStyle(VA.Colors.textPrimary)
+                            Text(appleAccountSupportingCopy)
+                                .font(VA.Typography.footnote)
+                                .foregroundStyle(VA.Colors.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+
+                    if appleAccountDidConnect {
+                        Label {
+                            Text(String(
+                                localized: "Apple ID connected",
+                                comment: "Onboarding Apple account connected status"
+                            ))
+                        } icon: {
+                            Image(systemName: "checkmark.circle.fill")
+                                .accessibilityHidden(true)
+                        }
+                        .font(VA.Typography.footnote)
+                        .foregroundStyle(VA.Colors.success)
+                        .accessibilityIdentifier("onboarding.appleSignIn.connected")
+                    } else {
+                        SignInWithAppleButton(.signIn) { request in
+                            request.requestedScopes = [.fullName, .email]
+                        } onCompletion: { result in
+                            handleAppleSignIn(result)
+                        }
+                        .signInWithAppleButtonStyle(.black)
+                        .frame(height: 48)
+                        .accessibilityIdentifier("onboarding.appleSignIn")
+                    }
+
+                    if let appleAccountStatusMessage {
+                        Text(appleAccountStatusMessage)
+                            .font(VA.Typography.caption)
+                            .foregroundStyle(appleAccountDidConnect ? VA.Colors.success : VA.Colors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("onboarding.appleSignIn.status")
+                    }
+                }
+            }
+            .frame(maxWidth: VA.Space.onboardingMaxWidth)
+        }
+        #endif
+    }
+
+    private var appleAccountSupportingCopy: String {
+        if appleAccountDidConnect {
+            return String(
+                localized: "Profile identity is ready. Training data and preferences sync through your private iCloud database.",
+                comment: "Onboarding Apple account connected supporting copy"
+            )
+        }
+        return String(
+            localized: "Use Apple ID to seed your profile. Training data and preferences sync through your private iCloud database.",
+            comment: "Onboarding Apple account supporting copy"
+        )
+    }
+
+    #if canImport(AuthenticationServices)
+    private func handleAppleSignIn(_ authorizationResult: Result<ASAuthorization, Error>) {
+        switch authorizationResult {
+        case let .success(authorization):
+            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+                appleAccountStatusMessage = String(
+                    localized: "Apple sign-in did not return a usable identity.",
+                    comment: "Onboarding Apple sign-in unusable credential message"
+                )
+                VAHaptics.warning()
+                return
+            }
+
+            let displayName = appleDisplayName(from: credential.fullName)
+            if result.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               displayName.isEmpty == false {
+                result.name = displayName
+            }
+
+            appleAccountStatusMessage = String(
+                localized: "Apple ID connected.",
+                comment: "Onboarding Apple sign-in success message"
+            )
+            appleAccountDidConnect = true
+            Task {
+                await onConnectAppleAccount?(OnboardingAppleAccount(
+                    userID: credential.user,
+                    displayName: displayName,
+                    email: credential.email
+                ))
+            }
+            VAHaptics.setLogged()
+        case .failure:
+            appleAccountStatusMessage = String(
+                localized: "Apple sign-in was canceled or could not complete.",
+                comment: "Onboarding Apple sign-in failure message"
+            )
+            appleAccountDidConnect = false
+            VAHaptics.warning()
+        }
+    }
+
+    private func appleDisplayName(from components: PersonNameComponents?) -> String {
+        guard let components else { return "" }
+        return PersonNameComponentsFormatter.localizedString(from: components, style: .medium)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    #endif
 
     /// VOL-109 + VOL-127: Apple Health permission step that doubles
     /// as the custom rationale screen presented BEFORE the system
@@ -406,38 +676,179 @@ public struct OnboardingView: View {
             }
 
             if onRequestHealthAuthorization != nil {
-                VAButton(
-                    healthAuthorizationDidComplete
-                        ? String(
-                            localized: "Connected",
-                            comment: "Onboarding permissions step button label after the system prompt has been answered"
-                        )
-                        : String(
-                            localized: "Connect Apple Health",
-                            comment: "Onboarding permissions step primary action — opens the HealthKit authorization sheet"
-                        ),
-                    style: healthAuthorizationDidComplete ? .ghost : .secondary,
-                    accessibilityIdentifier: "onboarding.permissions.connect-health"
-                ) {
-                    Task {
-                        VAHaptics.tap()
-                        let granted = await onRequestHealthAuthorization?() ?? false
-                        healthAuthorizationDidComplete = granted
+                healthConnectButton
+                    .frame(maxWidth: VA.Space.onboardingMaxWidth)
+                    .disabled(healthAuthorizationDidComplete)
+            }
+
+            if onRequestNotificationAuthorization != nil {
+                VACard(style: .glass) {
+                    VStack(alignment: .leading, spacing: VA.Space.md) {
+                        HStack(alignment: .top, spacing: VA.Space.sm) {
+                            Image(systemName: "bell.badge.fill")
+                                .font(VA.Typography.title2)
+                                .foregroundStyle(VA.Colors.primary)
+                                .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                                Text(String(
+                                    localized: "Workout reminders",
+                                    comment: "Onboarding notification permission card title"
+                                ))
+                                .font(VA.Typography.headline)
+                                .foregroundStyle(VA.Colors.textPrimary)
+                                Text(String(
+                                    localized: """
+                                    VolumeArc can send rest-timer alerts and scheduled-workout nudges. \
+                                    No streak guilt, no marketing pushes.
+                                    """,
+                                    comment: "Onboarding notification permission rationale"
+                                ))
+                                .font(VA.Typography.footnote)
+                                .foregroundStyle(VA.Colors.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+
+                        VAButton(
+                            notificationAuthorizationDidComplete
+                                ? String(
+                                    localized: "Notifications Enabled",
+                                    comment: "Onboarding notification permission enabled button label"
+                                )
+                                : String(
+                                    localized: "Allow Workout Notifications",
+                                    comment: "Onboarding notification permission request button label"
+                                ),
+                            icon: notificationAuthorizationDidComplete ? "checkmark.circle.fill" : "bell.fill",
+                            style: notificationAuthorizationDidComplete ? .ghost : .secondary,
+                            accessibilityIdentifier: "onboarding.permissions.notifications"
+                        ) {
+                            Task {
+                                VAHaptics.tap()
+                                let granted = await onRequestNotificationAuthorization?() ?? false
+                                notificationAuthorizationDidComplete = granted
+                            }
+                        }
+                        .disabled(notificationAuthorizationDidComplete)
                     }
                 }
                 .frame(maxWidth: VA.Space.onboardingMaxWidth)
-                .disabled(healthAuthorizationDidComplete)
             }
 
             Text(String(
-                localized: "You can change this anytime in Profile → Apple Health.",
-                comment: "Onboarding permissions step footer pointing the user to the Profile-tab settings entry for HealthKit"
+                localized: "You can change these anytime from Profile.",
+                comment: "Onboarding permissions step footer pointing the user to Profile settings"
             ))
             .font(VA.Typography.footnote)
             .foregroundStyle(VA.Colors.textTertiary)
             .multilineTextAlignment(.center)
             .frame(maxWidth: VA.Space.onboardingMaxWidth)
         }
+    }
+
+    private var healthConnectButton: some View {
+        Button {
+            Task {
+                VAHaptics.tap()
+                let granted = await onRequestHealthAuthorization?() ?? false
+                healthAuthorizationDidComplete = granted
+            }
+        } label: {
+            HStack(spacing: VA.Space.md) {
+                Image(systemName: healthAuthorizationDidComplete ? "checkmark.circle.fill" : "heart.text.square.fill")
+                    .font(VA.Typography.title2)
+                    .foregroundStyle(healthConnectForeground)
+                    .frame(width: VA.Space.iconBadge, height: VA.Space.iconBadge)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                    Text(healthConnectTitle)
+                        .font(VA.Typography.headline)
+                        .foregroundStyle(healthConnectForeground)
+                    Text(healthConnectSubtitle)
+                        .font(VA.Typography.footnote)
+                        .foregroundStyle(healthConnectSecondaryForeground)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: VA.Space.sm)
+                Image(systemName: healthAuthorizationDidComplete ? "lock.shield.fill" : "arrow.up.right")
+                    .font(VA.Typography.buttonIcon)
+                    .foregroundStyle(healthConnectSecondaryForeground)
+                    .accessibilityHidden(true)
+            }
+            .padding(VA.Space.lg)
+            .background(healthConnectBackground)
+            .clipShape(RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous)
+                    .stroke(healthConnectStroke, lineWidth: VA.Space.border)
+            }
+            .vaShadow(healthAuthorizationDidComplete ? .sm : .md)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(healthConnectAccessibilityLabel)
+        .accessibilityHint(healthConnectSubtitle)
+        .accessibilityIdentifier("onboarding.permissions.connect-health")
+    }
+
+    private var healthConnectTitle: String {
+        healthAuthorizationDidComplete
+            ? String(
+                localized: "Apple Health Connected",
+                comment: "Onboarding permissions connected Health button title"
+            )
+            : String(
+                localized: "Connect Apple Health",
+                comment: "Onboarding permissions Health button title"
+            )
+    }
+
+    private var healthConnectSubtitle: String {
+        healthAuthorizationDidComplete
+            ? String(
+                localized: "Recovery signals are ready for training guidance.",
+                comment: "Onboarding permissions connected Health button subtitle"
+            )
+            : String(
+                localized: "Use recovery, sleep, and workout history to tune every session.",
+                comment: "Onboarding permissions Health button subtitle"
+            )
+    }
+
+    private var healthConnectAccessibilityLabel: String {
+        healthAuthorizationDidComplete
+            ? String(
+                localized: "Connected",
+                comment: "Onboarding permissions connected Health button accessibility label"
+            )
+            : String(
+                localized: "Connect Apple Health",
+                comment: "Onboarding permissions Health button accessibility label"
+            )
+    }
+
+    private var healthConnectForeground: Color {
+        healthAuthorizationDidComplete ? VA.Colors.textPrimary : VA.Colors.textOnPrimary
+    }
+
+    private var healthConnectSecondaryForeground: Color {
+        healthAuthorizationDidComplete
+            ? VA.Colors.textSecondary
+            : VA.Colors.textOnPrimary.opacity(VA.Opacity.textSecondaryOnPrimary)
+    }
+
+    @ViewBuilder
+    private var healthConnectBackground: some View {
+        if healthAuthorizationDidComplete {
+            VA.Colors.surfacePrimary
+        } else {
+            VA.Gradients.sunriseHero
+        }
+    }
+
+    private var healthConnectStroke: Color {
+        healthAuthorizationDidComplete
+            ? VA.Colors.success.opacity(VA.Opacity.strokeOnPrimary)
+            : VA.Colors.textOnPrimary.opacity(VA.Opacity.strokeOnPrimary)
     }
 
     /// VOL-127: SF Symbol + body row for the structured HealthKit
@@ -564,7 +975,7 @@ public struct OnboardingView: View {
                     accessibilityIdentifier: "onboarding.back"
                 ) {
                     withAnimation(VAAnimation.standard) {
-                        step = Step(rawValue: step.rawValue - 1) ?? .welcome
+                        saveStep(Step(rawValue: step.rawValue - 1) ?? .welcome)
                     }
                 }
                 .frame(maxWidth: 100)
@@ -587,11 +998,24 @@ public struct OnboardingView: View {
                     onComplete(result)
                 } else {
                     withAnimation(VAAnimation.standard) {
-                        step = Step(rawValue: step.rawValue + 1) ?? .done
+                        saveStep(Step(rawValue: step.rawValue + 1) ?? .done)
                     }
                 }
             }
         }
+    }
+
+    private static func initialStep() -> Step {
+        guard let rawValue = OnboardingProgressStore.loadStepRaw(),
+              let savedStep = Step(rawValue: rawValue) else {
+            return .welcome
+        }
+        return savedStep
+    }
+
+    private func saveStep(_ nextStep: Step) {
+        step = nextStep
+        OnboardingProgressStore.saveStepRaw(nextStep.rawValue)
     }
 
     fileprivate enum Step: Int, CaseIterable {
@@ -650,6 +1074,18 @@ public struct OnboardingResult: Sendable {
     }
 }
 
+public struct OnboardingAppleAccount: Sendable, Equatable {
+    public let userID: String
+    public let displayName: String
+    public let email: String?
+
+    public init(userID: String, displayName: String, email: String?) {
+        self.userID = userID
+        self.displayName = displayName
+        self.email = email
+    }
+}
+
 @_spi(Testing) public enum OnboardingSnapshotStep: Sendable {
     case welcome
     case profile
@@ -674,6 +1110,32 @@ private extension OnboardingView.Step {
             self = .permissions
         case .done:
             self = .done
+        }
+    }
+}
+
+private struct OnboardingProofRow: View {
+    let icon: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: VA.Space.md) {
+            Image(systemName: icon)
+                .font(VA.Typography.headline)
+                .foregroundStyle(VA.Colors.primary)
+                .frame(width: 32, height: 32)
+                .background(VA.Colors.primary.opacity(0.12), in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                Text(title)
+                    .font(VA.Typography.headline)
+                    .foregroundStyle(VA.Colors.textPrimary)
+                Text(detail)
+                    .font(VA.Typography.footnote)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }

@@ -209,15 +209,18 @@ public final class StoreKitSubscriptionStore: ObservableObject, PremiumEntitleme
     public static func screenshotFixture(
         productIDs: [String],
         productDisplays: [StoreKitSubscriptionProductDisplay],
+        purchasedProductIDs: Set<String> = [],
         telemetry: (any TelemetrySink)? = nil
     ) -> StoreKitSubscriptionStore {
-        StoreKitSubscriptionStore(
+        let store = StoreKitSubscriptionStore(
             productIDs: productIDs,
             loadingState: .loaded,
             productDisplays: productDisplays,
             allowsAutomaticProductReload: false,
             telemetry: telemetry
         )
+        store.purchasedProductIDs = purchasedProductIDs
+        return store
     }
     #endif
 

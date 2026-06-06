@@ -2,7 +2,7 @@
 import SwiftUI
 import VolumeArcCore
 
-/// VOL-146 Phase 1B (VOL-176): in-app feedback sheet reachable from
+/// VOL-146 Phase 1B (VOL-176): in-app feedback surface reachable from
 /// `Profile → Send feedback`. Pairs with the model layer that landed in
 /// Phase 1A (`FeedbackBundle`, `FeedbackBundleAssembler`,
 /// `FeedbackTextScrubber` in `VolumeArcCore/Diagnostics/`).

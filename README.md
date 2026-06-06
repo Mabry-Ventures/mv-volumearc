@@ -46,7 +46,7 @@ The Xcode project is **generated** — never edit `VolumeArcApple.xcodeproj/proj
 
 ## Status
 
-The 2026-05-09 forensic re-audit ([`docs/AUDIT.md`](docs/AUDIT.md)) scored the platform at **88/100**. Submission blockers and ongoing burndown live in the [VolumeArc Production Readiness](https://linear.app/mabry-ventures/project/volumearc-production-readiness-af810008523d) Linear project.
+VolumeArc is pre-launch. The current launch-readiness audit is tracked in [`docs/AUDIT.md`](docs/AUDIT.md), and active release work now rolls up to the [VolumeArc Release](https://linear.app/mabry-ventures/initiative/volumearc-release-68a38ea2d762) Linear initiative. The release bar is every world-class scorecard category at 9.5 or higher with no unresolved P0-P4 findings.
 
 ## License
 

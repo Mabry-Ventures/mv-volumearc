@@ -64,16 +64,10 @@ jobs:
         run: npm ci
 
       - name: npm audit (VOL-254)
-        # Wave-B audit hardening: runs `npm audit` against the installed
-        # tree and surfaces moderate-or-higher findings. Rolled out as
-        # warn-only (`continue-on-error: true`) for a 1-week observation
-        # window so we calibrate against the existing lockfile state
-        # before promoting to a hard gate. After the window — and after
-        # any actionable findings are addressed via Dependabot (VOL-248)
-        # or direct upgrades — remove `continue-on-error` to flip the
-        # step to blocking. Tunable via NPM_AUDIT_LEVEL if we need to
-        # raise the bar later (e.g. `high` only).
-        continue-on-error: true
+        # VolumeArc Release: dependency audit is now a hard gate. The
+        # prior observation window is over and the Lighthouse transitive
+        # `tmp` advisory is resolved through the lockfile override, so
+        # moderate-or-higher findings must block until fixed or accepted.
         env:
           NPM_AUDIT_LEVEL: moderate
         run: |
@@ -99,13 +93,10 @@ jobs:
         run: npm run build
 
       - name: Generate SBOM (VOL-254)
-        # Wave-B audit hardening: CycloneDX SBOM for supply-chain
-        # auditing. `npm sbom` is built into npm 10.5+ (Node 22 ships
-        # 10.x). Output uploaded as an artifact so security review can
-        # diff supply-chain composition release-over-release. Failure
-        # is informational only — SBOM generation issues should not
-        # block the marketing deploy gate.
-        continue-on-error: true
+        # VolumeArc Release: CycloneDX SBOM generation is a hard
+        # supply-chain gate. `npm sbom` is built into npm 10.5+
+        # (Node 22 ships 10.x); the artifact lets security review diff
+        # composition release-over-release.
         run: npm sbom --sbom-format=cyclonedx > marketing-sbom.cyclonedx.json
 
       - name: Upload SBOM artifact (VOL-254)

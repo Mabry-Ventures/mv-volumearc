@@ -33,7 +33,7 @@
    ```
 4. **GitHub Actions** runs `Build & Test` + `Performance budgets (VOL-99)` against the tag commit. These must pass.
 5. **Xcode Cloud workflow** (configured per [Xcode Cloud setup](#xcode-cloud-setup) below) triggers in parallel on the tag push, archives the app with Apple-managed signing, and uploads to TestFlight.
-6. After archive, `ci_scripts/ci_post_xcodebuild.sh` runs `sentry-cli debug-files upload --include-sources --wait` against the archive's `dSYMs/` (VOL-133). Apple's auto-symbolication for App Store crashes still happens in parallel; this provides the same data to Sentry so our own crash reports symbolicate.
+6. After archive, `ci_scripts/ci_post_xcodebuild.sh` verifies the archived app has `VolumeArcSentryDSN` and `VolumeArcAIRelayURL`, generates a matching `Sentry.framework.dSYM` from the archived framework binary, then runs `sentry-cli debug-files upload --include-sources --wait` against the archive's `dSYMs/` (VOL-133). Apple's auto-symbolication for App Store crashes still happens in parallel; this provides the same data to Sentry so our own crash reports symbolicate.
 7. **TestFlight processing** (5-15 min usually). Watch in App Store Connect.
 8. dSYMs visible in Sentry under https://mabry-ventures-llc.sentry.io/settings/projects/volumearc-ios/debug-symbols/ tagged with release `com.mabryventures.VolumeArc@<version>+<build>`.
 
@@ -53,6 +53,7 @@ One-time setup, done in App Store Connect's web UI (cannot be done via CLI / API
    - Configuration: `Release`
    - Distribution: **TestFlight (Internal Testing Only)** initially; once we trust the pipeline, optionally add an external test group.
 8. **Environment variables** (settings cog → Environment):
+   - `SENTRY_DSN` — public client DSN for `mabry-ventures-llc/volumearc-ios`; required so TestFlight builds initialize Sentry.
    - `SENTRY_AUTH_TOKEN` — mark as **secret**. Same token as the GitHub `SENTRY_AUTH_TOKEN` secret (Sentry user token with `project:write` on `mabry-ventures-llc/volumearc-ios`).
    - `SENTRY_ORG` — `mabry-ventures-llc` (optional; script defaults to this)
    - `SENTRY_PROJECT` — `volumearc-ios` (optional; script defaults to this)
@@ -64,21 +65,28 @@ After setup, push a tag and verify:
 - The Xcode Cloud workflow appears in App Store Connect within ~30s of the tag push.
 - Build completes (typically 25-40 min on hosted Macs).
 - TestFlight build is visible.
-- Sentry's debug-symbols page shows dSYMs for the build.
+- Sentry's debug-symbols page shows app/watch/widget dSYMs plus the generated `Sentry.framework.dSYM` for the build.
 
 ### Local archive fallback
 
 `fastlane ios beta` still works for local archive — useful for hotfixes or for pushing a build before Xcode Cloud picks up the tag. Requires:
 - A local Apple Developer login in Xcode (Apple Distribution cert in keychain)
 - The provisioning profile installed in `~/Library/MobileDevice/Provisioning Profiles/`
-- `SENTRY_AUTH_TOKEN` env var set if you want dSYMs uploaded
+- `SENTRY_DSN` or `VOLUMEARC_SENTRY_DSN` env var set so the archived app initializes Sentry
+- `VOLUMEARC_AI_RELAY_URL=https://relay.volumearc.app` env var set so the archived app uses the production coach relay
+- `SENTRY_AUTH_TOKEN` env var set; the lane refuses to upload without Sentry dSYMs
 - `DEVELOPMENT_TEAM` env var set
-- `APP_STORE_CONNECT_API_KEY_PATH` env var pointing to a `.p8` key file (for upload_to_testflight)
+- `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, and `APP_STORE_CONNECT_API_KEY_PATH` env vars set for App Store Connect access. `APP_STORE_CONNECT_API_KEY_PATH` points to the raw `.p8`; the Fastlane lane builds the API key object in memory and refuses group/world-readable key files.
 
 ```bash
+export SENTRY_DSN=<public project DSN>
+export VOLUMEARC_AI_RELAY_URL=https://relay.volumearc.app
 export SENTRY_AUTH_TOKEN=<token>
-export DEVELOPMENT_TEAM=E896WB332K
-export APP_STORE_CONNECT_API_KEY_PATH=~/.appstoreconnect/private_keys/AuthKey_XXXXXXXXXX.p8
+export DEVELOPMENT_TEAM=A886EMZZW6
+export APP_STORE_CONNECT_KEY_ID=YR7UQCU7GN
+export APP_STORE_CONNECT_ISSUER_ID=69a6de72-e4ca-47e3-e053-5b8c7c11a4d1
+export APP_STORE_CONNECT_API_KEY_PATH=/Users/jaredmabry/Downloads/AuthKey_YR7UQCU7GN.p8
+chmod 600 "$APP_STORE_CONNECT_API_KEY_PATH"
 bundle exec fastlane ios beta
 ```
 
@@ -91,7 +99,7 @@ Local archive uses your keychain certs directly; no fastlane match infrastructur
 - `VOLUMEARC_NATIVE_DEPLOY_KEY` — SSH key for the runner's git operations
 
 Secrets that were previously required for the old GitHub Actions deploy path but are no longer used by CI (kept in case local devs use them or we add another integration):
-- `DEVELOPMENT_TEAM`, `APP_STORE_CONNECT_API_KEY_PATH`
+- `DEVELOPMENT_TEAM`, `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, `APP_STORE_CONNECT_API_KEY_PATH`
 
 ### Marketing site
 

@@ -126,11 +126,17 @@ enum VolumeArcAppUITestSupport {
         timeout: TimeInterval = 15,
         maxScrolls: Int = 3
     ) -> Bool {
-        guard element.waitForExistence(timeout: timeout) else { return false }
-        var attempts = 0
-        while !element.isHittable && attempts < maxScrolls {
+        let slice = max(0.5, timeout / Double(maxScrolls + 1))
+        var discoveryAttempts = 0
+        while !element.waitForExistence(timeout: slice) && discoveryAttempts < maxScrolls {
             app.swipeUp()
-            attempts += 1
+            discoveryAttempts += 1
+        }
+        guard element.exists else { return false }
+        var hittabilityAttempts = 0
+        while !element.isHittable && hittabilityAttempts < maxScrolls {
+            app.swipeUp()
+            hittabilityAttempts += 1
         }
         guard element.isHittable else { return false }
         element.tap()

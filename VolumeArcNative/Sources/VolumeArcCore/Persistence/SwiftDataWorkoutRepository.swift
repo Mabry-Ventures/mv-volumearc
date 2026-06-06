@@ -206,6 +206,7 @@ public struct SwiftDataWorkoutRepository: Sendable {
             .filter { $0.completedAt != nil }
             .map { record in
                 RecentSession(
+                    identifier: record.identifier,
                     date: record.completedAt ?? record.startedAt,
                     durationMinutes: record.durationMinutes,
                     exerciseIDs: record.exerciseIDsCSV.split(separator: ",").map(String.init),

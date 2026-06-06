@@ -586,6 +586,43 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         XCTAssertEqual(DashboardTab.profile.title, "Profile")
     }
 
+    // MARK: - Session profiles
+
+    func testWorkoutSessionProfileParseFallsBackToDefault() {
+        XCTAssertEqual(WorkoutSessionProfile.parse("Leg Day"), .legDay)
+        XCTAssertEqual(WorkoutSessionProfile.parse("Upper Strength"), .upperStrength)
+        XCTAssertEqual(WorkoutSessionProfile.parse("not-a-profile"), .defaultProfile)
+    }
+
+    func testWorkoutSessionProfileRulesResolveLegDayOnTuesdayAndThursday() throws {
+        let preferences = WorkoutSessionProfilePreferences(
+            selectedProfile: .defaultProfile,
+            legDayRuleEnabled: true,
+            shortSessionRuleEnabled: false
+        )
+        let calendar = Calendar(identifier: .gregorian)
+        let tuesday = try XCTUnwrap(DateComponents(calendar: calendar, year: 2026, month: 6, day: 2).date)
+        let thursday = try XCTUnwrap(DateComponents(calendar: calendar, year: 2026, month: 6, day: 4).date)
+        let wednesday = try XCTUnwrap(DateComponents(calendar: calendar, year: 2026, month: 6, day: 3).date)
+
+        XCTAssertEqual(preferences.resolvedProfile(sessionMinutes: 60, date: tuesday, calendar: calendar), .legDay)
+        XCTAssertEqual(preferences.resolvedProfile(sessionMinutes: 60, date: thursday, calendar: calendar), .legDay)
+        XCTAssertEqual(preferences.resolvedProfile(sessionMinutes: 60, date: wednesday, calendar: calendar), .defaultProfile)
+    }
+
+    func testWorkoutSessionProfileRulesPrioritizeShortSessionWhenTimeIsTight() throws {
+        let preferences = WorkoutSessionProfilePreferences(
+            selectedProfile: .upperStrength,
+            legDayRuleEnabled: true,
+            shortSessionRuleEnabled: true
+        )
+        let calendar = Calendar(identifier: .gregorian)
+        let tuesday = try XCTUnwrap(DateComponents(calendar: calendar, year: 2026, month: 6, day: 2).date)
+
+        XCTAssertEqual(preferences.resolvedProfile(sessionMinutes: 30, date: tuesday, calendar: calendar), .shortSession)
+        XCTAssertEqual(preferences.resolvedProfile(sessionMinutes: 45, date: tuesday, calendar: calendar), .legDay)
+    }
+
     // MARK: - CloudSync types
 
     func testCloudSyncRecordKindParseHandlesLegacyAliases() {
@@ -931,16 +968,20 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
     func testLocalHeuristicAICoachProviderRecoveryAtScoreBoundaries() async throws {
         let provider = LocalHeuristicAICoachProvider(coachingStyle: .motivational)
         let veryHigh = try await provider.coachResponse(for: "Am I ready?", context: "Readiness: 92/100 — green light")
-        XCTAssertTrue(veryHigh.contains("ready to push"))
+        XCTAssertTrue(veryHigh.contains("You can train"))
+        XCTAssertTrue(veryHigh.contains("stop if form or pain changes"))
 
         let mid = try await provider.coachResponse(for: "Am I ready?", context: "Readiness: 65/100 — moderate")
-        XCTAssertTrue(mid.contains("Moderate recovery"))
+        XCTAssertTrue(mid.contains("skip heroics"))
 
         let low = try await provider.coachResponse(for: "Am I ready?", context: "Readiness: 45/100 — fatigue")
-        XCTAssertTrue(low.contains("fatigue is accumulating"))
+        XCTAssertTrue(low.contains("Back off today"))
 
-        let veryLow = try await provider.coachResponse(for: "Am I ready?", context: "Readiness: 25/100 — sore")
-        XCTAssertTrue(veryLow.contains("lighter session"))
+        let veryLow = try await provider.coachResponse(for: "Am I ready?", context: "Readiness: 25/100 — low")
+        XCTAssertTrue(veryLow.contains("Rest is the best call today"))
+
+        let symptomOverride = try await provider.coachResponse(for: "Am I ready?", context: "Readiness: 25/100 — sore")
+        XCTAssertTrue(symptomOverride.contains("Rest is a valid win"))
 
         let noReadiness = try await provider.coachResponse(for: "How am I?", context: "Just woke up")
         // Free intent path: no readiness extracted means the default "log a set"
@@ -955,7 +996,8 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
             for: "Should I go heavier today?",
             context: "Readiness: 80/100 — strong"
         )
-        XCTAssertTrue(progGreen.contains("Green light"))
+        XCTAssertTrue(progGreen.contains("small jump"))
+        XCTAssertTrue(progGreen.contains("target RPE"))
 
         let progHold = try await provider.coachResponse(
             for: "Should I push more weight?",
@@ -965,9 +1007,15 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
 
         let deloadYes = try await provider.coachResponse(
             for: "Should I deload?",
-            context: "Readiness: 40/100 — drained"
+            context: "Readiness: 40/100 — low"
         )
         XCTAssertTrue(deloadYes.contains("deload makes sense"))
+
+        let deloadSymptomOverride = try await provider.coachResponse(
+            for: "Should I deload?",
+            context: "Readiness: 40/100 — drained"
+        )
+        XCTAssertTrue(deloadSymptomOverride.contains("Rest is a valid win"))
 
         let deloadMaybe = try await provider.coachResponse(
             for: "Should I deload?",
@@ -976,7 +1024,7 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
         XCTAssertTrue(deloadMaybe.contains("might not need a full deload"))
 
         let formCue = try await provider.coachResponse(for: "Form check?", context: "")
-        XCTAssertTrue(formCue.contains("Brace hard"))
+        XCTAssertTrue(formCue.contains("Brace before the rep starts"))
 
         let substitute = try await provider.coachResponse(
             for: "Substitute for back squat?",
@@ -991,7 +1039,7 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
             for: "Tell me what to do.",
             context: "Readiness 88/100 ready"
         )
-        XCTAssertTrue(response.contains("hold the target load"))
+        XCTAssertTrue(response.contains("choose the lowest-risk option"))
     }
 
     func testLocalHeuristicAICoachProviderPlanningRespectsRequestedHorizon() async throws {
@@ -1070,7 +1118,7 @@ final class VolumeArcCoreCoverageTests: XCTestCase {
             context: "Readiness: 88/100 — peak recovery"
         )
         XCTAssertFalse(bodyweightResponse.contains("Stop the session"))
-        XCTAssertTrue(bodyweightResponse.contains("Green light"))
+        XCTAssertTrue(bodyweightResponse.contains("small jump"))
     }
 
     func testLocalHeuristicAICoachProviderAvoidsBenignMedicalWordFalsePositives() async throws {

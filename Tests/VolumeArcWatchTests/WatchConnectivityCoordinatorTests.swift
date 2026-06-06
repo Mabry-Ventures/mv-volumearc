@@ -79,9 +79,11 @@ final class WatchConnectivityCoordinatorTests: XCTestCase {
     func test_send_enqueues_on_failure_and_propagates_error() async {
         let transport = FakeTransport(reachable: false, error: .notReachable)
         let store = UserDefaultsWatchPendingPayloadStore(defaults: ephemeralDefaults())
+        let telemetry = InMemoryTelemetrySink()
         let coordinator = WatchConnectivityCoordinator(
             transport: transport,
-            payloadStore: store
+            payloadStore: store,
+            telemetrySink: telemetry
         )
 
         do {
@@ -95,6 +97,10 @@ final class WatchConnectivityCoordinatorTests: XCTestCase {
 
         let queueCount = await coordinator.pendingPayloadCount()
         XCTAssertEqual(queueCount, 1)
+
+        let event = telemetry.currentEvents.first { $0.category == "watch" && $0.name == "payload.queued" }
+        XCTAssertEqual(event?.metadata["kind"], WatchPayloadKind.restTimer.rawValue)
+        XCTAssertEqual(event?.metadata["reason"], "send_failed")
     }
 
     func test_multiple_failed_sends_all_enqueue() async {
@@ -136,7 +142,12 @@ final class WatchConnectivityCoordinatorTests: XCTestCase {
         await store.enqueue(samplePayload(workoutID: "w-2", body: "second"))
 
         let transport = FakeTransport(reachable: true)
-        let coordinator = WatchConnectivityCoordinator(transport: transport, payloadStore: store)
+        let telemetry = InMemoryTelemetrySink()
+        let coordinator = WatchConnectivityCoordinator(
+            transport: transport,
+            payloadStore: store,
+            telemetrySink: telemetry
+        )
 
         try await coordinator.flushPendingIfReachable()
 
@@ -147,6 +158,13 @@ final class WatchConnectivityCoordinatorTests: XCTestCase {
         XCTAssertEqual(sent.count, 2)
         XCTAssertEqual(sent[0].body, "first")
         XCTAssertEqual(sent[1].body, "second")
+
+        let replayEvents = telemetry.currentEvents.filter {
+            $0.category == "watch" && $0.name == "payload.replayed"
+        }
+        XCTAssertEqual(replayEvents.count, 2)
+        XCTAssertEqual(replayEvents[0].metadata["kind"], WatchPayloadKind.restTimer.rawValue)
+        XCTAssertEqual(replayEvents[1].metadata["kind"], WatchPayloadKind.restTimer.rawValue)
     }
 
     func test_flushPendingIfReachable_reenqueues_on_partial_failure() async {
@@ -160,7 +178,12 @@ final class WatchConnectivityCoordinatorTests: XCTestCase {
         // retries it; payloads already drained ahead of the failure
         // are gone (the transport accepted them).
         let transport = FakeTransport(reachable: true, failingAfter: 1)
-        let coordinator = WatchConnectivityCoordinator(transport: transport, payloadStore: store)
+        let telemetry = InMemoryTelemetrySink()
+        let coordinator = WatchConnectivityCoordinator(
+            transport: transport,
+            payloadStore: store,
+            telemetrySink: telemetry
+        )
 
         do {
             try await coordinator.flushPendingIfReachable()
@@ -175,6 +198,15 @@ final class WatchConnectivityCoordinatorTests: XCTestCase {
         let sent = await transport.sent
         XCTAssertEqual(sent.count, 1)
         XCTAssertEqual(sent.first?.body, "first")
+
+        let replayEvents = telemetry.currentEvents.filter {
+            $0.category == "watch" && $0.name == "payload.replayed"
+        }
+        XCTAssertEqual(replayEvents.count, 1)
+        let requeueEvent = telemetry.currentEvents.first {
+            $0.category == "watch" && $0.name == "payload.queued"
+        }
+        XCTAssertEqual(requeueEvent?.metadata["reason"], "replay_failed")
     }
 
     // MARK: - UnavailableWatchSessionTransport (real type, not a fake)

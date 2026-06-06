@@ -436,10 +436,16 @@ public final class UserDefaultsWatchSessionStateStore: WatchSessionStateStore, @
 public actor WatchConnectivityCoordinator {
     private let transport: WatchSessionTransport
     private let payloadStore: WatchPendingPayloadStore
+    private let telemetrySink: (any TelemetrySink)?
 
-    public init(transport: WatchSessionTransport, payloadStore: WatchPendingPayloadStore) {
+    public init(
+        transport: WatchSessionTransport,
+        payloadStore: WatchPendingPayloadStore,
+        telemetrySink: (any TelemetrySink)? = nil
+    ) {
         self.transport = transport
         self.payloadStore = payloadStore
+        self.telemetrySink = telemetrySink
         Task { await transport.activate() }
     }
 
@@ -458,6 +464,7 @@ public actor WatchConnectivityCoordinator {
             try await transport.send(payload)
         } catch {
             await payloadStore.enqueue(payload)
+            recordPayloadQueued(payload, reason: "send_failed")
             throw error
         }
     }
@@ -469,11 +476,38 @@ public actor WatchConnectivityCoordinator {
         for payload in pending {
             do {
                 try await transport.send(payload)
+                recordPayloadReplayed(payload)
             } catch {
                 // Put it back in the queue if sending still fails.
                 await payloadStore.enqueue(payload)
+                recordPayloadQueued(payload, reason: "replay_failed")
                 throw error
             }
         }
+    }
+
+    private func recordPayloadQueued(_ payload: WatchPayload, reason: String) {
+        telemetrySink?.record(TelemetryEvent(
+            category: "watch",
+            name: "payload.queued",
+            severity: .info,
+            message: "Watch payload queued for replay.",
+            metadata: [
+                "kind": payload.kind.rawValue,
+                "reason": reason,
+            ]
+        ))
+    }
+
+    private func recordPayloadReplayed(_ payload: WatchPayload) {
+        telemetrySink?.record(TelemetryEvent(
+            category: "watch",
+            name: "payload.replayed",
+            severity: .info,
+            message: "Watch payload replayed after reconnect.",
+            metadata: [
+                "kind": payload.kind.rawValue,
+            ]
+        ))
     }
 }

@@ -115,7 +115,7 @@ public extension PrivacyMode {
             )
         case .strict:
             return String(
-                localized: "Strict mode strips your name and anonymizes history before sending to the AI coach.",
+                localized: "Strict mode strips your name and anonymizes history before cloud coach requests.",
                 comment: "Privacy mode footer — strict"
             )
         }
@@ -138,7 +138,7 @@ public enum LocalizedLabels {
         case .idea:
             return String(localized: "Idea", comment: "Feedback category — feature request or suggestion")
         case .coachQuality:
-            return String(localized: "Coach quality", comment: "Feedback category — AI coach response quality")
+            return String(localized: "Coach quality", comment: "Feedback category — coach response quality")
         case .other:
             return String(localized: "Other", comment: "Feedback category — anything that doesn't fit the named buckets")
         }

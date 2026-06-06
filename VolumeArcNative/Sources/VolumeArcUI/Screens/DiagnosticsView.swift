@@ -16,6 +16,11 @@ public struct DiagnosticsView: View {
     public var body: some View {
         VStack(spacing: 0) {
             filterBar
+            if !events.isEmpty {
+                summaryCard
+                    .padding(.horizontal, VA.Space.md)
+                    .padding(.bottom, VA.Space.sm)
+            }
             if filteredEvents.isEmpty {
                 VAEmptyState(
                     icon: "doc.text.magnifyingglass",
@@ -85,34 +90,89 @@ public struct DiagnosticsView: View {
     }
 
     private var filterBar: some View {
-        HStack(spacing: VA.Space.sm) {
-            ForEach(Filter.allCases, id: \.self) { filterCase in
-                Button {
-                    filter = filterCase
-                    VAHaptics.selection()
-                } label: {
-                    Text(filterCase.title)
-                        .font(VA.Typography.footnote)
-                        .foregroundStyle(filter == filterCase ? VA.Colors.textOnPrimary : VA.Colors.textPrimary)
-                        .padding(.horizontal, VA.Space.md)
-                        .padding(.vertical, VA.Space.sm)
-                        .background(filter == filterCase ? VA.Colors.primary : Color.clear)
-                        .clipShape(Capsule())
-                        .overlay {
-                            Capsule().stroke(VA.Colors.primary.opacity(0.4), lineWidth: 1)
-                        }
+        VStack(alignment: .leading, spacing: VA.Space.sm) {
+            HStack(spacing: VA.Space.sm) {
+                ForEach(Filter.allCases, id: \.self) { filterCase in
+                    Button {
+                        filter = filterCase
+                        VAHaptics.selection()
+                    } label: {
+                        Text(filterCase.title)
+                            .font(VA.Typography.footnote)
+                            .foregroundStyle(filter == filterCase ? VA.Colors.textOnPrimary : VA.Colors.textPrimary)
+                            .padding(.horizontal, VA.Space.md)
+                            .padding(.vertical, VA.Space.sm)
+                            .background(filter == filterCase ? VA.Colors.primary : Color.clear)
+                            .clipShape(Capsule())
+                            .overlay {
+                                Capsule().stroke(VA.Colors.primary.opacity(0.4), lineWidth: 1)
+                            }
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                Spacer(minLength: 0)
             }
-            Spacer()
-            Text(String(
-                localized: "\(filteredEvents.count) of \(events.count)",
-                comment: "Diagnostics counter — filtered events out of total"
-            ))
-            .font(VA.Typography.caption)
-            .foregroundStyle(VA.Colors.textSecondary)
+            HStack(spacing: VA.Space.sm) {
+                Text(String(
+                    localized: "\(filteredEvents.count) of \(events.count)",
+                    comment: "Diagnostics counter — filtered events out of total"
+                ))
+                .font(VA.Typography.caption)
+                .foregroundStyle(VA.Colors.textSecondary)
+                Spacer(minLength: VA.Space.sm)
+                ShareLink(
+                    item: diagnosticsExportText,
+                    subject: Text(String(localized: "VolumeArc diagnostics", comment: "Diagnostics export share subject")),
+                    message: Text(String(
+                        localized: "Diagnostics export from VolumeArc.",
+                        comment: "Diagnostics export share message"
+                    ))
+                ) {
+                    Label(
+                        String(localized: "Export", comment: "Diagnostics export button"),
+                        systemImage: "square.and.arrow.up"
+                    )
+                    .font(VA.Typography.footnote)
+                    .foregroundStyle(VA.Colors.primary)
+                    .accessibilityIdentifier("diagnostics.export")
+                }
+                .accessibilityIdentifier("diagnostics.export")
+            }
         }
         .padding(VA.Space.md)
+    }
+
+    private var summaryCard: some View {
+        VACard(style: .flat) {
+            VStack(alignment: .leading, spacing: VA.Space.sm) {
+                HStack(alignment: .center, spacing: VA.Space.sm) {
+                    Image(systemName: summaryIcon)
+                        .font(VA.Typography.headline)
+                        .foregroundStyle(summaryColor)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(summaryTitle)
+                            .font(VA.Typography.headline)
+                            .foregroundStyle(VA.Colors.textPrimary)
+                        Text(summaryDetail)
+                            .font(VA.Typography.footnote)
+                            .foregroundStyle(VA.Colors.textSecondary)
+                    }
+                }
+                Text(String(
+                    localized: """
+                    Warnings are support signals, not always launch blockers. Export diagnostics \
+                    when reporting an issue so the team can see the exact event history.
+                    """,
+                    comment: "Diagnostics warning explanation"
+                ))
+                .font(VA.Typography.captionLarge)
+                .foregroundStyle(VA.Colors.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("diagnostics.summary")
     }
 
     // MARK: - Rows
@@ -159,6 +219,89 @@ public struct DiagnosticsView: View {
 
     private func reload() {
         events = sink.loadEvents()
+    }
+
+    private var warningCount: Int {
+        events.filter { $0.severity == .warning }.count
+    }
+
+    private var errorCount: Int {
+        events.filter { $0.severity == .error }.count
+    }
+
+    private var summaryTitle: String {
+        if errorCount > 0 {
+            return errorCount == 1
+                ? String(localized: "1 error recorded", comment: "Diagnostics summary title singular error")
+                : String(localized: "\(errorCount) errors recorded", comment: "Diagnostics summary title plural errors")
+        }
+        if warningCount > 0 {
+            return warningCount == 1
+                ? String(localized: "1 warning recorded", comment: "Diagnostics summary title singular warning")
+                : String(localized: "\(warningCount) warnings recorded", comment: "Diagnostics summary title plural warnings")
+        }
+        return String(localized: "No warnings recorded", comment: "Diagnostics summary title healthy state")
+    }
+
+    private var summaryDetail: String {
+        if errorCount > 0 {
+            return String(
+                localized: "Use Export before clearing events.",
+                comment: "Diagnostics summary detail for error state"
+            )
+        }
+        if warningCount > 0 {
+            return String(
+                localized: "Review the warning list or include the export in feedback.",
+                comment: "Diagnostics summary detail for warning state"
+            )
+        }
+        return String(
+            localized: "Recent app events are informational.",
+            comment: "Diagnostics summary detail for healthy state"
+        )
+    }
+
+    private var summaryIcon: String {
+        if errorCount > 0 { return "xmark.octagon.fill" }
+        if warningCount > 0 { return "exclamationmark.triangle.fill" }
+        return "checkmark.seal.fill"
+    }
+
+    private var summaryColor: Color {
+        if errorCount > 0 { return VA.Colors.error }
+        if warningCount > 0 { return VA.Colors.warning }
+        return VA.Colors.success
+    }
+
+    private var diagnosticsExportText: String {
+        let formatter = ISO8601DateFormatter()
+        let rows = events.reversed().map { event in
+            let metadata = event.metadata
+                .sorted { $0.key < $1.key }
+                .map { "\($0.key)=\($0.value)" }
+                .joined(separator: ", ")
+            return [
+                formatter.string(from: event.timestamp),
+                event.severity.rawValue.uppercased(),
+                "[\(event.category)] \(event.name)",
+                event.message,
+                metadata.isEmpty ? nil : "metadata: \(metadata)",
+            ]
+            .compactMap { $0 }
+            .joined(separator: " | ")
+        }
+        let visibleRows = rows.isEmpty
+            ? [String(localized: "No diagnostics events recorded.", comment: "Diagnostics empty export row")]
+            : rows
+
+        return ([
+            "VolumeArc diagnostics",
+            "Events: \(events.count)",
+            "Warnings: \(warningCount)",
+            "Errors: \(errorCount)",
+            "",
+        ] + visibleRows).joined(separator: "\n")
     }
 
     private func iconForSeverity(_ severity: TelemetrySeverity) -> String {

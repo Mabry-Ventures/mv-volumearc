@@ -16,7 +16,7 @@ require 'xcodeproj'
 # which makes merges an O(n) game of whack-a-mole.
 #
 # The gem ships a built-in `predictabilize_uuids` method that rewrites
-# every UUID to `Digest::MD5.hexdigest(object_graph_path)` right before
+# every UUID to a hash of `object_graph_path` right before
 # serialization. That's already the "hash stable attributes into a
 # deterministic UUID" scheme the task asks for -- the gem's version is
 # battle-tested by CocoaPods, covers every object type the gem knows
@@ -26,7 +26,7 @@ require 'xcodeproj'
 # Two pieces of finesse are required to make it actually produce
 # byte-identical output:
 #
-# 1. The gem's default MD5 output is 32 chars; real Xcode UUIDs are 24.
+# 1. The gem's default output is 32 chars; real Xcode UUIDs are 24.
 #    We truncate to 24 so the pbxproj looks like something Xcode could
 #    have written (~96 bits of entropy, collision risk trivially zero
 #    for a project with ~500 objects). This keeps diffs legible if a
@@ -41,10 +41,10 @@ require 'xcodeproj'
 module Xcodeproj
   class Project
     class UUIDGenerator
-      # Truncate MD5 digest to 24 chars so generated pbxproj UUIDs match
-      # Xcode's own 12-byte convention. Overrides the gem default of 32.
+      # Truncate SHA-256 digest to 24 chars so generated pbxproj UUIDs
+      # match Xcode's own 12-byte convention.
       def uuid_for_path(path)
-        Digest::MD5.hexdigest(path).upcase[0, 24]
+        Digest::SHA256.hexdigest(path).upcase[0, 24]
       end
     end
   end
@@ -174,6 +174,11 @@ def configure_target(target, bundle_id: nil, extra: {})
     # (xctest bundles don't need signing).
     config.build_settings['CODE_SIGNING_ALLOWED'] =
       config.name == 'Release' ? 'YES' : 'NO'
+    if config.name == 'Release'
+      # VOL Release: keep the release hardening validator honest by
+      # explicitly stripping copied resources and nested frameworks.
+      config.build_settings['COPY_PHASE_STRIP'] = 'YES'
+    end
     config.build_settings['DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING'] = 'YES'
     config.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = bundle_id if bundle_id
     extra.each do |key, value|
@@ -183,7 +188,7 @@ def configure_target(target, bundle_id: nil, extra: {})
 end
 
 def assign_deterministic_uuid(object, seed)
-  uuid = Digest::MD5.hexdigest(seed).upcase[0, 24]
+  uuid = Digest::SHA256.hexdigest(seed).upcase[0, 24]
   project = object.project
   existing = project.objects_by_uuid[uuid]
   raise "Deterministic UUID collision for #{seed}: #{uuid}" if existing && existing != object
@@ -739,7 +744,7 @@ project.targets.each do |target|
 end
 
 # VOL-95: multiple passes are required. Pass 1 rewrites most UUIDs from
-# graph-path MD5 hashes, but objects that reference other objects by UUID
+# graph-path SHA-256 hashes, but objects that reference other objects by UUID
 # string (e.g. `PBXContainerItemProxy.remote_global_id_string`) still carry
 # old random references in their tree-hash paths. Later passes run against
 # the increasingly deterministic references and converge. Must run before
@@ -1047,7 +1052,7 @@ def test_plan_target_ref(uuid, name)
 end
 
 def deterministic_plan_guid(seed)
-  hex = Digest::MD5.hexdigest(seed)
+  hex = Digest::SHA256.hexdigest(seed)
   "#{hex[0, 8]}-#{hex[8, 4]}-#{hex[12, 4]}-#{hex[16, 4]}-#{hex[20, 12]}".upcase
 end
 

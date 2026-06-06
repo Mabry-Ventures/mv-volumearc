@@ -34,8 +34,8 @@ npm run build
 
 ```
 /                       Landing — Hero, PrimaryFeatures, SecondaryFeatures, CallToAction, Pricing, FAQs
-/terms                  Terms of Service (DRAFT — pending legal review, VOL-124)
-/privacy                Privacy Policy (DRAFT — pending legal review, VOL-124)
+/terms                  Terms of Service (placeholder-free; counsel approval gate)
+/privacy                Privacy Policy (placeholder-free; counsel approval gate)
 /support                Support, Resend-backed contact form, common issues, press
 /quality                Public coach-quality eval-trend from docs/coach-eval-trend.json
 ```
@@ -92,8 +92,8 @@ When a feature ships or its scope changes, update `docs/FEATURES.md` first; this
 ## Related docs
 
 - Marketing-site architecture & deploy flow: [`docs/MARKETING.md`](../docs/MARKETING.md)
-- Forensic audit + project burndown: [`docs/AUDIT.md`](../docs/AUDIT.md)
-- Linear: [VolumeArc Production Readiness](https://linear.app/mabry-ventures/project/volumearc-production-readiness-af810008523d)
+- Forensic audit + release findings: [`docs/AUDIT.md`](../docs/AUDIT.md)
+- Release initiative: [VolumeArc Release](https://linear.app/mabry-ventures/initiative/volumearc-release-68a38ea2d762)
 
 ## License
 

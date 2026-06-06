@@ -73,12 +73,10 @@ jobs:
           semgrep --version
 
       - name: Run Semgrep
-        # VOL-253: initial rollout is non-blocking for a 1-week
-        # observation window so we can calibrate false-positive volume
-        # before promoting Semgrep to a required check. After the
-        # observation window, remove `continue-on-error` and add
-        # `Semgrep scan` to the ruleset's required-status-checks list.
-        continue-on-error: true
+        # VolumeArc Release: Semgrep is now a hard launch gate. The
+        # prior observation window is over and the release branch has
+        # removed the known false positives, so any reportable finding
+        # must block until fixed or explicitly accepted.
         env:
           # SEMGREP_RULES uses Semgrep registry shortnames. p/owasp-top-ten
           # is the canonical OWASP A1-A10 ruleset; p/secrets adds a second

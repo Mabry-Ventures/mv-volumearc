@@ -35,9 +35,11 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         coachMemoryRepository = SwiftDataCoachMemoryRepository(container: container)
         userProfileRepository = SwiftDataUserProfileRepository(container: container)
         trainingPlanRepository = SwiftDataTrainingPlanRepository(container: container)
+        PlatformSurfaceDefaultsWriter.clearLiveActivityState()
     }
 
     override func tearDown() async throws {
+        PlatformSurfaceDefaultsWriter.clearLiveActivityState()
         container = nil
         workoutRepository = nil
         coachMemoryRepository = nil
@@ -271,6 +273,41 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         )
     }
 
+    func testWorkoutStartAndCompletionPublishLiveActivityJourneyTelemetry() async throws {
+        let telemetry = InMemoryTelemetrySink()
+        let model = makeDashboardModel(telemetrySink: telemetry)
+        _ = await model.refresh()
+
+        await model.startWorkoutSession()
+
+        let liveState = try XCTUnwrap(
+            PlatformSurfaceDefaultsReader.loadLiveActivityState(),
+            "Starting a workout should publish the Live Activity state snapshot consumed by ActivityKit."
+        )
+        XCTAssertEqual(liveState.workoutTitle, model.activeWorkoutTitle)
+        XCTAssertFalse(liveState.activeExerciseName.isEmpty)
+
+        let startedEvent = try XCTUnwrap(telemetry.currentEvents.first {
+            $0.category == "liveactivity" && $0.name == "started"
+        })
+        XCTAssertEqual(startedEvent.severity, .info)
+        XCTAssertEqual(startedEvent.metadata["workout"], liveState.workoutTitle)
+        XCTAssertEqual(startedEvent.metadata["exercise"], liveState.activeExerciseName)
+
+        _ = await model.completeWorkoutSession()
+
+        XCTAssertNil(
+            PlatformSurfaceDefaultsReader.loadLiveActivityState(),
+            "Completing the workout should clear the shared Live Activity state so ActivityKit can dismiss the surface."
+        )
+
+        let endedEvent = try XCTUnwrap(telemetry.currentEvents.first {
+            $0.category == "liveactivity" && $0.name == "ended"
+        })
+        XCTAssertEqual(endedEvent.severity, .info)
+        XCTAssertEqual(endedEvent.metadata["workout_id"], startedEvent.metadata["workout_id"])
+    }
+
     // MARK: - Profile + onboarding
 
     func testUpsertProfilePersistsValues() throws {
@@ -452,6 +489,63 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertFalse(outbound.contains(PromptPrivacyRedactor.redactionMarker), "Standard mode should leave no redaction marker")
     }
 
+    func testCoachAskEmitsFirstTokenBeforeCompletionTelemetry() async throws {
+        let telemetry = InMemoryTelemetrySink()
+        let model = makeDashboardModel(telemetrySink: telemetry)
+
+        await model.refresh()
+        await model.askCoach("Should I push today?")
+
+        let coachEvents = telemetry.currentEvents.filter { $0.category == "coach" }
+        let firstTokenIndex = coachEvents.firstIndex { $0.name == "first_token_received" }
+        let completeIndex = coachEvents.firstIndex { $0.name == "ask_complete" }
+
+        XCTAssertNotNil(firstTokenIndex, "Coach ask should record first-token telemetry")
+        XCTAssertNotNil(completeIndex, "Coach ask should record completion telemetry")
+        XCTAssertLessThan(
+            try XCTUnwrap(firstTokenIndex),
+            try XCTUnwrap(completeIndex),
+            "The first-token event must fire before the final completion event"
+        )
+    }
+
+    func testVoiceCoachPermissionAndSingleTurnPromptEmitJourneyTelemetry() async throws {
+        let telemetry = InMemoryTelemetrySink()
+        let transport = RecordingVoiceTransport(response: "Hold load and keep two reps in reserve.")
+        let model = makeDashboardModel(
+            telemetrySink: telemetry,
+            voicePermissionStore: MockVoicePermissionStore(),
+            voiceCoach: LiveVoiceCoachOrchestrator(transport: transport)
+        )
+
+        let sent = await model.askCoachByVoice("How is my squat form?")
+
+        XCTAssertTrue(sent)
+        XCTAssertFalse(model.isVoiceTurnActive)
+        XCTAssertFalse(model.isCoachStreaming)
+        XCTAssertNil(model.voiceNotice)
+        XCTAssertEqual(model.voicePermissionStatus.microphone, .authorized)
+        XCTAssertEqual(model.voicePermissionStatus.speechRecognition, .authorized)
+        XCTAssertEqual(model.coachMessages.map(\.sender), [.user, .coach])
+        XCTAssertEqual(model.coachMessages.last?.content, "Hold load and keep two reps in reserve.")
+
+        let calls = await transport.calls
+        XCTAssertTrue(
+            calls.contains { call in
+                if case let .send(context, userText) = call {
+                    return context.contains("Readiness") && userText == "How is my squat form?"
+                }
+                return false
+            },
+            "Voice turn must route the spoken transcript through the voice transport with grounded context"
+        )
+
+        let voiceEvents = telemetry.currentEvents.filter { $0.category == "voice" }
+        XCTAssertNotNil(voiceEvents.first { $0.name == "enabled" })
+        XCTAssertNotNil(voiceEvents.first { $0.name == "session_started" })
+        XCTAssertNotNil(voiceEvents.first { $0.name == "session_completed" })
+    }
+
     // MARK: - Coach memory
 
     func testCoachMemoryAppendAndProject() throws {
@@ -526,13 +620,413 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertEqual(try trainingPlanRepository.nextWorkout(from: sunday)?.title, "Monday Squat")
     }
 
+    func testScheduleCoDesignedWorkoutForTomorrowPersistsPlanAndEmitsTelemetry() async throws {
+        try trainingPlanRepository.upsertPlan([
+            WeeklyWorkout(dayOfWeek: 1, title: "Monday Squat"),
+            WeeklyWorkout(dayOfWeek: 2, title: "Lower Strength"),
+            WeeklyWorkout(dayOfWeek: 5, title: "Friday Deadlift"),
+        ])
+        let telemetry = InMemoryTelemetrySink()
+        let model = makeDashboardModel(telemetrySink: telemetry)
+        let monday = try XCTUnwrap(DateComponents(
+            calendar: Calendar(identifier: .gregorian),
+            year: 2026,
+            month: 6,
+            day: 1
+        ).date)
+
+        let scheduled = await model.scheduleCoDesignedWorkoutForTomorrow(
+            title: "Lower-body hypertrophy",
+            durationMinutes: 52,
+            targetRPE: 8,
+            exercises: [
+                WeeklyWorkoutExercise(
+                    name: "Front Squat",
+                    sets: 5,
+                    reps: 6,
+                    weight: 225,
+                    targetRPE: 8,
+                    restSeconds: 150
+                ),
+                WeeklyWorkoutExercise(
+                    name: "Romanian Deadlift",
+                    sets: 3,
+                    reps: 10,
+                    weight: 185,
+                    targetRPE: 7,
+                    restSeconds: 120
+                ),
+            ],
+            now: monday,
+            calendar: Calendar(identifier: .gregorian)
+        )
+
+        XCTAssertTrue(scheduled)
+        let workouts = try trainingPlanRepository.weeklyWorkouts()
+        XCTAssertEqual(workouts.count, 3)
+        let scheduledWorkout = try XCTUnwrap(workouts.first { $0.dayOfWeek == 2 })
+        XCTAssertEqual(scheduledWorkout.title, "Lower-body hypertrophy")
+        XCTAssertEqual(scheduledWorkout.durationMinutes, 52)
+        XCTAssertEqual(scheduledWorkout.targetRPE, 8)
+        XCTAssertEqual(scheduledWorkout.exercises.map(\.name), ["Front Squat", "Romanian Deadlift"])
+        XCTAssertEqual(scheduledWorkout.exercises.first?.sets, 5)
+        XCTAssertEqual(workouts.first(where: { $0.dayOfWeek == 1 })?.title, "Monday Squat")
+
+        let event = try XCTUnwrap(telemetry.currentEvents.first {
+            $0.category == "coach" && $0.name == "plan_scheduled"
+        })
+        XCTAssertEqual(event.metadata["dayOfWeek"], "2")
+        XCTAssertEqual(event.metadata["title"], "Lower-body hypertrophy")
+        XCTAssertEqual(event.metadata["exerciseCount"], "2")
+    }
+
+    func testScheduleWorkoutPlanForTodayPersistsBuilderDraftAndEmitsTelemetry() async throws {
+        try trainingPlanRepository.upsertPlan([
+            WeeklyWorkout(dayOfWeek: 1, title: "Monday Squat"),
+            WeeklyWorkout(dayOfWeek: 5, title: "Friday Deadlift"),
+        ])
+        let telemetry = InMemoryTelemetrySink()
+        let model = makeDashboardModel(telemetrySink: telemetry)
+        let wednesday = try XCTUnwrap(DateComponents(
+            calendar: Calendar(identifier: .gregorian),
+            year: 2026,
+            month: 6,
+            day: 3
+        ).date)
+        let plan = WorkoutSessionPlan(
+            title: "Builder upper strength",
+            durationMinutes: 50,
+            targetRPE: 7,
+            exercises: [
+                WeeklyWorkoutExercise(
+                    name: "Bench Press",
+                    sets: 4,
+                    reps: 5,
+                    weight: 185,
+                    targetRPE: 7,
+                    restSeconds: 150
+                ),
+                WeeklyWorkoutExercise(
+                    name: "Barbell Row",
+                    sets: 4,
+                    reps: 6,
+                    weight: 155,
+                    targetRPE: 7,
+                    restSeconds: 120
+                ),
+            ]
+        )
+
+        let scheduled = await model.scheduleWorkoutPlan(
+            plan,
+            on: wednesday,
+            source: "workouts_builder",
+            calendar: Calendar(identifier: .gregorian)
+        )
+
+        XCTAssertTrue(scheduled)
+        let workouts = try trainingPlanRepository.weeklyWorkouts()
+        let scheduledWorkout = try XCTUnwrap(workouts.first { $0.dayOfWeek == 3 })
+        XCTAssertEqual(scheduledWorkout.title, "Builder upper strength")
+        XCTAssertEqual(scheduledWorkout.durationMinutes, 50)
+        XCTAssertEqual(scheduledWorkout.targetRPE, 7)
+        XCTAssertEqual(scheduledWorkout.exercises.map(\.name), ["Bench Press", "Barbell Row"])
+
+        let event = try XCTUnwrap(telemetry.currentEvents.first {
+            $0.category == "coach" && $0.name == "plan_scheduled" && $0.metadata["source"] == "workouts_builder"
+        })
+        XCTAssertEqual(event.metadata["dayOfWeek"], "3")
+        XCTAssertEqual(event.metadata["exerciseCount"], "2")
+    }
+
+    func testStartingWorkoutWithPlanCarriesExercisesAndAdvancesThroughSets() async throws {
+        let model = makeDashboardModel()
+        let plan = WorkoutSessionPlan(
+            title: "Coach lower strength",
+            durationMinutes: 50,
+            targetRPE: 8,
+            exercises: [
+                WeeklyWorkoutExercise(
+                    name: "Back Squat",
+                    sets: 2,
+                    reps: 5,
+                    weight: 225,
+                    targetRPE: 8,
+                    restSeconds: 150
+                ),
+                WeeklyWorkoutExercise(
+                    name: "Romanian Deadlift",
+                    sets: 1,
+                    reps: 8,
+                    weight: 185,
+                    targetRPE: 7,
+                    restSeconds: 120
+                ),
+            ]
+        )
+
+        await model.startWorkoutSession(plan: plan)
+
+        XCTAssertTrue(model.isSessionActive)
+        XCTAssertEqual(model.activeWorkoutTitle, "Coach lower strength")
+        XCTAssertEqual(model.activeSessionExercise?.name, "Back Squat")
+        XCTAssertEqual(model.activeSessionExerciseSetCount, 2)
+
+        await model.logRecommendedSet()
+        XCTAssertEqual(model.loggedSetCountThisSession, 1)
+        XCTAssertEqual(model.loggedSetCountForActiveExercise, 1)
+        XCTAssertEqual(model.activeSessionExercise?.name, "Back Squat")
+
+        await model.logRecommendedSet()
+        XCTAssertEqual(model.loggedSetCountThisSession, 2)
+        XCTAssertEqual(model.loggedSetCountForActiveExercise, 0)
+        XCTAssertEqual(model.activeSessionExercise?.name, "Romanian Deadlift")
+
+        await model.logRecommendedSet(weightOverride: 195, repsOverride: 8, rpeOverride: 7)
+
+        let completed = await model.completeWorkoutSession()
+        let completedSnapshot = try XCTUnwrap(completed)
+        XCTAssertEqual(completedSnapshot.completedSetCount, 3)
+        XCTAssertEqual(completedSnapshot.exerciseIDs, ["back-squat", "romanian-deadlift"])
+    }
+
+    func testActiveSessionPlanCanReplaceAndSkipCurrentExercise() async throws {
+        let telemetry = InMemoryTelemetrySink()
+        let model = makeDashboardModel(telemetrySink: telemetry)
+        let plan = WorkoutSessionPlan(
+            title: "Busy gym lower",
+            exercises: [
+                WeeklyWorkoutExercise(
+                    name: "Back Squat",
+                    sets: 3,
+                    reps: 5,
+                    weight: 225,
+                    targetRPE: 8,
+                    restSeconds: 150
+                ),
+                WeeklyWorkoutExercise(
+                    name: "Romanian Deadlift",
+                    sets: 2,
+                    reps: 8,
+                    weight: 185,
+                    targetRPE: 7,
+                    restSeconds: 120
+                ),
+            ]
+        )
+
+        await model.startWorkoutSession(plan: plan)
+        model.replaceActiveSessionExercise(with: WeeklyWorkoutExercise(
+            name: "Front Squat",
+            sets: 3,
+            reps: 5,
+            weight: 185,
+            targetRPE: 7,
+            restSeconds: 150
+        ))
+
+        XCTAssertEqual(model.activeSessionExercise?.name, "Front Squat")
+
+        model.skipActiveSessionExercise()
+
+        XCTAssertEqual(model.activeSessionExercise?.name, "Romanian Deadlift")
+        XCTAssertTrue(telemetry.currentEvents.contains {
+            $0.category == "workout" && $0.name == "exercise_replaced"
+        })
+        XCTAssertTrue(telemetry.currentEvents.contains {
+            $0.category == "workout" && $0.name == "exercise_skipped"
+        })
+    }
+
+    func testActiveSessionPlanCanDeferAndSelectExercisesForBusyGym() async throws {
+        let telemetry = InMemoryTelemetrySink()
+        let activeSessionStateStore = InMemoryActiveWorkoutSessionStateStore()
+        let model = makeDashboardModel(
+            telemetrySink: telemetry,
+            activeSessionStateStore: activeSessionStateStore
+        )
+        let plan = WorkoutSessionPlan(
+            title: "Busy gym lower",
+            exercises: [
+                WeeklyWorkoutExercise(
+                    name: "Back Squat",
+                    sets: 3,
+                    reps: 5,
+                    weight: 225,
+                    targetRPE: 8,
+                    restSeconds: 150
+                ),
+                WeeklyWorkoutExercise(
+                    name: "Romanian Deadlift",
+                    sets: 2,
+                    reps: 8,
+                    weight: 185,
+                    targetRPE: 7,
+                    restSeconds: 120
+                ),
+                WeeklyWorkoutExercise(
+                    name: "Walking Lunge",
+                    sets: 2,
+                    reps: 10,
+                    weight: 35,
+                    targetRPE: 7,
+                    restSeconds: 90
+                ),
+            ]
+        )
+
+        await model.startWorkoutSession(plan: plan)
+        let workoutID = try XCTUnwrap(model.activeWorkoutID)
+
+        let pivot = try XCTUnwrap(model.deferActiveSessionExercise())
+
+        XCTAssertEqual(pivot.deferredExercise, "Back Squat")
+        XCTAssertEqual(pivot.nextExercise, "Romanian Deadlift")
+        XCTAssertEqual(model.activeSessionExercise?.name, "Romanian Deadlift")
+        XCTAssertEqual(model.activeSessionExerciseIndex, 0)
+        XCTAssertEqual(model.activeSessionPlan?.exercises.map(\.name), [
+            "Romanian Deadlift",
+            "Walking Lunge",
+            "Back Squat",
+        ])
+        XCTAssertEqual(activeSessionStateStore.load(workoutID: workoutID)?.plan.exercises.map(\.name), [
+            "Romanian Deadlift",
+            "Walking Lunge",
+            "Back Squat",
+        ])
+
+        model.moveActiveSession(toExerciseAt: 2)
+
+        XCTAssertEqual(model.activeSessionExercise?.name, "Back Squat")
+        XCTAssertEqual(model.activeSessionExerciseIndex, 2)
+        XCTAssertEqual(model.loggedSetCountForActiveExercise, 0)
+        XCTAssertEqual(activeSessionStateStore.load(workoutID: workoutID)?.activeExerciseIndex, 2)
+        XCTAssertTrue(telemetry.currentEvents.contains {
+            $0.category == "workout" && $0.name == "exercise_deferred"
+        })
+        XCTAssertTrue(telemetry.currentEvents.contains {
+            $0.category == "workout" && $0.name == "exercise_selected"
+        })
+    }
+
+    func testRefreshRehydratesActiveSessionPlanAfterCrashSimulation() async throws {
+        let activeSessionStateStore = InMemoryActiveWorkoutSessionStateStore()
+        let plan = WorkoutSessionPlan(
+            title: "Crash-safe lower",
+            exercises: [
+                WeeklyWorkoutExercise(
+                    name: "Back Squat",
+                    sets: 2,
+                    reps: 5,
+                    weight: 225,
+                    targetRPE: 8,
+                    restSeconds: 150
+                ),
+                WeeklyWorkoutExercise(
+                    name: "Romanian Deadlift",
+                    sets: 2,
+                    reps: 8,
+                    weight: 185,
+                    targetRPE: 7,
+                    restSeconds: 120
+                ),
+            ]
+        )
+        let originalModel = makeDashboardModel(activeSessionStateStore: activeSessionStateStore)
+
+        await originalModel.startWorkoutSession(plan: plan)
+        let workoutID = try XCTUnwrap(originalModel.activeWorkoutID)
+        await originalModel.logRecommendedSet()
+        await originalModel.logRecommendedSet()
+
+        XCTAssertEqual(originalModel.activeSessionExercise?.name, "Romanian Deadlift")
+        XCTAssertNotNil(activeSessionStateStore.load(workoutID: workoutID))
+
+        let telemetry = InMemoryTelemetrySink()
+        let rehydratedModel = makeDashboardModel(
+            telemetrySink: telemetry,
+            activeSessionStateStore: activeSessionStateStore
+        )
+        _ = await rehydratedModel.refresh()
+
+        XCTAssertTrue(rehydratedModel.isSessionActive)
+        XCTAssertEqual(rehydratedModel.activeWorkoutID, workoutID)
+        XCTAssertEqual(rehydratedModel.activeWorkoutTitle, "Crash-safe lower")
+        XCTAssertEqual(rehydratedModel.loggedSetCountThisSession, 2)
+        XCTAssertEqual(rehydratedModel.activeSessionExercise?.name, "Romanian Deadlift")
+        XCTAssertEqual(rehydratedModel.activeSessionExerciseIndex, 1)
+        XCTAssertEqual(rehydratedModel.loggedSetCountForActiveExercise, 0)
+        XCTAssertEqual(rehydratedModel.activeSessionPlan?.exercises.map(\.name), [
+            "Back Squat",
+            "Romanian Deadlift",
+        ])
+        XCTAssertTrue(telemetry.currentEvents.contains {
+            $0.category == "workout" && $0.name == "active_session.recovered"
+        })
+    }
+
+    func testCompletingWorkoutClearsPersistedActiveSessionPlan() async throws {
+        let activeSessionStateStore = InMemoryActiveWorkoutSessionStateStore()
+        let model = makeDashboardModel(activeSessionStateStore: activeSessionStateStore)
+        let plan = WorkoutSessionPlan(
+            title: "Clear on complete",
+            exercises: [
+                WeeklyWorkoutExercise(
+                    name: "Back Squat",
+                    sets: 1,
+                    reps: 5,
+                    weight: 225,
+                    targetRPE: 8,
+                    restSeconds: 150
+                ),
+            ]
+        )
+
+        await model.startWorkoutSession(plan: plan)
+        let workoutID = try XCTUnwrap(model.activeWorkoutID)
+        XCTAssertNotNil(activeSessionStateStore.load(workoutID: workoutID))
+
+        await model.logRecommendedSet()
+        _ = await model.completeWorkoutSession()
+
+        XCTAssertNil(activeSessionStateStore.load(workoutID: workoutID))
+    }
+
+    func testConnectAppleAccountPersistsSessionAndSeedsEmptyProfileName() async throws {
+        let accountSessionStore = InMemoryAccountSessionStore()
+        let telemetry = InMemoryTelemetrySink()
+        let model = makeDashboardModel(
+            telemetrySink: telemetry,
+            accountSessionStore: accountSessionStore
+        )
+
+        await model.connectAppleAccount(
+            userID: "apple-user-1",
+            displayName: "Jared Mabry",
+            email: "jared@example.com"
+        )
+
+        XCTAssertEqual(model.accountSession?.provider, "apple")
+        XCTAssertEqual(model.accountSession?.userID, "apple-user-1")
+        XCTAssertEqual(model.accountSession?.displayName, "Jared Mabry")
+        XCTAssertEqual(accountSessionStore.load()?.userID, "apple-user-1")
+        XCTAssertEqual(model.athlete.name, "Jared Mabry")
+        XCTAssertTrue(telemetry.currentEvents.contains {
+            $0.category == "account" && $0.name == "apple_sign_in_connected"
+        })
+    }
+
     private func makeDashboardModel(
         aiProvider: any AICoachProvider = LocalHeuristicAICoachProvider(),
         recoveryReader: any RecoveryReader = UnavailableRecoveryReader(),
         telemetrySink: any TelemetrySink = InMemoryTelemetrySink(),
+        voicePermissionStore: any VoicePermissionStore = UnavailableVoicePermissionStore(),
+        voiceCoach: LiveVoiceCoachOrchestrator? = nil,
         healthWorkoutImporter: any HealthWorkoutImporting = UnavailableHealthWorkoutImporter(),
         watchVoiceSettingsStore: any WatchVoiceSettingsStore = UserDefaultsWatchVoiceSettingsStore(),
-        watchConnectivityCoordinator: WatchConnectivityCoordinator? = nil
+        watchConnectivityCoordinator: WatchConnectivityCoordinator? = nil,
+        activeSessionStateStore: ActiveWorkoutSessionStateStore = InMemoryActiveWorkoutSessionStateStore(),
+        accountSessionStore: AccountSessionStore = InMemoryAccountSessionStore()
     ) -> WorkoutDashboardModel {
         WorkoutDashboardModel(
             aiProvider: aiProvider,
@@ -546,20 +1040,21 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
             coachMemoryRepository: coachMemoryRepository,
             userProfileRepository: userProfileRepository,
             trainingPlanRepository: trainingPlanRepository,
-            accountSessionStore: UserDefaultsAccountSessionStore(),
-            voicePermissionStore: UnavailableVoicePermissionStore(),
+            accountSessionStore: accountSessionStore,
+            voicePermissionStore: voicePermissionStore,
             healthStore: UnavailableHealthStore(),
             notificationStore: InMemoryNotificationStore(),
             telemetrySink: telemetrySink,
             surfaceStore: UserDefaultsPlatformSurfaceStateStore(),
             subscriptionStore: StoreKitSubscriptionStore(productIDs: []),
-            voiceCoach: LiveVoiceCoachOrchestrator(
+            voiceCoach: voiceCoach ?? LiveVoiceCoachOrchestrator(
                 transport: AIRelayVoiceTransport(provider: aiProvider)
             ),
             recoveryReader: recoveryReader,
             healthWorkoutImporter: healthWorkoutImporter,
             watchVoiceSettingsStore: watchVoiceSettingsStore,
-            watchConnectivityCoordinator: watchConnectivityCoordinator
+            watchConnectivityCoordinator: watchConnectivityCoordinator,
+            activeSessionStateStore: activeSessionStateStore
         )
     }
 
@@ -796,6 +1291,120 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertEqual(result.cueText, "Clean reps.")
     }
 
+    func testWatchConnectivityDropQueuesPayloadAndSurfacesNotice() async throws {
+        let telemetry = InMemoryTelemetrySink()
+        let transport = RecordingDashboardWatchTransport(reachable: false)
+        let coordinator = WatchConnectivityCoordinator(
+            transport: transport,
+            payloadStore: DashboardInMemoryPendingPayloadStore(),
+            telemetrySink: telemetry
+        )
+        let model = makeDashboardModel(
+            telemetrySink: telemetry,
+            watchConnectivityCoordinator: coordinator
+        )
+        let request = WatchFormCheckStartPayload(
+            sessionID: "form-queued",
+            exerciseID: FormCheckExercise.squat.rawValue,
+            exerciseName: "Back Squat",
+            setNumber: 1
+        )
+        let analysis = FormCheckAnalysis(
+            exercise: .squat,
+            capturedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            duration: 18,
+            frameCount: 120,
+            poseFrameCount: 120,
+            averageConfidence: 0.92,
+            reps: [],
+            maxLateralDrift: 0.02,
+            flags: [],
+            verdict: .solid,
+            hapticCode: .solid,
+            cueText: "Clean reps."
+        )
+
+        await model.handleWatchPayload(
+            WatchPayload(
+                kind: .formCheckStart,
+                workoutID: "watch",
+                body: WatchFormCheckStartPayload.encode(request)
+            )
+        )
+        await model.completeWatchFormCheck(analysis, sessionID: request.sessionID)
+
+        let pending = await coordinator.pendingPayloadCount()
+        XCTAssertEqual(pending, 1)
+        XCTAssertEqual(model.watchConnectivityNotice?.kind, .queued)
+        XCTAssertEqual(model.watchConnectivityNotice?.severity, .warning)
+        XCTAssertEqual(model.watchConnectivityNotice?.title, "Watch update queued")
+        XCTAssertTrue(model.watchConnectivityNotice?.message.contains("1 update") == true)
+        XCTAssertTrue(telemetry.currentEvents.contains {
+            $0.category == "watch" && $0.name == "payload.queued"
+        })
+        XCTAssertTrue(telemetry.currentEvents.contains {
+            $0.category == "watch.form_check" && $0.name == "result_sent_queued"
+        })
+    }
+
+    func testWatchConnectivityReconnectReplaysQueuedPayloadAndUpdatesNotice() async throws {
+        let telemetry = InMemoryTelemetrySink()
+        let transport = RecordingDashboardWatchTransport(reachable: false)
+        let coordinator = WatchConnectivityCoordinator(
+            transport: transport,
+            payloadStore: DashboardInMemoryPendingPayloadStore(),
+            telemetrySink: telemetry
+        )
+        let model = makeDashboardModel(
+            telemetrySink: telemetry,
+            watchConnectivityCoordinator: coordinator
+        )
+        let request = WatchFormCheckStartPayload(
+            sessionID: "form-replayed",
+            exerciseID: FormCheckExercise.squat.rawValue,
+            exerciseName: "Back Squat",
+            setNumber: 1
+        )
+        let analysis = FormCheckAnalysis(
+            exercise: .squat,
+            capturedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            duration: 18,
+            frameCount: 120,
+            poseFrameCount: 120,
+            averageConfidence: 0.92,
+            reps: [],
+            maxLateralDrift: 0.02,
+            flags: [],
+            verdict: .solid,
+            hapticCode: .solid,
+            cueText: "Clean reps."
+        )
+
+        await model.handleWatchPayload(
+            WatchPayload(
+                kind: .formCheckStart,
+                workoutID: "watch",
+                body: WatchFormCheckStartPayload.encode(request)
+            )
+        )
+        await model.completeWatchFormCheck(analysis, sessionID: request.sessionID)
+        await transport.setReachable(true)
+        await model.flushWatchConnectivityPendingPayloads()
+
+        let pending = await coordinator.pendingPayloadCount()
+        let sent = await transport.sent
+        XCTAssertEqual(pending, 0)
+        XCTAssertEqual(sent.count, 1)
+        XCTAssertEqual(sent.first?.kind, .formCheckResult)
+        XCTAssertEqual(model.watchConnectivityNotice?.kind, .replayed)
+        XCTAssertEqual(model.watchConnectivityNotice?.severity, .info)
+        XCTAssertEqual(model.watchConnectivityNotice?.title, "Watch back in sync")
+        XCTAssertTrue(model.watchConnectivityNotice?.message.contains("1 queued update") == true)
+        XCTAssertTrue(telemetry.currentEvents.contains {
+            $0.category == "watch" && $0.name == "payload.replayed"
+        })
+    }
+
     func testDismissWatchFormCheckSendsStoppedPayloadToWatch() async throws {
         let transport = RecordingDashboardWatchTransport(reachable: true)
         let coordinator = WatchConnectivityCoordinator(
@@ -1024,7 +1633,7 @@ private actor DashboardInMemoryPendingPayloadStore: WatchPendingPayloadStore {
 
 private actor RecordingDashboardWatchTransport: WatchSessionTransport {
     private(set) var sent: [WatchPayload] = []
-    private let reachable: Bool
+    private var reachable: Bool
 
     init(reachable: Bool) {
         self.reachable = reachable
@@ -1034,6 +1643,10 @@ private actor RecordingDashboardWatchTransport: WatchSessionTransport {
 
     func isReachable() async -> Bool {
         reachable
+    }
+
+    func setReachable(_ reachable: Bool) {
+        self.reachable = reachable
     }
 
     func send(_ payload: WatchPayload) async throws {

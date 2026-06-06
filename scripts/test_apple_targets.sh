@@ -12,6 +12,8 @@ ruby "scripts/generate_xcode_project.rb"
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT/.build/derived-data}"
 mkdir -p "$DERIVED_DATA_PATH"
 
+"$ROOT/scripts/hydrate_sentry_artifact.sh"
+
 # VOL-164 round 2 (2026-05-10): defense in depth against hung test runs.
 # Two layers:
 #   1. Per-test execution-time allowance via xcodebuild's
@@ -831,7 +833,7 @@ for entry in "${shard_results[@]}"; do
 
   if [ "$status" != "0" ]; then
     ui_test_failed=1
-    echo "  ✗ $shard (exit $status, $methods methods executed)"
+    echo "  FAIL $shard (exit $status, $methods methods executed)"
     continue
   fi
 
@@ -842,12 +844,12 @@ for entry in "${shard_results[@]}"; do
   # started.
   if [ "$methods" -lt 1 ]; then
     ui_test_failed=1
-    echo "  ✗ $shard (exit 0 but 0 methods executed — VOL-227 sanity failure)"
+    echo "  FAIL $shard (exit 0 but 0 methods executed — VOL-227 sanity failure)"
     echo "::error::VOL-227 sanity check failed for shard '$shard' — 0 test methods executed. Inspect ${log_to_check:-the shard attempt logs}."
     continue
   fi
 
-  echo "  ✓ $shard ($methods methods)"
+  echo "  PASS $shard ($methods methods)"
 done
 echo "Total UI test methods executed across all shards: $total_methods"
 

@@ -52,6 +52,21 @@ require_plist_value() {
   fi
 }
 
+require_plist_sentry_dsn() {
+  local key="$1"
+  local plist="$2"
+  local actual
+  actual="$(plist_value "$key" "$plist")"
+  if [[ -z "$actual" || "$actual" == *'$('* ]]; then
+    echo "FAIL: expected configured Sentry DSN in $plist, got ${actual:-<empty>}" >&2
+    exit 1
+  fi
+  if [[ ! "$actual" =~ ^https?://[^/]+/.+ ]]; then
+    echo "FAIL: expected Sentry DSN URL with project path in $plist, got $actual" >&2
+    exit 1
+  fi
+}
+
 require_codesign() {
   local bundle="$1"
   local label="$2"
@@ -155,6 +170,7 @@ require_dir "$APP_BUNDLE" "VolumeArc app bundle"
 require_dir "$WATCH_BUNDLE" "embedded watch app"
 require_dir "$WATCH_WIDGET_BUNDLE" "embedded watch widget extension"
 
+require_plist_sentry_dsn "VolumeArcSentryDSN" "$APP_BUNDLE/Info.plist"
 require_plist_value "VolumeArcAIRelayURL" "$EXPECTED_RELAY_URL" "$APP_BUNDLE/Info.plist"
 require_plist_value "CFBundleDisplayName" "VolumeArc" "$WATCH_BUNDLE/Info.plist"
 require_plist_value "CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconName" "AppIcon" "$WATCH_BUNDLE/Info.plist"

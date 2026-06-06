@@ -5,6 +5,7 @@ extension WorkoutDashboardModel {
     #if canImport(SwiftData)
     static func recentSession(_ workout: WorkoutRecord) -> RecentSession {
         RecentSession(
+            identifier: workout.identifier,
             title: workout.title.isEmpty ? nil : workout.title,
             date: workout.completedAt ?? workout.startedAt,
             durationMinutes: workout.durationMinutes,

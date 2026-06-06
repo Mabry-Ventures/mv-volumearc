@@ -44,7 +44,7 @@ import VolumeArcCore
 ///   of that deterministically (see `HealthKitRecoveryReaderTests`).
 ///
 /// The public `init(healthStore:…)` is unchanged, so the production call
-/// site in `VolumeArcAppFactories` keeps working with no edits.
+/// site in `VolumeArcApp` keeps working with no edits.
 
 /// Strength-training load summary for a window: total active energy in
 /// kilojoules and total workout minutes. HealthKit-free so it can cross

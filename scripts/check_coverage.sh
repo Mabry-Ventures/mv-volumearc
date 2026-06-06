@@ -69,6 +69,17 @@ THRESHOLD="${COVERAGE_THRESHOLD:-80}"
 TARGET="${COVERAGE_TARGET:-VolumeArcCore}"
 SUMMARY_JSON="${COVERAGE_SUMMARY_JSON:-$ROOT/.build/coverage-summary.json}"
 
+if ! xcrun -find xccov >/dev/null 2>&1; then
+  if [[ -z "${DEVELOPER_DIR:-}" && -d "/Applications/Xcode.app/Contents/Developer" ]]; then
+    export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+  fi
+fi
+
+if ! xcrun -find xccov >/dev/null 2>&1; then
+  echo "FAIL: xccov is unavailable. Install Xcode or set DEVELOPER_DIR to a full Xcode developer directory." >&2
+  exit 72
+fi
+
 if [[ ! -d "$XCRESULT" ]]; then
   echo "FAIL: No xcresult bundle at $XCRESULT — did tests run with -enableCodeCoverage YES?" >&2
   exit 1

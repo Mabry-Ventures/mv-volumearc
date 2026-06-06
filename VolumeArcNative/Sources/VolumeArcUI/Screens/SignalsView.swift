@@ -5,9 +5,11 @@ import VolumeArcCore
 /// The Signals tab — readiness breakdown, volume trends, training load.
 public struct SignalsView: View {
     @ObservedObject var model: WorkoutDashboardModel
+    private let now: () -> Date
 
-    public init(model: WorkoutDashboardModel) {
+    public init(model: WorkoutDashboardModel, now: @escaping () -> Date = { Date.now }) {
         self.model = model
+        self.now = now
     }
 
     public var body: some View {
@@ -15,6 +17,8 @@ public struct SignalsView: View {
             LazyVStack(alignment: .leading, spacing: VA.Space.xxl) {
                 signalsHeader
                 readinessSummaryCard
+                readinessDecisionCard
+                readinessUsageCard
                 inputsSection
                 weeklyVolumeSection
                 frequencySection
@@ -93,6 +97,93 @@ public struct SignalsView: View {
         ))
     }
 
+    private var readinessDecisionCard: some View {
+        VACard(style: .accent) {
+            VStack(alignment: .leading, spacing: VA.Space.lg) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                        Text(String(localized: "What this means", comment: "Signals readiness explanation title"))
+                            .font(VA.Typography.headline)
+                            .foregroundStyle(VA.Colors.textPrimary)
+                        Text(readinessBandTitle)
+                            .font(VA.Typography.footnote)
+                            .foregroundStyle(VA.Colors.textSecondary)
+                    }
+                    Spacer(minLength: VA.Space.sm)
+                    WorkoutChip(text: readinessTrainingLabel, tone: readinessTrainingTone)
+                }
+
+                VStack(alignment: .leading, spacing: VA.Space.sm) {
+                    SignalsDecisionRow(
+                        icon: "figure.strengthtraining.traditional",
+                        title: String(localized: "Today", comment: "Signals decision row title"),
+                        detail: readinessTodayGuidance
+                    )
+                    SignalsDecisionRow(
+                        icon: "brain.head.profile",
+                        title: String(localized: "Coach", comment: "Signals decision row title"),
+                        detail: readinessCoachGuidance
+                    )
+                    SignalsDecisionRow(
+                        icon: "arrow.triangle.2.circlepath",
+                        title: String(localized: "If plans change", comment: "Signals decision row title"),
+                        detail: String(
+                            localized: "Use substitutions or lighter technique work instead of forcing a risky session.",
+                            comment: "Signals readiness change guidance"
+                        )
+                    )
+                }
+            }
+        }
+        .accessibilityIdentifier("signals.readiness.explanation")
+    }
+
+    private var readinessUsageCard: some View {
+        VACard(style: .flat) {
+            VStack(alignment: .leading, spacing: VA.Space.lg) {
+                VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                    Text(String(
+                        localized: "How readiness changes training",
+                        comment: "Signals readiness usage card title"
+                    ))
+                    .font(VA.Typography.headline)
+                    .foregroundStyle(VA.Colors.textPrimary)
+                    Text(readinessDataSourceGuidance)
+                        .font(VA.Typography.footnote)
+                        .foregroundStyle(VA.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                VStack(alignment: .leading, spacing: VA.Space.sm) {
+                    SignalsDecisionRow(
+                        icon: "scalemass.fill",
+                        title: String(localized: "Load", comment: "Signals readiness usage row title"),
+                        detail: readinessLoadGuidance
+                    )
+                    SignalsDecisionRow(
+                        icon: "square.stack.3d.up.fill",
+                        title: String(localized: "Volume", comment: "Signals readiness usage row title"),
+                        detail: readinessVolumeGuidance
+                    )
+                    SignalsDecisionRow(
+                        icon: "sparkles.rectangle.stack",
+                        title: String(localized: "Coach", comment: "Signals readiness usage row title"),
+                        detail: readinessAIUsageGuidance
+                    )
+                }
+
+                Text(String(
+                    localized: "Readiness guides training choices. It is not a medical clearance or a reason to ignore symptoms.",
+                    comment: "Signals readiness safety footnote"
+                ))
+                .font(VA.Typography.captionLarge)
+                .foregroundStyle(VA.Colors.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityIdentifier("signals.readiness.usage")
+    }
+
     private var inputsSection: some View {
         VStack(alignment: .leading, spacing: VA.Space.md) {
             Text(String(localized: "Inputs", comment: "Signals readiness inputs section title"))
@@ -168,7 +259,7 @@ public struct SignalsView: View {
                 .foregroundStyle(VA.Colors.textPrimary)
             VACard(style: .flat) {
                 VStack(alignment: .leading, spacing: VA.Space.md) {
-                    FrequencyHeatmap(sessions: model.recentSessions)
+                    FrequencyHeatmap(sessions: model.recentSessions, now: now())
                     HStack {
                         Text(String(localized: "M T W T F S S", comment: "Signals frequency weekday legend"))
                             .font(VA.Typography.caption)
@@ -210,6 +301,175 @@ public struct SignalsView: View {
         }
     }
 
+    private var readinessBandTitle: String {
+        switch model.readiness.score {
+        case 80...:
+            return String(
+                localized: "High readiness: train as planned, then let warmups confirm the load.",
+                comment: "Signals high readiness band explanation"
+            )
+        case 60..<80:
+            return String(localized: "Moderate readiness: keep the session, avoid hero sets.", comment: "Signals moderate readiness band explanation")
+        case 40..<60:
+            return String(localized: "Low readiness: reduce load or volume before intensity.", comment: "Signals low readiness band explanation")
+        default:
+            return String(localized: "Very low readiness: rest is a valid training decision.", comment: "Signals very low readiness band explanation")
+        }
+    }
+
+    private var readinessTrainingLabel: String {
+        switch model.readiness.score {
+        case 80...:
+            return String(localized: "Train", comment: "Signals readiness training label")
+        case 60..<80:
+            return String(localized: "Hold", comment: "Signals readiness training label")
+        case 40..<60:
+            return String(localized: "Deload", comment: "Signals readiness training label")
+        default:
+            return String(localized: "Rest", comment: "Signals readiness training label")
+        }
+    }
+
+    private var readinessTrainingTone: WorkoutChip.Tone {
+        switch model.readiness.score {
+        case 80...:
+            return .success
+        case 60..<80:
+            return .primary
+        default:
+            return .neutral
+        }
+    }
+
+    private var readinessTodayGuidance: String {
+        switch model.readiness.score {
+        case 80...:
+            return String(localized: "Keep the programmed lift unless warmups feel off.", comment: "Signals high readiness today guidance")
+        case 60..<80:
+            return String(localized: "Keep movement quality high and leave reps in reserve.", comment: "Signals moderate readiness today guidance")
+        case 40..<60:
+            return String(localized: "Trim working sets, lower load, or choose accessories.", comment: "Signals low readiness today guidance")
+        default:
+            return String(
+                localized: "Skip heavy work. If you move, keep it easy and pain-free.",
+                comment: "Signals very low readiness today guidance"
+            )
+        }
+    }
+
+    private var readinessCoachGuidance: String {
+        switch model.readiness.score {
+        case 80...:
+            return String(localized: "Coach can progress the plan if recent sets support it.", comment: "Signals high readiness coach guidance")
+        case 60..<80:
+            return String(localized: "Coach should preserve the plan but cap aggressive jumps.", comment: "Signals moderate readiness coach guidance")
+        case 40..<60:
+            return String(
+                localized: "Coach should bias toward lighter substitutions and fewer sets.",
+                comment: "Signals low readiness coach guidance"
+            )
+        default:
+            return String(
+                localized: "Coach should recommend rest or very light technique work.",
+                comment: "Signals very low readiness coach guidance"
+            )
+        }
+    }
+
+    private var readinessLoadGuidance: String {
+        switch model.readiness.score {
+        case 80...:
+            return String(
+                localized: "Preserve the planned top set if warmups move well.",
+                comment: "Signals high readiness load usage guidance"
+            )
+        case 60..<80:
+            return String(
+                localized: "Use the planned load but avoid aggressive jumps.",
+                comment: "Signals moderate readiness load usage guidance"
+            )
+        case 40..<60:
+            return String(
+                localized: "Reduce load before chasing the written target.",
+                comment: "Signals low readiness load usage guidance"
+            )
+        default:
+            return String(
+                localized: "Avoid heavy loading; easy movement is the ceiling.",
+                comment: "Signals very low readiness load usage guidance"
+            )
+        }
+    }
+
+    private var readinessVolumeGuidance: String {
+        switch model.readiness.score {
+        case 80...:
+            return String(
+                localized: "Keep the full session unless the first lifts feel worse than expected.",
+                comment: "Signals high readiness volume usage guidance"
+            )
+        case 60..<80:
+            return String(
+                localized: "Keep priority lifts and trim optional accessories first.",
+                comment: "Signals moderate readiness volume usage guidance"
+            )
+        case 40..<60:
+            return String(
+                localized: "Cut sets, shorten the session, or swap to technique work.",
+                comment: "Signals low readiness volume usage guidance"
+            )
+        default:
+            return String(
+                localized: "Rest, mobility, or a short walk beats forcing volume.",
+                comment: "Signals very low readiness volume usage guidance"
+            )
+        }
+    }
+
+    private var readinessAIUsageGuidance: String {
+        switch model.readiness.score {
+        case 80...:
+            return String(
+                localized: "Coach can suggest progression only when recent sets support it.",
+                comment: "Signals high readiness coach usage guidance"
+            )
+        case 60..<80:
+            return String(
+                localized: "Coach should hold the plan steady and explain the tradeoff.",
+                comment: "Signals moderate readiness coach usage guidance"
+            )
+        case 40..<60:
+            return String(
+                localized: "Coach should bias toward deloads, substitutions, and lower pressure.",
+                comment: "Signals low readiness coach usage guidance"
+            )
+        default:
+            return String(
+                localized: "Coach should lead with permission to rest and avoid pressure.",
+                comment: "Signals very low readiness coach usage guidance"
+            )
+        }
+    }
+
+    private var readinessDataSourceGuidance: String {
+        if model.isHealthAuthorized && model.recovery.hasAnyData {
+            return String(
+                localized: "Using Apple Health recovery signals and your logged strength history.",
+                comment: "Signals readiness data source guidance with Health data"
+            )
+        }
+        if model.isHealthAuthorized {
+            return String(
+                localized: "Apple Health is connected. Readiness gets sharper as recent recovery samples arrive.",
+                comment: "Signals readiness data source guidance while Health samples warm up"
+            )
+        }
+        return String(
+            localized: "Using logged strength history only. Connect Apple Health in Profile for HRV, sleep, and workout load.",
+            comment: "Signals readiness data source guidance without Health access"
+        )
+    }
+
     private var signalInputs: [SignalInput] {
         model.readiness.factors.prefix(4).map { factor in
             SignalInput(
@@ -224,7 +484,7 @@ public struct SignalsView: View {
 
     private var weeklyVolumes: [WeeklyVolume] {
         let calendar = Calendar.current
-        let currentWeek = calendar.dateInterval(of: .weekOfYear, for: .now)?.start ?? .now
+        let currentWeek = calendar.dateInterval(of: .weekOfYear, for: now())?.start ?? now()
         return (0..<6).reversed().map { offset in
             let weekStart = calendar.date(byAdding: .weekOfYear, value: -offset, to: currentWeek) ?? currentWeek
             let interval = calendar.dateInterval(of: .weekOfYear, for: weekStart)
@@ -245,7 +505,7 @@ public struct SignalsView: View {
     }
 
     private var currentWeekSessionCount: Int {
-        let interval = Calendar.current.dateInterval(of: .weekOfYear, for: .now)
+        let interval = Calendar.current.dateInterval(of: .weekOfYear, for: now())
         return model.recentSessions.filter { session in interval?.contains(session.date) == true }.count
     }
 
@@ -265,6 +525,32 @@ private struct SignalInput: Identifiable {
     let detail: String
     let icon: String
     let color: Color
+}
+
+private struct SignalsDecisionRow: View {
+    let icon: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: VA.Space.md) {
+            Image(systemName: icon)
+                .font(VA.Typography.caption)
+                .foregroundStyle(VA.Colors.primary)
+                .frame(width: 28, height: 28)
+                .background(VA.Colors.primary.opacity(0.12), in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(VA.Typography.footnote)
+                    .foregroundStyle(VA.Colors.textPrimary)
+                Text(detail)
+                    .font(VA.Typography.captionLarge)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
 }
 
 private struct WeeklyVolume: Identifiable {
@@ -346,6 +632,7 @@ private struct WeeklyVolumeBars: View {
 
 private struct FrequencyHeatmap: View {
     let sessions: [RecentSession]
+    let now: Date
 
     var body: some View {
         VStack(spacing: VA.Space.xs) {
@@ -386,7 +673,7 @@ private struct FrequencyHeatmap: View {
     private func fillColor(week: Int, day: Int) -> Color {
         let calendar = Calendar.current
         let daysAgo = ((7 - week) * 7) + (6 - day)
-        let date = calendar.date(byAdding: .day, value: -daysAgo, to: .now) ?? .now
+        let date = calendar.date(byAdding: .day, value: -daysAgo, to: now) ?? now
         let hasSession = sessions.contains { calendar.isDate($0.date, inSameDayAs: date) }
         if hasSession {
             return VA.Colors.primary.opacity(0.76)

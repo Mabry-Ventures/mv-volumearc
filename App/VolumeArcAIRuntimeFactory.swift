@@ -48,23 +48,64 @@ enum VolumeArcAIRuntimeFactory {
                 credentialsProvider: sessionProvider,
                 tier: tier
             )
-            return FallbackCoachProvider(
+            let retrying = RelayUnauthorizedRetryCoachProvider(
                 primary: direct,
+                sessionRefresher: sessionProvider,
+                telemetrySink: telemetrySink
+            )
+            return FallbackCoachProvider(
+                primary: retrying,
                 fallback: LocalHeuristicAICoachProvider(),
                 telemetrySink: telemetrySink
             )
         }
 
         #if DEBUG
-        if ChaosController.injectAIRelay5xx {
-            return FallbackCoachProvider(
-                primary: ChaosAICoachProvider(error: .relayRequestFailed(
-                    statusCode: 503,
-                    message: "Chaos AIRelay 5xx"
-                )),
-                fallback: LocalHeuristicAICoachProvider(),
+        if ChaosController.injectCoachSlowStream {
+            return safetyFiltered(ChaosSlowStreamingCoachProvider())
+        }
+        if ChaosController.injectAIRelay401ThenSuccess {
+            let retryingPrimary = RelayUnauthorizedRetryCoachProvider(
+                primary: ChaosAICoach401ThenSuccessProvider(),
+                sessionRefresher: ChaosRelaySessionRefresher(),
                 telemetrySink: telemetrySink
             )
+            return safetyFiltered(FallbackCoachProvider(
+                primary: retryingPrimary,
+                fallback: LocalHeuristicAICoachProvider(),
+                telemetrySink: telemetrySink
+            ))
+        }
+        if let aiRelayFailure = ChaosController.aiRelayFailure {
+            let chaosPrimary = ChaosAICoachProvider(failure: aiRelayFailure)
+            let primary: AICoachProvider
+            switch aiRelayFailure {
+            case .relayRequestFailed(statusCode: 401, message: _):
+                primary = RelayUnauthorizedRetryCoachProvider(
+                    primary: chaosPrimary,
+                    sessionRefresher: ChaosRelaySessionRefresher(),
+                    telemetrySink: telemetrySink
+                )
+            case .relayRequestFailed, .relayUnavailable:
+                primary = chaosPrimary
+            }
+            return safetyFiltered(FallbackCoachProvider(
+                primary: primary,
+                fallback: LocalHeuristicAICoachProvider(),
+                telemetrySink: telemetrySink
+            ))
+        }
+        if ChaosController.injectFoundationModelsUnavailable {
+            let shouldUseHermeticFallback = VolumeArcRuntimeFlags.isDeterministicMode
+                || VolumeArcRuntimeFlags.isPerformanceTestMode
+            let fallbackProvider: AICoachProvider = shouldUseHermeticFallback
+                ? LocalHeuristicAICoachProvider()
+                : (relayProvider ?? LocalHeuristicAICoachProvider())
+            return safetyFiltered(FoundationModelsUnavailableChaosCoachProvider(
+                fallback: fallbackProvider,
+                telemetrySink: telemetrySink,
+                fallbackPath: shouldUseHermeticFallback || relayProvider == nil ? "local" : "relay_or_local"
+            ))
         }
         #endif
 
@@ -83,7 +124,7 @@ enum VolumeArcAIRuntimeFactory {
         // remains first so the fallback journey still exercises the
         // production fallback wrapper.
         if VolumeArcRuntimeFlags.isDeterministicMode || VolumeArcRuntimeFlags.isPerformanceTestMode {
-            return LocalHeuristicAICoachProvider()
+            return safetyFiltered(LocalHeuristicAICoachProvider())
         }
 
         #if canImport(FoundationModels) && !os(watchOS)
@@ -94,14 +135,27 @@ enum VolumeArcAIRuntimeFactory {
             // preserves legacy unconditional behavior.
             let fmEnabled = flagGate?.recordIfFirst(.foundationModelCoach) ?? true
             if fmEnabled {
-                return FoundationModelCoachProvider(
-                    fallback: relayProvider ?? LocalHeuristicAICoachProvider()
-                )
+                return safetyFiltered(FoundationModelCoachProvider(
+                    fallback: relayProvider ?? LocalHeuristicAICoachProvider(),
+                    telemetrySink: telemetrySink
+                ))
             }
+        } else {
+            recordFoundationModelsUnavailable(
+                telemetrySink: telemetrySink,
+                reason: "os_unsupported",
+                fallbackPath: relayProvider == nil ? "local" : "relay_or_local"
+            )
         }
+        #else
+        recordFoundationModelsUnavailable(
+            telemetrySink: telemetrySink,
+            reason: "framework_unavailable",
+            fallbackPath: relayProvider == nil ? "local" : "relay_or_local"
+        )
         #endif
 
-        return relayProvider ?? LocalHeuristicAICoachProvider()
+        return safetyFiltered(relayProvider ?? LocalHeuristicAICoachProvider())
     }
 
     /// Build the voice-coaching orchestrator.
@@ -136,7 +190,16 @@ enum VolumeArcAIRuntimeFactory {
         premiumGate?.recordIfFirst("live_voice", isPremium: isPremium)
 
         let transport: RealtimeVoiceTransport
-        if voiceEnabled, isPremium, VolumeArcAIConfiguration.relayConfiguration != nil {
+        if voiceEnabled, isPremium,
+           VolumeArcRuntimeFlags.isDeterministicMode || VolumeArcRuntimeFlags.isPerformanceTestMode {
+            transport = AIRelayVoiceTransport(
+                provider: makeCoachProvider(
+                    flagGate: flagGate,
+                    subscriptionStore: subscriptionStore,
+                    premiumGate: premiumGate
+                )
+            )
+        } else if voiceEnabled, isPremium, VolumeArcAIConfiguration.relayConfiguration != nil {
             transport = AIRelayVoiceTransport(
                 provider: makeCoachProvider(
                     flagGate: flagGate,
@@ -149,6 +212,32 @@ enum VolumeArcAIRuntimeFactory {
         }
 
         return LiveVoiceCoachOrchestrator(transport: transport)
+    }
+
+    private static func recordFoundationModelsUnavailable(
+        telemetrySink: (any TelemetrySink)?,
+        reason: String,
+        fallbackPath: String,
+        errorType: String? = nil
+    ) {
+        var metadata = [
+            "reason": reason,
+            "fallback_path": fallbackPath,
+        ]
+        if let errorType {
+            metadata["error_type"] = errorType
+        }
+        telemetrySink?.record(TelemetryEvent(
+            category: "ai",
+            name: "fm.unavailable",
+            severity: .warning,
+            message: "Foundation Models coach unavailable; falling back to relay or local provider.",
+            metadata: metadata
+        ))
+    }
+
+    private static func safetyFiltered(_ provider: AICoachProvider) -> AICoachProvider {
+        SafetyFilteredCoachProvider(base: provider)
     }
 }
 

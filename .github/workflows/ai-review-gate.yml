@@ -173,8 +173,8 @@ jobs:
               }
 
               if (
-                /(^|\n)\s*(?:✅\s*)?#{0,6}\s*Actions performed\b/i.test(text) &&
-                !/(^|\n)\s*#{1,6}\s+(?!Actions performed\b)/im.test(text.replace(/(^|\n)\s*(?:✅\s*)?#{0,6}\s*Actions performed\b[^\n]*/i, '\n'))
+                /(^|\n)\s*(?:\u2705\s*)?#{0,6}\s*Actions performed\b/i.test(text) &&
+                !/(^|\n)\s*#{1,6}\s+(?!Actions performed\b)/im.test(text.replace(/(^|\n)\s*(?:\u2705\s*)?#{0,6}\s*Actions performed\b[^\n]*/i, '\n'))
               ) {
                 return `${aiName} skipped review: actions-only automation comment is not a review signal`;
               }

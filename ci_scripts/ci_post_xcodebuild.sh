@@ -17,7 +17,7 @@
 # secret):
 #
 #   SENTRY_AUTH_TOKEN — Sentry auth token with `project:read` and
-#                       `project:releases` scopes.
+#                       `project:write` scopes.
 #   SENTRY_ORG        — defaults to `mabry-ventures-llc`
 #   SENTRY_PROJECT    — defaults to `volumearc-ios`
 #
@@ -214,6 +214,21 @@ require_plist_nonempty() {
   fi
 }
 
+require_plist_sentry_dsn() {
+  local key="$1"
+  local plist="$2"
+  local actual
+  actual="$(plist_value "$key" "$plist")"
+  if [[ -z "$actual" || "$actual" == *'$('* ]]; then
+    echo "::error::VOL-133: expected configured Sentry DSN in ${plist}, got ${actual:-<empty>}"
+    exit 1
+  fi
+  if [[ ! "$actual" =~ ^https?://[^/]+/.+ ]]; then
+    echo "::error::VOL-133: expected Sentry DSN URL with project path in ${plist}, got ${actual}"
+    exit 1
+  fi
+}
+
 require_watch_assets_car() {
   local assets_car="$1"
   if [[ ! -f "$assets_car" ]]; then
@@ -292,6 +307,33 @@ require_extension_entry_point() {
   fi
 }
 
+generate_sentry_framework_dsym() {
+  local sentry_binary="${APP_BUNDLE}/Frameworks/Sentry.framework/Sentry"
+  local sentry_dsym="${DSYM_DIR}/Sentry.framework.dSYM"
+  local binary_uuid
+  local dsym_uuid
+
+  if [[ ! -f "$sentry_binary" ]]; then
+    echo "::error::VOL-133: bundled Sentry.framework binary missing at ${sentry_binary}"
+    exit 1
+  fi
+
+  rm -rf "$sentry_dsym"
+  if ! xcrun dsymutil "$sentry_binary" -o "$sentry_dsym"; then
+    echo "::error::VOL-133: failed to generate Sentry.framework dSYM from archived binary"
+    exit 1
+  fi
+
+  binary_uuid="$(xcrun dwarfdump --uuid "$sentry_binary" | awk 'NR == 1 {print $2}')"
+  dsym_uuid="$(xcrun dwarfdump --uuid "$sentry_dsym" | awk 'NR == 1 {print $2}')"
+  if [[ -z "$binary_uuid" || "$binary_uuid" != "$dsym_uuid" ]]; then
+    echo "::error::VOL-133: generated Sentry.framework dSYM UUID mismatch (binary=${binary_uuid:-<empty>}, dSYM=${dsym_uuid:-<empty>})"
+    exit 1
+  fi
+
+  echo "VOL-133: generated archived Sentry.framework dSYM (${binary_uuid})"
+}
+
 APP_BUNDLE="${ARCHIVE_PATH}/Products/Applications/VolumeArc.app"
 WATCH_BUNDLE="${APP_BUNDLE}/Watch/VolumeArcWatch.app"
 WATCH_WIDGET_BUNDLE="${WATCH_BUNDLE}/PlugIns/VolumeArcWatchWidgets.appex"
@@ -300,6 +342,8 @@ require_dir "$APP_BUNDLE" "VolumeArc app bundle"
 require_dir "$WATCH_BUNDLE" "embedded watch app"
 require_dir "$WATCH_WIDGET_BUNDLE" "embedded watch widget extension"
 
+require_plist_sentry_dsn "VolumeArcSentryDSN" "${APP_BUNDLE}/Info.plist"
+require_plist_value "VolumeArcAIRelayURL" "https://relay.volumearc.app" "${APP_BUNDLE}/Info.plist"
 require_plist_nonempty "CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconName" "${WATCH_BUNDLE}/Info.plist"
 require_plist_nonempty "CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconFiles.0" "${WATCH_BUNDLE}/Info.plist"
 require_plist_value "CFBundleDisplayName" "VolumeArc" "${WATCH_WIDGET_BUNDLE}/Info.plist"
@@ -313,12 +357,6 @@ if [[ -n "${CI_BUILD_NUMBER:-}" ]]; then
   require_plist_value "CFBundleVersion" "$CI_BUILD_NUMBER" "${WATCH_WIDGET_BUNDLE}/Info.plist"
 fi
 
-relay_url="$(plist_value "VolumeArcAIRelayURL" "${APP_BUNDLE}/Info.plist")"
-if [[ -n "${VOLUMEARC_AI_RELAY_URL:-}" && "$relay_url" != "https://relay.volumearc.app" ]]; then
-  echo "::error::VOL-133: expected VolumeArcAIRelayURL=https://relay.volumearc.app in archived app, got ${relay_url:-<empty>}"
-  exit 1
-fi
-
 echo "VOL-133: archive contract OK (watch app, watch icon renditions, watch widget entry point, build numbers, relay config)"
 
 DSYM_DIR="${ARCHIVE_PATH}/dSYMs"
@@ -327,10 +365,12 @@ if [[ ! -d "${DSYM_DIR}" ]] || [[ -z "$(ls -A "${DSYM_DIR}" 2>/dev/null)" ]]; th
   exit 1
 fi
 
+generate_sentry_framework_dsym
+
 if [[ -z "${SENTRY_AUTH_TOKEN:-}" ]]; then
-  echo "::warning::SENTRY_AUTH_TOKEN unset — skipping dSYM upload. Crashes from this build will arrive in Sentry as obfuscated frames."
+  echo "::error::SENTRY_AUTH_TOKEN unset — refusing to ship a TestFlight/App Store archive without Sentry dSYM upload."
   echo "  Set SENTRY_AUTH_TOKEN as a secret env var in the Xcode Cloud workflow to fix."
-  exit 0
+  exit 1
 fi
 
 if ! command -v sentry-cli >/dev/null 2>&1; then

@@ -70,6 +70,7 @@ public struct PaywallView: View {
             // memory/scroll-perf win is marginal at 5 elements.
             VStack(alignment: .leading, spacing: VA.Space.xl) {
                 hero
+                premiumProofBand
                 featureComparison
                 plans
                 actionButtons
@@ -96,36 +97,171 @@ public struct PaywallView: View {
     // MARK: - Hero
 
     private var hero: some View {
-        VStack(spacing: VA.Space.md) {
-            Image(systemName: "sparkles")
-                .font(VA.Typography.display)
-                .foregroundStyle(VA.Colors.primary)
-                .vaAppear()
+        VStack(spacing: VA.Space.lg) {
+            premiumHeroPreview
 
-            Text(String(localized: "VolumeArc Premium", comment: "Paywall hero title"))
-                .font(VA.Typography.title)
-                .foregroundStyle(VA.Colors.textPrimary)
-                .multilineTextAlignment(.center)
+            VStack(spacing: VA.Space.sm) {
+                Text(String(localized: "VolumeArc Premium", comment: "Paywall hero title"))
+                    .font(VA.Typography.title)
+                    .foregroundStyle(VA.Colors.textPrimary)
+                    .multilineTextAlignment(.center)
 
-            // VOL-198: hero description must describe ONLY what Premium
-            // actually unlocks. CloudKit sync, Foundation Models, and
-            // Live Activities are free per `docs/PLATFORM.md` (VOL-91);
-            // promising them as Premium value is paid-subscription
-            // misrepresentation and an App Review risk.
-            // VOL-247 (copy pass): coach-voice rewrite of the hero
-            // description. The localized comment translators see is
-            // intentionally short; this contextual note lives next to the
-            // call so it doesn't push the source line past line_length.
-            Text(String(
-                localized: "Coaching that reads your full training history, talks back between sets, and adapts as you recover.",
-                comment: "Paywall hero description — Premium unlocks (Pro coach + live voice)"
-            ))
-                .font(VA.Typography.body)
-                .foregroundStyle(VA.Colors.textSecondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 340)
+                // VOL-198: hero description must describe ONLY what
+                // Premium actually unlocks. CloudKit sync, Foundation
+                // Models, and Live Activities are free per
+                // `docs/PLATFORM.md` (VOL-91); promising them as Premium
+                // value is paid-subscription misrepresentation.
+                Text(String(
+                    localized: "A deeper coach and live voice when your hands are full, built for better calls between sets.",
+                    comment: "Paywall hero description — Premium unlocks (Pro coach + live voice)"
+                ))
+                    .font(VA.Typography.body)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 360)
+            }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private var premiumHeroPreview: some View {
+        ZStack(alignment: .bottomLeading) {
+            VA.Gradients.sunriseHero
+            Circle()
+                .fill(VA.Colors.textOnPrimary.opacity(0.16))
+                .frame(width: 190, height: 190)
+                .offset(x: 220, y: -94)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: VA.Space.md) {
+                HStack(spacing: VA.Space.sm) {
+                    heroBadge(
+                        String(localized: "Coach Pro", comment: "Paywall hero badge"),
+                        icon: "brain.head.profile"
+                    )
+                    heroBadge(
+                        String(localized: "Voice ready", comment: "Paywall hero badge"),
+                        icon: "waveform.and.mic"
+                    )
+                    Spacer(minLength: 0)
+                }
+
+                VStack(alignment: .leading, spacing: VA.Space.sm) {
+                    Text(String(localized: "Next best move", comment: "Paywall hero preview card label"))
+                        .font(VA.Typography.caption)
+                        .foregroundStyle(VA.Colors.textOnPrimary.opacity(0.78))
+                    Text(String(
+                        localized: "Keep the first set light, then build only if it moves clean.",
+                        comment: "Paywall hero preview coach recommendation"
+                    ))
+                    .font(VA.Typography.headline)
+                    .foregroundStyle(VA.Colors.textOnPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    Text(String(
+                        localized: "If anything feels sharp, stop and switch the lift.",
+                        comment: "Paywall hero preview safety cue"
+                    ))
+                    .font(VA.Typography.footnote)
+                    .foregroundStyle(VA.Colors.textOnPrimary.opacity(0.82))
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(VA.Space.lg)
+                .background(VA.Colors.primaryDeep.opacity(0.34), in: RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous)
+                        .stroke(VA.Colors.textOnPrimary.opacity(0.22), lineWidth: 1)
+                }
+
+                HStack(spacing: VA.Space.sm) {
+                    heroMetric(
+                        value: String(localized: "Full", comment: "Paywall hero preview metric value"),
+                        label: String(localized: "history", comment: "Paywall hero preview metric label")
+                    )
+                    heroMetric(
+                        value: String(localized: "Live", comment: "Paywall hero preview metric value"),
+                        label: String(localized: "voice", comment: "Paywall hero preview metric label")
+                    )
+                    heroMetric(
+                        value: String(localized: "Pivot", comment: "Paywall hero preview metric value"),
+                        label: String(localized: "calls", comment: "Paywall hero preview metric label")
+                    )
+                }
+            }
+            .padding(VA.Space.lg)
+        }
+        .frame(maxWidth: .infinity, minHeight: 236)
+        .clipShape(RoundedRectangle(cornerRadius: VA.Radius.xl, style: .continuous))
+        .vaShadow(.md)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(String(
+            localized: "Premium preview showing Coach Pro, voice coaching, and between-set guidance.",
+            comment: "Paywall hero preview accessibility label"
+        ))
+    }
+
+    private func heroBadge(_ title: String, icon: String) -> some View {
+        HStack(spacing: VA.Space.xs) {
+            Image(systemName: icon)
+                .font(VA.Typography.caption)
+            Text(title)
+                .font(VA.Typography.caption)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+        }
+        .foregroundStyle(VA.Colors.primaryDeep)
+        .padding(.horizontal, VA.Space.sm)
+        .frame(height: 30)
+        .background(VA.Colors.textOnPrimary.opacity(0.94), in: Capsule())
+    }
+
+    private func heroMetric(value: String, label: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(VA.Typography.headline)
+                .foregroundStyle(VA.Colors.textOnPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+            Text(label)
+                .font(VA.Typography.caption)
+                .foregroundStyle(VA.Colors.textOnPrimary.opacity(0.76))
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(VA.Space.sm)
+        .background(VA.Colors.textOnPrimary.opacity(0.14), in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+    }
+
+    private var premiumProofBand: some View {
+        VACard(style: .accent) {
+            VStack(alignment: .leading, spacing: VA.Space.lg) {
+                Text(String(
+                    localized: "Built for lifters who want a coach in the session, not another passive tracker.",
+                    comment: "Paywall premium proof headline"
+                ))
+                .font(VA.Typography.headline)
+                .foregroundStyle(VA.Colors.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+
+                VStack(spacing: VA.Space.md) {
+                    PaywallProofRow(
+                        icon: "list.bullet.clipboard.fill",
+                        title: String(localized: "Remembers your training", comment: "Paywall proof row title"),
+                        detail: String(localized: "Coach Pro reviews saved sessions before it answers.", comment: "Paywall proof row detail")
+                    )
+                    PaywallProofRow(
+                        icon: "waveform.and.mic",
+                        title: String(localized: "Works when your hands are full", comment: "Paywall proof row title"),
+                        detail: String(localized: "Ask for cues or pivots between sets without typing.", comment: "Paywall proof row detail")
+                    )
+                    PaywallProofRow(
+                        icon: "shield.lefthalf.filled",
+                        title: String(localized: "Keeps pressure low", comment: "Paywall proof row title"),
+                        detail: String(localized: "Recovery-first guidance when today is not the day to push.", comment: "Paywall proof row detail")
+                    )
+                }
+            }
+        }
     }
 
     // MARK: - Feature comparison
@@ -136,7 +272,6 @@ public struct PaywallView: View {
                 Text(String(localized: "WHAT'S INCLUDED", comment: "Paywall feature list section label"))
                     .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.textSecondary)
-                    .tracking(0.5)
 
                 ForEach(premiumFeatures) { feature in
                     HStack(alignment: .top, spacing: VA.Space.md) {
@@ -188,12 +323,12 @@ public struct PaywallView: View {
             PremiumFeature(
                 icon: "brain.head.profile",
                 title: String(
-                    localized: "AI Coach — Pro tier",
-                    comment: "Premium feature name — AI coach Pro tier"
+                    localized: "Coach Pro",
+                    comment: "Premium feature name — pro coach tier"
                 ),
                 description: String(
-                    localized: "Looks at your full training history before answering, so advice fits your patterns — not just your last set.",
-                    comment: "Premium feature description — AI coach Pro tier"
+                    localized: "Looks at your full training history before answering, so advice fits your patterns, not just your last set.",
+                    comment: "Premium feature description — pro coach tier"
                 )
             ),
             PremiumFeature(
@@ -426,6 +561,32 @@ private struct PaywallPlanCardBackgroundModifier: ViewModifier {
         } else {
             content
                 .vaGlassBackground(in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+        }
+    }
+}
+
+private struct PaywallProofRow: View {
+    let icon: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: VA.Space.md) {
+            Image(systemName: icon)
+                .font(VA.Typography.headline)
+                .foregroundStyle(VA.Colors.primary)
+                .frame(width: 34, height: 34)
+                .background(VA.Colors.primary.opacity(0.12), in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                Text(title)
+                    .font(VA.Typography.headline)
+                    .foregroundStyle(VA.Colors.textPrimary)
+                Text(detail)
+                    .font(VA.Typography.footnote)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }

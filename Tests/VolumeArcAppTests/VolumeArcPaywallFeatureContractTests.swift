@@ -7,7 +7,7 @@
 //
 // The Premium definition that this test enforces:
 // > **Premium unlocks (VOL-91):**
-// > - AI coach tier (Gemini Pro)
+// > - Pro coach tier (Gemini Pro routing)
 // > - Live voice coaching
 // > **Not gated (free for all):** CloudKit sync, Foundation Models,
 // > Live Activities.
@@ -36,7 +36,7 @@ final class VolumeArcPaywallFeatureContractTests: XCTestCase {
                 // of engineering-voice tell the audit flagged. The
                 // Premium scope is unchanged (Pro coach tier + live voice);
                 // only the rendered label changed.
-                "AI Coach — Pro tier",
+                "Coach Pro",
                 "Live Voice Coaching",
             ],
             """

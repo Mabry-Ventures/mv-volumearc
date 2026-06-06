@@ -1,7 +1,7 @@
 {
   "configurations": [
     {
-      "id": "81EA7FB9-C20D-9A9C-79AA-A493F005C5E0",
+      "id": "FF3328BD-2435-95D7-F207-4CC8C558E11B",
       "name": "Configuration 1",
       "options": {
       }
@@ -11,7 +11,7 @@
     "codeCoverage": true,
     "targetForVariableExpansion": {
       "containerPath": "container:VolumeArcApple.xcodeproj",
-      "identifier": "E653DF58E355F9C13015AA84",
+      "identifier": "76EFBC3D5C1EDBF086D220D8",
       "name": "VolumeArcApp"
     }
   },
@@ -20,7 +20,7 @@
       "parallelizable": true,
       "target": {
         "containerPath": "container:VolumeArcApple.xcodeproj",
-        "identifier": "67C9C54DA61F142E18A1B43D",
+        "identifier": "7B0AE355DF9946F453DD93CF",
         "name": "VolumeArcAppTests"
       }
     },
@@ -31,7 +31,7 @@
       ],
       "target": {
         "containerPath": "container:VolumeArcApple.xcodeproj",
-        "identifier": "609B3CCDDC9FCB3BC7625EF9",
+        "identifier": "ED225923F530338BB3630BC2",
         "name": "VolumeArcAppUITests"
       }
     }

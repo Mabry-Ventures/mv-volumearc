@@ -6,11 +6,17 @@ import VolumeArcCore
 public struct TodayView: View {
     @ObservedObject var model: WorkoutDashboardModel
     @ObservedObject var navigation: DashboardNavigationModel
+    private let now: () -> Date
     @Namespace private var heroNamespace
 
-    public init(model: WorkoutDashboardModel, navigation: DashboardNavigationModel) {
+    public init(
+        model: WorkoutDashboardModel,
+        navigation: DashboardNavigationModel,
+        now: @escaping () -> Date = { Date.now }
+    ) {
         self.model = model
         self.navigation = navigation
+        self.now = now
     }
 
     public var body: some View {
@@ -84,11 +90,11 @@ public struct TodayView: View {
     }
 
     private var todayLabel: String {
-        Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day())
+        now().formatted(.dateTime.weekday(.wide).month(.wide).day())
     }
 
     private var greetingText: String {
-        let hour = Calendar.current.component(.hour, from: .now)
+        let hour = Calendar.current.component(.hour, from: now())
         switch hour {
         case 4..<12:
             return String(localized: "Good morning", comment: "Morning greeting header")
@@ -134,12 +140,23 @@ public struct TodayView: View {
     private var overviewMetrics: some View {
         TodayOverviewMetrics(
             readiness: model.readiness,
+            isHealthAuthorized: model.isHealthAuthorized,
             weeklyVolumeLoad: weeklyVolumeLoad,
             sparklineValues: weeklySparklineValues,
             trendLabel: volumeTrendLabel,
             trendIsPositive: volumeTrendIsPositive,
-            onReadinessTap: { navigation.openSignals() }
+            onReadinessTap: {
+                if model.isHealthAuthorized {
+                    navigation.openSignals()
+                } else {
+                    navigation.openProfile()
+                }
+            }
         )
+        .task(id: model.isHealthAuthorized) {
+            guard !model.isHealthAuthorized else { return }
+            model.recordHealthKitUnavailableShown(source: "today")
+        }
     }
 
     // MARK: - Next workout card
@@ -271,7 +288,7 @@ public struct TodayView: View {
             .accessibilityIdentifier("today.startWorkout")
 
             VAButton(
-                String(localized: "Ask Coach", comment: "Quick action to open the AI coach"),
+                String(localized: "Ask Coach", comment: "Quick action to open the coach"),
                 icon: "waveform",
                 style: .secondary
             ) {

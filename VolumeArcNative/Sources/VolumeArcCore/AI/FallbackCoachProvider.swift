@@ -33,6 +33,86 @@ public enum CoachFallbackNotificationUserInfoKey {
     public static let path = "path"
 }
 
+public protocol AIRelaySessionRefreshing: Sendable {
+    func refreshAfterUnauthorized() async
+}
+
+public struct RelayUnauthorizedRetryCoachProvider: AICoachProvider {
+    private let primary: AICoachProvider
+    private let sessionRefresher: AIRelaySessionRefreshing
+    private let telemetrySink: (any TelemetrySink)?
+
+    public init(
+        primary: AICoachProvider,
+        sessionRefresher: AIRelaySessionRefreshing,
+        telemetrySink: (any TelemetrySink)? = nil
+    ) {
+        self.primary = primary
+        self.sessionRefresher = sessionRefresher
+        self.telemetrySink = telemetrySink
+    }
+
+    public func coachResponse(for prompt: String, context: String) async throws -> String {
+        do {
+            return try await primary.coachResponse(for: prompt, context: context)
+        } catch {
+            guard Self.isUnauthorized(error) else { throw error }
+            await refreshSession(path: "non_streaming")
+            return try await primary.coachResponse(for: prompt, context: context)
+        }
+    }
+
+    public func streamCoachResponse(
+        for prompt: String,
+        context: String
+    ) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                var didRetry = false
+                while true {
+                    var yieldedAnything = false
+                    do {
+                        for try await chunk in primary.streamCoachResponse(for: prompt, context: context) {
+                            yieldedAnything = true
+                            continuation.yield(chunk)
+                        }
+                        continuation.finish()
+                        return
+                    } catch {
+                        guard !didRetry,
+                              !yieldedAnything,
+                              Self.isUnauthorized(error) else {
+                            continuation.finish(throwing: error)
+                            return
+                        }
+                        didRetry = true
+                        await refreshSession(path: "streaming")
+                    }
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    static func isUnauthorized(_ error: Error) -> Bool {
+        if case AIRuntimeIntegrationError.relayRequestFailed(let statusCode, _) = error {
+            return statusCode == 401
+        }
+        return false
+    }
+
+    private func refreshSession(path: String) async {
+        await sessionRefresher.refreshAfterUnauthorized()
+        telemetrySink?.record(TelemetryEvent(
+            category: "relay",
+            name: "session_refreshed",
+            severity: .info,
+            message: "Relay session refreshed after unauthorized response.",
+            metadata: ["path": path]
+        ))
+    }
+}
+
 public struct FallbackCoachProvider: AICoachProvider {
     private let primary: AICoachProvider
     private let fallback: AICoachProvider

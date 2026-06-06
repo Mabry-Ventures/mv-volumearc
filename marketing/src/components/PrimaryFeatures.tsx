@@ -226,7 +226,7 @@ function CoachScreen(props: ScreenProps) {
             </p>
           </div>
           <div className="rounded-full bg-sunrise-50 px-3 py-1.5 text-center text-xs font-medium text-sunrise-700">
-            Streaming · first token 0.6s · Gemini Pro
+            Streaming · first token 0.6s · Coach Pro
           </div>
         </div>
       </MotionAppScreenBody>

@@ -211,7 +211,7 @@ enum VolumeArcBackgroundTasks {
             // VOL-204: same main-actor hop reason as `handleAppRefresh`.
             scheduleAppProcessing()
             if let model = sharedModel {
-                await model.syncNow()
+                await model.performBackgroundProcessing()
                 completion.complete(success: true)
             } else {
                 completion.complete(success: false)

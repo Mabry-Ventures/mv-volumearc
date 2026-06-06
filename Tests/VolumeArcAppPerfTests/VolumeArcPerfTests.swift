@@ -123,18 +123,19 @@ final class VolumeArcPerfTests: XCTestCase {
     /// iterations so transient allocation spikes don't poison the
     /// measurement.
     func testMemoryFootprintDuringWorkout() throws {
-        let app = makePerfApp()
+        let app = makePerfApp(extraArguments: [
+            "-OpenDeepLinkOnLaunch", "volumearc://action/startWorkoutSession",
+        ])
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
 
-        // Route into the Workouts tab so the active-session UI takes
-        // over. `-PerfTestMode 1` seeds enough history for the tab to
-        // render its recent-history section if the session isn't
-        // auto-started.
-        let workoutsTab = app.tabBars.buttons["tab.workouts"]
-        if workoutsTab.waitForExistence(timeout: 5) {
-            workoutsTab.tap()
-        }
+        let activeSession = app.descendants(matching: .any)
+            .matching(identifier: "workouts.activeSession")
+            .firstMatch
+        XCTAssertTrue(
+            activeSession.waitForExistence(timeout: 20),
+            "Perf memory test should measure the active workout surface, not the default Today tab."
+        )
 
         let options = XCTMeasureOptions()
         options.iterationCount = 3
@@ -168,7 +169,7 @@ final class VolumeArcPerfTests: XCTestCase {
     /// The fallback streams one word every 30ms, so the first-token
     /// time is dominated by view setup, not network.
     func testCoachFirstTokenLatency() throws {
-        let app = makePerfApp()
+        let app = makePerfApp(extraArguments: ["-OpenCoachOnLaunch", "1"])
         defer { app.terminate() }
 
         let options = XCTMeasureOptions()
@@ -210,9 +211,11 @@ final class VolumeArcPerfTests: XCTestCase {
             XCTAssertFalse(firstResponse.exists, "Fresh perf launch should not contain a stale coach response.")
 
             self.startMeasuring()
-            sendButton.tap()
+            sendButton
+                .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+                .tap()
 
-            let didReceiveFirstToken = firstResponse.waitForExistence(timeout: 10)
+            let didReceiveFirstToken = waitForVisibleFirstToken(firstResponse, timeout: 10)
             self.stopMeasuring()
             XCTAssertTrue(didReceiveFirstToken, "Coach first response should stream within the perf timeout.")
         }
@@ -268,6 +271,21 @@ final class VolumeArcPerfTests: XCTestCase {
         return false
     }
 
+    /// `XCUIElement.waitForExistence` polls coarsely enough to add around a
+    /// second to a sub-second first-token path. For this budget we need the
+    /// first visible token edge, so poll the accessibility tree directly with
+    /// a short interval after the send tap.
+    private func waitForVisibleFirstToken(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if element.exists {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+        }
+        return element.exists
+    }
+
     /// Build the XCUIApplication configured for perf-mode:
     ///
     /// - `-PerfTestMode 1` flips `VolumeArcRuntimeFlags.isPerformanceTestMode`
@@ -278,7 +296,7 @@ final class VolumeArcPerfTests: XCTestCase {
     ///   bootstrapper when perf mode is set, but we pass them
     ///   explicitly so the launch arguments surface clearly in the CI
     ///   log.
-    private func makePerfApp() -> XCUIApplication {
+    private func makePerfApp(extraArguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments += [
             "-UITestMode", "1",
@@ -286,6 +304,7 @@ final class VolumeArcPerfTests: XCTestCase {
             "-SeedFixtures", "1",
             "-PerfTestMode", "1",
         ]
+        app.launchArguments += extraArguments
         return app
     }
 }

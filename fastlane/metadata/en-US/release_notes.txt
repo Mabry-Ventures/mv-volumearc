@@ -1,1 +1,1 @@
-Initial App Store release of VolumeArc: guided strength workouts, readiness-informed coaching, Apple Watch workout support, HealthKit sync, widgets, Live Activities, and privacy controls for AI coaching.
+Initial App Store release of VolumeArc: guided strength workouts, readiness-informed coaching, Apple Watch workout support, HealthKit sync, widgets, Live Activities, and privacy controls for cloud coaching.

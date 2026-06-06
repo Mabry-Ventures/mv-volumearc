@@ -18,6 +18,7 @@ public struct CoachMemoryView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: VA.Space.xl) {
+                    explanationSection
                     editorSection
                     if !model.coachMemory.mostRecent.isEmpty {
                         recentSection
@@ -39,6 +40,41 @@ public struct CoachMemoryView: View {
         }
         .presentationDetents([.medium, .large])
         .accessibilityIdentifier("coachMemory.root")
+    }
+
+    private var explanationSection: some View {
+        VACard(style: .accent) {
+            VStack(alignment: .leading, spacing: VA.Space.md) {
+                HStack(alignment: .top, spacing: VA.Space.md) {
+                    Image(systemName: "brain.head.profile")
+                        .font(VA.Typography.title2)
+                        .foregroundStyle(VA.Colors.primary)
+                        .frame(width: 38, height: 38)
+                        .background(VA.Colors.primary.opacity(0.12), in: Circle())
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                        Text(String(localized: "What the coach remembers", comment: "Coach memory explanation title"))
+                            .font(VA.Typography.headline)
+                            .foregroundStyle(VA.Colors.textPrimary)
+                        Text(String(
+                            localized: "Save durable coaching context such as injury notes, lift cues, equipment constraints, or preferences that should shape future recommendations.",
+                            comment: "Coach memory explanation body"
+                        ))
+                        .font(VA.Typography.footnote)
+                        .foregroundStyle(VA.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Text(String(
+                    localized: "Memory is editable and stays in your VolumeArc data. Do not add medical records or secrets.",
+                    comment: "Coach memory privacy boundary"
+                ))
+                .font(VA.Typography.captionLarge)
+                .foregroundStyle(VA.Colors.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     private var editorSection: some View {

@@ -30,6 +30,7 @@ public struct DashboardRefreshSnapshot: Sendable {
     public let readiness: ReadinessAssessment
     public let autopilot: WorkoutAutopilotState
     public let nextWorkout: WeeklyWorkout?
+    public let weeklyPlan: [WeeklyWorkout]
     public let trainingPrograms: [TrainingProgramDefinition]
     public let activeProgram: ActiveTrainingProgramContext?
     public let activeWorkout: ActiveWorkout?
@@ -42,6 +43,7 @@ public struct DashboardRefreshSnapshot: Sendable {
         readiness: ReadinessAssessment,
         autopilot: WorkoutAutopilotState,
         nextWorkout: WeeklyWorkout?,
+        weeklyPlan: [WeeklyWorkout],
         trainingPrograms: [TrainingProgramDefinition],
         activeProgram: ActiveTrainingProgramContext?,
         activeWorkout: ActiveWorkout?,
@@ -53,6 +55,7 @@ public struct DashboardRefreshSnapshot: Sendable {
         self.readiness = readiness
         self.autopilot = autopilot
         self.nextWorkout = nextWorkout
+        self.weeklyPlan = weeklyPlan
         self.trainingPrograms = trainingPrograms
         self.activeProgram = activeProgram
         self.activeWorkout = activeWorkout
@@ -94,6 +97,7 @@ public actor DashboardRefreshLoader {
         let primaryExercise = VolumeArcExerciseCatalog.backSquat
         let history = try loadHistory(forExercise: primaryExercise.id, limit: 20, in: context)
         let memory = try loadCoachMemory(in: context)
+        let weeklyPlan = try loadWeeklyPlan(in: context)
         let autopilot = progressionEngine.buildAutopilotState(
             for: history,
             athlete: athlete,
@@ -107,7 +111,8 @@ public actor DashboardRefreshLoader {
             recentSessions: recentSessions,
             readiness: readiness,
             autopilot: autopilot,
-            nextWorkout: try loadNextWorkout(in: context),
+            nextWorkout: Self.nextWorkout(from: weeklyPlan),
+            weeklyPlan: weeklyPlan,
             trainingPrograms: try loadTrainingPrograms(in: context),
             activeProgram: try loadActiveProgramContext(in: context),
             activeWorkout: try loadActiveWorkout(in: context),
@@ -221,13 +226,13 @@ public actor DashboardRefreshLoader {
         return CoachMemory(entries: entries)
     }
 
-    private func loadNextWorkout(in context: ModelContext) throws -> WeeklyWorkout? {
+    private func loadWeeklyPlan(in context: ModelContext) throws -> [WeeklyWorkout] {
         var descriptor = FetchDescriptor<TrainingPlanRecord>()
         descriptor.fetchLimit = 1
         guard let record = try context.fetch(descriptor).first,
               let data = record.workoutsJSON.data(using: .utf8)
         else {
-            return nil
+            return []
         }
 
         let workouts: [WeeklyWorkout]
@@ -235,11 +240,15 @@ public actor DashboardRefreshLoader {
             workouts = try JSONDecoder().decode([WeeklyWorkout].self, from: data)
         } catch {
             logTrainingPlanDecodeFailure(error: error)
-            return nil
+            return []
         }
 
+        return workouts.sorted { $0.dayOfWeek < $1.dayOfWeek }
+    }
+
+    private static func nextWorkout(from workouts: [WeeklyWorkout]) -> WeeklyWorkout? {
+        guard !workouts.isEmpty else { return nil }
         let sortedWorkouts = workouts.sorted { $0.dayOfWeek < $1.dayOfWeek }
-        guard !sortedWorkouts.isEmpty else { return nil }
         let todayWeekday = WeeklyWorkout.trainingWeekday(for: .now)
         return sortedWorkouts.first { $0.dayOfWeek >= todayWeekday } ?? sortedWorkouts.first
     }
@@ -306,6 +315,7 @@ public actor DashboardRefreshLoader {
 
     private static func recentSession(from workout: WorkoutRecord) -> RecentSession {
         RecentSession(
+            identifier: workout.identifier,
             title: workout.title.isEmpty ? nil : workout.title,
             date: workout.completedAt ?? workout.startedAt,
             durationMinutes: workout.durationMinutes,

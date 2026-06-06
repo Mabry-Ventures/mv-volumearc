@@ -6,20 +6,25 @@ public struct RootDashboardView: View {
     @ObservedObject private var navigation: DashboardNavigationModel
     @ObservedObject private var model: WorkoutDashboardModel
     @StateObject private var toastPresenter = VAToastPresenter()
+    @AppStorage(VolumeArcAppearancePreference.storageKey)
+    private var appearancePreferenceRawValue = VolumeArcAppearancePreference.system.rawValue
 
     /// VOL-176: App-layer feedback submission hook. Propagated to the
-    /// Profile tab so it can present the feedback sheet and forward
-    /// the user's input to the Sentry/telemetry adapter the App
-    /// constructs in `VolumeArcAppFactories`.
+    /// Profile tab so it can present the feedback surface and forward
+    /// the user's input to the Sentry/telemetry adapter constructed by
+    /// `VolumeArcApp`.
     private let onSendFeedback: ((FeedbackBundle.Category, String) -> Void)?
+    private let onRequestNotifications: (() async -> Bool)?
 
     public init(
         navigation: DashboardNavigationModel,
         model: WorkoutDashboardModel,
+        onRequestNotifications: (() async -> Bool)? = nil,
         onSendFeedback: ((FeedbackBundle.Category, String) -> Void)? = nil
     ) {
         self.navigation = navigation
         self.model = model
+        self.onRequestNotifications = onRequestNotifications
         self.onSendFeedback = onSendFeedback
     }
 
@@ -36,7 +41,7 @@ public struct RootDashboardView: View {
             .accessibilityIdentifier("tab.today")
 
             NavigationStack {
-                WorkoutsView(model: model)
+                WorkoutsView(model: model, navigation: navigation)
             }
             .tabItem {
                 Label(DashboardTab.workouts.title, systemImage: DashboardTab.workouts.systemImage)
@@ -66,7 +71,11 @@ public struct RootDashboardView: View {
             .accessibilityIdentifier("tab.signals")
 
             NavigationStack {
-                ProfileView(model: model, onSendFeedback: onSendFeedback)
+                ProfileView(
+                    model: model,
+                    onRequestNotifications: onRequestNotifications,
+                    onSendFeedback: onSendFeedback
+                )
             }
             .tabItem {
                 Label(DashboardTab.profile.title, systemImage: DashboardTab.profile.systemImage)
@@ -76,6 +85,7 @@ public struct RootDashboardView: View {
             .accessibilityIdentifier("tab.profile")
         }
         .tint(VA.Colors.primary)
+        .preferredColorScheme(appearancePreference.preferredColorScheme)
         .accessibilityIdentifier("root.dashboard")
         .environmentObject(toastPresenter)
         .vaToastOverlay(toastPresenter)
@@ -84,6 +94,7 @@ public struct RootDashboardView: View {
             let shouldOpenWorkoutsOnLaunch = Self.shouldOpenWorkoutsOnLaunch
             let shouldOpenCoachOnLaunch = Self.shouldOpenCoachOnLaunch
             let shouldOpenSignalsOnLaunch = Self.shouldOpenSignalsOnLaunch
+            let shouldSeedCoachWorkoutHandoff = Self.shouldSeedCoachWorkoutHandoffOnLaunch
             if shouldOpenProfileOnLaunch {
                 navigation.openProfile()
             }
@@ -98,6 +109,9 @@ public struct RootDashboardView: View {
             }
 
             await model.refresh()
+            if shouldSeedCoachWorkoutHandoff {
+                model.coachMessages = Self.seededCoachWorkoutHandoffMessages
+            }
             navigation.showOnboarding = model.hasLoadedInitialData && !model.isOnboardingComplete
             // XCUITest affordance: open the Profile surface directly so
             // tests that target Profile-only rows do not depend on
@@ -154,6 +168,17 @@ public struct RootDashboardView: View {
                 // `-SimulatePermissionPrompts 1` do.
                 onRequestHealthAuthorization: {
                     await model.requestHealthKitAuthorization()
+                },
+                onRequestNotificationAuthorization: onRequestNotifications,
+                onConnectAppleAccount: { account in
+                    await model.connectAppleAccount(
+                        userID: account.userID,
+                        displayName: account.displayName,
+                        email: account.email
+                    )
+                },
+                onResumeFromSavedProgress: { stepRaw in
+                    model.recordOnboardingResumed(stepRaw: stepRaw)
                 }
             )
         }
@@ -172,10 +197,22 @@ public struct RootDashboardView: View {
         }
         .onChange(of: model.isOnboardingComplete) { _, isComplete in
             guard model.hasLoadedInitialData else { return }
+            if isComplete {
+                OnboardingProgressStore.clear()
+            }
             navigation.showOnboarding = !isComplete
         }
         .onChange(of: navigation.selectedTab) { _, _ in
             VAHaptics.selection()
+        }
+        .onChange(of: model.watchConnectivityNotice) { _, notice in
+            guard let notice else { return }
+            toastPresenter.show(VAToast(
+                kind: toastKind(for: notice.severity),
+                title: notice.title,
+                message: notice.message,
+                duration: 5
+            ))
         }
     }
 
@@ -243,6 +280,17 @@ public struct RootDashboardView: View {
         #else
         EmptyView()
         #endif
+    }
+
+    private func toastKind(for severity: TelemetrySeverity) -> VAToast.Kind {
+        switch severity {
+        case .error:
+            return .error
+        case .warning:
+            return .warning
+        case .info:
+            return .info
+        }
     }
 
     /// VOL-93: XCUITest helper — presents the paywall as soon as the
@@ -318,6 +366,86 @@ public struct RootDashboardView: View {
         let rawValue = arguments[nextIndex]
         guard rawValue.hasPrefix("-") == false else { return true }
         return rawValue != "0"
+    }
+
+    /// XCUITest helper that seeds a parseable Coach workout recommendation so
+    /// the one-tap Coach -> Workouts handoff can be exercised without live AI.
+    fileprivate static var shouldSeedCoachWorkoutHandoffOnLaunch: Bool {
+        guard VolumeArcRuntimeFlags.isDeterministicMode else { return false }
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "-SeedCoachWorkoutHandoff") else {
+            return false
+        }
+        let nextIndex = arguments.index(after: index)
+        guard nextIndex < arguments.endIndex else { return true }
+        let rawValue = arguments[nextIndex]
+        guard rawValue.hasPrefix("-") == false else { return true }
+        return rawValue != "0"
+    }
+
+    fileprivate static var seededCoachWorkoutHandoffMessages: [CoachMessage] {
+        [
+            CoachMessage(
+                sender: .user,
+                content: String(
+                    localized: "Build me a light workout I can start now.",
+                    comment: "Seeded user message for Coach workout handoff UI tests"
+                )
+            ),
+            CoachMessage(
+                sender: .coach,
+                content: String(
+                    localized: """
+                    Keep this light and focused on clean movement.
+
+                    - Dumbbell rows: 3 sets of 10 reps
+                    - Light lunges: 3 sets of 10 reps
+                    - Light planks: 3 sets of 30 seconds
+                    """,
+                    comment: "Seeded parseable Coach workout recommendation for UI tests"
+                )
+            ),
+        ]
+    }
+
+    private var appearancePreference: VolumeArcAppearancePreference {
+        VolumeArcAppearancePreference(rawValue: appearancePreferenceRawValue) ?? .system
+    }
+}
+
+public enum VolumeArcAppearancePreference: String, CaseIterable, Identifiable, Sendable {
+    case system
+    case light
+    case dark
+    case warm
+
+    public static let storageKey = "volumearc.appearancePreference"
+    public static let userSelectableCases: [VolumeArcAppearancePreference] = [.system, .light, .dark]
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .system:
+            return String(localized: "System", comment: "Appearance preference option")
+        case .light:
+            return String(localized: "Light", comment: "Appearance preference option")
+        case .dark:
+            return String(localized: "Dark", comment: "Appearance preference option")
+        case .warm:
+            return String(localized: "Warm", comment: "Appearance preference option")
+        }
+    }
+
+    var preferredColorScheme: ColorScheme? {
+        switch self {
+        case .system:
+            return nil
+        case .light, .warm:
+            return .light
+        case .dark:
+            return .dark
+        }
     }
 }
 #endif
