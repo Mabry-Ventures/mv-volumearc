@@ -909,6 +909,56 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         })
     }
 
+    func testActiveSessionExerciseSelectionPreservesPerExerciseSetProgress() async throws {
+        let activeSessionStateStore = InMemoryActiveWorkoutSessionStateStore()
+        let model = makeDashboardModel(activeSessionStateStore: activeSessionStateStore)
+        let plan = WorkoutSessionPlan(
+            title: "Busy gym upper",
+            exercises: [
+                WeeklyWorkoutExercise(
+                    name: "Bench Press",
+                    sets: 3,
+                    reps: 5,
+                    weight: 185,
+                    targetRPE: 8,
+                    restSeconds: 150
+                ),
+                WeeklyWorkoutExercise(
+                    name: "Barbell Row",
+                    sets: 3,
+                    reps: 8,
+                    weight: 135,
+                    targetRPE: 7,
+                    restSeconds: 120
+                ),
+            ]
+        )
+
+        await model.startWorkoutSession(plan: plan)
+        let workoutID = try XCTUnwrap(model.activeWorkoutID)
+
+        await model.logRecommendedSet()
+        XCTAssertEqual(model.activeSessionExercise?.name, "Bench Press")
+        XCTAssertEqual(model.loggedSetCountForActiveExercise, 1)
+
+        model.moveActiveSession(toExerciseAt: 1)
+        await model.logRecommendedSet()
+        XCTAssertEqual(model.activeSessionExercise?.name, "Barbell Row")
+        XCTAssertEqual(model.loggedSetCountForActiveExercise, 1)
+
+        model.moveActiveSession(toExerciseAt: 0)
+        XCTAssertEqual(model.activeSessionExercise?.name, "Bench Press")
+        XCTAssertEqual(model.loggedSetCountForActiveExercise, 1)
+
+        model.moveActiveSession(toExerciseAt: 1)
+        XCTAssertEqual(model.activeSessionExercise?.name, "Barbell Row")
+        XCTAssertEqual(model.loggedSetCountForActiveExercise, 1)
+        XCTAssertEqual(
+            activeSessionStateStore.load(workoutID: workoutID)?.loggedSetCountsByExerciseIndex,
+            [0: 1, 1: 1]
+        )
+    }
+
     func testRefreshRehydratesActiveSessionPlanAfterCrashSimulation() async throws {
         let activeSessionStateStore = InMemoryActiveWorkoutSessionStateStore()
         let plan = WorkoutSessionPlan(

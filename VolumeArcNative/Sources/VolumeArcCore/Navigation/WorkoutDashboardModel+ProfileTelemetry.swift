@@ -1,4 +1,4 @@
-#if canImport(SwiftUI)
+#if canImport(Combine)
 
 extension WorkoutDashboardModel {
     func recordProfilePreferenceTelemetry(

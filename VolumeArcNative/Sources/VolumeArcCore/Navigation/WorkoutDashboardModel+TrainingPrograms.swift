@@ -1,4 +1,4 @@
-#if canImport(SwiftUI)
+#if canImport(Combine)
 import Foundation
 
 extension WorkoutDashboardModel {
@@ -68,7 +68,8 @@ extension WorkoutDashboardModel {
                 message: "Co-designed workout scheduled for tomorrow.",
                 metadata: [
                     "dayOfWeek": "\(dayOfWeek)",
-                    "title": title,
+                    "title_present": title.isEmpty ? "false" : "true",
+                    "title_length_bucket": coDesignedTitleLengthBucket(title),
                     "exerciseCount": "\(plan.exercises.count)",
                     "source": source,
                 ]
@@ -76,7 +77,7 @@ extension WorkoutDashboardModel {
             await refresh()
             return true
         } catch {
-            recordCoDesignedPlanScheduleFailure(title: title, reason: error.localizedDescription)
+            recordCoDesignedPlanScheduleFailure(title: title, reason: String(describing: type(of: error)))
             return false
         }
         #else
@@ -136,10 +137,24 @@ extension WorkoutDashboardModel {
             severity: .warning,
             message: "Failed to schedule co-designed workout.",
             metadata: [
-                "title": normalizedCoDesignedWorkoutTitle(title),
-                "reason": reason,
+                "title_present": title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "false" : "true",
+                "title_length_bucket": coDesignedTitleLengthBucket(title),
+                "error_type": reason,
             ]
         ))
+    }
+
+    private func coDesignedTitleLengthBucket(_ title: String) -> String {
+        switch normalizedCoDesignedWorkoutTitle(title).count {
+        case 0:
+            return "0"
+        case 1...20:
+            return "1-20"
+        case 21...80:
+            return "21-80"
+        default:
+            return ">80"
+        }
     }
 }
 #endif

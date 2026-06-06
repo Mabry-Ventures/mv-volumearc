@@ -125,7 +125,8 @@ public enum CoachSafetyFilter {
     }
 
     public static func medicalRedFlagResponse(prompt: String, context: String) -> String? {
-        medicalRedFlagResponse(from: [prompt, context].joined(separator: "\n"))
+        _ = context
+        return medicalRedFlagResponse(from: prompt)
     }
 
     public static func medicalRedFlagResponse(from text: String) -> String? {

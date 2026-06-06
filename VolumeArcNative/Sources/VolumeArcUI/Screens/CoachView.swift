@@ -215,8 +215,8 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
                     Image(systemName: "figure.strengthtraining.traditional")
                         .font(VA.Typography.title2)
                         .foregroundStyle(VA.Colors.primary)
-                        .frame(width: 44, height: 44)
-                        .background(VA.Colors.primary.opacity(0.12), in: Circle())
+                        .frame(width: VA.Space.avatar, height: VA.Space.avatar)
+                        .background(VA.Colors.primary.opacity(VA.Opacity.subtleFill), in: Circle())
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: VA.Space.xs) {
                         Text(String(localized: "Start this workout", comment: "Coach workout handoff card title"))
@@ -231,8 +231,10 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
                 }
 
                 VAButton(
-                    String(localized: "Start Workout", comment: "Coach response handoff start workout button"),
-                    icon: "play.fill",
+                    model.isSessionActive
+                        ? String(localized: "Open Active Workout", comment: "Coach handoff button when a workout is already active")
+                        : String(localized: "Start Workout", comment: "Coach response handoff start workout button"),
+                    icon: model.isSessionActive ? "arrow.forward.circle.fill" : "play.fill",
                     style: .primary,
                     accessibilityIdentifier: "coach.startRecommendedWorkout"
                 ) {
@@ -251,8 +253,8 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
                 Image(systemName: "figure.strengthtraining.traditional")
                     .font(VA.Typography.headline)
                     .foregroundStyle(VA.Colors.primary)
-                    .frame(width: 34, height: 34)
-                    .background(VA.Colors.primary.opacity(0.12), in: Circle())
+                    .frame(width: VA.Space.xxl, height: VA.Space.xxl)
+                    .background(VA.Colors.primary.opacity(VA.Opacity.subtleFill), in: Circle())
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: VA.Space.xxs) {
@@ -272,14 +274,16 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
                     startCoachRecommendedWorkout(plan)
                 } label: {
                     Label(
-                        String(localized: "Start", comment: "Pinned Coach workout handoff start button"),
-                        systemImage: "play.fill"
+                        model.isSessionActive
+                            ? String(localized: "Open", comment: "Pinned Coach workout handoff open active workout button")
+                            : String(localized: "Start", comment: "Pinned Coach workout handoff start button"),
+                        systemImage: model.isSessionActive ? "arrow.forward.circle.fill" : "play.fill"
                     )
                     .font(VA.Typography.button)
                     .foregroundStyle(VA.Colors.textOnPrimary)
                     .lineLimit(1)
                     .padding(.horizontal, VA.Space.md)
-                    .frame(minHeight: 38)
+                    .frame(minHeight: VA.Space.cameraChromeControl)
                     .background(VA.Colors.primary, in: Capsule())
                 }
                 .buttonStyle(.plain)
@@ -312,8 +316,8 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
                     } label: {
                         Label {
                             Text(suggestion.title)
-                                .font(VA.Typography.footnote)
-                                .lineLimit(1)
+                        .font(VA.Typography.footnote)
+                        .lineLimit(1)
                         } icon: {
                             Image(systemName: suggestion.systemImage)
                                 .font(VA.Typography.caption)
@@ -321,7 +325,7 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
                         }
                         .foregroundStyle(VA.Colors.textOnPrimary)
                         .padding(.horizontal, VA.Space.md)
-                        .frame(height: 36)
+                        .frame(height: VA.Space.xxl)
                         .background(VA.Colors.primary, in: Capsule())
                         .overlay {
                             Capsule()
@@ -435,8 +439,13 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
                     Image(systemName: model.isVoiceTurnActive ? "waveform" : "mic.fill")
                         .font(VA.Typography.button)
                         .foregroundStyle(canStartVoice ? VA.Colors.primary : VA.Colors.textTertiary)
-                        .frame(width: 36, height: 36)
-                        .background(VA.Colors.primary.opacity(canStartVoice ? 0.14 : 0.06), in: Circle())
+                        .frame(width: VA.Space.xxl, height: VA.Space.xxl)
+                        .background(
+                            VA.Colors.primary.opacity(
+                                canStartVoice ? VA.Opacity.iconPanelAccent : VA.Opacity.subtleSeparator
+                            ),
+                            in: Circle()
+                        )
                 }
                 .disabled(!canStartVoice)
                 .buttonStyle(.plain)
@@ -445,7 +454,7 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
                     comment: "Coach composer voice button accessibility label"
                 ))
                 .accessibilityHint(String(
-                    localized: "Sends the current dictated prompt through voice coaching.",
+                    localized: "Starts a quick voice coach check or sends the current prompt.",
                     comment: "Coach composer voice button accessibility hint"
                 ))
                 .accessibilityIdentifier("coach.voice")
@@ -456,8 +465,11 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
                     Image(systemName: "arrow.up")
                         .font(VA.Typography.button)
                         .foregroundStyle(canSend ? VA.Colors.textOnPrimary : VA.Colors.textTertiary)
-                        .frame(width: 36, height: 36)
-                        .background(canSend ? VA.Colors.primary : VA.Colors.textTertiary.opacity(0.12), in: Circle())
+                        .frame(width: VA.Space.xxl, height: VA.Space.xxl)
+                        .background(
+                            canSend ? VA.Colors.primary : VA.Colors.textTertiary.opacity(VA.Opacity.subtleFill),
+                            in: Circle()
+                        )
                 }
                 .disabled(!canSend)
                 .buttonStyle(.plain)
@@ -503,8 +515,7 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
     }
 
     private var canStartVoice: Bool {
-        !voicePromptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !model.isCoachStreaming
+        !model.isCoachStreaming
             && !model.isVoiceTurnActive
     }
 
@@ -517,7 +528,10 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
            let fixture = VolumeArcRuntimeFlags.voicePromptTranscriptFixture {
             return fixture
         }
-        return ""
+        return String(
+            localized: "Give me a quick coach check for this session.",
+            comment: "Default voice coach prompt used when the composer is empty"
+        )
     }
 
     private func coachWorkoutPlan(from response: String) -> WorkoutSessionPlan? {
@@ -586,6 +600,10 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
         Task {
             VAHaptics.sessionStart()
             dismissKeyboard()
+            guard !model.isSessionActive else {
+                navigation.selectedTab = .workouts
+                return
+            }
             await model.startWorkoutSession(title: plan.title, plan: plan)
             navigation.selectedTab = .workouts
         }

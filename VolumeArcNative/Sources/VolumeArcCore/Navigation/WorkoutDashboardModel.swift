@@ -1,7 +1,7 @@
 // swiftlint:disable file_length
-#if canImport(SwiftUI)
+#if canImport(Combine)
+import Combine
 import Foundation
-import SwiftUI
 #if canImport(SwiftData)
 import SwiftData
 #endif
@@ -62,6 +62,7 @@ public final class WorkoutDashboardModel: ObservableObject {
     @Published public private(set) var activeSessionPlan: WorkoutSessionPlan?
     @Published public private(set) var activeSessionExerciseIndex: Int = 0
     @Published public private(set) var loggedSetCountForActiveExercise: Int = 0
+    private var loggedSetCountsByExerciseIndex: [Int: Int] = [:]
 
     @Published public var startupNotice: String?
     @Published public var startupNoticeSeverity: TelemetrySeverity?
@@ -421,6 +422,9 @@ public final class WorkoutDashboardModel: ObservableObject {
         activeSessionPlan = state.activeSessionPlan
         activeSessionExerciseIndex = state.activeSessionExerciseIndex
         loggedSetCountForActiveExercise = state.loggedSetCountForActiveExercise
+        if state.activeSessionPlan?.exercises.indices.contains(state.activeSessionExerciseIndex) == true {
+            loggedSetCountsByExerciseIndex[state.activeSessionExerciseIndex] = state.loggedSetCountForActiveExercise
+        }
         isOnboardingComplete = state.isOnboardingComplete
         isNetworkReachable = state.isNetworkReachable
         isHealthAuthorized = state.isHealthAuthorized
@@ -563,13 +567,18 @@ public final class WorkoutDashboardModel: ObservableObject {
         if !trimmedPlanTitle.isEmpty {
             return trimmedPlanTitle
         }
-        return nextWorkout?.title ?? "Strength Session"
+        if let nextWorkoutTitle = nextWorkout?.title.trimmingCharacters(in: .whitespacesAndNewlines),
+           !nextWorkoutTitle.isEmpty {
+            return nextWorkoutTitle
+        }
+        return String(localized: "Strength Session", comment: "Fallback workout session title")
     }
 
     private func clearActiveSessionPlan() {
         activeSessionPlan = nil
         activeSessionExerciseIndex = 0
         loggedSetCountForActiveExercise = 0
+        loggedSetCountsByExerciseIndex = [:]
     }
 
     private func clearActiveSessionPlan(persistedWorkoutID: String?) {
@@ -589,7 +598,11 @@ public final class WorkoutDashboardModel: ObservableObject {
             workoutID: activeWorkoutID,
             plan: activeSessionPlan,
             activeExerciseIndex: activeSessionExerciseIndex,
-            loggedSetCountForActiveExercise: loggedSetCountForActiveExercise
+            loggedSetCountForActiveExercise: loggedSetCountForActiveExercise,
+            loggedSetCountsByExerciseIndex: normalizedLoggedSetCounts(
+                loggedSetCountsByExerciseIndex,
+                plan: activeSessionPlan
+            )
         ))
     }
 
@@ -602,13 +615,21 @@ public final class WorkoutDashboardModel: ObservableObject {
         }
 
         activeSessionPlan = state.plan
+        loggedSetCountsByExerciseIndex = normalizedLoggedSetCounts(
+            state.loggedSetCountsByExerciseIndex,
+            plan: state.plan
+        )
+        if loggedSetCountsByExerciseIndex.isEmpty, state.loggedSetCountForActiveExercise > 0 {
+            loggedSetCountsByExerciseIndex[state.activeExerciseIndex] = state.loggedSetCountForActiveExercise
+        }
         let maxIndex = max(0, state.plan.exercises.count - 1)
         activeSessionExerciseIndex = min(max(0, state.activeExerciseIndex), maxIndex)
         let activeSetCount = state.plan.exercise(at: activeSessionExerciseIndex).map { max(1, $0.sets) } ?? 1
         loggedSetCountForActiveExercise = min(
-            max(0, state.loggedSetCountForActiveExercise),
+            max(0, loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] ?? state.loggedSetCountForActiveExercise),
             activeSetCount
         )
+        loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] = loggedSetCountForActiveExercise
     }
 
     private func advanceActiveSessionPlanAfterLoggedSet() {
@@ -618,13 +639,60 @@ public final class WorkoutDashboardModel: ObservableObject {
 
         let targetSets = max(1, activeSessionPlan.exercises[activeSessionExerciseIndex].sets)
         loggedSetCountForActiveExercise += 1
+        loggedSetCountForActiveExercise = min(loggedSetCountForActiveExercise, targetSets)
+        loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] = loggedSetCountForActiveExercise
         guard loggedSetCountForActiveExercise >= targetSets else { return }
 
         if activeSessionExerciseIndex < activeSessionPlan.exercises.count - 1 {
             activeSessionExerciseIndex += 1
-            loggedSetCountForActiveExercise = 0
+            loggedSetCountForActiveExercise = min(
+                loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] ?? 0,
+                max(1, activeSessionPlan.exercises[activeSessionExerciseIndex].sets)
+            )
         } else {
             loggedSetCountForActiveExercise = targetSets
+            loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] = targetSets
+        }
+    }
+
+    private func normalizedLoggedSetCounts(
+        _ counts: [Int: Int],
+        plan: WorkoutSessionPlan
+    ) -> [Int: Int] {
+        counts.reduce(into: [Int: Int]()) { result, entry in
+            guard plan.exercises.indices.contains(entry.key) else { return }
+            let targetSets = max(1, plan.exercises[entry.key].sets)
+            result[entry.key] = min(max(0, entry.value), targetSets)
+        }
+    }
+
+    private func shiftLoggedSetCountsAfterDeferringCurrentExercise(
+        _ counts: [Int: Int],
+        from deferredIndex: Int,
+        exerciseCount: Int
+    ) -> [Int: Int] {
+        counts.reduce(into: [Int: Int]()) { result, entry in
+            guard entry.key >= 0, entry.key < exerciseCount else { return }
+            if entry.key == deferredIndex {
+                result[exerciseCount - 1] = entry.value
+            } else if entry.key > deferredIndex {
+                result[entry.key - 1] = entry.value
+            } else {
+                result[entry.key] = entry.value
+            }
+        }
+    }
+
+    private static func lengthBucket(for value: String) -> String {
+        switch value.count {
+        case 0:
+            return "0"
+        case 1...20:
+            return "1-20"
+        case 21...100:
+            return "21-100"
+        default:
+            return ">100"
         }
     }
 
@@ -655,6 +723,16 @@ public final class WorkoutDashboardModel: ObservableObject {
     public func startWorkoutSession(title overrideTitle: String? = nil, plan: WorkoutSessionPlan? = nil) async {
         #if canImport(SwiftData)
         guard let workoutRepository else { return }
+        guard !isSessionActive else {
+            telemetrySink.record(TelemetryEvent(
+                category: "workout",
+                name: "session_start_blocked_active",
+                severity: .warning,
+                message: "Prevented starting a second workout while one is active.",
+                metadata: ["active_workout_present": activeWorkoutID == nil ? "false" : "true"]
+            ))
+            return
+        }
         do {
             let resolvedPlan = activeSessionPlanCandidate(from: plan)
             let title = workoutTitle(overrideTitle: overrideTitle, plan: resolvedPlan)
@@ -666,6 +744,7 @@ public final class WorkoutDashboardModel: ObservableObject {
             self.activeSessionPlan = resolvedPlan
             self.activeSessionExerciseIndex = 0
             self.loggedSetCountForActiveExercise = 0
+            self.loggedSetCountsByExerciseIndex = [:]
             persistActiveSessionStateIfNeeded()
 
             publishWidgetSnapshot()
@@ -674,14 +753,19 @@ public final class WorkoutDashboardModel: ObservableObject {
                 category: "workout",
                 name: "session_started",
                 severity: .info,
-                message: "Started session: \(title)"
+                message: "Started workout session.",
+                metadata: [
+                    "title_present": title.isEmpty ? "false" : "true",
+                    "title_length_bucket": Self.lengthBucket(for: title)
+                ]
             ))
         } catch {
             telemetrySink.record(TelemetryEvent(
                 category: "workout",
                 name: "session_start_failed",
                 severity: .error,
-                message: error.localizedDescription
+                message: "Workout session failed to start.",
+                metadata: ["error_type": String(describing: type(of: error))]
             ))
         }
         #endif
@@ -701,13 +785,14 @@ public final class WorkoutDashboardModel: ObservableObject {
             exercises: exercises
         )
         self.loggedSetCountForActiveExercise = 0
+        self.loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] = 0
         persistActiveSessionStateIfNeeded()
         telemetrySink.record(TelemetryEvent(
             category: "workout",
             name: "exercise_replaced",
             severity: .info,
-            message: "Replaced current exercise with \(replacement.name).",
-            metadata: ["exercise": replacement.name]
+            message: "Replaced current exercise.",
+            metadata: ["exercise_id": Self.exerciseIdentifier(named: replacement.name)]
         ))
         publishWidgetSnapshot()
     }
@@ -730,17 +815,25 @@ public final class WorkoutDashboardModel: ObservableObject {
             targetRPE: activeSessionPlan.targetRPE,
             exercises: exercises
         )
-        self.loggedSetCountForActiveExercise = 0
+        self.loggedSetCountsByExerciseIndex = shiftLoggedSetCountsAfterDeferringCurrentExercise(
+            loggedSetCountsByExerciseIndex,
+            from: activeSessionExerciseIndex,
+            exerciseCount: exercises.count
+        )
+        self.loggedSetCountForActiveExercise = min(
+            loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] ?? 0,
+            max(1, exercises[activeSessionExerciseIndex].sets)
+        )
         persistActiveSessionStateIfNeeded()
         let nextExercise = exercises[activeSessionExerciseIndex]
         telemetrySink.record(TelemetryEvent(
             category: "workout",
             name: "exercise_deferred",
             severity: .info,
-            message: "Deferred \(deferredExercise.name) and loaded \(nextExercise.name).",
+            message: "Deferred current exercise and loaded the next exercise.",
             metadata: [
-                "deferred_exercise": deferredExercise.name,
-                "next_exercise": nextExercise.name,
+                "deferred_exercise_id": Self.exerciseIdentifier(named: deferredExercise.name),
+                "next_exercise_id": Self.exerciseIdentifier(named: nextExercise.name),
             ]
         ))
         publishWidgetSnapshot()
@@ -756,16 +849,19 @@ public final class WorkoutDashboardModel: ObservableObject {
         let previousExercise = activeSessionPlan.exercises[activeSessionExerciseIndex]
         let nextExercise = activeSessionPlan.exercises[index]
         activeSessionExerciseIndex = index
-        loggedSetCountForActiveExercise = 0
+        loggedSetCountForActiveExercise = min(
+            loggedSetCountsByExerciseIndex[index] ?? 0,
+            max(1, nextExercise.sets)
+        )
         persistActiveSessionStateIfNeeded()
         telemetrySink.record(TelemetryEvent(
             category: "workout",
             name: "exercise_selected",
             severity: .info,
-            message: "Moved active session from \(previousExercise.name) to \(nextExercise.name).",
+            message: "Moved active session to another exercise.",
             metadata: [
-                "from_exercise": previousExercise.name,
-                "to_exercise": nextExercise.name,
+                "from_exercise_id": Self.exerciseIdentifier(named: previousExercise.name),
+                "to_exercise_id": Self.exerciseIdentifier(named: nextExercise.name),
             ]
         ))
         publishWidgetSnapshot()
@@ -778,18 +874,23 @@ public final class WorkoutDashboardModel: ObservableObject {
 
         let skippedExercise = activeSessionPlan.exercises[activeSessionExerciseIndex]
         if activeSessionExerciseIndex < activeSessionPlan.exercises.count - 1 {
+            loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] = max(1, skippedExercise.sets)
             activeSessionExerciseIndex += 1
-            loggedSetCountForActiveExercise = 0
+            loggedSetCountForActiveExercise = min(
+                loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] ?? 0,
+                max(1, activeSessionPlan.exercises[activeSessionExerciseIndex].sets)
+            )
         } else {
             loggedSetCountForActiveExercise = max(1, skippedExercise.sets)
+            loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] = loggedSetCountForActiveExercise
         }
         persistActiveSessionStateIfNeeded()
         telemetrySink.record(TelemetryEvent(
             category: "workout",
             name: "exercise_skipped",
             severity: .info,
-            message: "Skipped \(skippedExercise.name) during an active session.",
-            metadata: ["exercise": skippedExercise.name]
+            message: "Skipped exercise during an active session.",
+            metadata: ["exercise_id": Self.exerciseIdentifier(named: skippedExercise.name)]
         ))
         publishWidgetSnapshot()
     }

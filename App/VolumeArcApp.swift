@@ -640,13 +640,14 @@ struct VolumeArcApp: App {
             .queryItems?
             .first(where: { $0.name == "source" })?
             .value ?? "notification"
+        let safeSource = Self.telemetrySourceName(from: source)
         let destinationName = telemetryDestinationName(for: destination)
         telemetrySink.record(TelemetryEvent(
             category: "notification",
             name: "tapped",
             severity: .info,
             message: "Notification opened VolumeArc to \(destinationName).",
-            metadata: ["destination": destinationName, "source": source]
+            metadata: ["destination": destinationName, "source": safeSource]
         ))
     }
 
@@ -658,14 +659,25 @@ struct VolumeArcApp: App {
             .queryItems?
             .first(where: { $0.name == "source" })?
             .value ?? "unknown"
+        let safeSource = Self.telemetrySourceName(from: source)
         let destinationName = telemetryDestinationName(for: destination)
         telemetrySink.record(TelemetryEvent(
             category: "deeplink",
             name: "received",
             severity: .info,
             message: "Deep link received for \(destinationName).",
-            metadata: ["destination": destinationName, "source": source]
+            metadata: ["destination": destinationName, "source": safeSource]
         ))
+    }
+
+    private static func telemetrySourceName(from rawValue: String) -> String {
+        let normalized = rawValue
+            .lowercased()
+            .filter { character in
+                character.isLetter || character.isNumber || character == "_" || character == "-"
+            }
+        guard !normalized.isEmpty else { return "unknown" }
+        return String(normalized.prefix(40))
     }
 
     private func recordIntentTelemetryIfPresent(in url: URL) {
@@ -680,12 +692,13 @@ struct VolumeArcApp: App {
            let queryItems = components.queryItems,
            queryItems.first(where: { $0.name == "source" })?.value == "intent",
            let intentName = queryItems.first(where: { $0.name == "intent" })?.value {
+            let safeIntentName = Self.telemetrySourceName(from: intentName)
             telemetrySink.record(TelemetryEvent(
                 category: "intent",
-                name: "\(intentName).invoked",
+                name: "\(safeIntentName).invoked",
                 severity: .info,
-                message: "App Intent \(intentName) invoked via deep link.",
-                metadata: ["intent": intentName]
+                message: "App Intent invoked via deep link.",
+                metadata: ["intent": safeIntentName]
             ))
         }
     }

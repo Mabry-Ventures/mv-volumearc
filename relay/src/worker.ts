@@ -410,17 +410,28 @@ function coachSafetyResponse(body: CoachRequestBody): string | null {
 
 function coachSafetyScanText(body: CoachRequestBody): string {
   const history = (body.messages ?? [])
+    .filter((message) => message.role === "user")
     .map((message) => message.content)
     .filter((value) => value.trim().length > 0);
   return [
-    body.system,
-    body.prompt,
     body.question,
-    body.contextBlock,
+    renderedAthleteQuestion(body.prompt),
     ...history,
   ]
     .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
     .join("\n");
+}
+
+function renderedAthleteQuestion(prompt: string | undefined): string | undefined {
+  if (!prompt?.trim()) {
+    return undefined;
+  }
+  const marker = "## Athlete question";
+  const markerIndex = prompt.indexOf(marker);
+  if (markerIndex < 0) {
+    return prompt.includes("## System") ? undefined : prompt;
+  }
+  return prompt.slice(markerIndex + marker.length).trim();
 }
 
 function hasMedicalRedFlag(text: string): boolean {

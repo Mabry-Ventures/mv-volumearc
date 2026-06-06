@@ -163,17 +163,43 @@ public struct ActiveWorkoutSessionState: Codable, Equatable, Sendable {
     public let plan: WorkoutSessionPlan
     public let activeExerciseIndex: Int
     public let loggedSetCountForActiveExercise: Int
+    public let loggedSetCountsByExerciseIndex: [Int: Int]
 
     public init(
         workoutID: String,
         plan: WorkoutSessionPlan,
         activeExerciseIndex: Int,
-        loggedSetCountForActiveExercise: Int
+        loggedSetCountForActiveExercise: Int,
+        loggedSetCountsByExerciseIndex: [Int: Int] = [:]
     ) {
         self.workoutID = workoutID
         self.plan = plan
         self.activeExerciseIndex = activeExerciseIndex
         self.loggedSetCountForActiveExercise = loggedSetCountForActiveExercise
+        self.loggedSetCountsByExerciseIndex = loggedSetCountsByExerciseIndex
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case workoutID
+        case plan
+        case activeExerciseIndex
+        case loggedSetCountForActiveExercise
+        case loggedSetCountsByExerciseIndex
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        workoutID = try container.decode(String.self, forKey: .workoutID)
+        plan = try container.decode(WorkoutSessionPlan.self, forKey: .plan)
+        activeExerciseIndex = try container.decode(Int.self, forKey: .activeExerciseIndex)
+        loggedSetCountForActiveExercise = try container.decode(
+            Int.self,
+            forKey: .loggedSetCountForActiveExercise
+        )
+        loggedSetCountsByExerciseIndex = try container.decodeIfPresent(
+            [Int: Int].self,
+            forKey: .loggedSetCountsByExerciseIndex
+        ) ?? [:]
     }
 }
 
@@ -310,7 +336,8 @@ public struct WorkoutSessionProfilePreferences: Codable, Equatable, Sendable {
         }
 
         let trainingWeekday = WeeklyWorkout.trainingWeekday(for: date, calendar: calendar)
-        if legDayRuleEnabled, trainingWeekday == 2 || trainingWeekday == 5 {
+        let isLegDayWeekday = trainingWeekday == 2 || trainingWeekday == 5
+        if legDayRuleEnabled, isLegDayWeekday {
             return .legDay
         }
 
