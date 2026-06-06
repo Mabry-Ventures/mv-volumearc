@@ -297,7 +297,7 @@ struct ChaosSlowStreamingCoachProvider: AICoachProvider {
     }
 }
 
-struct FoundationModelsUnavailableChaosCoachProvider: AICoachProvider {
+struct FMUnavailableChaosCoachProvider: AICoachProvider {
     private let fallback: AICoachProvider
     private let telemetrySink: (any TelemetrySink)?
     private let fallbackPath: String

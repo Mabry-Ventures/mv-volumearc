@@ -121,7 +121,10 @@ struct TodayOverviewMetrics: View {
         }
 
         return String(
-            localized: "Grant Health to unlock readiness. Connect Apple Health to bring recovery, sleep, and training history into today's prescription.",
+            localized: """
+            Grant Health to unlock readiness. Connect Apple Health to bring \
+            recovery, sleep, and training history into today's prescription.
+            """,
             comment: "VoiceOver label for the Today readiness fallback card"
         )
     }

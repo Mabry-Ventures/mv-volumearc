@@ -179,7 +179,7 @@ final class ActiveWorkoutLiveActivitySnapshotTests: XCTestCase {
         testName: String = #function,
         line: UInt = #line
     ) {
-        let view = ActiveWorkoutDynamicIslandExpandedPreview(snapshot: snapshot)
+        let view = ActiveWorkoutIslandPreview(snapshot: snapshot)
             .snapshotEnvironment(colorScheme: colorScheme, dynamicTypeSize: .medium)
             .frame(
                 width: Metrics.dynamicIslandExpanded.width,

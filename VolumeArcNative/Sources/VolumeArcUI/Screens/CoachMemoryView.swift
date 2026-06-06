@@ -57,7 +57,11 @@ public struct CoachMemoryView: View {
                             .font(VA.Typography.headline)
                             .foregroundStyle(VA.Colors.textPrimary)
                         Text(String(
-                            localized: "Save durable coaching context such as injury notes, lift cues, equipment constraints, or preferences that should shape future recommendations.",
+                            localized: """
+                            Save durable coaching context such as injury notes, \
+                            lift cues, equipment constraints, or preferences \
+                            that should shape future recommendations.
+                            """,
                             comment: "Coach memory explanation body"
                         ))
                         .font(VA.Typography.footnote)

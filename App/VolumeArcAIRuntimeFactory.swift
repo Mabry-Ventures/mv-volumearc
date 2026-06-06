@@ -29,83 +29,11 @@ enum VolumeArcAIRuntimeFactory {
         premiumGate?.recordIfFirst("coach_tier", isPremium: isPremium)
         let tier: CoachTier = isPremium ? .pro : .flashLite
 
-        // VOL-199: when the relay is configured, wrap the
-        // `AIRelayCoachProvider` in a `FallbackCoachProvider` that
-        // routes through to a `LocalHeuristicAICoachProvider` on
-        // transient relay failures (5xx, 401, network drop). Before
-        // this change, a relay outage produced a hard user-visible
-        // error; the docs and journey catalog promised local fallback
-        // but the implementation didn't run it. `telemetrySink` is
-        // threaded through so each fallback emits the
-        // `coach.fallback_used` event for operator visibility.
-        let relayProvider: AICoachProvider? = VolumeArcAIConfiguration.relayConfiguration.map { configuration in
-            let sessionProvider = VolumeArcAppAttestRelaySessionProvider(
-                baseURL: configuration.baseURL,
-                telemetrySink: telemetrySink
-            )
-            let direct = AIRelayCoachProvider(
-                configuration: configuration,
-                credentialsProvider: sessionProvider,
-                tier: tier
-            )
-            let retrying = RelayUnauthorizedRetryCoachProvider(
-                primary: direct,
-                sessionRefresher: sessionProvider,
-                telemetrySink: telemetrySink
-            )
-            return FallbackCoachProvider(
-                primary: retrying,
-                fallback: LocalHeuristicAICoachProvider(),
-                telemetrySink: telemetrySink
-            )
-        }
+        let relayProvider = makeRelayProvider(tier: tier, telemetrySink: telemetrySink)
 
         #if DEBUG
-        if ChaosController.injectCoachSlowStream {
-            return safetyFiltered(ChaosSlowStreamingCoachProvider())
-        }
-        if ChaosController.injectAIRelay401ThenSuccess {
-            let retryingPrimary = RelayUnauthorizedRetryCoachProvider(
-                primary: ChaosAICoach401ThenSuccessProvider(),
-                sessionRefresher: ChaosRelaySessionRefresher(),
-                telemetrySink: telemetrySink
-            )
-            return safetyFiltered(FallbackCoachProvider(
-                primary: retryingPrimary,
-                fallback: LocalHeuristicAICoachProvider(),
-                telemetrySink: telemetrySink
-            ))
-        }
-        if let aiRelayFailure = ChaosController.aiRelayFailure {
-            let chaosPrimary = ChaosAICoachProvider(failure: aiRelayFailure)
-            let primary: AICoachProvider
-            switch aiRelayFailure {
-            case .relayRequestFailed(statusCode: 401, message: _):
-                primary = RelayUnauthorizedRetryCoachProvider(
-                    primary: chaosPrimary,
-                    sessionRefresher: ChaosRelaySessionRefresher(),
-                    telemetrySink: telemetrySink
-                )
-            case .relayRequestFailed, .relayUnavailable:
-                primary = chaosPrimary
-            }
-            return safetyFiltered(FallbackCoachProvider(
-                primary: primary,
-                fallback: LocalHeuristicAICoachProvider(),
-                telemetrySink: telemetrySink
-            ))
-        }
-        if ChaosController.injectFoundationModelsUnavailable {
-            let shouldUseHermeticFallback = VolumeArcRuntimeFlags.isDeterministicMode
-                || VolumeArcRuntimeFlags.isPerformanceTestMode
-            let fallbackProvider: AICoachProvider = shouldUseHermeticFallback
-                ? LocalHeuristicAICoachProvider()
-                : (relayProvider ?? LocalHeuristicAICoachProvider())
-            return safetyFiltered(FoundationModelsUnavailableChaosCoachProvider(
-                fallback: fallbackProvider,
-                telemetrySink: telemetrySink,
-                fallbackPath: shouldUseHermeticFallback || relayProvider == nil ? "local" : "relay_or_local"
-            ))
+        if let chaosProvider = makeChaosCoachProvider(relayProvider: relayProvider, telemetrySink: telemetrySink) {
+            return safetyFiltered(chaosProvider)
         }
         #endif
 
@@ -157,6 +85,97 @@ enum VolumeArcAIRuntimeFactory {
 
         return safetyFiltered(relayProvider ?? LocalHeuristicAICoachProvider())
     }
+
+    /// VOL-199: when the relay is configured, wrap it in a fallback provider
+    /// so transient relay failures route through the local heuristic coach.
+    private static func makeRelayProvider(
+        tier: CoachTier,
+        telemetrySink: (any TelemetrySink)?
+    ) -> AICoachProvider? {
+        VolumeArcAIConfiguration.relayConfiguration.map { configuration in
+            let sessionProvider = VolumeArcAppAttestRelaySessionProvider(
+                baseURL: configuration.baseURL,
+                telemetrySink: telemetrySink
+            )
+            let direct = AIRelayCoachProvider(
+                configuration: configuration,
+                credentialsProvider: sessionProvider,
+                tier: tier
+            )
+            let retrying = RelayUnauthorizedRetryCoachProvider(
+                primary: direct,
+                sessionRefresher: sessionProvider,
+                telemetrySink: telemetrySink
+            )
+            return FallbackCoachProvider(
+                primary: retrying,
+                fallback: LocalHeuristicAICoachProvider(),
+                telemetrySink: telemetrySink
+            )
+        }
+    }
+
+    #if DEBUG
+    private static func makeChaosCoachProvider(
+        relayProvider: AICoachProvider?,
+        telemetrySink: (any TelemetrySink)?
+    ) -> AICoachProvider? {
+        if ChaosController.injectCoachSlowStream {
+            return ChaosSlowStreamingCoachProvider()
+        }
+        if ChaosController.injectAIRelay401ThenSuccess {
+            return retryingChaos401Provider(telemetrySink: telemetrySink)
+        }
+        if let aiRelayFailure = ChaosController.aiRelayFailure {
+            return failingChaosRelayProvider(aiRelayFailure, telemetrySink: telemetrySink)
+        }
+        if ChaosController.injectFoundationModelsUnavailable {
+            let hermetic = VolumeArcRuntimeFlags.isDeterministicMode || VolumeArcRuntimeFlags.isPerformanceTestMode
+            return FMUnavailableChaosCoachProvider(
+                fallback: hermetic ? LocalHeuristicAICoachProvider() : (relayProvider ?? LocalHeuristicAICoachProvider()),
+                telemetrySink: telemetrySink,
+                fallbackPath: hermetic || relayProvider == nil ? "local" : "relay_or_local"
+            )
+        }
+        return nil
+    }
+
+    private static func retryingChaos401Provider(telemetrySink: (any TelemetrySink)?) -> AICoachProvider {
+        let retryingPrimary = RelayUnauthorizedRetryCoachProvider(
+            primary: ChaosAICoach401ThenSuccessProvider(),
+            sessionRefresher: ChaosRelaySessionRefresher(),
+            telemetrySink: telemetrySink
+        )
+        return FallbackCoachProvider(
+            primary: retryingPrimary,
+            fallback: LocalHeuristicAICoachProvider(),
+            telemetrySink: telemetrySink
+        )
+    }
+
+    private static func failingChaosRelayProvider(
+        _ failure: ChaosAICoachFailure,
+        telemetrySink: (any TelemetrySink)?
+    ) -> AICoachProvider {
+        let chaosPrimary = ChaosAICoachProvider(failure: failure)
+        let primary: AICoachProvider
+        switch failure {
+        case .relayRequestFailed(statusCode: 401, message: _):
+            primary = RelayUnauthorizedRetryCoachProvider(
+                primary: chaosPrimary,
+                sessionRefresher: ChaosRelaySessionRefresher(),
+                telemetrySink: telemetrySink
+            )
+        case .relayRequestFailed, .relayUnavailable:
+            primary = chaosPrimary
+        }
+        return FallbackCoachProvider(
+            primary: primary,
+            fallback: LocalHeuristicAICoachProvider(),
+            telemetrySink: telemetrySink
+        )
+    }
+    #endif
 
     /// Build the voice-coaching orchestrator.
     ///

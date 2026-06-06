@@ -563,7 +563,7 @@ struct ActiveWorkoutDynamicIslandView {
         } compactLeading: {
             ActiveWorkoutDynamicIslandGlyphView()
         } compactTrailing: {
-            ActiveWorkoutDynamicIslandCompactTimerView(snapshot: snapshot)
+            ActiveWorkoutIslandTimerView(snapshot: snapshot)
         } minimal: {
             ActiveWorkoutDynamicIslandGlyphView()
         }
@@ -571,7 +571,7 @@ struct ActiveWorkoutDynamicIslandView {
     }
 }
 
-struct ActiveWorkoutDynamicIslandExpandedPreview: View {
+struct ActiveWorkoutIslandPreview: View {
     let snapshot: ActiveWorkoutLiveActivitySnapshot
 
     var body: some View {
@@ -639,7 +639,7 @@ private struct ActiveWorkoutDynamicIslandGlyphView: View {
     }
 }
 
-private struct ActiveWorkoutDynamicIslandCompactTimerView: View {
+private struct ActiveWorkoutIslandTimerView: View {
     let snapshot: ActiveWorkoutLiveActivitySnapshot
 
     var body: some View {

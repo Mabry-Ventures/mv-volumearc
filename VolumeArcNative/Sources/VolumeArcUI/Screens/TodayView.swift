@@ -568,10 +568,12 @@ public struct TodayView: View {
             comment: "Target line: weight × rep range @ target RPE for the next set"
         )
     }
+}
 
+private extension TodayView {
     // MARK: - Signals
 
-    private var signalsSection: some View {
+    var signalsSection: some View {
         VStack(alignment: .leading, spacing: VA.Space.md) {
             VASectionHeader(String(
                 localized: "System status",
@@ -583,7 +585,7 @@ public struct TodayView: View {
         }
     }
 
-    private func signalRow(_ signal: OperationalSignalSummary) -> some View {
+    func signalRow(_ signal: OperationalSignalSummary) -> some View {
         VACard(style: .flat) {
             HStack(spacing: VA.Space.md) {
                 Image(systemName: signalIcon(signal.severity))
@@ -602,7 +604,7 @@ public struct TodayView: View {
         }
     }
 
-    private func signalIcon(_ severity: TelemetrySeverity) -> String {
+    func signalIcon(_ severity: TelemetrySeverity) -> String {
         switch severity {
         case .info: return "info.circle.fill"
         case .warning: return "exclamationmark.triangle.fill"
@@ -610,16 +612,16 @@ public struct TodayView: View {
         }
     }
 
-    private func signalColor(_ severity: TelemetrySeverity) -> Color {
+    func signalColor(_ severity: TelemetrySeverity) -> Color {
         switch severity {
         case .info: return VA.Colors.info
         case .warning: return VA.Colors.warning
         case .error: return VA.Colors.error
         }
     }
-}
 
-private extension TodayView {
+    // MARK: - Recent session display
+
     func sessionTitle(for session: RecentSession) -> String {
         if session.isExternalHealthSession, let title = session.title, !title.isEmpty {
             return title
