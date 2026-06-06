@@ -1719,28 +1719,32 @@ extension WorkoutDashboardModel {
 
     private func streamCoachResponse(prompt: String, context: String, streamingID: UUID) async throws -> String {
         var accumulated = ""
+        accumulated.reserveCapacity(4_096)
+        var accumulatedCharacterCount = 0
         var didRecordFirstToken = false
         var lastPublishedCharacterCount = 0
         let publishCharacterStride = 16
         let stream = aiProvider.streamCoachResponse(for: prompt, context: context)
         for try await chunk in stream {
             accumulated += chunk
+            // Avoid calling String.count on the full accumulated response for every streamed chunk.
+            accumulatedCharacterCount += chunk.count
 
             if !didRecordFirstToken,
                !accumulated.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 didRecordFirstToken = true
                 recordCoachFirstToken()
                 replaceCoachMessage(id: streamingID, content: accumulated)
-                lastPublishedCharacterCount = accumulated.count
+                lastPublishedCharacterCount = accumulatedCharacterCount
                 continue
             }
 
-            if accumulated.count - lastPublishedCharacterCount >= publishCharacterStride {
+            if accumulatedCharacterCount - lastPublishedCharacterCount >= publishCharacterStride {
                 replaceCoachMessage(id: streamingID, content: accumulated)
-                lastPublishedCharacterCount = accumulated.count
+                lastPublishedCharacterCount = accumulatedCharacterCount
             }
         }
-        if accumulated.count != lastPublishedCharacterCount {
+        if accumulatedCharacterCount != lastPublishedCharacterCount {
             replaceCoachMessage(id: streamingID, content: accumulated)
         }
         return accumulated
