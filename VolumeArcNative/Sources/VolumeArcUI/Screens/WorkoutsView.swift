@@ -194,6 +194,7 @@ public struct WorkoutsView: View {
     private var activeSessionHeader: some View {
         VStack(alignment: .leading, spacing: VA.Space.md) {
             HStack(alignment: .center, spacing: VA.Space.md) {
+                let currentSetCount = min(model.loggedSetCountThisSession, sessionTargetSetCount)
                 VStack(alignment: .leading, spacing: VA.Space.xxs) {
                     Text(String(localized: "LIVE SESSION", comment: "Label above the active session card"))
                         .font(VA.Typography.caption)
@@ -215,13 +216,13 @@ public struct WorkoutsView: View {
                 ZStack {
                     VAProgressRing(progress: setProgress, lineWidth: 4)
                         .frame(width: 44, height: 44)
-                    Text("\(min(model.loggedSetCountThisSession, sessionTargetSetCount))/\(sessionTargetSetCount)")
+                    Text("\(currentSetCount)/\(sessionTargetSetCount)")
                         .font(VA.Typography.caption)
                         .foregroundStyle(VA.Colors.textPrimary)
                         .monospacedDigit()
                 }
                 .accessibilityLabel(String(
-                    localized: "Session progress \(min(model.loggedSetCountThisSession, sessionTargetSetCount)) of ^[\(sessionTargetSetCount) set](inflect: true)",
+                    localized: "Session progress \(currentSetCount) of ^[\(sessionTargetSetCount) set](inflect: true)",
                     comment: "VoiceOver label for active session set progress"
                 ))
                 Button {
