@@ -11,13 +11,16 @@ WATCH_BUNDLE="$APP_BUNDLE/Watch/VolumeArcWatch.app"
 WATCH_WIDGET_BUNDLE="$WATCH_BUNDLE/PlugIns/VolumeArcWatchWidgets.appex"
 WATCH_WIDGET_EXECUTABLE="$WATCH_WIDGET_BUNDLE/VolumeArcWatchWidgets"
 WATCH_ASSETS_CAR="$WATCH_BUNDLE/Assets.car"
+SENTRY_FRAMEWORK="$APP_BUNDLE/Frameworks/Sentry.framework"
+SENTRY_BINARY="$SENTRY_FRAMEWORK/Sentry"
 DSYM_DIR="$ARCHIVE_PATH/dSYMs"
 LOG_PATH="$TMP_DIR/ci_post_xcodebuild.log"
 SENTRY_LOG="$TMP_DIR/sentry-cli.log"
 
-mkdir -p "$WATCH_WIDGET_BUNDLE" "$DSYM_DIR/VolumeArc.app.dSYM" "$TMP_DIR/bin"
+mkdir -p "$WATCH_WIDGET_BUNDLE" "$SENTRY_FRAMEWORK" "$DSYM_DIR/VolumeArc.app.dSYM" "$TMP_DIR/bin"
 touch "$WATCH_ASSETS_CAR"
 touch "$WATCH_WIDGET_EXECUTABLE"
+touch "$SENTRY_BINARY"
 
 write_plist() {
   local path="$1"
@@ -25,6 +28,7 @@ write_plist() {
   local relay_url="${3:-}"
   local extension_point="${4:-}"
   local bundle_kind="${5:-}"
+  local sentry_dsn="${6:-}"
 
   {
     printf '<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -36,6 +40,10 @@ write_plist() {
     if [[ -n "$relay_url" ]]; then
       printf '  <key>VolumeArcAIRelayURL</key>\n'
       printf '  <string>%s</string>\n' "$relay_url"
+    fi
+    if [[ -n "$sentry_dsn" ]]; then
+      printf '  <key>VolumeArcSentryDSN</key>\n'
+      printf '  <string>%s</string>\n' "$sentry_dsn"
     fi
     if [[ "$bundle_kind" == "watch-app" ]]; then
       printf '  <key>CFBundleIcons</key>\n'
@@ -69,7 +77,7 @@ write_plist() {
   } >"$path"
 }
 
-write_plist "$APP_BUNDLE/Info.plist" "16" "https://relay.volumearc.app"
+write_plist "$APP_BUNDLE/Info.plist" "16" "https://relay.volumearc.app" "" "" "https://examplePublicKey@o0.ingest.sentry.io/0"
 write_plist "$WATCH_BUNDLE/Info.plist" "16" "" "" "watch-app"
 write_plist "$WATCH_WIDGET_BUNDLE/Info.plist" "16" "" "com.apple.widgetkit-extension" "watch-widget"
 
@@ -97,6 +105,29 @@ if [[ "$1" == "assetutil" && "$2" == "--info" ]]; then
   {"AssetType":"Icon Image","Name":"AppIcon","Idiom":"watch","PixelWidth":216,"PixelHeight":216}
 ]
 JSON
+  exit 0
+fi
+if [[ "$1" == "dsymutil" ]]; then
+  output=""
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      -o)
+        shift
+        output="${1:-}"
+        ;;
+    esac
+    shift || true
+  done
+  if [[ -z "$output" ]]; then
+    echo "missing dsymutil output path" >&2
+    exit 64
+  fi
+  mkdir -p "$output/Contents/Resources/DWARF"
+  touch "$output/Contents/Resources/DWARF/Sentry"
+  exit 0
+fi
+if [[ "$1" == "dwarfdump" && "$2" == "--uuid" ]]; then
+  echo "UUID: 12345678-1234-1234-1234-1234567890AB (arm64) $3"
   exit 0
 fi
 echo "unexpected xcrun invocation: $*" >&2
