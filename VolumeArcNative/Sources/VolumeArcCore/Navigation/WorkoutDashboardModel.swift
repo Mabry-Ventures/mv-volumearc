@@ -1723,7 +1723,7 @@ extension WorkoutDashboardModel {
         var accumulatedCharacterCount = 0
         var didRecordFirstToken = false
         var lastPublishedCharacterCount = 0
-        let publishCharacterStride = 16
+        let publishCharacterStride = 64
         let stream = aiProvider.streamCoachResponse(for: prompt, context: context)
         for try await chunk in stream {
             accumulated += chunk
