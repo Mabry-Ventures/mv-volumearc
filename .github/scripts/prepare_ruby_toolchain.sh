@@ -13,6 +13,17 @@ export PATH="$ruby_bin:$PATH"
 
 gem_user_bin="$(ruby -e 'print Gem.user_dir')/bin"
 gem_bindir="$(ruby -e 'print Gem.bindir')"
+export PATH="$ruby_bin:$gem_user_bin:$gem_bindir:$PATH"
+workspace_root="${GITHUB_WORKSPACE:-$PWD}"
+bundle_path="$workspace_root/vendor/bundle"
+bundle_user_home="$workspace_root/.bundle"
+
+export BUNDLE_PATH="$bundle_path"
+export BUNDLE_USER_HOME="$bundle_user_home"
+export BUNDLE_APP_CONFIG="$bundle_user_home/config"
+export BUNDLE_USER_CACHE="$bundle_user_home/cache"
+export BUNDLE_JOBS="${BUNDLE_JOBS:-4}"
+export BUNDLE_RETRY="${BUNDLE_RETRY:-3}"
 
 if [[ -n "${GITHUB_PATH:-}" ]]; then
   {
@@ -20,6 +31,17 @@ if [[ -n "${GITHUB_PATH:-}" ]]; then
     echo "$gem_user_bin"
     echo "$gem_bindir"
   } >> "$GITHUB_PATH"
+fi
+
+if [[ -n "${GITHUB_ENV:-}" ]]; then
+  {
+    echo "BUNDLE_PATH=$BUNDLE_PATH"
+    echo "BUNDLE_USER_HOME=$BUNDLE_USER_HOME"
+    echo "BUNDLE_APP_CONFIG=$BUNDLE_APP_CONFIG"
+    echo "BUNDLE_USER_CACHE=$BUNDLE_USER_CACHE"
+    echo "BUNDLE_JOBS=$BUNDLE_JOBS"
+    echo "BUNDLE_RETRY=$BUNDLE_RETRY"
+  } >> "$GITHUB_ENV"
 fi
 
 ruby --version
