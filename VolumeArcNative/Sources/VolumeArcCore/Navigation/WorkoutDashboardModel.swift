@@ -1824,7 +1824,11 @@ extension WorkoutDashboardModel {
         var accumulatedCharacterCount = 0
         var didRecordFirstToken = false
         var lastPublishedCharacterCount = 0
-        let publishCharacterStride = 64
+        let clock = ContinuousClock()
+        let publishInterval: Duration = .milliseconds(80)
+        let publishCheckStride = 64
+        var lastPublishedInstant = clock.now
+        var lastPublishCheckCharacterCount = 0
         let stream = aiProvider.streamCoachResponse(for: prompt, context: context)
         for try await chunk in stream {
             accumulated += chunk
@@ -1837,12 +1841,20 @@ extension WorkoutDashboardModel {
                 recordCoachFirstToken()
                 replaceCoachMessage(id: streamingID, content: accumulated)
                 lastPublishedCharacterCount = accumulatedCharacterCount
+                lastPublishedInstant = clock.now
+                lastPublishCheckCharacterCount = accumulatedCharacterCount
                 continue
             }
 
-            if accumulatedCharacterCount - lastPublishedCharacterCount >= publishCharacterStride {
+            guard accumulatedCharacterCount - lastPublishCheckCharacterCount >= publishCheckStride else {
+                continue
+            }
+            lastPublishCheckCharacterCount = accumulatedCharacterCount
+            let now = clock.now
+            if lastPublishedInstant.duration(to: now) >= publishInterval {
                 replaceCoachMessage(id: streamingID, content: accumulated)
                 lastPublishedCharacterCount = accumulatedCharacterCount
+                lastPublishedInstant = now
             }
         }
         if accumulatedCharacterCount != lastPublishedCharacterCount {

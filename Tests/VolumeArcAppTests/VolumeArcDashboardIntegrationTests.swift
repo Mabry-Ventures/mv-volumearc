@@ -676,7 +676,8 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
             $0.category == "coach" && $0.name == "plan_scheduled"
         })
         XCTAssertEqual(event.metadata["dayOfWeek"], "2")
-        XCTAssertEqual(event.metadata["title"], "Lower-body hypertrophy")
+        XCTAssertEqual(event.metadata["title_present"], "true")
+        XCTAssertEqual(event.metadata["title_length_bucket"], "21-80")
         XCTAssertEqual(event.metadata["exerciseCount"], "2")
     }
 
