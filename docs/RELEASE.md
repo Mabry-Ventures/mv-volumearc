@@ -9,6 +9,7 @@
 - [ ] Tests pass: `./scripts/test_apple_targets.sh`
 - [ ] Release config validates: `./scripts/validate_release_config.sh`
 - [ ] Release-ready validation passes: `VOLUMEARC_RELEASE_READY=1 ./scripts/validate_release_config.sh`
+- [ ] Coach response eval trend is current, mirrored to marketing, and passes `./scripts/check_coach_eval_trend.sh` at 47/47
 - [ ] Physical/TestFlight UAT evidence in `docs/RELEASE_UAT_EVIDENCE.md` is complete and passes `./scripts/check_release_uat_evidence.sh`
 - [ ] Review `docs/FEATURES.md` for honest feature status
 - [ ] Marketing site (`marketing/`) builds clean and the live `volumearc.app/terms` + `/privacy` URLs that `App/LegalLinks.swift` references resolve to non-placeholder content (VOL-124)
@@ -39,17 +40,21 @@ There is **no live tag-triggered TestFlight workflow** in App Store Connect toda
 
 1. Merge all changes to `main` after required GitHub and Xcode Cloud PR gates pass.
 2. Bump `VERSION` if needed.
-3. Run the release-ready local/static gate:
+3. Run the live staging response eval suite against the selected relay/model routing, publish the resulting green trend to `docs/coach-eval-trend.json`, mirror it to `marketing/src/data/coach-eval-trend.json`, and verify:
+   ```bash
+   ./scripts/check_coach_eval_trend.sh
+   ```
+4. Run the release-ready local/static gate:
    ```bash
    VOLUMEARC_RELEASE_READY=1 ./scripts/validate_release_config.sh
    ```
-4. In App Store Connect, open Apps → VolumeArc → Xcode Cloud → `Internal Testing`.
-5. Start a manual run from branch `main`.
-6. Xcode Cloud archives the app with Apple-managed signing and uploads to internal TestFlight.
-7. After archive, `ci_scripts/ci_post_xcodebuild.sh` verifies the archived app has `VolumeArcSentryDSN` and `VolumeArcAIRelayURL`, generates a matching `Sentry.framework.dSYM` from the archived framework binary, then runs `sentry-cli debug-files upload --include-sources --wait` against the archive's `dSYMs/` (VOL-133). Apple's auto-symbolication for App Store crashes still happens in parallel; this provides the same data to Sentry so our own crash reports symbolicate.
-8. **TestFlight processing** usually takes 5-15 minutes. Watch in App Store Connect.
-9. dSYMs must be visible in Sentry under https://mabry-ventures-llc.sentry.io/settings/projects/volumearc-ios/debug-symbols/ tagged with release `com.mabryventures.VolumeArc@<version>+<build>`.
-10. Fill out `docs/RELEASE_UAT_EVIDENCE.md` for the exact TestFlight build and run `./scripts/check_release_uat_evidence.sh`.
+5. In App Store Connect, open Apps → VolumeArc → Xcode Cloud → `Internal Testing`.
+6. Start a manual run from branch `main`.
+7. Xcode Cloud archives the app with Apple-managed signing and uploads to internal TestFlight.
+8. After archive, `ci_scripts/ci_post_xcodebuild.sh` verifies the archived app has `VolumeArcSentryDSN` and `VolumeArcAIRelayURL`, generates a matching `Sentry.framework.dSYM` from the archived framework binary, then runs `sentry-cli debug-files upload --include-sources --wait` against the archive's `dSYMs/` (VOL-133). Apple's auto-symbolication for App Store crashes still happens in parallel; this provides the same data to Sentry so our own crash reports symbolicate.
+9. **TestFlight processing** usually takes 5-15 minutes. Watch in App Store Connect.
+10. dSYMs must be visible in Sentry under https://mabry-ventures-llc.sentry.io/settings/projects/volumearc-ios/debug-symbols/ tagged with release `com.mabryventures.VolumeArc@<version>+<build>`.
+11. Fill out `docs/RELEASE_UAT_EVIDENCE.md` for the exact TestFlight build and run `./scripts/check_release_uat_evidence.sh`.
 
 ### Xcode Cloud setup target state
 

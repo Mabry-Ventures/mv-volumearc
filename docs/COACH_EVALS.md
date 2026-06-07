@@ -90,6 +90,14 @@ export VOLUMEARC_EVAL_FIXTURE_LIMIT=5
 
 The script writes per-fixture raw SSE streams, extracted response text, HTTP status files, and a machine-readable `summary.json` under `$VOLUMEARC_EVAL_OUTPUT_DIR`. It exits `1` when any fixture fails response assertions and exits `2` for missing configuration.
 
+For paid-launch readiness, the committed trend must also pass the release gate:
+
+```bash
+./scripts/check_coach_eval_trend.sh
+```
+
+That gate requires `docs/coach-eval-trend.json` and `marketing/src/data/coach-eval-trend.json` to be semantic mirrors, the latest timestamp to be no more than 7 days old, and the latest run to show all 47 fixtures passing with no axis failures. `VOLUMEARC_RELEASE_READY=1 ./scripts/validate_release_config.sh` runs this gate before UAT evidence checks so the release cannot be marked ready while `/quality` is stale or red.
+
 Worker-side staging setup:
 
 - Set `EVAL_ATTEST_BROKER_ENABLED=true` only on the staging relay Worker.

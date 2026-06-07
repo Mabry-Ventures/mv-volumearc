@@ -238,8 +238,10 @@ fi
 # TestFlight, purchase, notification, widget, Live Activity, and live coach
 # safety proof on the exact build under review.
 if [[ "${VOLUMEARC_RELEASE_READY:-0}" == "1" ]]; then
+  "$ROOT/scripts/check_coach_eval_trend.sh"
   "$ROOT/scripts/check_release_uat_evidence.sh"
 else
+  echo "INFO: coach eval trend freshness/green-state not enforced. Set VOLUMEARC_RELEASE_READY=1 to require a current 47/47 trend mirror."
   echo "INFO: release UAT evidence not enforced. Set VOLUMEARC_RELEASE_READY=1 to require docs/RELEASE_UAT_EVIDENCE.md."
 fi
 
