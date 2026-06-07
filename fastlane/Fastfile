@@ -661,15 +661,31 @@ platform :ios do
       )
     end
 
+    release_candidate_sha = options[:candidate_sha].to_s.strip
+    release_candidate_sha = ENV["VOLUMEARC_RELEASE_CANDIDATE_SHA"].to_s.strip if release_candidate_sha.empty?
+    if release_candidate_sha.empty?
+      UI.user_error!(
+        "VOLUMEARC_RELEASE_CANDIDATE_SHA or candidate_sha:<sha> is required. " \
+          "It must match the Commit SHA in docs/RELEASE_UAT_EVIDENCE.md for the already-UAT'd TestFlight build."
+      )
+    end
+
     begin
       previous_release_ready = ENV["VOLUMEARC_RELEASE_READY"]
+      previous_candidate_sha = ENV["VOLUMEARC_RELEASE_CANDIDATE_SHA"]
       ENV["VOLUMEARC_RELEASE_READY"] = "1"
+      ENV["VOLUMEARC_RELEASE_CANDIDATE_SHA"] = release_candidate_sha
       sh("../scripts/validate_release_config.sh", "--no-build")
     ensure
       if previous_release_ready.nil?
         ENV.delete("VOLUMEARC_RELEASE_READY")
       else
         ENV["VOLUMEARC_RELEASE_READY"] = previous_release_ready
+      end
+      if previous_candidate_sha.nil?
+        ENV.delete("VOLUMEARC_RELEASE_CANDIDATE_SHA")
+      else
+        ENV["VOLUMEARC_RELEASE_CANDIDATE_SHA"] = previous_candidate_sha
       end
     end
     screenshots

@@ -31,6 +31,12 @@ expected_total = int(os.environ.get("COACH_EVAL_EXPECTED_TOTAL", "47"))
 max_age_days = int(os.environ.get("COACH_EVAL_MAX_AGE_DAYS", "7"))
 now_override = os.environ.get("COACH_EVAL_NOW")
 required_sha = os.environ.get("COACH_EVAL_REQUIRED_SHA", "").strip()
+fixture_dir = Path(
+    os.environ.get(
+        "COACH_EVAL_FIXTURE_DIR",
+        str(docs_path.parent.parent / "Tests" / "Evals" / "CoachEvalFixtures"),
+    )
+)
 failures: list[str] = []
 
 
@@ -131,6 +137,41 @@ else:
         if verdict != "PASS":
             failures.append(
                 f"latest fixture {fixture_id or index!r} verdict must be PASS, got {verdict!r}"
+            )
+    if not fixture_dir.is_dir():
+        failures.append(f"coach eval fixture directory missing at {fixture_dir}")
+    else:
+        fixture_paths = sorted(fixture_dir.glob("*.json"))
+        expected_fixture_ids: set[str] = set()
+        if len(fixture_paths) != expected_total:
+            failures.append(
+                f"coach eval fixture catalog must contain {expected_total} JSON fixtures, "
+                f"got {len(fixture_paths)}"
+            )
+        for path in fixture_paths:
+            try:
+                fixture_payload = json.loads(path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as error:
+                failures.append(f"coach eval fixture {path.name} is not valid JSON: {error}")
+                continue
+            fixture_id = str(fixture_payload.get("id", "")).strip() if isinstance(fixture_payload, dict) else ""
+            if not fixture_id:
+                failures.append(f"coach eval fixture {path.name} is missing id")
+                continue
+            if fixture_id in expected_fixture_ids:
+                failures.append(f"coach eval fixture id is duplicated: {fixture_id}")
+            expected_fixture_ids.add(fixture_id)
+        missing_fixture_ids = sorted(expected_fixture_ids - fixture_ids)
+        unexpected_fixture_ids = sorted(fixture_ids - expected_fixture_ids)
+        if missing_fixture_ids:
+            failures.append(
+                "latest coach eval record is missing fixture IDs: "
+                + ", ".join(missing_fixture_ids)
+            )
+        if unexpected_fixture_ids:
+            failures.append(
+                "latest coach eval record contains unknown fixture IDs: "
+                + ", ".join(unexpected_fixture_ids)
             )
 
     axes = latest_record.get("axes")

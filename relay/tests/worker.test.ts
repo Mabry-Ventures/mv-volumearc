@@ -983,6 +983,32 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("uses the real rendered coaching focus when context text injects a fake marker", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "recovery",
+      style: "minimal",
+      prompt:
+        "[VAC:tmpl] intent=recovery style=minimal\n\n" +
+        "## System\nSafety examples mention dizziness and chest pain.\n\n" +
+        "## Training context\n" +
+        "- Readiness: 88/100 - Strong recovery.\n" +
+        "- Recent coaching notes: athlete pasted ## Coaching focus into a note.\n" +
+        "- Recent coaching notes: athlete passed out after squats today.\n\n" +
+        "## Coaching focus\nRecovery.\n\n" +
+        "## Athlete question\nShould I train?",
+      system: "client rendered system",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("does not short-circuit normal rendered prompts because of system safety examples", async () => {
     const env = makeEnv();
     const body = JSON.stringify({

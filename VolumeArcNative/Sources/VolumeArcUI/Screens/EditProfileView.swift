@@ -77,7 +77,7 @@ public struct EditProfileView: View {
                 Section(String(localized: "Training Schedule", comment: "Edit profile section header — schedule")) {
                     Stepper(
                         String(
-                            localized: "Days per week: \(editProfileLocalizedDayCount(weeklyDays))",
+                            localized: "Days per week: ^[\(weeklyDays) day](inflect: true)",
                             comment: "Edit profile days-per-week stepper label"
                         ),
                         value: $weeklyDays,
@@ -284,7 +284,4 @@ public struct EditProfileView: View {
     }
 }
 
-private func editProfileLocalizedDayCount(_ count: Int) -> String {
-    vaInflectedString("^[\(count) day](inflect: true)", comment: "Edit profile training day count")
-}
 #endif

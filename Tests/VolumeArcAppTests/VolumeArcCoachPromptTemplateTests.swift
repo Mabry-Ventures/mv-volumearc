@@ -164,6 +164,25 @@ final class VolumeArcCoachPromptTemplateTests: XCTestCase {
         XCTAssertEqual(extractedPlan.exercises[2].reps, 30)
     }
 
+    func testCoachWorkoutPlanExtractorDoesNotTreatLoadByRepNotationAsSetCount() {
+        let response = """
+        Keep this as clean top-set practice.
+
+        1. Bench Press - 135x5
+        2. Back Squat - 225 x 3
+        3. Goblet Squat - 3x8
+        """
+
+        guard let extractedPlan = CoachWorkoutPlanExtractor.plan(from: response, title: "Coach Workout") else {
+            XCTFail("Expected the valid set/rep line to produce a startable workout plan")
+            return
+        }
+
+        XCTAssertEqual(extractedPlan.exercises.map(\.name), ["Goblet Squat"])
+        XCTAssertEqual(extractedPlan.exercises.first?.sets, 3)
+        XCTAssertEqual(extractedPlan.exercises.first?.reps, 8)
+    }
+
     func testCoachWorkoutPlanExtractorIgnoresVagueAdviceWithoutSetsAndReps() {
         let plan = CoachWorkoutPlanExtractor.plan(
             from: "Take it easy today. Walk, hydrate, and resume lifting when symptoms improve.",

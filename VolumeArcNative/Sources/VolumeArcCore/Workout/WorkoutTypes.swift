@@ -169,6 +169,7 @@ public enum CoachWorkoutPlanExtractor {
                   let sets = Int(text[setsRange]),
                   let reps = Int(text[repsRange])
             else { continue }
+            guard (1...8).contains(sets), (1...100).contains(reps) else { continue }
             return (sets, reps)
         }
         return nil

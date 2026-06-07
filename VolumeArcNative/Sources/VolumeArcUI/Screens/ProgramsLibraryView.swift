@@ -112,11 +112,14 @@ public struct ProgramsLibraryView: View {
     @ViewBuilder
     private func metaChips(for program: TrainingProgramDefinition) -> some View {
         WorkoutChip(
-            text: programsLocalizedWeekCount(program.weeks),
+            text: String(localized: "^[\(program.weeks) week](inflect: true)", comment: "Program duration chip"),
             tone: .neutral
         )
         WorkoutChip(
-            text: programsLocalizedWeeklySessionCount(program.sessionsPerWeek),
+            text: String(
+                localized: "^[\(program.sessionsPerWeek) session](inflect: true)/week",
+                comment: "Program weekly frequency chip"
+            ),
             tone: .neutral
         )
         WorkoutChip(text: program.difficulty.displayName, tone: .primary)
@@ -157,14 +160,4 @@ public struct ProgramsLibraryView: View {
     }
 }
 
-private func programsLocalizedWeekCount(_ count: Int) -> String {
-    vaInflectedString("^[\(count) week](inflect: true)", comment: "Program duration chip")
-}
-
-private func programsLocalizedWeeklySessionCount(_ count: Int) -> String {
-    vaInflectedString(
-        "^[\(count) session](inflect: true)/week",
-        comment: "Program weekly frequency chip"
-    )
-}
 #endif

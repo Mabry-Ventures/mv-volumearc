@@ -447,11 +447,14 @@ function renderedTrainingContext(prompt: string | undefined): string | undefined
     return undefined;
   }
   const focusMarker = "## Coaching focus";
-  const focusIndex = prompt.indexOf(focusMarker);
+  const athleteMarker = "## Athlete question";
+  const athleteIndex = prompt.indexOf(athleteMarker);
+  const searchablePrompt = athleteIndex >= 0 ? prompt.slice(0, athleteIndex) : prompt;
+  const focusIndex = searchablePrompt.lastIndexOf(focusMarker);
   if (focusIndex < 0) {
     return undefined;
   }
-  const beforeFocus = prompt.slice(0, focusIndex);
+  const beforeFocus = searchablePrompt.slice(0, focusIndex);
   const contextMarkers = [
     "## Training context",
     "## Recovery (Apple Health)",

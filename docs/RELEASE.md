@@ -62,7 +62,7 @@ There is **no live tag-triggered TestFlight workflow** in App Store Connect toda
 12. Run the release-ready gate after TestFlight processing and physical UAT evidence exist:
 
    ```bash
-   VOLUMEARC_RELEASE_READY=1 ./scripts/validate_release_config.sh --no-build
+   VOLUMEARC_RELEASE_READY=1 VOLUMEARC_RELEASE_CANDIDATE_SHA=<tested-build-sha> ./scripts/validate_release_config.sh --no-build
    ```
 
 ### Xcode Cloud setup target state
@@ -233,7 +233,7 @@ To create a local TestFlight candidate through Fastlane, run:
 bundle exec fastlane ios release upload_beta:true
 ```
 
-That path uploads and waits for the candidate build, then stops before App Store submission. Fill `docs/RELEASE_UAT_EVIDENCE.md` for that exact build and rerun `bundle exec fastlane ios release` without `upload_beta:true`.
+That path uploads and waits for the candidate build, then stops before App Store submission. Fill `docs/RELEASE_UAT_EVIDENCE.md` for that exact build and rerun `bundle exec fastlane ios release candidate_sha:<tested-build-sha>` without `upload_beta:true`.
 
 ### Screenshots lane (VOL-96)
 

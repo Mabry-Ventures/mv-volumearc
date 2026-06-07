@@ -132,6 +132,11 @@ def expected_commit_sha() -> str | None:
     explicit = os.environ.get("VOLUMEARC_RELEASE_CANDIDATE_SHA", "").strip()
     if explicit:
         return explicit
+    if os.environ.get("VOLUMEARC_RELEASE_READY", "").strip() == "1":
+        failures.append(
+            "VOLUMEARC_RELEASE_CANDIDATE_SHA must be set in release-ready mode "
+            "so UAT evidence is bound to the exact TestFlight build under review"
+        )
     return None
 
 for line_number, raw_line in enumerate(text.splitlines(), start=1):

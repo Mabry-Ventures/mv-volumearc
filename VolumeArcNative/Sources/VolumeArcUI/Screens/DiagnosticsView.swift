@@ -114,7 +114,7 @@ public struct DiagnosticsView: View {
             }
             HStack(spacing: VA.Space.sm) {
                 Text(String(
-                    localized: "\(diagnosticsLocalizedEventCount(filteredEvents.count)) of \(diagnosticsLocalizedEventCount(events.count))",
+                    localized: "^[\(filteredEvents.count) event](inflect: true) of ^[\(events.count) event](inflect: true)",
                     comment: "Diagnostics counter — filtered events out of total"
                 ))
                 .font(VA.Typography.caption)
@@ -232,13 +232,13 @@ public struct DiagnosticsView: View {
     private var summaryTitle: String {
         if errorCount > 0 {
             return String(
-                localized: "\(diagnosticsLocalizedErrorCount(errorCount)) recorded",
+                localized: "^[\(errorCount) error](inflect: true) recorded",
                 comment: "Diagnostics summary title for error count"
             )
         }
         if warningCount > 0 {
             return String(
-                localized: "\(diagnosticsLocalizedWarningCount(warningCount)) recorded",
+                localized: "^[\(warningCount) warning](inflect: true) recorded",
                 comment: "Diagnostics summary title for warning count"
             )
         }
@@ -323,15 +323,4 @@ public struct DiagnosticsView: View {
     }
 }
 
-private func diagnosticsLocalizedEventCount(_ count: Int) -> String {
-    vaInflectedString("^[\(count) event](inflect: true)", comment: "Diagnostics event count")
-}
-
-private func diagnosticsLocalizedErrorCount(_ count: Int) -> String {
-    vaInflectedString("^[\(count) error](inflect: true)", comment: "Diagnostics error count")
-}
-
-private func diagnosticsLocalizedWarningCount(_ count: Int) -> String {
-    vaInflectedString("^[\(count) warning](inflect: true)", comment: "Diagnostics warning count")
-}
 #endif

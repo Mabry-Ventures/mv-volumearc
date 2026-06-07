@@ -2,6 +2,8 @@
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
 #endif
 import VolumeArcCore
 
@@ -503,11 +505,23 @@ struct WorkoutIllustrationTile: View {
         } else {
             fallbackIcon
         }
+        #elseif canImport(AppKit)
+        if let illustrationAssetName,
+           let image = NSImage(named: NSImage.Name(illustrationAssetName)) {
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+        } else {
+            fallbackIcon
+        }
         #else
         // On the shipping Apple app target these assets live in the main app
         // bundle. Non-UIKit preview/test hosts fall back if the bundle does not
         // expose asset lookup.
-        if let illustrationAssetName {
+        if let illustrationAssetName,
+           Bundle.main.url(forResource: illustrationAssetName, withExtension: nil) != nil {
             Image(illustrationAssetName, bundle: .main)
                 .resizable()
                 .scaledToFill()
