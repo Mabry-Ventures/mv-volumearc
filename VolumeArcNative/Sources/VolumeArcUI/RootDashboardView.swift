@@ -420,7 +420,7 @@ public enum VolumeArcAppearancePreference: String, CaseIterable, Identifiable, S
     case warm
 
     public static let storageKey = "volumearc.appearancePreference"
-    public static let userSelectableCases: [VolumeArcAppearancePreference] = [.system, .light, .dark]
+    public static let userSelectableCases: [VolumeArcAppearancePreference] = [.system, .light, .dark, .warm]
 
     public var id: String { rawValue }
 

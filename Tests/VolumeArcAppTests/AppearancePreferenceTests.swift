@@ -2,8 +2,8 @@ import XCTest
 @_spi(Testing) import VolumeArcUI
 
 final class AppearancePreferenceTests: XCTestCase {
-    func testUserSelectableCasesExcludeWarmBrandPersonality() {
-        XCTAssertEqual(VolumeArcAppearancePreference.userSelectableCases, [.system, .light, .dark])
+    func testUserSelectableCasesExposeSystemLightDarkAndWarm() {
+        XCTAssertEqual(VolumeArcAppearancePreference.userSelectableCases, [.system, .light, .dark, .warm])
         XCTAssertTrue(VolumeArcAppearancePreference.allCases.contains(.warm))
     }
 }
