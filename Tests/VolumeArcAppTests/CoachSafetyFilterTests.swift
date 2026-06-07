@@ -118,6 +118,30 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertNil(response)
     }
 
+    func testSharedNegatedContextMedicalRedFlagsDoNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I add five pounds next week?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Check-in: denies chest pain and shortness of breath.
+            """
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testSharedCommaNegatedContextMedicalRedFlagsDoNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I add five pounds next week?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Check-in: denies chest pain, dizziness, and shortness of breath.
+            """
+        )
+
+        XCTAssertNil(response)
+    }
+
     func testExpandedNegatedContextMedicalRedFlagsDoNotEscalate() {
         let response = CoachSafetyFilter.medicalRedFlagResponse(
             prompt: "Should I train today?",

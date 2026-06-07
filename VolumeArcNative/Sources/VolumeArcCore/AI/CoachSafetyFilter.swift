@@ -152,25 +152,86 @@ public enum CoachSafetyFilter {
         context
             .components(separatedBy: .newlines)
             .contains { line in
-                medicalRedFlagClauses(in: line).contains { clause in
-                    let lowered = clause.lowercased()
-                    guard !isStaleMedicalRedFlagLine(lowered),
-                          !isNegatedMedicalRedFlagLine(lowered) else { return false }
-                    return contextMedicalRedFlagPatterns.contains { containsPattern($0, in: clause) }
+                var sharedNegationCarries = false
+                for clause in medicalRedFlagClauses(in: line) {
+                    if !clause.separatorAllowsSharedNegation {
+                        sharedNegationCarries = false
+                    }
+
+                    let lowered = clause.text.lowercased()
+                    if isStaleMedicalRedFlagLine(lowered) {
+                        sharedNegationCarries = false
+                        continue
+                    }
+                    if isNegatedMedicalRedFlagLine(lowered) {
+                        sharedNegationCarries = isSharedNegationCarrier(lowered)
+                        continue
+                    }
+                    if sharedNegationCarries,
+                       clause.separatorAllowsSharedNegation,
+                       isBareSharedNegationContinuation(lowered) {
+                        continue
+                    }
+                    sharedNegationCarries = false
+                    if contextMedicalRedFlagPatterns.contains(where: { containsPattern($0, in: clause.text) }) {
+                        return true
+                    }
                 }
+                return false
             }
     }
 
-    private static func medicalRedFlagClauses(in line: String) -> [String] {
-        line
-            .replacingOccurrences(
-                of: #"(?i)\b(?:but|however|and)\b"#,
-                with: ";",
-                options: .regularExpression
+    private struct MedicalRedFlagClause {
+        let text: String
+        let separatorAllowsSharedNegation: Bool
+    }
+
+    private static func medicalRedFlagClauses(in line: String) -> [MedicalRedFlagClause] {
+        let pattern = #"(?i)\b(?:but|however|and)\b|[.,;]"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? [] : [
+                MedicalRedFlagClause(text: trimmed, separatorAllowsSharedNegation: false)
+            ]
+        }
+
+        let nsLine = line as NSString
+        let range = NSRange(location: 0, length: nsLine.length)
+        var clauses: [MedicalRedFlagClause] = []
+        var start = 0
+        var nextSeparatorAllowsSharedNegation = false
+
+        for match in regex.matches(in: line, range: range) {
+            let clauseRange = NSRange(location: start, length: match.range.location - start)
+            let clause = nsLine
+                .substring(with: clauseRange)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !clause.isEmpty {
+                clauses.append(
+                    MedicalRedFlagClause(
+                        text: clause,
+                        separatorAllowsSharedNegation: nextSeparatorAllowsSharedNegation
+                    )
+                )
+            }
+
+            let separator = nsLine.substring(with: match.range).lowercased()
+            nextSeparatorAllowsSharedNegation = separator == "," || separator == "and"
+            start = match.range.location + match.range.length
+        }
+
+        let tail = nsLine
+            .substring(from: start)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !tail.isEmpty {
+            clauses.append(
+                MedicalRedFlagClause(
+                    text: tail,
+                    separatorAllowsSharedNegation: nextSeparatorAllowsSharedNegation
+                )
             )
-            .components(separatedBy: CharacterSet(charactersIn: ".;,"))
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+        }
+        return clauses
     }
 
     private static func isStaleMedicalRedFlagLine(_ loweredLine: String) -> Bool {
@@ -242,6 +303,41 @@ public enum CoachSafetyFilter {
             "symptoms resolved",
             "resolved symptoms",
         ].contains { loweredLine.contains($0) }
+    }
+
+    private static func isSharedNegationCarrier(_ loweredLine: String) -> Bool {
+        let negatedStatePattern =
+            #"\bnot\s+(?:experiencing|having|short|lightheaded|fainting|"# +
+            #"pregnant|restricting|purging|starving)\b"#
+        return containsPattern(#"\b(?:no|denies|without)\b"#, in: loweredLine) ||
+            containsPattern(negatedStatePattern, in: loweredLine)
+    }
+
+    private static func isBareSharedNegationContinuation(_ loweredLine: String) -> Bool {
+        let trimmed = loweredLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        let currentEventPattern =
+            #"\b(?:after|during|while|today|now|current(?:ly)?|reported|"# +
+            #"showed|shows|felt|feel|got|became|under\s+load|episode|"# +
+            #"mid[- ]?set|following)\b"#
+        guard !containsPattern(
+            currentEventPattern,
+            in: trimmed
+        ) else {
+            return false
+        }
+
+        return [
+            #"^(?:severe\s+)?short(?:ness)?\s+of\s+breath$"#,
+            #"^dizz(?:y|iness)$"#,
+            #"^lightheaded(?:ness)?$"#,
+            #"^fainting$"#,
+            #"^syncope$"#,
+            #"^chest\s+pain$"#,
+            #"^pain\s+in\s+(?:the\s+)?chest$"#,
+            #"^pregnan(?:t|cy)$"#,
+            #"^eating\s+disorder$"#,
+            #"^(?:cardiac\s+event|heart\s+attack|palpitations|arrhythmia)$"#,
+        ].contains { containsPattern($0, in: trimmed) }
     }
 
     private static func containsPattern(_ pattern: String, in text: String) -> Bool {

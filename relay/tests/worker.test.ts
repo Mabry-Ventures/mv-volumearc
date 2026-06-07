@@ -960,6 +960,50 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("does not short-circuit shared-negated current context red flags", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Should I add five pounds next week?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 86/100 - Strong recovery.",
+        "- Check-in: denies chest pain and shortness of breath.",
+      ].join("\n"),
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not short-circuit shared-comma-negated current context red flags", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Should I add five pounds next week?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 86/100 - Strong recovery.",
+        "- Check-in: denies chest pain, dizziness, and shortness of breath.",
+      ].join("\n"),
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("does not short-circuit expanded negated current context red flags", async () => {
     const env = makeEnv();
     const body = JSON.stringify({

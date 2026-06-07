@@ -527,23 +527,64 @@ function hasCurrentMedicalRedFlag(text: string): boolean {
     "\\bhaven'?t\\s+eaten\\b",
     "\\b(?:cardiac\\s+event|heart\\s+attack)\\b",
   ];
-  return text
-    .split(/\r?\n/)
-    .some((line) =>
-      medicalRedFlagClauses(line).some(
-        (clause) =>
-          !isStaleMedicalRedFlagLine(clause) &&
-          !isNegatedMedicalRedFlagLine(clause) &&
-          patterns.some((pattern) => containsPattern(pattern, clause)),
-      ),
-    );
+  return text.split(/\r?\n/).some((line) => {
+    let sharedNegationCarries = false;
+    for (const clause of medicalRedFlagClauses(line)) {
+      if (!clause.separatorAllowsSharedNegation) {
+        sharedNegationCarries = false;
+      }
+
+      const lowered = clause.text.toLowerCase();
+      if (isStaleMedicalRedFlagLine(lowered)) {
+        sharedNegationCarries = false;
+        continue;
+      }
+      if (isNegatedMedicalRedFlagLine(lowered)) {
+        sharedNegationCarries = isSharedNegationCarrier(lowered);
+        continue;
+      }
+      if (
+        sharedNegationCarries &&
+        clause.separatorAllowsSharedNegation &&
+        isBareSharedNegationContinuation(lowered)
+      ) {
+        continue;
+      }
+      sharedNegationCarries = false;
+      if (patterns.some((pattern) => containsPattern(pattern, clause.text))) {
+        return true;
+      }
+    }
+    return false;
+  });
 }
 
-function medicalRedFlagClauses(line: string): string[] {
-  return line
-    .split(/\b(?:but|however|and)\b|[.,;]/i)
-    .map((clause) => clause.trim())
-    .filter((clause) => clause.length > 0);
+type MedicalRedFlagClause = {
+  text: string;
+  separatorAllowsSharedNegation: boolean;
+};
+
+function medicalRedFlagClauses(line: string): MedicalRedFlagClause[] {
+  const clauses: MedicalRedFlagClause[] = [];
+  const delimiter = /\b(?:but|however|and)\b|[.,;]/gi;
+  let start = 0;
+  let nextSeparatorAllowsSharedNegation = false;
+  let match: RegExpExecArray | null;
+  while ((match = delimiter.exec(line)) !== null) {
+    const text = line.slice(start, match.index).trim();
+    if (text.length > 0) {
+      clauses.push({ text, separatorAllowsSharedNegation: nextSeparatorAllowsSharedNegation });
+    }
+    const separator = match[0].toLowerCase();
+    nextSeparatorAllowsSharedNegation = separator === "," || separator === "and";
+    start = match.index + match[0].length;
+  }
+
+  const tail = line.slice(start).trim();
+  if (tail.length > 0) {
+    clauses.push({ text: tail, separatorAllowsSharedNegation: nextSeparatorAllowsSharedNegation });
+  }
+  return clauses;
 }
 
 function isStaleMedicalRedFlagLine(line: string): boolean {
@@ -613,6 +654,45 @@ function isNegatedMedicalRedFlagLine(line: string): boolean {
     "symptoms resolved",
     "resolved symptoms",
   ].some((phrase) => lowered.includes(phrase));
+}
+
+function isSharedNegationCarrier(line: string): boolean {
+  return (
+    containsPattern("\\b(?:no|denies|without)\\b", line) ||
+    containsPattern(
+      "\\bnot\\s+(?:experiencing|having|short|lightheaded|fainting|pregnant|restricting|purging|starving)\\b",
+      line,
+    )
+  );
+}
+
+function isBareSharedNegationContinuation(line: string): boolean {
+  const trimmed = line.trim();
+  const currentEventPattern =
+    "\\b(?:after|during|while|today|now|current(?:ly)?|reported|" +
+    "showed|shows|felt|feel|got|became|under\\s+load|episode|" +
+    "mid[- ]?set|following)\\b";
+  if (
+    containsPattern(
+      currentEventPattern,
+      trimmed,
+    )
+  ) {
+    return false;
+  }
+
+  return [
+    "^(?:severe\\s+)?short(?:ness)?\\s+of\\s+breath$",
+    "^dizz(?:y|iness)$",
+    "^lightheaded(?:ness)?$",
+    "^fainting$",
+    "^syncope$",
+    "^chest\\s+pain$",
+    "^pain\\s+in\\s+(?:the\\s+)?chest$",
+    "^pregnan(?:t|cy)$",
+    "^eating\\s+disorder$",
+    "^(?:cardiac\\s+event|heart\\s+attack|palpitations|arrhythmia)$",
+  ].some((pattern) => containsPattern(pattern, trimmed));
 }
 
 function containsPattern(pattern: string, text: string): boolean {
