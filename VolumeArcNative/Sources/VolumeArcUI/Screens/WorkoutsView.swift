@@ -48,8 +48,6 @@ public struct WorkoutsView: View {
                     setLogCard
                     if restActive {
                         restTimerCard
-                    } else {
-                        coachCueCard
                     }
                     upNextCard
                 } else {
@@ -318,6 +316,7 @@ public struct WorkoutsView: View {
                         WorkoutChip(text: restChipText, tone: .neutral)
                     }
 
+                    activeExerciseCueSection
                     liveTargetEditor
                     livePivotActions
                     activeExercisePrimaryActions
@@ -629,28 +628,37 @@ public struct WorkoutsView: View {
     }
 
     @ViewBuilder
-    private var coachCueCard: some View {
-        if let cue = model.autopilot?.bestCue {
-            HStack(alignment: .top, spacing: VA.Space.md) {
-                Image(systemName: "quote.opening")
-                    .font(VA.Typography.headline)
-                    .foregroundStyle(VA.Colors.primary)
-                    .frame(width: 30, height: 30)
-                    .background(VA.Colors.primary.opacity(0.12), in: Circle())
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: VA.Space.xs) {
-                    Text(String(localized: "Coach cue", comment: "Active workout coach cue label"))
-                        .font(VA.Typography.footnote)
-                        .foregroundStyle(VA.Colors.textSecondary)
-                    Text(cue)
-                        .font(VA.Typography.footnote)
-                        .foregroundStyle(VA.Colors.textPrimary)
-                        .italic()
-                        .fixedSize(horizontal: false, vertical: true)
+    private var activeExerciseCueSection: some View {
+        if !activeExerciseCues.isEmpty {
+            VStack(alignment: .leading, spacing: VA.Space.sm) {
+                Text(String(localized: "COACH CUES", comment: "Active workout inline cue section label"))
+                    .font(VA.Typography.caption)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                    .tracking(0.6)
+                ForEach(activeExerciseCues, id: \.self) { cue in
+                    HStack(alignment: .top, spacing: VA.Space.sm) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(VA.Typography.caption)
+                            .foregroundStyle(VA.Colors.primary)
+                            .accessibilityHidden(true)
+                        Text(cue)
+                            .font(VA.Typography.footnote)
+                            .foregroundStyle(VA.Colors.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
-            .padding(VA.Space.lg)
-            .vaGlassBackground(in: RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous))
+            .padding(VA.Space.md)
+            .background(
+                VA.Colors.primary.opacity(0.08),
+                in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous)
+                    .stroke(VA.Colors.primary.opacity(0.18), lineWidth: 1)
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("workouts.activeExercise.cues")
         }
     }
 
@@ -1220,6 +1228,16 @@ public struct WorkoutsView: View {
         }
         guard let autopilot = model.autopilot else { return nil }
         return VolumeArcExerciseCatalog.exercise(withID: autopilot.nextExerciseID)
+    }
+
+    private var activeExerciseCues: [String] {
+        let catalogCues = currentExerciseDefinition?.cues ?? []
+        let fallbackCue = model.autopilot?.bestCue.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        var cues = Array(catalogCues.prefix(2))
+        if cues.isEmpty, !fallbackCue.isEmpty {
+            cues.append(fallbackCue)
+        }
+        return cues
     }
 
     private var activeTargetWeight: Double {
