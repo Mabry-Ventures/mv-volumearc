@@ -201,14 +201,10 @@ public struct WorkoutsView: View {
                     Text(activeWorkoutTitle)
                         .font(VA.Typography.headline)
                         .foregroundStyle(VA.Colors.textPrimary)
-                    let loggedSets = model.loggedSetCountThisSession
-                    let setsLoggedText = String(
-                        localized: "^[\(loggedSets) set](inflect: true) logged",
-                        comment: "Active session subtitle with logged set count"
-                    )
+                    let setsLoggedText = activeSessionLoggedSetText
                     Text(setsLoggedText)
-                    .font(VA.Typography.footnote)
-                    .foregroundStyle(VA.Colors.textSecondary)
+                        .font(VA.Typography.footnote)
+                        .foregroundStyle(VA.Colors.textSecondary)
                 }
                 Spacer(minLength: VA.Space.sm)
                 ZStack {
@@ -220,7 +216,7 @@ public struct WorkoutsView: View {
                         .monospacedDigit()
                 }
                 .accessibilityLabel(String(
-                    localized: "Session progress \(currentSetCount) of ^[\(sessionTargetSetCount) set](inflect: true)",
+                    localized: "Session progress \(currentSetCount) of \(workoutsLocalizedSetCount(sessionTargetSetCount))",
                     comment: "VoiceOver label for active session set progress"
                 ))
                 Button {
@@ -265,7 +261,16 @@ public struct WorkoutsView: View {
         .padding(VA.Space.lg)
         .vaGlassBackground(in: RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous))
         .accessibilityElement(children: .contain)
+        .accessibilityValue(activeSessionLoggedSetText)
         .accessibilityIdentifier("workouts.activeSession")
+    }
+
+    private var activeSessionLoggedSetText: String {
+        let loggedSets = model.loggedSetCountThisSession
+        return String(
+            localized: "\(workoutsLocalizedSetCount(loggedSets)) logged",
+            comment: "Active session subtitle with logged set count"
+        )
     }
 
     @ViewBuilder
@@ -476,10 +481,7 @@ public struct WorkoutsView: View {
                         .foregroundStyle(VA.Colors.textSecondary)
                         .tracking(0.6)
                     Spacer()
-                    Text(String(
-                        localized: "^[\(activeWorkoutExerciseNames.count) move](inflect: true)",
-                        comment: "Active workout exercise list count"
-                    ))
+                    Text(workoutsLocalizedMoveCount(activeWorkoutExerciseNames.count))
                     .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.textSecondary)
                 }
@@ -568,6 +570,10 @@ public struct WorkoutsView: View {
                     .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.textSecondary)
                     .tracking(0.6)
+                Text(activeSessionLoggedSetText)
+                    .font(VA.Typography.caption)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                    .accessibilityIdentifier("workouts.loggedSetCount")
                 Spacer()
                 Text(String(localized: "RPE", comment: "Active workout set log rpe column label"))
                     .font(VA.Typography.caption)
@@ -648,7 +654,8 @@ public struct WorkoutsView: View {
                     }
                 }
             }
-            .padding(VA.Space.md)
+            .padding(.horizontal, VA.Space.md)
+            .padding(.vertical, VA.Space.sm)
             .background(
                 VA.Colors.primary.opacity(0.08),
                 in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous)
@@ -799,7 +806,7 @@ public struct WorkoutsView: View {
             )
         }
         return String(
-            localized: "^[\(workout.exercises.count) move](inflect: true) - \(firstExercise.name) first",
+            localized: "\(workoutsLocalizedMoveCount(workout.exercises.count)) - \(firstExercise.name) first",
             comment: "Workouts scheduled tomorrow card subtitle with co-designed exercise preview"
         )
     }
@@ -1194,7 +1201,7 @@ public struct WorkoutsView: View {
 
     private var restStartedToastMessage: String {
         String(
-            localized: "Starting your ^[\(restDurationSeconds) second](inflect: true) rest.",
+            localized: "Starting your \(workoutsLocalizedSecondCount(restDurationSeconds)) rest.",
             comment: "Toast detail after logging a set and starting rest"
         )
     }
@@ -2137,7 +2144,7 @@ private struct LiveWorkoutStepper: View {
                 } label: {
                     Image(systemName: "minus")
                         .font(VA.Typography.caption)
-                        .frame(width: 32, height: 32)
+                        .frame(width: 28, height: 30)
                 }
                 .accessibilityLabel(String(localized: "Decrease \(label)", comment: "Live workout stepper decrement"))
                 .accessibilityIdentifier("\(accessibilityPrefix).decrement")
@@ -2145,7 +2152,7 @@ private struct LiveWorkoutStepper: View {
                 Text("\(value)")
                     .font(VA.Typography.monoDigit)
                     .foregroundStyle(VA.Colors.textPrimary)
-                    .frame(minWidth: 40)
+                    .frame(minWidth: 30)
                     .accessibilityIdentifier("\(accessibilityPrefix).value")
 
                 Button {
@@ -2153,7 +2160,7 @@ private struct LiveWorkoutStepper: View {
                 } label: {
                     Image(systemName: "plus")
                         .font(VA.Typography.caption)
-                        .frame(width: 32, height: 32)
+                        .frame(width: 28, height: 30)
                 }
                 .accessibilityLabel(String(localized: "Increase \(label)", comment: "Live workout stepper increment"))
                 .accessibilityIdentifier("\(accessibilityPrefix).increment")
@@ -2161,7 +2168,7 @@ private struct LiveWorkoutStepper: View {
             .foregroundStyle(VA.Colors.textPrimary)
             .background(VA.Colors.textTertiary.opacity(0.10), in: RoundedRectangle(cornerRadius: VA.Radius.sm))
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: true, vertical: false)
     }
 }
 
@@ -2338,5 +2345,35 @@ private struct ActiveExerciseGuideView: View {
             String(localized: "Stop the set if the movement changes or symptoms show up.", comment: "Fallback active exercise guide cue"),
         ]
     }
+}
+
+private func workoutsLocalizedMoveCount(_ count: Int) -> String {
+    if count == 1 {
+        return String(localized: "1 move", comment: "Singular workout move count")
+    }
+    return String(
+        localized: "\(count) moves",
+        comment: "Plural workout move count; placeholder is the number of moves"
+    )
+}
+
+private func workoutsLocalizedSetCount(_ count: Int) -> String {
+    if count == 1 {
+        return String(localized: "1 set", comment: "Singular workout set count")
+    }
+    return String(
+        localized: "\(count) sets",
+        comment: "Plural workout set count; placeholder is the number of sets"
+    )
+}
+
+private func workoutsLocalizedSecondCount(_ count: Int) -> String {
+    if count == 1 {
+        return String(localized: "1 second", comment: "Singular workout duration in seconds")
+    }
+    return String(
+        localized: "\(count) seconds",
+        comment: "Plural workout duration in seconds; placeholder is the number of seconds"
+    )
 }
 #endif

@@ -413,7 +413,7 @@ public struct TodayView: View {
     private var recentSessionsSection: some View {
         let count = weeklyVolumeSummary.currentWeekSessionCount
         let subtitle = String(
-            localized: "^[\(count) session](inflect: true) this week",
+            localized: "\(todayLocalizedSessionCount(count)) this week",
             comment: "Recent sessions subtitle with current week session count"
         )
         return VStack(alignment: .leading, spacing: VA.Space.md) {
@@ -637,10 +637,7 @@ private extension TodayView {
             return "\(source) • \(session.durationMinutes)min"
         }
         let rpeText = String(format: "%.1f", session.averageRPE)
-        let setsText = String(
-            localized: "^[\(session.completedSetCount) set](inflect: true)",
-            comment: "Session summary set count"
-        )
+        let setsText = todayLocalizedSetCount(session.completedSetCount)
         return "\(setsText) • \(session.durationMinutes)min • RPE \(rpeText)"
     }
 
@@ -659,5 +656,25 @@ private extension TodayView {
             ? String(localized: "min", comment: "Minute unit abbreviation")
             : String(localized: "lb", comment: "Weight unit abbreviation — pounds")
     }
+}
+
+private func todayLocalizedSessionCount(_ count: Int) -> String {
+    if count == 1 {
+        return String(localized: "1 session", comment: "Singular recent sessions subtitle count")
+    }
+    return String(
+        localized: "\(count) sessions",
+        comment: "Plural recent sessions subtitle count; placeholder is the number of sessions"
+    )
+}
+
+private func todayLocalizedSetCount(_ count: Int) -> String {
+    if count == 1 {
+        return String(localized: "1 set", comment: "Singular recent session set count")
+    }
+    return String(
+        localized: "\(count) sets",
+        comment: "Plural recent session set count; placeholder is the number of sets"
+    )
 }
 #endif

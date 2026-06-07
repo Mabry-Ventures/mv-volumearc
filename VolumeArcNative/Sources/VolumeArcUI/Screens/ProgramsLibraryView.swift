@@ -112,14 +112,11 @@ public struct ProgramsLibraryView: View {
     @ViewBuilder
     private func metaChips(for program: TrainingProgramDefinition) -> some View {
         WorkoutChip(
-            text: String(localized: "^[\(program.weeks) week](inflect: true)", comment: "Program duration chip"),
+            text: programsLocalizedWeekCount(program.weeks),
             tone: .neutral
         )
         WorkoutChip(
-            text: String(
-                localized: "^[\(program.sessionsPerWeek) session](inflect: true)/week",
-                comment: "Program weekly frequency chip"
-            ),
+            text: programsLocalizedWeeklySessionCount(program.sessionsPerWeek),
             tone: .neutral
         )
         WorkoutChip(text: program.difficulty.displayName, tone: .primary)
@@ -158,5 +155,25 @@ public struct ProgramsLibraryView: View {
         case .advanced: return "chart.line.uptrend.xyaxis"
         }
     }
+}
+
+private func programsLocalizedWeekCount(_ count: Int) -> String {
+    if count == 1 {
+        return String(localized: "1 week", comment: "Singular program duration chip")
+    }
+    return String(
+        localized: "\(count) weeks",
+        comment: "Plural program duration chip; placeholder is the number of weeks"
+    )
+}
+
+private func programsLocalizedWeeklySessionCount(_ count: Int) -> String {
+    if count == 1 {
+        return String(localized: "1 session/week", comment: "Singular program weekly frequency chip")
+    }
+    return String(
+        localized: "\(count) sessions/week",
+        comment: "Plural program weekly frequency chip; placeholder is the number of sessions per week"
+    )
 }
 #endif

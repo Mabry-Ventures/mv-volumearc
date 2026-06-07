@@ -528,10 +528,17 @@ final class VolumeArcAppJourneyTests: XCTestCase {
             "Active session should expose Log Set"
         )
         logSetButton.tap()
+        _ = waitForElement(
+            in: app,
+            identifier: "workouts.restTimer",
+            timeout: 10,
+            "Logging a set should start the rest timer before force-quit"
+        )
 
-        XCTAssertTrue(
-            app.staticTexts["1 set logged"].waitForExistence(timeout: 10),
-            "The active session should show one logged set before force-quit"
+        let loggedSetLabel = waitForLoggedSetLabel(
+            in: app,
+            timeout: 10,
+            "The active session should show a logged set before force-quit"
         )
 
         app.terminate()
@@ -551,10 +558,12 @@ final class VolumeArcAppJourneyTests: XCTestCase {
             timeout: 15,
             "Relaunch should restore the in-progress workout session"
         )
-        XCTAssertTrue(
-            app.staticTexts["1 set logged"].waitForExistence(timeout: 10),
+        let restoredLoggedSetLabel = waitForLoggedSetLabel(
+            in: app,
+            timeout: 10,
             "Relaunch should preserve the set logged before force-quit"
         )
+        XCTAssertEqual(restoredLoggedSetLabel, loggedSetLabel)
 
         VolumeArcAppUITestSupport.assertTelemetryFired(
             in: app,
@@ -1047,6 +1056,57 @@ final class VolumeArcAppJourneyTests: XCTestCase {
             .firstMatch
         assertElementExists(element, timeout: timeout, message)
         return element
+    }
+
+    private func waitForLoggedSetLabel(
+        in app: XCUIApplication,
+        timeout: TimeInterval,
+        _ message: String
+    ) -> String {
+        let predicate = NSPredicate(
+            format: "identifier == %@ AND label MATCHES %@",
+            "workouts.loggedSetCount",
+            #"^[1-9][0-9]* sets? logged$"#
+        )
+        let scrollView = app.scrollViews["workouts.root"].firstMatch
+        let deadline = Date().addingTimeInterval(timeout)
+
+        repeat {
+            let label = app.staticTexts.matching(predicate).firstMatch
+            if label.exists {
+                return label.label
+            }
+            let activeSession = app.descendants(matching: .any)
+                .matching(identifier: "workouts.activeSession")
+                .firstMatch
+            if activeSession.exists, let label = loggedSetLabel(from: activeSession) {
+                return label
+            }
+            if scrollView.exists {
+                scrollView.swipeDown()
+            } else {
+                app.swipeDown()
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        } while Date() < deadline
+
+        XCTFail(message)
+        return ""
+    }
+
+    private func loggedSetLabel(from element: XCUIElement) -> String? {
+        let candidates = [element.label, element.value as? String]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+        for candidate in candidates {
+            if let range = candidate.range(
+                of: #"[1-9][0-9]* sets? logged"#,
+                options: .regularExpression
+            ) {
+                return String(candidate[range])
+            }
+        }
+        return nil
     }
 
     private func assertElementExists(

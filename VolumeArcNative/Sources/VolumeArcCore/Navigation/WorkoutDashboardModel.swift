@@ -1176,7 +1176,7 @@ public final class WorkoutDashboardModel: ObservableObject {
             kind: .queued,
             title: String(localized: "Watch update queued", comment: "Toast title when WatchConnectivity payloads are queued"),
             message: String(
-                localized: "We'll replay ^[\(pending) update](inflect: true) when your Watch reconnects.",
+                localized: "We'll replay \(dashboardLocalizedUpdateCount(pending)) when your Watch reconnects.",
                 comment: "Toast message when WatchConnectivity payloads are queued; placeholder is pending payload count"
             ),
             severity: .warning
@@ -1188,7 +1188,7 @@ public final class WorkoutDashboardModel: ObservableObject {
             kind: .replayed,
             title: String(localized: "Watch back in sync", comment: "Toast title when queued WatchConnectivity payloads replay"),
             message: String(
-                localized: "Replayed ^[\(replayed) queued update](inflect: true).",
+                localized: "Replayed \(dashboardLocalizedQueuedUpdateCount(replayed)).",
                 comment: "Toast message when WatchConnectivity payloads replay; placeholder is replayed payload count"
             ),
             severity: .info
@@ -1410,7 +1410,7 @@ public final class WorkoutDashboardModel: ObservableObject {
             syncSummary: isSessionActive
                 ? String(localized: "Session in progress", comment: "Widget sync summary during active session")
                 : String(
-                    localized: "^[\(recentSessions.count) session](inflect: true) this week",
+                    localized: "\(dashboardLocalizedSessionCount(recentSessions.count)) this week",
                     comment: "Widget sync summary count"
                 ),
             streakDays: computeStreakDays(),
@@ -2046,5 +2046,35 @@ public struct CoachMessage: Sendable, Identifiable, Equatable {
         self.content = content
         self.timestamp = timestamp
     }
+}
+
+private func dashboardLocalizedUpdateCount(_ count: Int) -> String {
+    if count == 1 {
+        return String(localized: "1 update", comment: "Singular WatchConnectivity pending update count")
+    }
+    return String(
+        localized: "\(count) updates",
+        comment: "Plural WatchConnectivity pending update count; placeholder is the number of updates"
+    )
+}
+
+private func dashboardLocalizedQueuedUpdateCount(_ count: Int) -> String {
+    if count == 1 {
+        return String(localized: "1 queued update", comment: "Singular WatchConnectivity replayed update count")
+    }
+    return String(
+        localized: "\(count) queued updates",
+        comment: "Plural WatchConnectivity replayed update count; placeholder is the number of queued updates"
+    )
+}
+
+private func dashboardLocalizedSessionCount(_ count: Int) -> String {
+    if count == 1 {
+        return String(localized: "1 session", comment: "Singular widget weekly session count")
+    }
+    return String(
+        localized: "\(count) sessions",
+        comment: "Plural widget weekly session count; placeholder is the number of sessions"
+    )
 }
 #endif

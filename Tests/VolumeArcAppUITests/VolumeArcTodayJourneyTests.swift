@@ -368,7 +368,7 @@ final class VolumeArcTodayJourneyTests: XCTestCase {
         )
 
         let schedule = app.descendants(matching: .any)
-            .matching(identifier: "coach.plan.schedule")
+            .matching(identifier: "coach.plan.schedule.footer")
             .firstMatch
         XCTAssertTrue(
             VolumeArcAppUITestSupport.scrollIntoViewAndTap(
@@ -383,8 +383,9 @@ final class VolumeArcTodayJourneyTests: XCTestCase {
             .matching(identifier: "workouts.root")
             .firstMatch
         XCTAssertTrue(workoutsRoot.waitForExistence(timeout: 10))
+        let editedScheduleSubtitle = app.staticTexts["3 moves - Romanian Deadlift first"].firstMatch
         XCTAssertTrue(
-            app.staticTexts["3 moves - Romanian Deadlift first"].waitForExistence(timeout: 10),
+            scrollUntilExists(editedScheduleSubtitle, in: app, timeout: 10, maxScrolls: 6),
             "Scheduled Workouts card should reflect the edited co-designed exercise list"
         )
         VolumeArcAppUITestSupport.assertTelemetryFired(
@@ -394,5 +395,20 @@ final class VolumeArcTodayJourneyTests: XCTestCase {
             within: 10,
             test: self
         )
+    }
+
+    private func scrollUntilExists(
+        _ element: XCUIElement,
+        in app: XCUIApplication,
+        timeout: TimeInterval,
+        maxScrolls: Int
+    ) -> Bool {
+        let slice = max(0.5, timeout / Double(maxScrolls + 1))
+        var attempts = 0
+        while !element.waitForExistence(timeout: slice) && attempts < maxScrolls {
+            app.swipeUp()
+            attempts += 1
+        }
+        return element.exists
     }
 }

@@ -114,7 +114,7 @@ public struct DiagnosticsView: View {
             }
             HStack(spacing: VA.Space.sm) {
                 Text(String(
-                    localized: "^[\(filteredEvents.count) event](inflect: true) of ^[\(events.count) event](inflect: true)",
+                    localized: "\(diagnosticsLocalizedEventCount(filteredEvents.count)) of \(diagnosticsLocalizedEventCount(events.count))",
                     comment: "Diagnostics counter — filtered events out of total"
                 ))
                 .font(VA.Typography.caption)
@@ -232,13 +232,13 @@ public struct DiagnosticsView: View {
     private var summaryTitle: String {
         if errorCount > 0 {
             return String(
-                localized: "^[\(errorCount) error](inflect: true) recorded",
+                localized: "\(diagnosticsLocalizedErrorCount(errorCount)) recorded",
                 comment: "Diagnostics summary title for error count"
             )
         }
         if warningCount > 0 {
             return String(
-                localized: "^[\(warningCount) warning](inflect: true) recorded",
+                localized: "\(diagnosticsLocalizedWarningCount(warningCount)) recorded",
                 comment: "Diagnostics summary title for warning count"
             )
         }
@@ -321,5 +321,35 @@ public struct DiagnosticsView: View {
         case .error: return VA.Colors.error
         }
     }
+}
+
+private func diagnosticsLocalizedEventCount(_ count: Int) -> String {
+    if count == 1 {
+        return String(localized: "1 event", comment: "Singular diagnostics event count")
+    }
+    return String(
+        localized: "\(count) events",
+        comment: "Plural diagnostics event count; placeholder is the number of events"
+    )
+}
+
+private func diagnosticsLocalizedErrorCount(_ count: Int) -> String {
+    if count == 1 {
+        return String(localized: "1 error", comment: "Singular diagnostics error count")
+    }
+    return String(
+        localized: "\(count) errors",
+        comment: "Plural diagnostics error count; placeholder is the number of errors"
+    )
+}
+
+private func diagnosticsLocalizedWarningCount(_ count: Int) -> String {
+    if count == 1 {
+        return String(localized: "1 warning", comment: "Singular diagnostics warning count")
+    }
+    return String(
+        localized: "\(count) warnings",
+        comment: "Plural diagnostics warning count; placeholder is the number of warnings"
+    )
 }
 #endif

@@ -77,7 +77,7 @@ public struct EditProfileView: View {
                 Section(String(localized: "Training Schedule", comment: "Edit profile section header — schedule")) {
                     Stepper(
                         String(
-                            localized: "Days per week: ^[\(weeklyDays) day](inflect: true)",
+                            localized: "Days per week: \(editProfileLocalizedDayCount(weeklyDays))",
                             comment: "Edit profile days-per-week stepper label"
                         ),
                         value: $weeklyDays,
@@ -282,5 +282,15 @@ public struct EditProfileView: View {
         onSave(defaults)
         isPresented = false
     }
+}
+
+private func editProfileLocalizedDayCount(_ count: Int) -> String {
+    if count == 1 {
+        return String(localized: "1 day", comment: "Singular edit profile training day count")
+    }
+    return String(
+        localized: "\(count) days",
+        comment: "Plural edit profile training day count; placeholder is the number of days"
+    )
 }
 #endif

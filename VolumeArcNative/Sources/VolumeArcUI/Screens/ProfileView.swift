@@ -231,10 +231,7 @@ public struct ProfileView: View { // swiftlint:disable:this type_body_length
             .accessibilityIdentifier("profile.advancementRow")
             profileRow(
                 label: String(localized: "Equipment", comment: "Profile row label"),
-                value: String(
-                    localized: "^[\(model.athlete.availableEquipment.count) type](inflect: true)",
-                    comment: "Equipment count on Profile row"
-                ),
+                value: profileLocalizedTypeCount(model.athlete.availableEquipment.count),
                 icon: "dumbbell.fill"
             ) {
                 VAHaptics.tap()
@@ -266,7 +263,7 @@ public struct ProfileView: View { // swiftlint:disable:this type_body_length
 
     private var coachMemoryCountText: String {
         let count = model.coachMemory.entries.count
-        return String(localized: "^[\(count) note](inflect: true)", comment: "Profile coach memory count value")
+        return profileLocalizedNoteCount(count)
     }
 
     private var subscriptionCard: some View {
@@ -1901,5 +1898,25 @@ private struct ProfileStat: View {
         }
         .frame(maxWidth: .infinity)
     }
+}
+
+private func profileLocalizedTypeCount(_ count: Int) -> String {
+    if count == 1 {
+        return String(localized: "1 type", comment: "Singular equipment type count on Profile row")
+    }
+    return String(
+        localized: "\(count) types",
+        comment: "Plural equipment type count on Profile row; placeholder is the number of equipment types"
+    )
+}
+
+private func profileLocalizedNoteCount(_ count: Int) -> String {
+    if count == 1 {
+        return String(localized: "1 note", comment: "Singular coach memory count value")
+    }
+    return String(
+        localized: "\(count) notes",
+        comment: "Plural coach memory count value; placeholder is the number of notes"
+    )
 }
 #endif

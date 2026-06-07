@@ -109,6 +109,7 @@ struct CoachPlanningCard: View {
             actionGrid
             targetChips
             exerciseList
+            footerActions
         }
         .padding(VA.Space.lg)
         .vaGlassBackground(in: RoundedRectangle(cornerRadius: VA.Radius.xl, style: .continuous))
@@ -219,6 +220,28 @@ struct CoachPlanningCard: View {
                 startNow()
             }
         }
+    }
+
+    private var footerActions: some View {
+        VStack(spacing: VA.Space.sm) {
+            VAButton(
+                String(localized: "Schedule", comment: "Co-design schedule footer action"),
+                icon: "calendar",
+                style: .secondary,
+                accessibilityIdentifier: "coach.plan.schedule.footer"
+            ) {
+                schedulePlan()
+            }
+            VAButton(
+                String(localized: "Start now", comment: "Co-design start now footer action"),
+                icon: "arrow.right",
+                style: .primary,
+                accessibilityIdentifier: "coach.plan.startNow.footer"
+            ) {
+                startNow()
+            }
+        }
+        .padding(.top, VA.Space.xs)
     }
 
     private func toggleExpanded(_ exercise: CoachPlanExercise) {

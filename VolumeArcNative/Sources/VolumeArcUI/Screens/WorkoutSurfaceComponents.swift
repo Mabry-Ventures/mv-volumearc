@@ -157,7 +157,7 @@ struct WorkoutIdleLibrary: View {
                             .font(VA.Typography.footnote)
                             .foregroundStyle(VA.Colors.textSecondary)
                         Text(String(
-                            localized: "\(duration) min · ^[\(exercises) exercise](inflect: true)",
+                            localized: "\(duration) min · \(workoutSurfaceLocalizedExerciseCount(exercises))",
                             comment: "Workout library row duration and exercise count"
                         ))
                         .font(VA.Typography.footnote)
@@ -411,9 +411,7 @@ struct WorkoutHistorySection: View {
             return "\(source) - \(session.durationMinutes)min"
         }
         let rpeText = String(format: "%.1f", session.averageRPE)
-        let setsText = session.completedSetCount == 1
-            ? String(localized: "1 set", comment: "Session summary set count, singular")
-            : String(localized: "^[\(session.completedSetCount) set](inflect: true)", comment: "Session summary set count")
+        let setsText = workoutSurfaceLocalizedSetCount(session.completedSetCount)
         return "\(setsText) - \(session.durationMinutes)min - RPE \(rpeText)"
     }
 
@@ -552,7 +550,7 @@ struct RestTimerDisplay: View {
                     remaining == 0
                         ? String(localized: "Go time", comment: "Rest timer complete accessibility value")
                         : String(
-                            localized: "^[\(remaining) second](inflect: true) remaining",
+                            localized: "\(workoutSurfaceLocalizedSecondCount(remaining)) remaining",
                             comment: "Rest timer countdown accessibility value"
                         )
                 )
@@ -604,5 +602,35 @@ struct RestTimerDisplay: View {
             lastFired = false
         }
     }
+}
+
+private func workoutSurfaceLocalizedExerciseCount(_ count: Int) -> String {
+    if count == 1 {
+        return String(localized: "1 exercise", comment: "Singular workout exercise count")
+    }
+    return String(
+        localized: "\(count) exercises",
+        comment: "Plural workout exercise count; placeholder is the number of exercises"
+    )
+}
+
+private func workoutSurfaceLocalizedSetCount(_ count: Int) -> String {
+    if count == 1 {
+        return String(localized: "1 set", comment: "Singular session summary set count")
+    }
+    return String(
+        localized: "\(count) sets",
+        comment: "Plural session summary set count; placeholder is the number of sets"
+    )
+}
+
+private func workoutSurfaceLocalizedSecondCount(_ count: Int) -> String {
+    if count == 1 {
+        return String(localized: "1 second", comment: "Singular rest timer duration in seconds")
+    }
+    return String(
+        localized: "\(count) seconds",
+        comment: "Plural rest timer duration in seconds; placeholder is the number of seconds"
+    )
 }
 #endif

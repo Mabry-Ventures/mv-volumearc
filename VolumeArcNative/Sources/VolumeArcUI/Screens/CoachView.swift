@@ -571,7 +571,7 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
             return String(localized: "Ready to review in Workouts.", comment: "Coach workout handoff empty summary")
         }
         return String(
-            localized: "^[\(plan.exercises.count) move](inflect: true) - \(firstExercise.name) first",
+            localized: "\(coachLocalizedMoveCount(plan.exercises.count)) - \(firstExercise.name) first",
             comment: "Coach workout handoff summary with exercise count and first lift"
         )
     }
@@ -688,5 +688,15 @@ private struct SuggestedCoachPrompt: Identifiable {
     let id: String
     let title: String
     let systemImage: String
+}
+
+private func coachLocalizedMoveCount(_ count: Int) -> String {
+    if count == 1 {
+        return String(localized: "1 move", comment: "Singular coach workout move count")
+    }
+    return String(
+        localized: "\(count) moves",
+        comment: "Plural coach workout move count; placeholder is the number of moves"
+    )
 }
 #endif
