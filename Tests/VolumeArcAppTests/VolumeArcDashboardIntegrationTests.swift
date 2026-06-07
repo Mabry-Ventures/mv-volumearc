@@ -830,15 +830,73 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
 
         XCTAssertEqual(model.activeSessionExercise?.name, "Front Squat")
 
-        model.skipActiveSessionExercise()
+        let skip = try XCTUnwrap(model.skipActiveSessionExercise())
 
+        XCTAssertEqual(skip.skippedExercise, "Front Squat")
+        XCTAssertEqual(skip.nextExercise, "Romanian Deadlift")
         XCTAssertEqual(model.activeSessionExercise?.name, "Romanian Deadlift")
+        XCTAssertEqual(model.activeSessionPlan?.exercises.map(\.name), ["Romanian Deadlift"])
+        XCTAssertEqual(model.loggedSetCountThisSession, 0)
+        XCTAssertEqual(model.loggedSetCountForActiveExercise, 0)
         XCTAssertTrue(telemetry.currentEvents.contains {
             $0.category == "workout" && $0.name == "exercise_replaced"
         })
         XCTAssertTrue(telemetry.currentEvents.contains {
             $0.category == "workout" && $0.name == "exercise_skipped"
         })
+    }
+
+    func testSkippingCurrentExerciseRemovesItWithoutInflatingSetProgress() async throws {
+        let activeSessionStateStore = InMemoryActiveWorkoutSessionStateStore()
+        let model = makeDashboardModel(activeSessionStateStore: activeSessionStateStore)
+        let plan = WorkoutSessionPlan(
+            title: "Busy gym upper",
+            exercises: [
+                WeeklyWorkoutExercise(
+                    name: "Bench Press",
+                    sets: 3,
+                    reps: 5,
+                    weight: 185,
+                    targetRPE: 8,
+                    restSeconds: 150
+                ),
+                WeeklyWorkoutExercise(
+                    name: "Barbell Row",
+                    sets: 3,
+                    reps: 8,
+                    weight: 135,
+                    targetRPE: 7,
+                    restSeconds: 120
+                ),
+                WeeklyWorkoutExercise(
+                    name: "Overhead Press",
+                    sets: 2,
+                    reps: 6,
+                    weight: 95,
+                    targetRPE: 7,
+                    restSeconds: 120
+                ),
+            ]
+        )
+
+        await model.startWorkoutSession(plan: plan)
+        let workoutID = try XCTUnwrap(model.activeWorkoutID)
+        await model.logRecommendedSet()
+        model.moveActiveSession(toExerciseAt: 1)
+        await model.logRecommendedSet()
+
+        let skip = try XCTUnwrap(model.skipActiveSessionExercise())
+
+        XCTAssertEqual(skip.skippedExercise, "Barbell Row")
+        XCTAssertEqual(skip.nextExercise, "Overhead Press")
+        XCTAssertEqual(model.loggedSetCountThisSession, 2)
+        XCTAssertEqual(model.activeSessionExercise?.name, "Overhead Press")
+        XCTAssertEqual(model.activeSessionPlan?.exercises.map(\.name), ["Bench Press", "Overhead Press"])
+        XCTAssertEqual(model.loggedSetCountForActiveExercise, 0)
+        XCTAssertEqual(
+            activeSessionStateStore.load(workoutID: workoutID)?.loggedSetCountsByExerciseIndex,
+            [0: 1]
+        )
     }
 
     func testActiveSessionPlanCanDeferAndSelectExercisesForBusyGym() async throws {

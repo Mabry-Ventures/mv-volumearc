@@ -683,6 +683,23 @@ public final class WorkoutDashboardModel: ObservableObject {
         }
     }
 
+    private func shiftLoggedSetCountsAfterRemovingExercise(
+        _ counts: [Int: Int],
+        removedIndex: Int,
+        exerciseCountAfterRemoval: Int
+    ) -> [Int: Int] {
+        counts.reduce(into: [Int: Int]()) { result, entry in
+            guard entry.key >= 0, entry.key <= exerciseCountAfterRemoval else { return }
+            if entry.key == removedIndex {
+                return
+            } else if entry.key > removedIndex {
+                result[entry.key - 1] = entry.value
+            } else {
+                result[entry.key] = entry.value
+            }
+        }
+    }
+
     private static func lengthBucket(for value: String) -> String {
         switch value.count {
         case 0:
@@ -882,32 +899,60 @@ public final class WorkoutDashboardModel: ObservableObject {
         publishWidgetSnapshot()
     }
 
-    public func skipActiveSessionExercise() {
+    @discardableResult
+    public func skipActiveSessionExercise() -> (skippedExercise: String, nextExercise: String?)? {
         guard let activeSessionPlan,
               activeSessionPlan.exercises.indices.contains(activeSessionExerciseIndex)
-        else { return }
+        else { return nil }
 
+        let skippedIndex = activeSessionExerciseIndex
+        var exercises = activeSessionPlan.exercises
         let skippedExercise = activeSessionPlan.exercises[activeSessionExerciseIndex]
-        if activeSessionExerciseIndex < activeSessionPlan.exercises.count - 1 {
-            loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] = max(1, skippedExercise.sets)
-            activeSessionExerciseIndex += 1
+        exercises.remove(at: skippedIndex)
+
+        loggedSetCountsByExerciseIndex = shiftLoggedSetCountsAfterRemovingExercise(
+            loggedSetCountsByExerciseIndex,
+            removedIndex: skippedIndex,
+            exerciseCountAfterRemoval: exercises.count
+        )
+
+        if exercises.isEmpty {
+            self.activeSessionPlan = nil
+            activeSessionExerciseIndex = 0
+            loggedSetCountForActiveExercise = 0
+            if let activeWorkoutID {
+                activeSessionStateStore.clear(workoutID: activeWorkoutID)
+            }
+        } else {
+            self.activeSessionPlan = WorkoutSessionPlan(
+                title: activeSessionPlan.title,
+                durationMinutes: activeSessionPlan.durationMinutes,
+                targetRPE: activeSessionPlan.targetRPE,
+                exercises: exercises
+            )
+            activeSessionExerciseIndex = min(skippedIndex, exercises.count - 1)
             loggedSetCountForActiveExercise = min(
                 loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] ?? 0,
-                max(1, activeSessionPlan.exercises[activeSessionExerciseIndex].sets)
+                max(1, exercises[activeSessionExerciseIndex].sets)
             )
-        } else {
-            loggedSetCountForActiveExercise = max(1, skippedExercise.sets)
-            loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] = loggedSetCountForActiveExercise
+            persistActiveSessionStateIfNeeded()
         }
-        persistActiveSessionStateIfNeeded()
+
+        let nextExercise = exercises.indices.contains(activeSessionExerciseIndex)
+            ? exercises[activeSessionExerciseIndex].name
+            : nil
         telemetrySink.record(TelemetryEvent(
             category: "workout",
             name: "exercise_skipped",
             severity: .info,
             message: "Skipped exercise during an active session.",
-            metadata: ["exercise_id": Self.exerciseIdentifier(named: skippedExercise.name)]
+            metadata: [
+                "exercise_id": Self.exerciseIdentifier(named: skippedExercise.name),
+                "next_exercise_id": nextExercise.map(Self.exerciseIdentifier(named:)) ?? "none",
+            ]
         ))
         publishWidgetSnapshot()
+        return (skippedExercise.name, nextExercise)
     }
 
     /// Discard the in-progress workout without creating a completed history row.

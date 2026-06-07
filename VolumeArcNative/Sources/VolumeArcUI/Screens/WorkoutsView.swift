@@ -1012,13 +1012,13 @@ public struct WorkoutsView: View {
 
     private func skipCurrentExercise() {
         if model.activeSessionPlan != nil {
-            model.skipActiveSessionExercise()
+            let result = model.skipActiveSessionExercise()
             resetLiveWorkoutOverrides()
             VAHaptics.selection()
             toastPresenter.show(VAToast(
                 kind: .info,
                 title: String(localized: "Exercise skipped", comment: "Toast title after skipping exercise"),
-                message: String(localized: "Moved to the next planned lift.", comment: "Toast body after skipping exercise")
+                message: skippedExerciseToastMessage(nextExercise: result?.nextExercise)
             ))
         } else {
             chooseEquipmentBusyReplacement()
@@ -1049,6 +1049,19 @@ public struct WorkoutsView: View {
         targetRepsOverride = nil
         targetRPEOverride = nil
         replacementExercise = nil
+    }
+
+    private func skippedExerciseToastMessage(nextExercise: String?) -> String {
+        if let nextExercise {
+            return String(
+                localized: "\(nextExercise) is now loaded.",
+                comment: "Toast body after skipping one exercise and loading the next"
+            )
+        }
+        return String(
+            localized: "No planned lifts remain. Complete the session or use the builder for another move.",
+            comment: "Toast body after skipping the final planned exercise"
+        )
     }
 
     private func startRestTimer() {
