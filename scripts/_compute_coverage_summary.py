@@ -23,6 +23,12 @@ The shell wrapper invokes us as:
       | python3 scripts/_compute_coverage_summary.py
 
 with TARGET, THRESHOLD, SUMMARY_JSON in the environment.
+
+Optional: COVERAGE_FILE_CONTAINS lets a gate measure a source surface
+compiled into a test host rather than an independently executed product
+target. This is intentionally narrow and used for widget SwiftUI view
+coverage until the widget extension can be exercised as its own runtime
+process in CI.
 """
 
 import json
@@ -33,7 +39,7 @@ import sys
 # VOL-140 Phase 1: filter out test targets — their "coverage" isn't
 # the kind we ship. Anything ending in these suffixes (case-insensitive)
 # is dropped from the per-target rows.
-TEST_TARGET_SUFFIXES = ("tests", "testsupport", "uitests-runner")
+TEST_TARGET_SUFFIXES = ("tests", ".xctest", "testsupport", "uitests-runner")
 
 
 def looks_like_test_target(name: str) -> bool:
@@ -94,10 +100,43 @@ def build_top_uncovered(target_entry: dict) -> list[dict]:
     return rows
 
 
+def file_matches(entry: dict, pattern: str | None) -> bool:
+    if not pattern:
+        return False
+    raw_path = entry.get("path") or entry.get("name") or ""
+    return pattern in raw_path
+
+
+def build_file_surface_entry(data: dict, pattern: str | None) -> dict | None:
+    if not pattern:
+        return None
+
+    matched_files = []
+    for target in data.get("targets", []) or []:
+        for entry in target.get("files", []) or []:
+            if file_matches(entry, pattern):
+                matched_files.append(entry)
+
+    if not matched_files:
+        return None
+
+    executable = sum((entry.get("executableLines", 0) or 0) for entry in matched_files)
+    covered = sum((entry.get("coveredLines", 0) or 0) for entry in matched_files)
+    line_coverage = covered / executable if executable else 0.0
+    return {
+        "name": pattern,
+        "lineCoverage": line_coverage,
+        "executableLines": executable,
+        "coveredLines": covered,
+        "files": matched_files,
+    }
+
+
 def main() -> int:
     target_name = os.environ["TARGET"]
     threshold = float(os.environ["THRESHOLD"])
     summary_path = os.environ["SUMMARY_JSON"]
+    file_pattern = os.environ.get("COVERAGE_FILE_CONTAINS")
 
     # VolumeArcCore is built as a static library, so xccov reports the
     # target as 'libVolumeArcCore.a'. Accept either form so the gate
@@ -109,6 +148,7 @@ def main() -> int:
     }
 
     data = json.load(sys.stdin)
+    file_surface_entry = build_file_surface_entry(data, file_pattern)
 
     primary_target_entry = None
     per_target_rows = []
@@ -138,6 +178,23 @@ def main() -> int:
             row["passed"] = coverage_pct + 1e-9 >= threshold
 
         per_target_rows.append(row)
+
+    if primary_target_entry is None and file_surface_entry is not None:
+        primary_target_entry = file_surface_entry
+        coverage_value = file_surface_entry.get("lineCoverage", 0.0) or 0.0
+        coverage_pct = round(coverage_value * 100, 2)
+        per_target_rows.append(
+            {
+                "target": target_name,
+                "coverage": coverage_pct,
+                "executable": file_surface_entry.get("executableLines", 0) or 0,
+                "covered": file_surface_entry.get("coveredLines", 0) or 0,
+                "gated": True,
+                "threshold": threshold,
+                "passed": coverage_pct + 1e-9 >= threshold,
+                "sourceMatch": file_pattern,
+            }
+        )
 
     # Sort: gated target first, then by coverage descending so the
     # most well-tested modules surface first in tables.

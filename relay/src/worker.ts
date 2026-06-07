@@ -540,7 +540,7 @@ function hasCurrentMedicalRedFlag(text: string): boolean {
 
 function medicalRedFlagClauses(line: string): string[] {
   return line
-    .split(/\b(?:but|however)\b|[.;]/i)
+    .split(/\b(?:but|however)\b|[.,;]/i)
     .map((clause) => clause.trim())
     .filter((clause) => clause.length > 0);
 }

@@ -23,7 +23,7 @@ The release bar is now higher than the original positioning decision. VolumeArc 
 **What we ship that most competitors don't:**
 - Native Apple watch + phone with **parity**, not a shrunken companion
 - Live Activities + Dynamic Island for active workouts
-- CloudKit continuity across iPhone and Apple Watch, with optional Sign in with Apple profile identity
+- CloudKit continuity across iPhone and Apple Watch, with Sign in with Apple available to seed profile identity
 - Readiness derived from actual HealthKit (HRV, sleep, recovery) feeding a real progression engine
 - Liquid Glass (iOS 26) design language adoption on day one
 - Private-by-default data (SwiftData + CloudKit, no third-party telemetry of training data)
