@@ -531,6 +531,7 @@ public struct ProfileView: View { // swiftlint:disable:this type_body_length
         case .sessionProfiles:
             SessionProfilesSheet(
                 athlete: model.athlete,
+                activeProfileName: $activeSessionProfileName,
                 saveDefaults: { sessionMinutes, weeklyDays in
                     saveProfileDefaults(sessionTimeBudgetMinutes: sessionMinutes, weeklyTrainingDays: weeklyDays)
                 }
@@ -663,6 +664,18 @@ public struct ProfileView: View { // swiftlint:disable:this type_body_length
             profileRowLabel(label: label, value: value, icon: icon)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(profileRowAccessibilityLabel(label: label, value: value))
+        .accessibilityValue(value)
+    }
+
+    private func profileRowAccessibilityLabel(label: String, value: String) -> String {
+        let trimmedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedValue.isEmpty else { return label }
+        return String(
+            localized: "\(label), \(trimmedValue)",
+            comment: "Profile row accessibility label with current setting value"
+        )
     }
 
     private func saveProfileDefaults(
@@ -1262,8 +1275,7 @@ private struct EquipmentPreferencesSheet: View {
 
 private struct SessionProfilesSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("volumearc.sessionProfiles.active")
-    private var persistedActiveProfileName = WorkoutSessionProfile.defaultProfile.rawValue
+    @Binding private var persistedActiveProfileName: String
     @AppStorage("volumearc.sessionProfiles.customNames")
     private var persistedCustomProfileNamesRaw = ""
     @AppStorage("volumearc.sessionProfiles.legDayRule")
@@ -1281,7 +1293,12 @@ private struct SessionProfilesSheet: View {
 
     private let builtInProfileNames = WorkoutSessionProfile.allCases.map(\.rawValue)
 
-    init(athlete: AthleteProfile, saveDefaults: @escaping (Int, Int) -> Void) {
+    init(
+        athlete: AthleteProfile,
+        activeProfileName: Binding<String>,
+        saveDefaults: @escaping (Int, Int) -> Void
+    ) {
+        _persistedActiveProfileName = activeProfileName
         _sessionMinutes = State(initialValue: athlete.sessionTimeBudgetMinutes)
         _weeklyTrainingDays = State(initialValue: athlete.weeklyTrainingDays)
         self.saveDefaults = saveDefaults
@@ -1425,12 +1442,17 @@ private struct SessionProfilesSheet: View {
     }
 
     private var canAddCustomProfile: Bool {
-        !normalizedNewProfileName.isEmpty &&
-            !profileNames.contains { $0.caseInsensitiveCompare(normalizedNewProfileName) == .orderedSame }
+        !normalizedNewProfileName.isEmpty
     }
 
     private func addCustomProfile() {
         guard canAddCustomProfile else { return }
+        if let existingName = profileNames.first(where: { $0.caseInsensitiveCompare(normalizedNewProfileName) == .orderedSame }) {
+            activeProfileName = existingName
+            newProfileName = ""
+            VAHaptics.tap()
+            return
+        }
         var names = customProfileNames
         names.append(normalizedNewProfileName)
         customProfileNamesRaw = names.joined(separator: "\n")

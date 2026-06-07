@@ -272,7 +272,7 @@ final class VolumeArcProfileJourneyTests: XCTestCase {
         let updatedRow = findProfileRow(identifier: "profile.sessionProfilesRow", in: app)
         XCTAssertTrue(
             updatedRow.label.localizedCaseInsensitiveContains("Pull Day"),
-            "Profile row should show the active custom session profile"
+            "Profile row should show the active custom session profile; label=\(updatedRow.label), value=\(updatedRow.value)"
         )
     }
 
