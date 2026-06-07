@@ -265,11 +265,24 @@ enum VolumeArcSentryConfiguration {
     }
 
     private static func resolveDSN() -> String? {
-        let rawDSN = (try? secureStore.load(dsnKey))
-            ?? ProcessInfo.processInfo.environment["VOLUMEARC_SENTRY_DSN"]
-            ?? Bundle.main.object(forInfoDictionaryKey: "VolumeArcSentryDSN") as? String
+        let rawDSN = resolveRawDSNCandidate(
+            secureStoreValue: try? secureStore.load(dsnKey),
+            environment: ProcessInfo.processInfo.environment,
+            bundleValue: Bundle.main.object(forInfoDictionaryKey: "VolumeArcSentryDSN") as? String
+        )
 
         return validatedDSN(from: rawDSN)
+    }
+
+    static func resolveRawDSNCandidate(
+        secureStoreValue: String?,
+        environment: [String: String],
+        bundleValue: String?
+    ) -> String? {
+        secureStoreValue
+            ?? environment["VOLUMEARC_SENTRY_DSN"]
+            ?? environment["SENTRY_DSN"]
+            ?? bundleValue
     }
 
     static func validatedDSN(from rawValue: String?) -> String? {

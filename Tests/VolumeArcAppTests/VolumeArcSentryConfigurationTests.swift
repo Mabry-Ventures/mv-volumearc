@@ -153,6 +153,39 @@ final class VolumeArcSentryConfigurationTests: XCTestCase {
         XCTAssertEqual(dsn, "https://publicKey@o123456.ingest.sentry.io/987654")
     }
 
+    func testRawDSNResolutionAcceptsDocumentedEnvironmentVariable() {
+        let rawDSN = VolumeArcSentryConfiguration.resolveRawDSNCandidate(
+            secureStoreValue: nil,
+            environment: ["SENTRY_DSN": "https://publicKey@o123456.ingest.sentry.io/987654"],
+            bundleValue: nil
+        )
+
+        XCTAssertEqual(rawDSN, "https://publicKey@o123456.ingest.sentry.io/987654")
+    }
+
+    func testRawDSNResolutionPrefersLegacyVolumeArcEnvironmentVariableOverDocumentedAlias() {
+        let rawDSN = VolumeArcSentryConfiguration.resolveRawDSNCandidate(
+            secureStoreValue: nil,
+            environment: [
+                "VOLUMEARC_SENTRY_DSN": "https://legacyKey@o123456.ingest.sentry.io/111111",
+                "SENTRY_DSN": "https://publicKey@o123456.ingest.sentry.io/987654",
+            ],
+            bundleValue: "https://bundleKey@o123456.ingest.sentry.io/222222"
+        )
+
+        XCTAssertEqual(rawDSN, "https://legacyKey@o123456.ingest.sentry.io/111111")
+    }
+
+    func testRawDSNResolutionPrefersSecureStoreOverEnvironment() {
+        let rawDSN = VolumeArcSentryConfiguration.resolveRawDSNCandidate(
+            secureStoreValue: "https://storedKey@o123456.ingest.sentry.io/333333",
+            environment: ["SENTRY_DSN": "https://publicKey@o123456.ingest.sentry.io/987654"],
+            bundleValue: "https://bundleKey@o123456.ingest.sentry.io/222222"
+        )
+
+        XCTAssertEqual(rawDSN, "https://storedKey@o123456.ingest.sentry.io/333333")
+    }
+
     func testValidatedDSNRejectsBuildSettingPlaceholder() {
         XCTAssertNil(VolumeArcSentryConfiguration.validatedDSN(from: "$(SENTRY_DSN)"))
     }

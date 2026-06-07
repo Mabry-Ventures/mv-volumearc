@@ -182,7 +182,7 @@ StoreKit 2 with two products and `@Published` entitlement state:
 |-----|--------|---------|
 | `VOLUMEARC_AI_RELAY_URL` | Env var or `VolumeArcAIRelayURL` in Info.plist | AI relay base URL for cloud coach + voice |
 | `VolumeArcCloudKitContainer` | Info.plist | CloudKit container identifier (`iCloud.com.mabryventures.VolumeArc`) |
-| `VOLUMEARC_SENTRY_DSN` | Env var or `VolumeArcSentryDSN` in Info.plist | Sentry DSN for crash reporting and telemetry |
+| `SENTRY_DSN` / `VOLUMEARC_SENTRY_DSN` | Env var or `VolumeArcSentryDSN` in Info.plist | Sentry DSN for crash reporting and telemetry. `SENTRY_DSN` is the documented release/Xcode Cloud build setting; `VOLUMEARC_SENTRY_DSN` remains accepted as a legacy runtime alias. |
 
 The AI relay URL is bootstrapped into Keychain at launch. If neither source provides it, cloud AI and live voice are disabled with a startup warning.
 
