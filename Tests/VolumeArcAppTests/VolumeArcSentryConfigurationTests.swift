@@ -180,5 +180,27 @@ final class VolumeArcSentryConfigurationTests: XCTestCase {
             from: "https://publicKey@o123456.ingest.sentry.io"
         ))
     }
+
+    func testMissingDSNIsInformationalForDebugBuilds() {
+        XCTAssertEqual(
+            VolumeArcSentryConfiguration.startupWarningSeverity(isDebugBuild: true),
+            .info
+        )
+        XCTAssertTrue(
+            VolumeArcSentryConfiguration.startupWarningMessage(isDebugBuild: true)
+                .contains("local Debug build")
+        )
+    }
+
+    func testMissingDSNIsWarningForReleaseBuilds() {
+        XCTAssertEqual(
+            VolumeArcSentryConfiguration.startupWarningSeverity(isDebugBuild: false),
+            .warning
+        )
+        XCTAssertTrue(
+            VolumeArcSentryConfiguration.startupWarningMessage(isDebugBuild: false)
+                .contains("Release build")
+        )
+    }
 }
 #endif

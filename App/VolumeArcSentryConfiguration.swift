@@ -242,7 +242,26 @@ enum VolumeArcSentryConfiguration {
     static var startupWarning: String? {
         isConfigured
             ? nil
-            : "Sentry DSN is not configured, so crash reporting is unavailable on this build."
+            : startupWarningMessage(isDebugBuild: isDebugBuild)
+    }
+
+    static var startupWarningSeverity: TelemetrySeverity {
+        startupWarningSeverity(isDebugBuild: isDebugBuild)
+    }
+
+    static func startupWarningSeverity(isDebugBuild: Bool) -> TelemetrySeverity {
+        isDebugBuild ? .info : .warning
+    }
+
+    static func startupWarningMessage(isDebugBuild: Bool) -> String {
+        if isDebugBuild {
+            return """
+            Sentry DSN is not configured for this local Debug build, so crash \
+            reporting is unavailable here. TestFlight and App Store builds \
+            must provide SENTRY_DSN.
+            """
+        }
+        return "Sentry DSN is not configured, so crash reporting is unavailable on this Release build."
     }
 
     private static func resolveDSN() -> String? {
