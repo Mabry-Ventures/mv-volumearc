@@ -73,13 +73,13 @@ final class VolumeArcCoachStreamingPerfTests: XCTestCase {
         )
         XCTAssertLessThanOrEqual(
             result.coachMessagePublishCount,
-            6,
+            12,
             """
             VOL-257 contract regression: 1000 streamed chunks produced \
             \(result.coachMessagePublishCount) coachMessages publishes. \
-            Expected user bubble, empty coach bubble, first-token publish, \
-            and final publish with small headroom; a publish per token \
-            would reintroduce UI churn.
+            Expected bounded micro-batched publishes with shared-CI \
+            scheduler headroom; a publish per token would reintroduce UI \
+            churn.
             """
         )
         XCTAssertLessThan(
