@@ -23,50 +23,50 @@
 
 **As of 2026-05-04 (VOL-126), TestFlight deploys are owned by Xcode Cloud.** Apple-managed signing eliminates the cert/profile management overhead that blocked the earlier self-hosted Fastlane path. GitHub Actions still owns the substantive validation gates (build, tests, perf-regression, lint) — Xcode Cloud only owns archive + sign + upload.
 
-### Tag → TestFlight flow
+### Current Xcode Cloud workflows
 
-1. Merge all changes to `main` (GitHub Actions runs the full validation suite on every push).
+Live App Store Connect state checked on 2026-06-06:
+
+| Workflow | Trigger | Actions | Distribution |
+|---|---|---|---|
+| `VolumeArc PR` | Pull requests into `main` | Build `VolumeArcApp`; test `VOL-PR` on iPhone 17 / iOS 26.5 | None |
+| `VolumeArc Main` | Branch updates to `main` | Test `VOL-Main` | None |
+| `Internal Testing` | Manual branch run, source `main` only | Archive `VolumeArcApp` | TestFlight internal only |
+
+There is **no live tag-triggered TestFlight workflow** in App Store Connect today. Treat any older `Tag -> TestFlight` references as stale until a new Xcode Cloud workflow with a `v*` tag trigger is intentionally created and verified.
+
+### Main → Internal TestFlight flow
+
+1. Merge all changes to `main` after required GitHub and Xcode Cloud PR gates pass.
 2. Bump `VERSION` if needed.
-3. Tag the release:
+3. Run the release-ready local/static gate:
    ```bash
-   git tag v1.2.3
-   git push --tags
+   VOLUMEARC_RELEASE_READY=1 ./scripts/validate_release_config.sh
    ```
-4. **GitHub Actions** runs `Build & Test` + `Performance budgets (VOL-99)` against the tag commit. These must pass.
-5. **Xcode Cloud workflow** (configured per [Xcode Cloud setup](#xcode-cloud-setup) below) triggers in parallel on the tag push, archives the app with Apple-managed signing, and uploads to TestFlight.
-6. After archive, `ci_scripts/ci_post_xcodebuild.sh` verifies the archived app has `VolumeArcSentryDSN` and `VolumeArcAIRelayURL`, generates a matching `Sentry.framework.dSYM` from the archived framework binary, then runs `sentry-cli debug-files upload --include-sources --wait` against the archive's `dSYMs/` (VOL-133). Apple's auto-symbolication for App Store crashes still happens in parallel; this provides the same data to Sentry so our own crash reports symbolicate.
-7. **TestFlight processing** (5-15 min usually). Watch in App Store Connect.
-8. dSYMs visible in Sentry under https://mabry-ventures-llc.sentry.io/settings/projects/volumearc-ios/debug-symbols/ tagged with release `com.mabryventures.VolumeArc@<version>+<build>`.
+4. In App Store Connect, open Apps → VolumeArc → Xcode Cloud → `Internal Testing`.
+5. Start a manual run from branch `main`.
+6. Xcode Cloud archives the app with Apple-managed signing and uploads to internal TestFlight.
+7. After archive, `ci_scripts/ci_post_xcodebuild.sh` verifies the archived app has `VolumeArcSentryDSN` and `VolumeArcAIRelayURL`, generates a matching `Sentry.framework.dSYM` from the archived framework binary, then runs `sentry-cli debug-files upload --include-sources --wait` against the archive's `dSYMs/` (VOL-133). Apple's auto-symbolication for App Store crashes still happens in parallel; this provides the same data to Sentry so our own crash reports symbolicate.
+8. **TestFlight processing** usually takes 5-15 minutes. Watch in App Store Connect.
+9. dSYMs must be visible in Sentry under https://mabry-ventures-llc.sentry.io/settings/projects/volumearc-ios/debug-symbols/ tagged with release `com.mabryventures.VolumeArc@<version>+<build>`.
+10. Fill out `docs/RELEASE_UAT_EVIDENCE.md` for the exact TestFlight build and run `./scripts/check_release_uat_evidence.sh`.
 
-### Xcode Cloud setup
+### Xcode Cloud setup target state
 
-One-time setup, done in App Store Connect's web UI (cannot be done via CLI / API as of 2026-05).
+The current manual `Internal Testing` workflow is enough for controlled internal TestFlight builds from `main`, but it is not the desired long-term automation. Before GA, either:
 
-1. https://appstoreconnect.apple.com → Apps → VolumeArc → Xcode Cloud
-2. Click "Get Started" or "Create Workflow".
-3. **Workflow name**: `Tag → TestFlight`
-4. **Project**: `VolumeArcApple.xcodeproj` (the generated project at the repo root — Xcode Cloud needs this checked into git, which it is via `scripts/generate_xcode_project.rb`'s pbxproj output)
-5. **Scheme**: `VolumeArcApp`
-6. **Branch / Tag triggers**:
-   - Add a **Tag Changes** trigger
-   - Pattern: `v*` (matches `v1.0.2`, `v1.0.2-rc1`, etc.)
-7. **Actions**: add an **Archive** action
-   - Configuration: `Release`
-   - Distribution: **TestFlight (Internal Testing Only)** initially; once we trust the pipeline, optionally add an external test group.
-8. **Environment variables** (settings cog → Environment):
-   - `SENTRY_DSN` — public client DSN for `mabry-ventures-llc/volumearc-ios`; required so TestFlight builds initialize Sentry.
-   - `SENTRY_AUTH_TOKEN` — mark as **secret**. Same token as the GitHub `SENTRY_AUTH_TOKEN` secret (Sentry user token with `project:write` on `mabry-ventures-llc/volumearc-ios`).
-   - `SENTRY_ORG` — `mabry-ventures-llc` (optional; script defaults to this)
-   - `SENTRY_PROJECT` — `volumearc-ios` (optional; script defaults to this)
-   - `VOLUMEARC_AI_RELAY_URL` — `https://relay.volumearc.app`
-9. **Post-Actions**: leave empty — the dSYM upload runs from `ci_scripts/ci_post_xcodebuild.sh` which Xcode Cloud invokes automatically after each archive.
-10. **Test grouping** (optional): add a "Test" action with the `VolumeArcAppTests` scheme if you want Xcode Cloud to run unit tests too. Not required since GitHub Actions already runs them.
+- keep `Internal Testing` as a deliberate manual release step and document the operator, build number, and ASC run URL in `docs/RELEASE_UAT_EVIDENCE.md`; or
+- create a separate `Tag -> TestFlight` workflow with a `v*` tag trigger, Archive action, Release configuration, and TestFlight internal distribution, then update this section after the first successful tag-driven build.
 
-After setup, push a tag and verify:
-- The Xcode Cloud workflow appears in App Store Connect within ~30s of the tag push.
-- Build completes (typically 25-40 min on hosted Macs).
-- TestFlight build is visible.
-- Sentry's debug-symbols page shows app/watch/widget dSYMs plus the generated `Sentry.framework.dSYM` for the build.
+Every TestFlight-capable workflow must keep these Xcode Cloud environment variables configured:
+
+- `SENTRY_DSN` — public client DSN for `mabry-ventures-llc/volumearc-ios`; required so TestFlight builds initialize Sentry.
+- `SENTRY_AUTH_TOKEN` — mark as **secret**. Same token as the GitHub `SENTRY_AUTH_TOKEN` secret (Sentry user token with `project:write` on `mabry-ventures-llc/volumearc-ios`).
+- `SENTRY_ORG` — `mabry-ventures-llc` (optional; script defaults to this).
+- `SENTRY_PROJECT` — `volumearc-ios` (optional; script defaults to this).
+- `VOLUMEARC_AI_RELAY_URL` — `https://relay.volumearc.app`.
+
+Post-actions should remain empty because the dSYM upload runs from `ci_scripts/ci_post_xcodebuild.sh`, which Xcode Cloud invokes automatically after each archive.
 
 ### Local archive fallback
 
