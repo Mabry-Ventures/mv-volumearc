@@ -220,11 +220,20 @@ Commit the updated `Package.resolved` alongside the generator change.
 1. Verify TestFlight build is stable with at least 3 testers
 2. Tag with `-rc` suffix if doing a release candidate
 3. Run `fastlane ios release` which:
-   - Runs the `beta` lane (waits for processing, fails loudly on rejection)
+   - Assumes the exact UAT-approved TestFlight build is already selected in App Store Connect
+   - Runs `VOLUMEARC_RELEASE_READY=1 ./scripts/validate_release_config.sh --no-build`
    - Runs the `screenshots` lane (see below) to regenerate App Store listing assets
    - Submits for review via `deliver` with `skip_screenshots: false` so the fresh artifacts upload with the metadata
 4. Monitor App Store Connect for review status
 5. Release manually when approved
+
+To create a local TestFlight candidate through Fastlane, run:
+
+```bash
+bundle exec fastlane ios release upload_beta:true
+```
+
+That path uploads and waits for the candidate build, then stops before App Store submission. Fill `docs/RELEASE_UAT_EVIDENCE.md` for that exact build and rerun `bundle exec fastlane ios release` without `upload_beta:true`.
 
 ### Screenshots lane (VOL-96)
 

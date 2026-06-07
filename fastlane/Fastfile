@@ -626,12 +626,23 @@ platform :ios do
     end
   end
 
-  desc "Submit to App Store review"
-  # Release runs beta first (waits for processing), then generates and
-  # uploads screenshots before submitting for review. `deliver` picks
-  # screenshots up automatically from fastlane/screenshots/.
-  lane :release do
-    beta
+  desc "Submit an already-UAT'd TestFlight build to App Store review"
+  # TestFlight candidate creation and physical UAT are separate from App
+  # Store submission. By default this lane assumes the candidate build is
+  # already processed, selected in App Store Connect, and recorded in
+  # docs/RELEASE_UAT_EVIDENCE.md. Passing upload_beta:true creates a fresh
+  # TestFlight candidate and then stops before submission so evidence cannot
+  # be accidentally reused for the wrong build.
+  lane :release do |options|
+    upload_beta = options[:upload_beta].to_s == "true" || ENV["VOLUMEARC_RELEASE_UPLOAD_BETA"] == "1"
+    if upload_beta
+      beta
+      UI.user_error!(
+        "TestFlight candidate uploaded and processed. Complete physical UAT evidence for that exact build, " \
+          "then rerun `bundle exec fastlane ios release` without upload_beta:true to submit it."
+      )
+    end
+
     begin
       previous_release_ready = ENV["VOLUMEARC_RELEASE_READY"]
       ENV["VOLUMEARC_RELEASE_READY"] = "1"
