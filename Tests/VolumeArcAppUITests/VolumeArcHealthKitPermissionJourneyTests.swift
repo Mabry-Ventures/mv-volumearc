@@ -110,6 +110,22 @@ final class VolumeArcHealthKitPermissionJourneyTests: XCTestCase {
                         "VOL-127: permissions step rationale should surface '\(rationaleNeedle)' before the system prompt fires"
                     )
                 }
+
+                let notificationRequest = app.descendants(matching: .any)
+                    .matching(identifier: "onboarding.permissions.notifications")
+                    .firstMatch
+                XCTAssertFalse(
+                    notificationRequest.waitForExistence(timeout: 1),
+                    "Onboarding must not expose the iOS notification permission request; Profile owns the explicit ask."
+                )
+
+                let notificationEducation = app.descendants(matching: .any)
+                    .matching(identifier: "onboarding.permissions.notificationEducation")
+                    .firstMatch
+                XCTAssertTrue(
+                    notificationEducation.waitForExistence(timeout: 5),
+                    "Onboarding should explain optional workout alerts without triggering the system notification prompt."
+                )
             }
 
             if stepIndex == 1 {

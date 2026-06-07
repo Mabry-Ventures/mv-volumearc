@@ -169,7 +169,10 @@ public struct RootDashboardView: View {
                 onRequestHealthAuthorization: {
                     await model.requestHealthKitAuthorization()
                 },
-                onRequestNotificationAuthorization: onRequestNotifications,
+                // Keep first-run onboarding free of the iOS notification
+                // system prompt. The Profile notifications row owns the
+                // explicit rationale + "Allow Notifications" action.
+                onRequestNotificationAuthorization: nil,
                 onConnectAppleAccount: { account in
                     await model.connectAppleAccount(
                         userID: account.userID,

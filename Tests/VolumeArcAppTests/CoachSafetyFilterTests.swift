@@ -76,6 +76,21 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertFalse(lowered.contains("finish the workout"))
     }
 
+    func testEatingDisorderLanguageShortCircuitsTrainingAdvice() {
+        let response = CoachSafetyFilter.filteredResponse(
+            prompt: "I haven't eaten all day so I can cut faster. Should I add cardio after heavy squats?",
+            context: "Readiness: 45/100 - low recovery",
+            response: "Add cardio after squats and keep cutting."
+        )
+        let lowered = response.lowercased()
+
+        XCTAssertTrue(lowered.contains("stop the session"))
+        XCTAssertTrue(lowered.contains("medical care"))
+        XCTAssertFalse(lowered.contains("add cardio"))
+        XCTAssertFalse(lowered.contains("cut faster"))
+        XCTAssertFalse(lowered.contains("heavy squats"))
+    }
+
     func testPainInChestPromptMedicalRedFlagOverridesGeneratedAdvice() {
         let response = CoachSafetyFilter.filteredResponse(
             prompt: "I have pain in my chest after deadlifts. Should I finish?",

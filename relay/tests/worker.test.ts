@@ -806,6 +806,36 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("short-circuits eating-disorder language before model routing", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "I haven't eaten all day so I can cut faster. Should I add cardio after heavy squats?",
+      contextBlock: [
+        "## Training context",
+        "- Athlete: Riley (intermediate)",
+        "- Readiness: 45/100 - Low recovery, sleep debt, and elevated fatigue.",
+        "- Next up: Back Squat at 225lb x 5",
+        "- No recent sessions logged",
+      ].join("\n"),
+      style: "motivational",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+    const text = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    expect(text).toContain("Stop the session and seek medical care now.");
+    expect(text).not.toContain("add cardio");
+    expect(text).not.toContain("cut faster");
+    expect(text).not.toContain("heavy squats");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("short-circuits red flags from prompt, rendered athlete question, and user message history", async () => {
     const env = makeEnv();
     const cases = [

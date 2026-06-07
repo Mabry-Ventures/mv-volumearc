@@ -494,8 +494,11 @@ function hasMedicalRedFlag(text: string): boolean {
     "\\b(?:during|while)\\s+(?:my\\s+)?pregnancy\\b",
     "\\bpregnan(?:t|cy)\\b" + nearby + "\\b(?:train|training|lift|lifting|heavy|squat|deadlift|workout)\\b",
     "\\b(i\\s*(?:have|had|am\\s+dealing\\s+with)|i\\W?m\\s+dealing\\s+with)\\b" +
-      nearby + "\\b(?:eating\\s+disorder|starv\\w*|purg\\w*|not\\s+eating)\\b",
-    "\\bi\\s*(?:haven'?t|have\\s+not)\\s+eaten\\b" + nearby + "\\b(?:cut|cardio|train|squat|lift|workout)\\b",
+      nearby + "\\b(?:eating\\s+disorder|restrict\\w*|starv\\w*|purg\\w*|not\\s+eating)\\b",
+    "\\bi\\s*(?:haven'?t|have\\s+not|hadn'?t|didn'?t|did\\s+not)\\s+eaten\\b" +
+      nearby + "\\b(?:cut|cardio|train|training|squat|lift|workout)\\b",
+    "\\b(?:restrict\\w*|skip(?:ping)?\\s+(?:meals?|food)|fast(?:ing|ed)?)\\b" +
+      nearby + "\\b(?:cut|weight|fat|cardio|train|training|squat|lift|workout)\\b",
     "\\b(i\\s*(?:have|had|experienced|experience)|my)\\b" +
       nearby + "\\b(?:cardiac\\s+event|heart\\s+attack)\\b",
   ];
@@ -560,8 +563,10 @@ function hasCurrentMedicalRedFlag(text: string): boolean {
     "\\b(can'?t|cannot)\\s+breathe\\b",
     "\\bhard\\s+to\\s+breathe\\b",
     "\\bpregnan(?:t|cy)\\b",
-    "\\b(?:eating\\s+disorder|starv\\w*|purg\\w*|not\\s+eating)\\b",
+    "\\b(?:eating\\s+disorder|restrict\\w*|starv\\w*|purg\\w*|not\\s+eating)\\b",
     "\\bhaven'?t\\s+eaten\\b",
+    "\\bhadn'?t\\s+eaten\\b",
+    "\\bdidn'?t\\s+eaten\\b",
     "\\b(?:cardiac\\s+event|heart\\s+attack)\\b",
   ];
   return text.split(/\r?\n/).some((line) => {

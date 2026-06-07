@@ -22,7 +22,6 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
     /// callback keep compiling — a missing callback degrades the step
     /// to "informational only, just tap Continue to advance".
     let onRequestHealthAuthorization: (() async -> Bool)?
-    let onRequestNotificationAuthorization: (() async -> Bool)?
     let onConnectAppleAccount: ((OnboardingAppleAccount) async -> Void)?
     let onResumeFromSavedProgress: ((Int) -> Void)?
 
@@ -33,7 +32,6 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
     /// any business logic — Continue advances unconditionally — so a
     /// "false" value just means we don't change the button label.
     @State private var healthAuthorizationDidComplete: Bool
-    @State private var notificationAuthorizationDidComplete: Bool
     @State private var appleAccountDidConnect = false
     @State private var appleAccountStatusMessage: String?
     @State private var didRecordResumeTelemetry = false
@@ -49,13 +47,11 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
         self._isPresented = isPresented
         self.onComplete = onComplete
         self.onRequestHealthAuthorization = onRequestHealthAuthorization
-        self.onRequestNotificationAuthorization = onRequestNotificationAuthorization
         self.onConnectAppleAccount = onConnectAppleAccount
         self.onResumeFromSavedProgress = onResumeFromSavedProgress
         self._step = State(initialValue: Self.initialStep())
         self._result = State(initialValue: Self.initialResult())
         self._healthAuthorizationDidComplete = State(initialValue: false)
-        self._notificationAuthorizationDidComplete = State(initialValue: false)
     }
 
     @_spi(Testing) public init(
@@ -74,13 +70,11 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
         self._isPresented = isPresented
         self.onComplete = onComplete
         self.onRequestHealthAuthorization = onRequestHealthAuthorization
-        self.onRequestNotificationAuthorization = onRequestNotificationAuthorization
         self.onConnectAppleAccount = onConnectAppleAccount
         self.onResumeFromSavedProgress = onResumeFromSavedProgress
         self._step = State(initialValue: Step(snapshotStep: snapshotStep))
         self._result = State(initialValue: snapshotResult)
         self._healthAuthorizationDidComplete = State(initialValue: snapshotHealthAuthorizationDidComplete)
-        self._notificationAuthorizationDidComplete = State(initialValue: snapshotNotificationAuthorizationDidComplete)
     }
 
     public var body: some View {
@@ -684,59 +678,8 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
                     .disabled(healthAuthorizationDidComplete)
             }
 
-            if onRequestNotificationAuthorization != nil {
-                VACard(style: .glass) {
-                    VStack(alignment: .leading, spacing: VA.Space.md) {
-                        HStack(alignment: .top, spacing: VA.Space.sm) {
-                            Image(systemName: "bell.badge.fill")
-                                .font(VA.Typography.title2)
-                                .foregroundStyle(VA.Colors.primary)
-                                .accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: VA.Space.xxs) {
-                                Text(String(
-                                    localized: "Workout reminders",
-                                    comment: "Onboarding notification permission card title"
-                                ))
-                                .font(VA.Typography.headline)
-                                .foregroundStyle(VA.Colors.textPrimary)
-                                Text(String(
-                                    localized: """
-                                    VolumeArc can send rest-timer alerts and scheduled-workout nudges. \
-                                    No streak guilt, no marketing pushes.
-                                    """,
-                                    comment: "Onboarding notification permission rationale"
-                                ))
-                                .font(VA.Typography.footnote)
-                                .foregroundStyle(VA.Colors.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-
-                        VAButton(
-                            notificationAuthorizationDidComplete
-                                ? String(
-                                    localized: "Notifications Enabled",
-                                    comment: "Onboarding notification permission enabled button label"
-                                )
-                                : String(
-                                    localized: "Allow Workout Notifications",
-                                    comment: "Onboarding notification permission request button label"
-                                ),
-                            icon: notificationAuthorizationDidComplete ? "checkmark.circle.fill" : "bell.fill",
-                            style: notificationAuthorizationDidComplete ? .ghost : .secondary,
-                            accessibilityIdentifier: "onboarding.permissions.notifications"
-                        ) {
-                            Task {
-                                VAHaptics.tap()
-                                let granted = await onRequestNotificationAuthorization?() ?? false
-                                notificationAuthorizationDidComplete = granted
-                            }
-                        }
-                        .disabled(notificationAuthorizationDidComplete)
-                    }
-                }
+            notificationEducationCard
                 .frame(maxWidth: VA.Space.onboardingMaxWidth)
-            }
 
             Text(String(
                 localized: "You can change these anytime from Profile.",
@@ -747,6 +690,39 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
             .multilineTextAlignment(.center)
             .frame(maxWidth: VA.Space.onboardingMaxWidth)
         }
+    }
+
+    private var notificationEducationCard: some View {
+        VACard(style: .glass) {
+            HStack(alignment: .top, spacing: VA.Space.md) {
+                Image(systemName: "bell.badge.fill")
+                    .font(VA.Typography.title2)
+                    .foregroundStyle(VA.Colors.primary)
+                    .frame(width: VA.Space.iconBadge, height: VA.Space.iconBadge)
+                    .background(VA.Colors.primary.opacity(VA.Opacity.iconPanelAccent), in: Circle())
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: VA.Space.xs) {
+                    Text(String(
+                        localized: "Workout alerts are optional",
+                        comment: "Onboarding notification education title"
+                    ))
+                    .font(VA.Typography.headline)
+                    .foregroundStyle(VA.Colors.textPrimary)
+                    Text(String(
+                        localized: """
+                        VolumeArc can remind you about scheduled sessions and rest timers. \
+                        You will choose this later from Profile, after the app explains exactly what it sends.
+                        """,
+                        comment: "Onboarding notification education copy"
+                    ))
+                    .font(VA.Typography.footnote)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("onboarding.permissions.notificationEducation")
     }
 
     private var healthConnectButton: some View {

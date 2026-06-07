@@ -58,9 +58,9 @@ public struct CoachMemoryView: View {
                             .foregroundStyle(VA.Colors.textPrimary)
                         Text(String(
                             localized: """
-                            Save durable coaching context such as injury notes, \
-                            lift cues, equipment constraints, or preferences \
-                            that should shape future recommendations.
+                            Save durable coaching context the app should remember \
+                            across sessions: equipment limits, lift cues, training \
+                            preferences, or constraints you do not want to repeat.
                             """,
                             comment: "Coach memory explanation body"
                         ))
@@ -70,13 +70,32 @@ public struct CoachMemoryView: View {
                     }
                 }
 
-                Text(String(
-                    localized: "Memory is editable and stays in your VolumeArc data. Do not add medical records or secrets.",
-                    comment: "Coach memory privacy boundary"
-                ))
-                .font(VA.Typography.captionLarge)
-                .foregroundStyle(VA.Colors.textTertiary)
-                .fixedSize(horizontal: false, vertical: true)
+                VStack(spacing: VA.Space.sm) {
+                    CoachMemoryFactRow(
+                        icon: "target",
+                        title: String(localized: "Shapes future calls", comment: "Coach memory fact title"),
+                        detail: String(
+                            localized: "Used when the coach picks substitutions, load guidance, and session planning context.",
+                            comment: "Coach memory fact detail"
+                        )
+                    )
+                    CoachMemoryFactRow(
+                        icon: "pencil.and.list.clipboard",
+                        title: String(localized: "You control it", comment: "Coach memory fact title"),
+                        detail: String(
+                            localized: "Add concise notes here and review recent saved memory before relying on it.",
+                            comment: "Coach memory fact detail"
+                        )
+                    )
+                    CoachMemoryFactRow(
+                        icon: "lock.shield.fill",
+                        title: String(localized: "Keep it training-specific", comment: "Coach memory fact title"),
+                        detail: String(
+                            localized: "Do not store medical records, secrets, or anything you would not want in training context.",
+                            comment: "Coach memory fact detail"
+                        )
+                    )
+                }
             }
         }
     }
@@ -207,6 +226,32 @@ private struct CoachMemoryEntryRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(VA.Space.lg)
+    }
+}
+
+private struct CoachMemoryFactRow: View {
+    let icon: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: VA.Space.sm) {
+            Image(systemName: icon)
+                .font(VA.Typography.caption)
+                .foregroundStyle(VA.Colors.primary)
+                .frame(width: 24, height: 24)
+                .background(VA.Colors.primary.opacity(VA.Opacity.iconPanelAccent), in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(VA.Typography.footnote)
+                    .foregroundStyle(VA.Colors.textPrimary)
+                Text(detail)
+                    .font(VA.Typography.captionLarge)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 }
 

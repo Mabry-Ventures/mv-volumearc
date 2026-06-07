@@ -132,15 +132,40 @@ public enum CoachWorkoutPlanExtractor {
             line.range(of: ":"),
             line.range(of: " - "),
             line.range(of: " -- "),
+            line.range(of: " \u{2013} "),
+            line.range(of: " \u{2014} "),
         ].compactMap { $0 }
-        guard let delimiter = delimiterRanges.min(by: { $0.lowerBound < $1.lowerBound }) else {
+        let rawName: Substring
+        if let delimiter = delimiterRanges.min(by: { $0.lowerBound < $1.lowerBound }) {
+            rawName = line[..<delimiter.lowerBound]
+        } else if let prescriptionRange = firstPrescriptionRange(in: line) {
+            rawName = line[..<prescriptionRange.lowerBound]
+        } else {
             return nil
         }
-        let name = line[..<delimiter.lowerBound]
+        let name = rawName
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.localizedCaseInsensitiveContains("sample workout") else { return nil }
         guard !name.localizedCaseInsensitiveContains("workout plan") else { return nil }
         return name
+    }
+
+    private static func firstPrescriptionRange(in text: String) -> Range<String.Index>? {
+        let patterns = [
+            #"(\d+)\s*(?:x|×)\s*\d+"#,
+            #"\d+\s*sets?"#,
+            #"\d+\s*seconds?"#,
+        ]
+        return patterns
+            .compactMap { firstMatchRange(matching: $0, in: text) }
+            .min(by: { $0.lowerBound < $1.lowerBound })
+    }
+
+    private static func firstMatchRange(matching pattern: String, in text: String) -> Range<String.Index>? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return nil }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = regex.firstMatch(in: text, range: range) else { return nil }
+        return Range(match.range, in: text)
     }
 
     private static func firstInt(matching pattern: String, in text: String) -> Int? {
