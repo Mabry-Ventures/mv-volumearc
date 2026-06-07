@@ -845,6 +845,55 @@ describe("volumearc-ai-relay App Attest auth", () => {
     }
   });
 
+  it("short-circuits medical red flags from current context before model routing", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "recovery",
+      question: "Readiness looks strong. Should I train today?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 92/100 - Peak recovery.",
+        "- Recent coaching notes: chest pain showed up during the top set today.",
+      ].join("\n"),
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("short-circuits medical red flags from rendered training context", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "recovery",
+      style: "minimal",
+      prompt:
+        "[VAC:tmpl] intent=recovery style=minimal\n\n" +
+        "## System\nSafety examples mention dizziness and chest pain.\n\n" +
+        "## Training context\n" +
+        "- Readiness: 88/100 - Strong recovery.\n" +
+        "- Recent coaching notes: athlete got dizzy under load today.\n\n" +
+        "## Coaching focus\nRecovery.\n\n" +
+        "## Athlete question\nShould I push?",
+      system: "client rendered system",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("does not short-circuit normal rendered prompts because of system safety examples", async () => {
     const env = makeEnv();
     const body = JSON.stringify({
@@ -856,6 +905,50 @@ describe("volumearc-ai-relay App Attest auth", () => {
         "## Coaching focus\nProgression.\n\n" +
         "## Athlete question\nShould I add five pounds next week?",
       system: "SAFETY OVERRIDE: chest pain, dizziness, and pregnancy require escalation.",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not short-circuit negated current context red flags", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Should I add five pounds next week?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 86/100 - Strong recovery.",
+        "- Check-in: no chest pain, no dizziness, and no shortness of breath.",
+      ].join("\n"),
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not short-circuit stale medical history in context", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Should I train today?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 86/100 - Strong recovery.",
+        "- Historical note: chest pain during a workout last year, cleared by clinician.",
+      ].join("\n"),
+      style: "minimal",
+      prompt: "",
+      system: "",
     });
 
     const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);

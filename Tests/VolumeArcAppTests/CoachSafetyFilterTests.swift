@@ -76,12 +76,69 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertFalse(lowered.contains("finish the workout"))
     }
 
+    func testMedicalRedFlagFromCurrentContextOverridesGeneratedAdvice() {
+        let response = CoachSafetyFilter.filteredResponse(
+            prompt: "Should I push today?",
+            context: """
+            Readiness: 92/100 - peak recovery
+            - Recent coaching notes: chest pain showed up during the top set today.
+            """,
+            response: "Readiness is high, so add weight and finish the workout."
+        )
+        let lowered = response.lowercased()
+
+        XCTAssertTrue(lowered.contains("stop the session"))
+        XCTAssertTrue(lowered.contains("medical care"))
+        XCTAssertFalse(lowered.contains("add weight"))
+        XCTAssertFalse(lowered.contains("finish the workout"))
+    }
+
+    func testNegatedContextMedicalRedFlagDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I add five pounds next week?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Check-in: no chest pain, no dizziness, and no shortness of breath.
+            """
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testStaleContextMedicalRedFlagDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I train today?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Historical note: chest pain during a workout last year, cleared by clinician.
+            """
+        )
+
+        XCTAssertNil(response)
+    }
+
     func testMedicalRedFlagsShortCircuitNonStreamingProvider() async throws {
         let provider = SafetyFilteredCoachProvider(base: FailingIfCalledProvider())
 
         let response = try await provider.coachResponse(
             for: "I feel lightheaded and blacked out after squats. Can I keep going?",
             context: "Readiness: 90/100 - peak recovery"
+        )
+        let lowered = response.lowercased()
+
+        XCTAssertTrue(lowered.contains("stop the session"))
+        XCTAssertTrue(lowered.contains("medical care"))
+    }
+
+    func testContextMedicalRedFlagsShortCircuitNonStreamingProvider() async throws {
+        let provider = SafetyFilteredCoachProvider(base: FailingIfCalledProvider())
+
+        let response = try await provider.coachResponse(
+            for: "Readiness looks high. Should I train?",
+            context: """
+            Readiness: 94/100 - peak recovery
+            - Recent coaching notes: athlete got dizzy under load today.
+            """
         )
         let lowered = response.lowercased()
 
@@ -96,6 +153,25 @@ final class CoachSafetyFilterTests: XCTestCase {
         for try await chunk in provider.streamCoachResponse(
             for: "I can't breathe after a set. What should I do?",
             context: "Readiness: 90/100 - peak recovery"
+        ) {
+            collected += chunk
+        }
+        let lowered = collected.lowercased()
+
+        XCTAssertTrue(lowered.contains("stop the session"))
+        XCTAssertTrue(lowered.contains("medical care"))
+    }
+
+    func testContextMedicalRedFlagsShortCircuitStreamingProvider() async throws {
+        let provider = SafetyFilteredCoachProvider(base: FailingIfCalledProvider())
+
+        var collected = ""
+        for try await chunk in provider.streamCoachResponse(
+            for: "Should I finish the session?",
+            context: """
+            Readiness: 88/100 - strong recovery
+            - Recent coaching notes: severe shortness of breath after the last set.
+            """
         ) {
             collected += chunk
         }

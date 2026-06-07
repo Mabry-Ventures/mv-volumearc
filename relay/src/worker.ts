@@ -398,8 +398,9 @@ function buildSystemPrompt(style: FallbackCoachingStyle): string {
 }
 
 function coachSafetyResponse(body: CoachRequestBody): string | null {
-  const combined = coachSafetyScanText(body);
-  if (!hasMedicalRedFlag(combined)) {
+  const athleteText = coachSafetyScanText(body);
+  const contextText = coachSafetyContextText(body);
+  if (!hasMedicalRedFlag(athleteText) && !hasCurrentMedicalRedFlag(contextText)) {
     return null;
   }
   return [
@@ -422,6 +423,12 @@ function coachSafetyScanText(body: CoachRequestBody): string {
     .join("\n");
 }
 
+function coachSafetyContextText(body: CoachRequestBody): string {
+  return [body.contextBlock, renderedTrainingContext(body.prompt)]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join("\n");
+}
+
 function renderedAthleteQuestion(prompt: string | undefined): string | undefined {
   if (!prompt?.trim()) {
     return undefined;
@@ -432,6 +439,34 @@ function renderedAthleteQuestion(prompt: string | undefined): string | undefined
     return prompt.includes("## System") ? undefined : prompt;
   }
   return prompt.slice(markerIndex + marker.length).trim();
+}
+
+function renderedTrainingContext(prompt: string | undefined): string | undefined {
+  if (!prompt?.trim()) {
+    return undefined;
+  }
+  const focusMarker = "## Coaching focus";
+  const focusIndex = prompt.indexOf(focusMarker);
+  if (focusIndex < 0) {
+    return undefined;
+  }
+  const beforeFocus = prompt.slice(0, focusIndex);
+  const contextMarkers = [
+    "## Training context",
+    "## Recovery (Apple Health)",
+    "## Weekly schedule",
+    "## Recent coaching notes",
+    "## Active program",
+    "## Latest form check",
+  ];
+  const contextStart = contextMarkers
+    .map((marker) => beforeFocus.indexOf(marker))
+    .filter((index) => index >= 0)
+    .sort((left, right) => left - right)[0];
+  if (contextStart === undefined) {
+    return undefined;
+  }
+  return beforeFocus.slice(contextStart).trim();
 }
 
 function hasMedicalRedFlag(text: string): boolean {
@@ -472,6 +507,57 @@ function hasMedicalRedFlag(text: string): boolean {
     text,
   );
   return minorSafetyConcern && strengthRisk;
+}
+
+function hasCurrentMedicalRedFlag(text: string): boolean {
+  const patterns = [
+    "\\bchest\\s+pain\\b",
+    "\\bdizz(?:y|iness)\\b",
+    "\\blightheaded\\b",
+    "\\bfaint(?:ed|ing)?\\b",
+    "\\bsyncope\\b",
+    "\\bpassed\\s+out\\b",
+    "\\bblacked\\s+out\\b",
+    "\\b(?:severe\\s+)?short(?:ness)?\\s+of\\s+breath\\b",
+    "\\b(can'?t|cannot)\\s+breathe\\b",
+    "\\bhard\\s+to\\s+breathe\\b",
+    "\\bpregnan(?:t|cy)\\b",
+    "\\b(?:eating\\s+disorder|starv\\w*|purg\\w*|not\\s+eating)\\b",
+    "\\bhaven'?t\\s+eaten\\b",
+    "\\b(?:cardiac\\s+event|heart\\s+attack)\\b",
+  ];
+  return text
+    .split(/\r?\n/)
+    .some(
+      (line) =>
+        !isStaleMedicalRedFlagLine(line) &&
+        !isNegatedMedicalRedFlagLine(line) &&
+        patterns.some((pattern) => containsPattern(pattern, line)),
+    );
+}
+
+function isStaleMedicalRedFlagLine(line: string): boolean {
+  const lowered = line.toLowerCase();
+  return ["historical note", "last year", "prior ", "previously cleared", "cleared by"].some((phrase) =>
+    lowered.includes(phrase),
+  );
+}
+
+function isNegatedMedicalRedFlagLine(line: string): boolean {
+  const lowered = line.toLowerCase();
+  return [
+    "no chest pain",
+    "denies chest pain",
+    "without chest pain",
+    "not experiencing chest pain",
+    "no dizziness",
+    "denies dizziness",
+    "no shortness of breath",
+    "denies shortness of breath",
+    "no trouble breathing",
+    "symptoms resolved",
+    "resolved symptoms",
+  ].some((phrase) => lowered.includes(phrase));
 }
 
 function containsPattern(pattern: string, text: string): boolean {
