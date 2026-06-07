@@ -85,8 +85,8 @@ Post-actions should remain empty because the dSYM upload runs from `ci_scripts/c
 ### Local archive fallback
 
 `fastlane ios beta` still works for local archive — useful for hotfixes or for pushing a build before Xcode Cloud picks up the tag. Requires:
-- A local Apple Developer login in Xcode (Apple Distribution cert in keychain)
-- The provisioning profile installed in `~/Library/MobileDevice/Provisioning Profiles/`
+- Homebrew Ruby 4.x on `PATH` so the repo's Bundler 4 lockfile is honored
+- An App Store Connect API key with Developer Portal signing/provisioning access; the lane passes that key to `xcodebuild -allowProvisioningUpdates` so Xcode can create or download the missing signing assets
 - `SENTRY_DSN` or `VOLUMEARC_SENTRY_DSN` env var set so the archived app initializes Sentry
 - `VOLUMEARC_AI_RELAY_URL=https://relay.volumearc.app` env var set so the archived app uses the production coach relay
 - `SENTRY_AUTH_TOKEN` env var set; the lane refuses to upload without Sentry dSYMs
@@ -105,7 +105,7 @@ chmod 600 "$APP_STORE_CONNECT_API_KEY_PATH"
 bundle exec fastlane ios beta
 ```
 
-Local archive uses your keychain certs directly; no fastlane match infrastructure required. Relay auth is App Attest-only; local archive tooling no longer patches client relay secrets into `App/Info.plist`.
+Local archive uses Xcode automatic signing with the ASC key; no fastlane match infrastructure is required. After export, the lane validates the final IPA with `scripts/validate_exported_ipa_contract.sh`, including Sentry DSN, production relay URL, production APNs entitlement, iCloud, HealthKit, App Groups, watch embedding, watch widget entry point, and watch AppIcon renditions. Relay auth is App Attest-only; local archive tooling no longer patches client relay secrets into `App/Info.plist`.
 
 ### Required GitHub secrets (for the validation gates)
 

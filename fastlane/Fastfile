@@ -104,6 +104,21 @@ def volume_arc_app_store_connect_api_key
   )
 end
 
+def volume_arc_xcodebuild_auth_args
+  key_id = ENV["APP_STORE_CONNECT_KEY_ID"].to_s.strip
+  issuer_id = ENV["APP_STORE_CONNECT_ISSUER_ID"].to_s.strip
+  key_path = ENV["APP_STORE_CONNECT_API_KEY_PATH"].to_s.strip
+
+  return [] if key_id.empty? || issuer_id.empty? || key_path.empty?
+
+  [
+    "-allowProvisioningUpdates",
+    "-authenticationKeyPath #{Shellwords.escape(File.expand_path(key_path))}",
+    "-authenticationKeyID #{Shellwords.escape(key_id)}",
+    "-authenticationKeyIssuerID #{Shellwords.escape(issuer_id)}"
+  ]
+end
+
 def volume_arc_generate_sentry_framework_dsym(archive_path)
   sentry_binary = File.join(
     archive_path,
@@ -259,6 +274,15 @@ platform :ios do
     # before sentry-cli or upload_to_testflight even runs). The
     # `DEVELOPMENT_TEAM` env var comes from the GitHub Actions secret
     # of the same name in the deploy-testflight job.
+    xcodebuild_auth_args = volume_arc_xcodebuild_auth_args
+    archive_xcargs = (
+      [
+        "CODE_SIGNING_ALLOWED=YES",
+        "DEVELOPMENT_TEAM=#{Shellwords.escape(ENV.fetch("DEVELOPMENT_TEAM"))}",
+        "-xcconfig #{Shellwords.escape(sentry_xcconfig_path)}"
+      ] + xcodebuild_auth_args
+    ).join(" ")
+
     begin
       build_app(
         project: "VolumeArcApple.xcodeproj",
@@ -270,29 +294,23 @@ platform :ios do
         output_name: "VolumeArc.ipa",
         include_symbols: true,
         include_bitcode: false,
-        xcargs: "CODE_SIGNING_ALLOWED=YES -xcconfig #{Shellwords.escape(sentry_xcconfig_path)}"
+        xcargs: archive_xcargs
       )
     ensure
       FileUtils.rm_f(sentry_xcconfig_path)
     end
 
-    # VOL-92: validate signed entitlements on the archived bundle before
-    # uploading. gym populates Actions.lane_context[SharedValues::XCODEBUILD_ARCHIVE]
-    # — the archive's Products/Applications/*.app is the canonical signed
-    # bundle, so point the validator at it via the VOLUMEARC_BUILT_APP_PATH
-    # override. If gym didn't record an archive (edge case), the validator
-    # falls back to its DerivedData discovery logic. Fails the lane before
-    # upload if aps-environment drifted to development, the iCloud container
-    # identifier vanished, HealthKit was stripped, or the App Group
-    # disappeared in signing.
+    # VOL-92: validate the final exported IPA before uploading. With local
+    # automatic signing, the intermediate .xcarchive may be development-signed
+    # and then re-signed during `xcodebuild -exportArchive`; the IPA is the
+    # artifact that reaches TestFlight, so it is the canonical release contract.
     archive_path = Actions.lane_context[SharedValues::XCODEBUILD_ARCHIVE]
-    if archive_path && File.directory?(archive_path)
-      built_app = Dir.glob(File.join(archive_path, "Products/Applications/*.app")).first
-      built_watch = Dir.glob(File.join(archive_path, "Products/Applications/*.app/Watch/*.app")).first
-      ENV["VOLUMEARC_BUILT_APP_PATH"] = built_app if built_app
-      ENV["VOLUMEARC_BUILT_WATCH_PATH"] = built_watch if built_watch
+    ipa_path = Actions.lane_context[SharedValues::IPA_OUTPUT_PATH]
+    if ipa_path.to_s.empty? || !File.file?(ipa_path)
+      UI.user_error!("VOL-92: cannot validate exported IPA — no IPA_OUTPUT_PATH from gym.")
     end
-    sh("../scripts/validate_release_config.sh")
+    sh("../scripts/validate_release_config.sh", "--no-build")
+    sh("../scripts/validate_exported_ipa_contract.sh", ipa_path, build_number)
 
     # VOL-133: upload dSYMs to Sentry so production crash reports
     # symbolicate. Without this step, every crash that lands in Sentry

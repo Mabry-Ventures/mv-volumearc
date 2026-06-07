@@ -53,7 +53,7 @@ Roll back the public TestFlight group to a prior processed build (VOL-178)
 [bundle exec] fastlane ios release
 ```
 
-Submit to App Store review
+Submit an already-UAT'd TestFlight build to App Store review
 
 ----
 
