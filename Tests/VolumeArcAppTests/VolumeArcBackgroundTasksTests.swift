@@ -120,7 +120,8 @@ final class VolumeArcBackgroundTasksTests: XCTestCase {
         let telemetry = CapturingTelemetrySink()
         let model = makeDashboardModel(telemetrySink: telemetry)
 
-        await model.performBackgroundProcessing()
+        let success = await model.performBackgroundProcessing()
+        XCTAssertTrue(success, "Background processing should complete successfully on a healthy model")
 
         let backgroundEvents = telemetry.events.filter { $0.category == "background" }
         XCTAssertEqual(
@@ -155,7 +156,8 @@ final class VolumeArcBackgroundTasksTests: XCTestCase {
 
         let refreshSucceeded = await relaunchedModel.performBackgroundRefresh()
         XCTAssertTrue(refreshSucceeded)
-        await relaunchedModel.performBackgroundProcessing()
+        let processingSucceeded = await relaunchedModel.performBackgroundProcessing()
+        XCTAssertTrue(processingSucceeded)
 
         XCTAssertTrue(relaunchedModel.isSessionActive)
         XCTAssertEqual(relaunchedModel.activeWorkoutID, originalWorkoutID)

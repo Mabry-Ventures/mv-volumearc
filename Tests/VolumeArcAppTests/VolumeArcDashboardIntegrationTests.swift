@@ -1672,6 +1672,10 @@ private actor DashboardInMemoryPendingPayloadStore: WatchPendingPayloadStore {
         payloads.append(payload)
     }
 
+    func enqueueFront(_ payload: WatchPayload) async {
+        payloads.insert(payload, at: 0)
+    }
+
     func dequeueAll() async -> [WatchPayload] {
         defer { payloads.removeAll() }
         return payloads

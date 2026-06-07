@@ -287,10 +287,17 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
                     .background(VA.Colors.primary, in: Capsule())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(String(
-                    localized: "Start recommended workout",
-                    comment: "Pinned Coach workout handoff start button accessibility label"
-                ))
+                .accessibilityLabel(
+                    model.isSessionActive
+                        ? String(
+                            localized: "Open active workout",
+                            comment: "Pinned Coach workout handoff open button accessibility label"
+                        )
+                        : String(
+                            localized: "Start recommended workout",
+                            comment: "Pinned Coach workout handoff start button accessibility label"
+                        )
+                )
                 .accessibilityIdentifier("coach.startRecommendedWorkout.pinned")
             }
             .padding(.horizontal, VA.Space.lg)
@@ -582,15 +589,17 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
 
     private func sendVoiceMessage() {
         let prompt = voicePromptText
-        draftMessage = ""
+        let previousDraft = draftMessage
         showPlanDraft = showPlanDraft || isPlanningPrompt(prompt)
         dismissKeyboard()
         VAHaptics.tap()
         Task {
             let sent = await model.askCoachByVoice(prompt)
             if sent {
+                draftMessage = ""
                 VAHaptics.coachResponse()
             } else {
+                draftMessage = previousDraft
                 VAHaptics.error()
             }
         }

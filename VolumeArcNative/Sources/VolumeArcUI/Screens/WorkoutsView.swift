@@ -238,7 +238,7 @@ public struct WorkoutsView: View {
                     .foregroundStyle(VA.Colors.textPrimary)
                     .frame(width: 36, height: 36)
                     .background(VA.Colors.textTertiary.opacity(0.14), in: Circle())
-                    .accessibilityIdentifier("workouts.exitSession.header")
+                    .accessibilityIdentifier("workouts.exitSession.label")
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "Exit Session", comment: "Active workout header exit button"))
@@ -478,7 +478,7 @@ public struct WorkoutsView: View {
                         .tracking(0.6)
                     Spacer()
                     Text(String(
-                        localized: "\(activeWorkoutExerciseNames.count) moves",
+                        localized: "^[\(activeWorkoutExerciseNames.count) move](inflect: true)",
                         comment: "Active workout exercise list count"
                     ))
                     .font(VA.Typography.caption)
@@ -1943,11 +1943,46 @@ private struct WorkoutBuilderSheet: View {
     }
 
     private static let quickAddExercises: [WeeklyWorkoutExercise] = [
-        WeeklyWorkoutExercise(name: "Bench Press", sets: 4, reps: 5, weight: 135, targetRPE: 7, restSeconds: 150),
-        WeeklyWorkoutExercise(name: "Barbell Row", sets: 4, reps: 6, weight: 115, targetRPE: 7, restSeconds: 120),
-        WeeklyWorkoutExercise(name: "Romanian Deadlift", sets: 3, reps: 8, weight: 135, targetRPE: 7, restSeconds: 120),
-        WeeklyWorkoutExercise(name: "Lat Pulldown", sets: 3, reps: 10, weight: 90, targetRPE: 7, restSeconds: 90),
-        WeeklyWorkoutExercise(name: "Plank", sets: 3, reps: 30, weight: 0, targetRPE: 6, restSeconds: 60),
+        WeeklyWorkoutExercise(
+            name: String(localized: "Bench Press", comment: "Quick-add exercise name"),
+            sets: 4,
+            reps: 5,
+            weight: 135,
+            targetRPE: 7,
+            restSeconds: 150
+        ),
+        WeeklyWorkoutExercise(
+            name: String(localized: "Barbell Row", comment: "Quick-add exercise name"),
+            sets: 4,
+            reps: 6,
+            weight: 115,
+            targetRPE: 7,
+            restSeconds: 120
+        ),
+        WeeklyWorkoutExercise(
+            name: String(localized: "Romanian Deadlift", comment: "Quick-add exercise name"),
+            sets: 3,
+            reps: 8,
+            weight: 135,
+            targetRPE: 7,
+            restSeconds: 120
+        ),
+        WeeklyWorkoutExercise(
+            name: String(localized: "Lat Pulldown", comment: "Quick-add exercise name"),
+            sets: 3,
+            reps: 10,
+            weight: 90,
+            targetRPE: 7,
+            restSeconds: 90
+        ),
+        WeeklyWorkoutExercise(
+            name: String(localized: "Plank", comment: "Quick-add exercise name"),
+            sets: 3,
+            reps: 30,
+            weight: 0,
+            targetRPE: 6,
+            restSeconds: 60
+        ),
     ]
 }
 

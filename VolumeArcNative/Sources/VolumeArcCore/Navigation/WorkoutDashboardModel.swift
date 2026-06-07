@@ -385,7 +385,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         )
         self.init(
             aiProvider: coachProvider,
-            accountSessionStore: UserDefaultsAccountSessionStore(),
+            accountSessionStore: InMemoryAccountSessionStore(),
             voicePermissionStore: UnavailableVoicePermissionStore(),
             healthStore: UnavailableHealthStore(),
             notificationStore: InMemoryNotificationStore(),
@@ -693,6 +693,21 @@ public final class WorkoutDashboardModel: ObservableObject {
             return "21-100"
         default:
             return ">100"
+        }
+    }
+
+    private static func weightBucket(_ value: Double) -> String {
+        switch value {
+        case ..<1:
+            return "0"
+        case 1..<50:
+            return "1-49"
+        case 50..<150:
+            return "50-149"
+        case 150..<300:
+            return "150-299"
+        default:
+            return "300+"
         }
     }
 
@@ -1006,7 +1021,9 @@ public final class WorkoutDashboardModel: ObservableObject {
                 message: "Deleted workout session from history.",
                 metadata: [
                     "workout_id": identifier,
-                    "title": session.title ?? "",
+                    "title_present": (session.title?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
+                        ? "true"
+                        : "false",
                 ]
             ))
             await refresh()
@@ -1202,7 +1219,10 @@ public final class WorkoutDashboardModel: ObservableObject {
                 category: "profile",
                 name: "profile_updated",
                 severity: .info,
-                message: "Profile updated for \(defaults.name.isEmpty ? "athlete" : defaults.name)"
+                message: "Profile updated.",
+                metadata: [
+                    "name_present": defaults.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "false" : "true"
+                ]
             ))
             recordProfilePreferenceTelemetry(
                 previousCoachingStyle: previousCoachingStyle,
@@ -1256,7 +1276,8 @@ public final class WorkoutDashboardModel: ObservableObject {
     }
 
     /// Trigger a cloud sync cycle.
-    public func syncNow() async {
+    @discardableResult
+    public func syncNow() async -> Bool {
         telemetrySink.record(TelemetryEvent(
             category: "sync",
             name: "sync_requested",
@@ -1264,6 +1285,7 @@ public final class WorkoutDashboardModel: ObservableObject {
             message: "Manual sync requested"
         ))
 
+        var success = true
         #if canImport(StoreKit)
         if let syncEngine {
             do {
@@ -1281,11 +1303,13 @@ public final class WorkoutDashboardModel: ObservableObject {
                     severity: .warning,
                     message: error.localizedDescription
                 ))
+                success = false
             }
         }
         #endif
 
         await refresh()
+        return success
     }
 
     /// Pattern-match the user's prompt to infer a memory theme for organization.
@@ -1309,25 +1333,56 @@ public final class WorkoutDashboardModel: ObservableObject {
         let liveExerciseName = activeSessionExercise?.name ?? autopilot?.nextExerciseName
         let liveWeight = activeSessionExercise.map { Double($0.weight) } ?? autopilot?.nextTarget.weight
         let liveReps = activeSessionExercise?.reps ?? autopilot?.nextTarget.repRange.lowerBound
-        let snapshot = WidgetSummarySnapshot(
-            nextWorkoutTitle: nextWorkout?.title ?? liveExerciseName ?? "Strength Session",
+
+        PlatformSurfaceDefaultsWriter.saveWidgetSnapshot(widgetSnapshot(
+            liveExerciseName: liveExerciseName,
+            liveWeight: liveWeight
+        ))
+
+        publishLiveActivityState(
+            liveExerciseName: liveExerciseName,
+            liveWeight: liveWeight,
+            liveReps: liveReps
+        )
+    }
+
+    private func widgetSnapshot(liveExerciseName: String?, liveWeight: Double?) -> WidgetSummarySnapshot {
+        WidgetSummarySnapshot(
+            nextWorkoutTitle: nextWorkout?.title ?? liveExerciseName ?? String(
+                localized: "Strength Session",
+                comment: "Widget fallback next workout title"
+            ),
             readinessScore: "\(readiness.score)",
             primaryLiftForecast: liveExerciseName.map { name in
                 if let liveWeight {
                     return "\(name) @ \(Int(liveWeight))lb"
                 }
                 return name
-            } ?? "Open to plan your session",
-            nextActionTitle: isSessionActive ? "Continue" : "Start",
-            syncSummary: isSessionActive ? "Session in progress" : "\(recentSessions.count) this week",
+            } ?? String(localized: "Open to plan your session", comment: "Widget fallback primary lift forecast"),
+            nextActionTitle: isSessionActive
+                ? String(localized: "Continue", comment: "Widget active session action")
+                : String(localized: "Start", comment: "Widget idle session action"),
+            syncSummary: isSessionActive
+                ? String(localized: "Session in progress", comment: "Widget sync summary during active session")
+                : String(
+                    localized: "^[\(recentSessions.count) session](inflect: true) this week",
+                    comment: "Widget sync summary count"
+                ),
             streakDays: computeStreakDays(),
-            coachPrompt: autopilot?.recommendationReason ?? "What should I do next?"
+            coachPrompt: autopilot?.recommendationReason ?? String(
+                localized: "What should I do next?",
+                comment: "Widget fallback coach prompt"
+            )
         )
-        PlatformSurfaceDefaultsWriter.saveWidgetSnapshot(snapshot)
+    }
 
+    private func publishLiveActivityState(liveExerciseName: String?, liveWeight: Double?, liveReps: Int?) {
         if isSessionActive, let liveExerciseName {
             let state = LiveActivityState(
-                workoutTitle: activeWorkoutTitle ?? "Strength Session",
+                workoutTitle: activeWorkoutTitle ?? String(
+                    localized: "Strength Session",
+                    comment: "Live Activity fallback workout title"
+                ),
                 activeExerciseName: liveExerciseName,
                 targetSummary: "\(Int(liveWeight ?? 0))lb × \(liveReps ?? 1)",
                 setProgressSummary: liveActivitySetProgressSummary(),
@@ -1341,11 +1396,7 @@ public final class WorkoutDashboardModel: ObservableObject {
                     name: "started",
                     severity: .info,
                     message: "Published active workout state for Live Activity.",
-                    metadata: [
-                        "workout_id": activeWorkoutID ?? "",
-                        "workout": state.workoutTitle,
-                        "exercise": state.activeExerciseName
-                    ]
+                    metadata: liveActivityStartedMetadata(for: state)
                 ))
             }
         } else if !isSessionActive {
@@ -1361,6 +1412,18 @@ public final class WorkoutDashboardModel: ObservableObject {
                 ))
             }
         }
+    }
+
+    private func liveActivityStartedMetadata(for state: LiveActivityState) -> [String: String] {
+        [
+            "workout_id": activeWorkoutID ?? "",
+            "workout_title_present": state.workoutTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "false"
+                : "true",
+            "exercise_present": state.activeExerciseName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "false"
+                : "true"
+        ]
     }
 
     private func liveActivitySetProgressSummary() -> String {
@@ -1450,7 +1513,12 @@ public extension WorkoutDashboardModel {
                 category: "workout",
                 name: "set_logged",
                 severity: .info,
-                message: "Logged \(Int(set.weight))lb x \(set.reps) on \(exerciseName)"
+                message: "Logged workout set.",
+                metadata: [
+                    "weight_bucket": Self.weightBucket(set.weight),
+                    "reps": "\(set.reps)",
+                    "exercise_present": exerciseName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "false" : "true",
+                ]
             ))
 
             await refresh()
@@ -1488,7 +1556,7 @@ public extension WorkoutDashboardModel {
     }
 
     /// BGProcessing entry point with the same observability contract as app refresh.
-    func performBackgroundProcessing() async {
+    func performBackgroundProcessing() async -> Bool {
         recordBackgroundTaskWake(kind: "app_processing")
         telemetrySink.record(TelemetryEvent(
             category: "background",
@@ -1496,13 +1564,16 @@ public extension WorkoutDashboardModel {
             severity: .info,
             message: "BGTask app-processing handler entered."
         ))
-        await syncNow()
+        let success = await syncNow()
         telemetrySink.record(TelemetryEvent(
             category: "background",
-            name: "processing_completed",
-            severity: .info,
-            message: "BGTask app-processing handler completed."
+            name: success ? "processing_completed" : "processing_failed",
+            severity: success ? .info : .error,
+            message: success
+                ? "BGTask app-processing handler completed."
+                : "BGTask app-processing handler failed."
         ))
+        return success
     }
 
     private func recordBackgroundTaskWake(kind: String) {

@@ -161,17 +161,17 @@ async function handleCoach(request: Request, env: Env): Promise<Response> {
     return json({ error: auth.error, reason: auth.reason }, auth.status);
   }
 
-  const rateOk = await checkRateLimit(auth.deviceId, env);
-  if (!rateOk) {
-    return json({ error: "rate_limited" }, 429);
-  }
-
   const deterministicSafetyResponse = coachSafetyResponse(body);
   if (deterministicSafetyResponse) {
     return sseText(deterministicSafetyResponse, {
       "x-coach-model": "deterministic-safety",
       "x-coach-safety": "red-flag",
     });
+  }
+
+  const rateOk = await checkRateLimit(auth.deviceId, env);
+  if (!rateOk) {
+    return json({ error: "rate_limited" }, 429);
   }
 
   const tier = request.headers.get("X-Coach-Tier")?.toLowerCase();
@@ -440,6 +440,8 @@ function hasMedicalRedFlag(text: string): boolean {
     "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
       nearby + "\\bchest\\s+pain\\b",
     "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+      nearby + "\\bpain\\s+in\\s+(?:my\\s+)?chest\\b",
+    "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
       nearby + "\\bdizz(?:y|iness)\\b",
     "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
       nearby + "\\blightheaded\\b",
@@ -451,6 +453,7 @@ function hasMedicalRedFlag(text: string): boolean {
     "\\b(i\\s*(?:can'?t|cannot)\\s+breathe|hard\\s+to\\s+breathe)\\b",
     "\\b(i\\s*(?:am|might\\s+be|may\\s+be)|i\\W?m)\\s+pregnant\\b",
     "\\b(?:during|while)\\s+(?:my\\s+)?pregnancy\\b",
+    "\\bpregnan(?:t|cy)\\b" + nearby + "\\b(?:train|training|lift|lifting|heavy|squat|deadlift|workout)\\b",
     "\\b(i\\s*(?:have|had|am\\s+dealing\\s+with)|i\\W?m\\s+dealing\\s+with)\\b" +
       nearby + "\\b(?:eating\\s+disorder|starv\\w*|purg\\w*|not\\s+eating)\\b",
     "\\bi\\s*(?:haven'?t|have\\s+not)\\s+eaten\\b" + nearby + "\\b(?:cut|cardio|train|squat|lift|workout)\\b",

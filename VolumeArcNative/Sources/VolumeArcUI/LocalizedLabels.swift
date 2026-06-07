@@ -142,6 +142,19 @@ public extension WorkoutSessionProfile {
 /// localization APIs by design); the UI maps each case to a `String(localized:)`
 /// here so translators see every enum-derived label in one file.
 public enum LocalizedLabels {
+    public static func appearancePreferenceDisplayName(_ preference: VolumeArcAppearancePreference) -> String {
+        switch preference {
+        case .system:
+            return String(localized: "System", comment: "Appearance preference option")
+        case .light:
+            return String(localized: "Light", comment: "Appearance preference option")
+        case .dark:
+            return String(localized: "Dark", comment: "Appearance preference option")
+        case .warm:
+            return String(localized: "Warm", comment: "Appearance preference option")
+        }
+    }
+
     public static func formCheckExerciseDisplayName(_ exercise: FormCheckExercise) -> String {
         exercise.displayName
     }

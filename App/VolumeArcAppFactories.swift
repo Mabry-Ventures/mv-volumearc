@@ -96,7 +96,7 @@ extension VolumeArcApp {
         #endif
     }
 
-    static func makeWatchConnectivityCoordinator() -> WatchConnectivityCoordinator {
+    static func makeWatchConnectivityCoordinator(telemetrySink: (any TelemetrySink)? = nil) -> WatchConnectivityCoordinator {
         let transport: WatchSessionTransport = {
             #if canImport(WatchConnectivity) && (os(iOS) || os(watchOS))
             WatchConnectivitySessionTransport()
@@ -106,7 +106,8 @@ extension VolumeArcApp {
         }()
         return WatchConnectivityCoordinator(
             transport: transport,
-            payloadStore: UserDefaultsWatchPendingPayloadStore()
+            payloadStore: UserDefaultsWatchPendingPayloadStore(),
+            telemetrySink: telemetrySink
         )
     }
 

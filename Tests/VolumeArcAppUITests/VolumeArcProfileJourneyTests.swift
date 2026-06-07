@@ -144,6 +144,10 @@ final class VolumeArcProfileJourneyTests: XCTestCase {
             picker.waitForExistence(timeout: 10),
             "Profile should expose the app appearance picker"
         )
+        XCTAssertTrue(app.buttons["System"].exists || app.staticTexts["System"].exists)
+        XCTAssertTrue(app.buttons["Light"].exists || app.staticTexts["Light"].exists)
+        XCTAssertTrue(app.buttons["Dark"].exists || app.staticTexts["Dark"].exists)
+        XCTAssertFalse(app.buttons["Warm"].exists || app.staticTexts["Warm"].exists)
     }
 
     // MARK: - profile.diagnostics

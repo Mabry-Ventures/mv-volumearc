@@ -60,10 +60,14 @@ public final class UserDefaultsAccountSessionStore: AccountSessionStore, @unchec
 
     public func load() -> AccountSession? {
         #if canImport(Security)
-        if let data = keychainData(),
-           let session = try? JSONDecoder().decode(AccountSession.self, from: data) {
-            defaults.removeObject(forKey: key)
-            return session
+        if let data = keychainData() {
+            do {
+                let session = try JSONDecoder().decode(AccountSession.self, from: data)
+                defaults.removeObject(forKey: key)
+                return session
+            } catch {
+                deleteKeychainData()
+            }
         }
         if let legacyData = defaults.data(forKey: key) {
             defer { defaults.removeObject(forKey: key) }

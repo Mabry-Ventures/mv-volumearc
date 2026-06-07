@@ -114,7 +114,7 @@ public struct DiagnosticsView: View {
             }
             HStack(spacing: VA.Space.sm) {
                 Text(String(
-                    localized: "\(filteredEvents.count) of \(events.count)",
+                    localized: "^[\(filteredEvents.count) event](inflect: true) of ^[\(events.count) event](inflect: true)",
                     comment: "Diagnostics counter — filtered events out of total"
                 ))
                 .font(VA.Typography.caption)
@@ -231,14 +231,16 @@ public struct DiagnosticsView: View {
 
     private var summaryTitle: String {
         if errorCount > 0 {
-            return errorCount == 1
-                ? String(localized: "1 error recorded", comment: "Diagnostics summary title singular error")
-                : String(localized: "\(errorCount) errors recorded", comment: "Diagnostics summary title plural errors")
+            return String(
+                localized: "^[\(errorCount) error](inflect: true) recorded",
+                comment: "Diagnostics summary title for error count"
+            )
         }
         if warningCount > 0 {
-            return warningCount == 1
-                ? String(localized: "1 warning recorded", comment: "Diagnostics summary title singular warning")
-                : String(localized: "\(warningCount) warnings recorded", comment: "Diagnostics summary title plural warnings")
+            return String(
+                localized: "^[\(warningCount) warning](inflect: true) recorded",
+                comment: "Diagnostics summary title for warning count"
+            )
         }
         return String(localized: "No warnings recorded", comment: "Diagnostics summary title healthy state")
     }
@@ -296,10 +298,10 @@ public struct DiagnosticsView: View {
             : rows
 
         return ([
-            "VolumeArc diagnostics",
-            "Events: \(events.count)",
-            "Warnings: \(warningCount)",
-            "Errors: \(errorCount)",
+            String(localized: "VolumeArc diagnostics", comment: "Diagnostics export title"),
+            String(localized: "Events: \(events.count)", comment: "Diagnostics export total events row"),
+            String(localized: "Warnings: \(warningCount)", comment: "Diagnostics export warnings row"),
+            String(localized: "Errors: \(errorCount)", comment: "Diagnostics export errors row"),
             "",
         ] + visibleRows).joined(separator: "\n")
     }

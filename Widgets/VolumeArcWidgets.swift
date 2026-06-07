@@ -599,11 +599,11 @@ private struct ActiveWorkoutDynamicIslandLeadingView: View {
                 .font(VA.Typography.captionLarge)
                 .foregroundStyle(VA.Colors.textSecondary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(VA.Typography.dynamicIslandTitleMinimumScale)
             Text(snapshot.activeExerciseName)
                 .font(VA.Typography.headline)
                 .lineLimit(1)
-                .minimumScaleFactor(0.82)
+                .minimumScaleFactor(VA.Typography.dynamicIslandSubtitleMinimumScale)
         }
     }
 }

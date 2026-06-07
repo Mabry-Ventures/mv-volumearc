@@ -231,9 +231,10 @@ public struct ProfileView: View { // swiftlint:disable:this type_body_length
             .accessibilityIdentifier("profile.advancementRow")
             profileRow(
                 label: String(localized: "Equipment", comment: "Profile row label"),
-                value: model.athlete.availableEquipment.count == 1
-                    ? String(localized: "1 type", comment: "Singular equipment count on Profile row")
-                    : String(localized: "\(model.athlete.availableEquipment.count) types", comment: "Plural equipment count on Profile row"),
+                value: String(
+                    localized: "^[\(model.athlete.availableEquipment.count) type](inflect: true)",
+                    comment: "Equipment count on Profile row"
+                ),
                 icon: "dumbbell.fill"
             ) {
                 VAHaptics.tap()
@@ -265,10 +266,7 @@ public struct ProfileView: View { // swiftlint:disable:this type_body_length
 
     private var coachMemoryCountText: String {
         let count = model.coachMemory.entries.count
-        if count == 1 {
-            return String(localized: "1 note", comment: "Profile coach memory single count value")
-        }
-        return String(localized: "\(count) notes", comment: "Profile coach memory plural count value")
+        return String(localized: "^[\(count) note](inflect: true)", comment: "Profile coach memory count value")
     }
 
     private var subscriptionCard: some View {
@@ -1265,13 +1263,17 @@ private struct EquipmentPreferencesSheet: View {
 private struct SessionProfilesSheet: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("volumearc.sessionProfiles.active")
-    private var activeProfileName = WorkoutSessionProfile.defaultProfile.rawValue
+    private var persistedActiveProfileName = WorkoutSessionProfile.defaultProfile.rawValue
     @AppStorage("volumearc.sessionProfiles.customNames")
-    private var customProfileNamesRaw = ""
+    private var persistedCustomProfileNamesRaw = ""
     @AppStorage("volumearc.sessionProfiles.legDayRule")
-    private var isLegDayRuleEnabled = false
+    private var persistedIsLegDayRuleEnabled = false
     @AppStorage("volumearc.sessionProfiles.shortSessionRule")
-    private var isShortSessionRuleEnabled = false
+    private var persistedIsShortSessionRuleEnabled = false
+    @State private var activeProfileName = WorkoutSessionProfile.defaultProfile.rawValue
+    @State private var customProfileNamesRaw = ""
+    @State private var isLegDayRuleEnabled = false
+    @State private var isShortSessionRuleEnabled = false
     @State private var newProfileName = ""
     @State private var sessionMinutes: Int
     @State private var weeklyTrainingDays: Int
@@ -1342,7 +1344,7 @@ private struct SessionProfilesSheet: View {
                                 localized: "Delete \(profile)",
                                 comment: "Session profile delete custom profile accessibility label"
                             ))
-                            .accessibilityIdentifier("profile.sessionProfiles.delete.\(profile)")
+                            .accessibilityIdentifier("profile.sessionProfiles.delete")
                         }
                     }
                 }
@@ -1391,6 +1393,7 @@ private struct SessionProfilesSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(String(localized: "Save", comment: "Save session profiles")) {
+                        persistDrafts()
                         saveDefaults(sessionMinutes, weeklyTrainingDays)
                         VAHaptics.setLogged()
                         dismiss()
@@ -1401,6 +1404,7 @@ private struct SessionProfilesSheet: View {
         }
         .accessibilityIdentifier("profile.sessionProfiles.sheet")
         .onAppear {
+            loadDrafts()
             normalizeActiveProfileName()
         }
     }
@@ -1446,6 +1450,20 @@ private struct SessionProfilesSheet: View {
 
     private func localizedProfileName(_ profile: String) -> String {
         localizedSessionProfileDisplayName(profile)
+    }
+
+    private func loadDrafts() {
+        activeProfileName = persistedActiveProfileName
+        customProfileNamesRaw = persistedCustomProfileNamesRaw
+        isLegDayRuleEnabled = persistedIsLegDayRuleEnabled
+        isShortSessionRuleEnabled = persistedIsShortSessionRuleEnabled
+    }
+
+    private func persistDrafts() {
+        persistedActiveProfileName = activeProfileName
+        persistedCustomProfileNamesRaw = customProfileNamesRaw
+        persistedIsLegDayRuleEnabled = isLegDayRuleEnabled
+        persistedIsShortSessionRuleEnabled = isShortSessionRuleEnabled
     }
 
     private func normalizeActiveProfileName() {

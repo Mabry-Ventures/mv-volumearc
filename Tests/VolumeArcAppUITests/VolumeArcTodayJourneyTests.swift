@@ -370,12 +370,15 @@ final class VolumeArcTodayJourneyTests: XCTestCase {
         let schedule = app.descendants(matching: .any)
             .matching(identifier: "coach.plan.schedule")
             .firstMatch
-        for _ in 0..<5 where !(schedule.exists && schedule.isHittable) {
-            app.swipeDown()
-        }
-        XCTAssertTrue(schedule.waitForExistence(timeout: 5))
-        XCTAssertTrue(schedule.isHittable, "Edited co-designed plan should remain schedulable")
-        schedule.tap()
+        XCTAssertTrue(
+            VolumeArcAppUITestSupport.scrollIntoViewAndTap(
+                schedule,
+                in: app,
+                timeout: 10,
+                maxScrolls: 6
+            ),
+            "Edited co-designed plan should remain schedulable"
+        )
         let workoutsRoot = app.descendants(matching: .any)
             .matching(identifier: "workouts.root")
             .firstMatch

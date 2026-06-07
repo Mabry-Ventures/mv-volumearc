@@ -34,10 +34,11 @@ extension WorkoutDashboardModel {
         source: String = "workouts_builder",
         calendar: Calendar = .current
     ) async -> Bool {
+        let trimmedRawTitle = plan.title.trimmingCharacters(in: .whitespacesAndNewlines)
         #if canImport(SwiftData)
         guard let trainingPlanRepository else {
             recordCoDesignedPlanScheduleFailure(
-                title: plan.title,
+                title: trimmedRawTitle,
                 reason: "training_plan_repository_unavailable"
             )
             return false
@@ -68,8 +69,8 @@ extension WorkoutDashboardModel {
                 message: "Co-designed workout scheduled for tomorrow.",
                 metadata: [
                     "dayOfWeek": "\(dayOfWeek)",
-                    "title_present": title.isEmpty ? "false" : "true",
-                    "title_length_bucket": coDesignedTitleLengthBucket(title),
+                    "title_present": trimmedRawTitle.isEmpty ? "false" : "true",
+                    "title_length_bucket": coDesignedTitleLengthBucket(trimmedRawTitle),
                     "exerciseCount": "\(plan.exercises.count)",
                     "source": source,
                 ]
@@ -77,11 +78,11 @@ extension WorkoutDashboardModel {
             await refresh()
             return true
         } catch {
-            recordCoDesignedPlanScheduleFailure(title: title, reason: String(describing: type(of: error)))
+            recordCoDesignedPlanScheduleFailure(title: trimmedRawTitle, reason: String(describing: type(of: error)))
             return false
         }
         #else
-        recordCoDesignedPlanScheduleFailure(title: plan.title, reason: "swiftdata_unavailable")
+        recordCoDesignedPlanScheduleFailure(title: trimmedRawTitle, reason: "swiftdata_unavailable")
         return false
         #endif
     }

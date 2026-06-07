@@ -347,6 +347,7 @@ public struct UnavailableWatchSessionTransport: WatchSessionTransport {
 
 public protocol WatchPendingPayloadStore: Sendable {
     func enqueue(_ payload: WatchPayload) async
+    func enqueueFront(_ payload: WatchPayload) async
     func dequeueAll() async -> [WatchPayload]
     func count() async -> Int
 }
@@ -370,6 +371,12 @@ public actor UserDefaultsWatchPendingPayloadStore: WatchPendingPayloadStore {
     public func enqueue(_ payload: WatchPayload) async {
         var current = loadUnsafe()
         current.append(payload)
+        save(current)
+    }
+
+    public func enqueueFront(_ payload: WatchPayload) async {
+        var current = loadUnsafe()
+        current.insert(payload, at: 0)
         save(current)
     }
 
@@ -480,8 +487,8 @@ public actor WatchConnectivityCoordinator {
             } catch {
                 // Put the failed payload and every untouched payload back in
                 // original order so a partial replay cannot drop work.
-                for payloadToRequeue in pending[index...] {
-                    await payloadStore.enqueue(payloadToRequeue)
+                for payloadToRequeue in pending[index...].reversed() {
+                    await payloadStore.enqueueFront(payloadToRequeue)
                     recordPayloadQueued(payloadToRequeue, reason: "replay_failed")
                 }
                 throw error

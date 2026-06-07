@@ -22,9 +22,11 @@ public struct EditProfileView: View {
     @State private var privacyMode: PrivacyMode
     @State private var selectedEquipment: Set<Equipment>
     @AppStorage(ProfileAvatarStorage.storageKey)
-    private var avatarImageData: Data?
+    private var persistedAvatarImageData: Data?
+    @State private var avatarImageData: Data?
     #if canImport(PhotosUI)
     @State private var selectedAvatarItem: PhotosPickerItem?
+    @State private var avatarLoadTask: Task<Void, Never>?
     #endif
 
     public init(
@@ -74,7 +76,10 @@ public struct EditProfileView: View {
 
                 Section(String(localized: "Training Schedule", comment: "Edit profile section header — schedule")) {
                     Stepper(
-                        String(localized: "Days per week: \(weeklyDays)", comment: "Edit profile days-per-week stepper label"),
+                        String(
+                            localized: "Days per week: ^[\(weeklyDays) day](inflect: true)",
+                            comment: "Edit profile days-per-week stepper label"
+                        ),
                         value: $weeklyDays,
                         in: 1...7
                     )
@@ -141,6 +146,10 @@ public struct EditProfileView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(String(localized: "Cancel", comment: "Edit profile cancel button")) {
                         VAHaptics.tap()
+                        #if canImport(PhotosUI)
+                        avatarLoadTask?.cancel()
+                        #endif
+                        avatarImageData = persistedAvatarImageData
                         isPresented = false
                     }
                     .accessibilityIdentifier("editProfile.cancel")
@@ -158,6 +167,16 @@ public struct EditProfileView: View {
                 }
             }
         }
+        .onAppear {
+            if avatarImageData == nil {
+                avatarImageData = persistedAvatarImageData
+            }
+        }
+        #if canImport(PhotosUI)
+        .onDisappear {
+            avatarLoadTask?.cancel()
+        }
+        #endif
     }
 
     @ViewBuilder
@@ -197,7 +216,8 @@ public struct EditProfileView: View {
             }
             .accessibilityIdentifier("editProfile.avatar.photoPicker")
             .onChange(of: selectedAvatarItem) { _, newValue in
-                Task {
+                avatarLoadTask?.cancel()
+                avatarLoadTask = Task {
                     await loadAvatar(from: newValue)
                 }
             }
@@ -236,15 +256,18 @@ public struct EditProfileView: View {
                 VAHaptics.warning()
                 return
             }
+            guard !Task.isCancelled else { return }
             avatarImageData = normalized
             VAHaptics.setLogged()
         } catch {
+            guard !Task.isCancelled else { return }
             VAHaptics.warning()
         }
     }
     #endif
 
     private func save() {
+        persistedAvatarImageData = avatarImageData
         let defaults = UserProfileDefaults(
             name: name,
             coachingStyle: coachingStyle,

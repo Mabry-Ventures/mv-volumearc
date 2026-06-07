@@ -425,16 +425,7 @@ public enum VolumeArcAppearancePreference: String, CaseIterable, Identifiable, S
     public var id: String { rawValue }
 
     public var displayName: String {
-        switch self {
-        case .system:
-            return String(localized: "System", comment: "Appearance preference option")
-        case .light:
-            return String(localized: "Light", comment: "Appearance preference option")
-        case .dark:
-            return String(localized: "Dark", comment: "Appearance preference option")
-        case .warm:
-            return String(localized: "Warm", comment: "Appearance preference option")
-        }
+        LocalizedLabels.appearancePreferenceDisplayName(self)
     }
 
     var preferredColorScheme: ColorScheme? {

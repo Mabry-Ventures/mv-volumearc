@@ -232,6 +232,12 @@ public enum VA {
 
         /// Letter spacing for ALL-CAPS eyebrow labels.
         public static let eyebrowTracking: CGFloat = 0.6
+
+        /// Minimum scale for compact Dynamic Island title copy.
+        public static let dynamicIslandTitleMinimumScale: CGFloat = 0.8
+
+        /// Minimum scale for compact Dynamic Island subtitle copy.
+        public static let dynamicIslandSubtitleMinimumScale: CGFloat = 0.82
     }
 
     // MARK: - Opacity

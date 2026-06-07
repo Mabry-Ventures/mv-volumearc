@@ -132,22 +132,30 @@ public enum OnboardingProgressStore {
 
 public enum CoachStreamRecoveryStore {
     private static let inFlightKey = "com.mabryventures.VolumeArc.coach.streamInFlight"
+    private static let lock = NSLock()
 
     public static func markInFlight() {
+        lock.lock()
+        defer { lock.unlock() }
         UserDefaults.standard.set(true, forKey: inFlightKey)
         UserDefaults.standard.synchronize()
     }
 
     public static func clear() {
+        lock.lock()
+        defer { lock.unlock() }
         UserDefaults.standard.removeObject(forKey: inFlightKey)
         UserDefaults.standard.synchronize()
     }
 
     @discardableResult
     public static func consumeAbortedStream() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
         let wasInFlight = UserDefaults.standard.bool(forKey: inFlightKey)
         if wasInFlight {
-            clear()
+            UserDefaults.standard.removeObject(forKey: inFlightKey)
+            UserDefaults.standard.synchronize()
         }
         return wasInFlight
     }

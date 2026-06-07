@@ -126,12 +126,12 @@ struct VolumeArcApp: App {
         let voicePermissionStore = Self.makeVoicePermissionStore()
         let accountSessionStore = Self.makeAccountSessionStore()
         let notificationStore = Self.makeNotificationStore()
-        let watchConnectivityCoordinator = Self.makeWatchConnectivityCoordinator()
         #if canImport(SwiftData)
         let telemetrySink = Self.makeTelemetrySink(initialEvents: persistence.bootstrapTelemetryEvents)
         #else
         let telemetrySink = Self.makeTelemetrySink()
         #endif
+        let watchConnectivityCoordinator = Self.makeWatchConnectivityCoordinator(telemetrySink: telemetrySink)
         // VOL-204: capture the telemetry sink as an instance property so
         // `.onAppear` can publish it to `VolumeArcBackgroundTasks.telemetrySink`
         // alongside the existing `sharedModel` handoff. The local
