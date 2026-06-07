@@ -18,12 +18,12 @@ export const metadata: Metadata = {
     default: 'VolumeArc — The deepest Apple-ecosystem strength coach',
   },
   description:
-    'AI-powered strength training that runs on-device, drives prescription from your real recovery data, and lives natively on your Apple Watch. Built for iOS 26 + watchOS 26.',
+    'Apple-native strength coaching that runs on-device, drives prescription from your real recovery data, and lives natively on your Apple Watch. Built for iOS 26 + watchOS 26.',
   applicationName: 'VolumeArc',
   authors: [{ name: 'Mabry Ventures', url: 'https://mabryventures.com' }],
   keywords: [
     'strength training',
-    'AI coach',
+    'strength coach',
     'Apple Watch',
     'iOS 26',
     'watchOS 26',
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'VolumeArc — The deepest Apple-ecosystem strength coach',
     description:
-      'AI-powered strength training that runs on-device, drives prescription from your real recovery data, and lives natively on your Apple Watch.',
+      'Apple-native strength coaching that runs on-device, drives prescription from your real recovery data, and lives natively on your Apple Watch.',
     url: 'https://volumearc.app',
     siteName: 'VolumeArc',
     locale: 'en_US',
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'VolumeArc — The deepest Apple-ecosystem strength coach',
     description:
-      'AI-powered strength training that runs on-device, drives prescription from your real recovery data, and lives natively on your Apple Watch.',
+      'Apple-native strength coaching that runs on-device, drives prescription from your real recovery data, and lives natively on your Apple Watch.',
   },
   robots: {
     index: true,
@@ -67,7 +67,7 @@ const structuredData = [
     '@type': 'SoftwareApplication',
     name: 'VolumeArc',
     description:
-      'AI-powered strength training app that runs on-device, drives prescription from your real recovery data, and lives natively on your Apple Watch.',
+      'Apple-native strength coaching that runs on-device, drives prescription from your real recovery data, and lives natively on your Apple Watch.',
     applicationCategory: 'HealthApplication',
     operatingSystem: 'iOS 26, watchOS 26',
     url: 'https://volumearc.app',

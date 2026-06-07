@@ -1,4 +1,4 @@
-#if canImport(SwiftUI)
+#if canImport(Combine)
 import Foundation
 
 extension WorkoutDashboardModel {
@@ -140,6 +140,7 @@ extension WorkoutDashboardModel {
             ))
         } catch {
             let pending = await watchConnectivityCoordinator.pendingPayloadCount()
+            publishWatchConnectivityQueuedNotice(pending: pending)
             telemetrySink.record(TelemetryEvent(
                 category: "watch.form_check",
                 name: "\(eventName)_queued",

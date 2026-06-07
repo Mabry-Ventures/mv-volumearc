@@ -7,7 +7,7 @@
 // before the bundle is serialized so the same scrub layer that
 // guards Sentry events also guards user feedback.
 //
-// Phase 1B (separate PR): SwiftUI sheet (`FeedbackView`) + ProfileView
+// Phase 1B (separate PR): SwiftUI feedback surface (`FeedbackView`) + ProfileView
 // entry that builds a `FeedbackBundle` and calls
 // `SentrySDK.captureUserFeedback(_:)` with the JSON payload as a
 // `comments` field.

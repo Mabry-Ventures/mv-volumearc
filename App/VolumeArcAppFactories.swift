@@ -27,6 +27,12 @@ extension VolumeArcApp {
         // the store in shipping binaries — even if launchArguments
         // somehow contained a `-CHAOS_*` token.
         let underlying: HealthStore = {
+            #if DEBUG
+            if ChaosController.useAuthorizedHealthFixture {
+                return AuthorizedHealthFixtureStore()
+            }
+            #endif
+
             #if canImport(HealthKit)
             return HealthKitRuntimeStore()
             #else
@@ -77,14 +83,20 @@ extension VolumeArcApp {
     }
 
     static func makeVoicePermissionStore() -> VoicePermissionStore {
+        #if DEBUG
+        if ChaosController.useAuthorizedVoiceFixture {
+            return AuthorizedVoicePermissionFixtureStore()
+        }
+        #endif
+
         #if canImport(AVFoundation) && canImport(Speech)
-        VolumeArcVoicePermissionStore()
+        return VolumeArcVoicePermissionStore()
         #else
-        UnavailableVoicePermissionStore()
+        return UnavailableVoicePermissionStore()
         #endif
     }
 
-    static func makeWatchConnectivityCoordinator() -> WatchConnectivityCoordinator {
+    static func makeWatchConnectivityCoordinator(telemetrySink: (any TelemetrySink)? = nil) -> WatchConnectivityCoordinator {
         let transport: WatchSessionTransport = {
             #if canImport(WatchConnectivity) && (os(iOS) || os(watchOS))
             WatchConnectivitySessionTransport()
@@ -94,7 +106,8 @@ extension VolumeArcApp {
         }()
         return WatchConnectivityCoordinator(
             transport: transport,
-            payloadStore: UserDefaultsWatchPendingPayloadStore()
+            payloadStore: UserDefaultsWatchPendingPayloadStore(),
+            telemetrySink: telemetrySink
         )
     }
 

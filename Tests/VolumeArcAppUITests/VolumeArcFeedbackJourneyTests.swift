@@ -3,7 +3,7 @@ import XCTest
 /// VOL-179 (Phase 1C of VOL-176 / VOL-146): XCUITest journey for the
 /// in-app feedback flow that landed in PR #169.
 ///
-/// The Phase 1B PR delivered the SwiftUI sheet (`FeedbackView`) and
+/// The Phase 1B PR delivered the SwiftUI feedback surface (`FeedbackView`) and
 /// the App-layer adapter (`VolumeArcFeedbackSubmitter`) but explicitly
 /// deferred the XCUITest journey + the `docs/USER_JOURNEYS.md`
 /// `profile.send-feedback` row to this ticket so the merge wave
@@ -42,7 +42,7 @@ final class VolumeArcFeedbackJourneyTests: XCTestCase {
         }
     }
 
-    /// Opens the Profile feedback sheet, fills in a bug-report
+    /// Opens the Profile feedback surface, fills in a bug-report
     /// description, taps Submit, and asserts the
     /// `feedback.submitted` telemetry event fires.
     ///
@@ -73,13 +73,13 @@ final class VolumeArcFeedbackJourneyTests: XCTestCase {
         )
         feedbackRow.tap()
 
-        // ---- 2. Feedback sheet appears ---------------------------
+        // ---- 2. Feedback surface appears -------------------------
         let sheet = app.descendants(matching: .any)
             .matching(identifier: "feedback.sheet")
             .firstMatch
         XCTAssertTrue(
             sheet.waitForExistence(timeout: 5),
-            "Feedback sheet root should appear after tapping the profile row"
+            "Feedback surface root should appear after tapping the profile row"
         )
 
         // ---- 3. Pick a category ----------------------------------
@@ -145,7 +145,7 @@ final class VolumeArcFeedbackJourneyTests: XCTestCase {
         }
         XCTAssertFalse(
             sheet.exists,
-            "Feedback sheet should dismiss after submit completes"
+            "Feedback surface should dismiss after submit completes"
         )
     }
 
@@ -189,7 +189,7 @@ final class VolumeArcFeedbackJourneyTests: XCTestCase {
         }
         XCTAssertFalse(
             sheet.exists,
-            "Feedback sheet should dismiss on Cancel"
+            "Feedback surface should dismiss on Cancel"
         )
 
         // No `feedback.submitted` event should appear within a

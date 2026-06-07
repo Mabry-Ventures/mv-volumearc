@@ -1,13 +1,12 @@
 // VOL-200 Phase 2 — Coach surface journey coverage.
 //
-// Closes 3 of the 6 `coach.*` rows from `docs/USER_JOURNEYS.md`:
+// Closes all `coach.*` rows from `docs/USER_JOURNEYS.md`:
 //   * `coach.ask-question`
 //   * `coach.scroll-memory`
+//   * `coach.voice-prompt`
 //   * `coach.privacy-mode-strict`
-//
-// The remaining 2 (`coach.voice-prompt`, dedicated degraded-notice
-// surfacing for `coach.relay-fallback`) need separate setup (premium
-// fixture + product copy) and follow in subsequent PRs.
+//   * `coach.follow-up-turn`
+//   * `coach.relay-fallback`
 //
 // Every test uses the `-OpenCoachOnLaunch 1` launch arg the
 // `RootDashboardView` reads at launch (VOL-200 Phase 2 affordance,
@@ -83,15 +82,185 @@ final class VolumeArcCoachJourneyTests: XCTestCase {
             "Coach response bubble should appear within 10s of Send tap"
         )
 
-        // Telemetry assertion: `coach.question_sent` per the journey
-        // catalog row. The catalog also lists `coach.first_token_received`
-        // but that event-name is product-side TBD until the relay
-        // streaming path lands its dedicated event; the question-sent
-        // event is the contract today.
+        // Telemetry assertions: the journey catalog expects both the
+        // first streamed token and the completed response. Keeping the
+        // first-token event pinned here gives the perf gate an app-side
+        // edge to compare against the visible XCUITest edge.
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "coach",
+            name: "first_token_received",
+            within: 10,
+            test: self
+        )
         VolumeArcAppUITestSupport.assertTelemetryFired(
             in: app,
             category: "coach",
             name: "ask_complete",
+            within: 10,
+            test: self
+        )
+    }
+
+    func testCoachSafetyDisclosureIsPersistentAndNonBlocking() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenCoachOnLaunch", "1"]
+        )
+        app.launch()
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: 20),
+            "App should reach foreground running state on cold launch"
+        )
+
+        let composer = app.descendants(matching: .any)
+            .matching(identifier: "coach.input")
+            .firstMatch
+        XCTAssertTrue(
+            composer.waitForExistence(timeout: 15),
+            "Coach composer should be reachable without acknowledging a blocking safety alert"
+        )
+
+        let safetyAlert = app.alerts["Coach safety notice"].firstMatch
+        XCTAssertFalse(
+            safetyAlert.waitForExistence(timeout: 2),
+            "Coach should not present a blocking medical-advice alert on tab entry"
+        )
+
+        let safetyDisclaimer = app.descendants(matching: .any)
+            .matching(identifier: "coach.safetyDisclaimer")
+            .firstMatch
+        XCTAssertTrue(
+            safetyDisclaimer.waitForExistence(timeout: 5),
+            "Coach should keep the safety disclosure visible near the composer"
+        )
+    }
+
+    func testCoachSuggestedPromptStagesComposerText() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenCoachOnLaunch", "1"]
+        )
+        app.launch()
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: 20),
+            "App should reach foreground running state on cold launch"
+        )
+
+        let suggestion = app.descendants(matching: .any)
+            .matching(identifier: "coach.suggestion.restOrTrain")
+            .firstMatch
+        XCTAssertTrue(
+            suggestion.waitForExistence(timeout: 15),
+            "Coach suggested prompt chips should be visible and tappable"
+        )
+        suggestion.tap()
+
+        let composer = app.descendants(matching: .any)
+            .matching(identifier: "coach.input")
+            .firstMatch
+        XCTAssertTrue(
+            composer.waitForExistence(timeout: 5),
+            "Coach composer should remain reachable after tapping a suggested prompt"
+        )
+        XCTAssertEqual(
+            composer.value as? String,
+            "Rest or train?",
+            "Tapping a suggested prompt should stage the prompt for review instead of sending immediately"
+        )
+    }
+
+    func testCoachRecommendedWorkoutStartsActiveWorkoutInOneTap() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenCoachOnLaunch", "1", "-SeedCoachWorkoutHandoff", "1"]
+        )
+        app.launch()
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: 20),
+            "App should reach foreground with a seeded Coach workout recommendation"
+        )
+
+        let pinnedHandoff = app.descendants(matching: .any)
+            .matching(identifier: "coach.workoutHandoff.pinned")
+            .firstMatch
+        XCTAssertTrue(
+            pinnedHandoff.waitForExistence(timeout: 15),
+            "A parseable Coach workout recommendation should expose a pinned start affordance"
+        )
+
+        let startWorkout = app.descendants(matching: .any)
+            .matching(identifier: "coach.startRecommendedWorkout.pinned")
+            .firstMatch
+        XCTAssertTrue(startWorkout.waitForExistence(timeout: 5))
+        startWorkout.tap()
+
+        let activeSession = app.descendants(matching: .any)
+            .matching(identifier: "workouts.activeSession")
+            .firstMatch
+        XCTAssertTrue(
+            activeSession.waitForExistence(timeout: 10),
+            "Tapping the Coach handoff should open a live Workouts session"
+        )
+        XCTAssertTrue(
+            app.staticTexts["Coach Workout"].waitForExistence(timeout: 5),
+            "The active session should preserve the coach-generated workout title"
+        )
+        XCTAssertTrue(
+            app.staticTexts["SET 1 OF 3"].waitForExistence(timeout: 5),
+            "The active session should use the coach-generated exercise prescription"
+        )
+    }
+
+    func testVoicePromptUsesPremiumPermissionFixtureAndEmitsTelemetry() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: [
+                "-OpenCoachOnLaunch", "1",
+                "-UseScreenshotStoreKitFixtures", "1",
+                "-UsePremiumEntitlementFixture", "1",
+                "-UseAuthorizedVoiceFixture", "1",
+                "-VoicePromptTranscriptFixture", "How is my squat form?"
+            ]
+        )
+        app.launch()
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: 20),
+            "App should reach foreground running state on cold launch"
+        )
+
+        let voiceButton = app.descendants(matching: .any)
+            .matching(identifier: "coach.voice")
+            .firstMatch
+        XCTAssertTrue(
+            voiceButton.waitForExistence(timeout: 15),
+            "Coach voice button should be reachable within 15s in premium deterministic mode"
+        )
+        XCTAssertTrue(voiceButton.isEnabled, "Premium fixture + voice transcript should enable the voice button")
+        voiceButton.tap()
+
+        let firstResponse = app.descendants(matching: .any)
+            .matching(identifier: "coach.firstResponse")
+            .firstMatch
+        XCTAssertTrue(
+            firstResponse.waitForExistence(timeout: 10),
+            "Voice coach response should render in the Coach transcript"
+        )
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "voice",
+            name: "enabled",
+            within: 10,
+            test: self
+        )
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "voice",
+            name: "session_started",
+            within: 10,
+            test: self
+        )
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "voice",
+            name: "session_completed",
             within: 10,
             test: self
         )
@@ -349,18 +518,116 @@ final class VolumeArcCoachJourneyTests: XCTestCase {
     /// existing `FallbackCoachProvider` switches to the local heuristic
     /// path and emits the journey-catalog `coach.fallback_used` event.
     func testCoachRelay5xxFallsBackToLocalHeuristic() throws {
+        try assertCoachFallbackJourney(
+            extra: ["-CHAOS_AIRELAY_5XX"],
+            prompt: "Should I push today?",
+            failureLabel: "relay 5xx"
+        )
+    }
+
+    /// VOL-141 / VOL-168: force the relay path to be unreachable before
+    /// it yields a token. This covers the `fail.offline` journey row:
+    /// the user still receives a local recommendation, the fallback
+    /// banner is visible, and telemetry records `coach.fallback_used`.
+    func testCoachOfflineFallsBackToLocalHeuristicAndShowsBanner() throws {
+        try assertCoachFallbackJourney(
+            extra: ["-CHAOS_AIRELAY_OFFLINE"],
+            prompt: "I am offline. What should I do for today's lower session?",
+            failureLabel: "offline relay"
+        )
+    }
+
+    /// VOL-141 / VOL-168: force a relay 401 on the first attempt, then
+    /// prove the app refreshes the relay session and retries before
+    /// local fallback is surfaced to the user.
+    func testCoachRelay401RefreshesSessionAndRetries() throws {
         let app = VolumeArcAppUITestSupport.makeSeededApp(
-            extra: ["-OpenCoachOnLaunch", "1", "-CHAOS_AIRELAY_5XX"]
+            extra: ["-OpenCoachOnLaunch", "1", "-CHAOS_AIRELAY_401_THEN_SUCCESS"]
         )
         app.launch()
-        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: 20),
+            "App should reach foreground for relay 401 retry"
+        )
 
         let composer = app.descendants(matching: .any)
             .matching(identifier: "coach.input")
             .firstMatch
         XCTAssertTrue(
             composer.waitForExistence(timeout: 15),
-            "Coach composer should be reachable under AIRelay chaos"
+            "Coach composer should be reachable under relay 401 retry chaos"
+        )
+
+        composer.tap()
+        composer.typeText("Should I adjust today's bench work?")
+
+        let sendButton = app.descendants(matching: .any)
+            .matching(identifier: "coach.send")
+            .firstMatch
+        XCTAssertTrue(sendButton.waitForExistence(timeout: 5))
+        sendButton.tap()
+
+        let firstResponse = app.descendants(matching: .any)
+            .matching(identifier: "coach.firstResponse")
+            .firstMatch
+        XCTAssertTrue(
+            firstResponse.waitForExistence(timeout: 10),
+            "Refreshed relay retry should render a coach response"
+        )
+        XCTAssertTrue(
+            firstResponse.label.localizedCaseInsensitiveContains("session refreshed"),
+            "Retry response should come from the refreshed relay path"
+        )
+
+        let fallbackBanner = app.descendants(matching: .any)
+            .matching(identifier: "coach.fallbackBanner")
+            .firstMatch
+        XCTAssertFalse(
+            fallbackBanner.waitForExistence(timeout: 2),
+            "Successful 401 retry should not surface the local fallback banner"
+        )
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "relay",
+            name: "session_refreshed",
+            within: 10,
+            test: self
+        )
+    }
+
+    /// VOL-141 / VOL-168: force a relay 401 before the first streamed
+    /// token on every attempt. The app retries once after refreshing
+    /// relay credentials, then degrades to the local heuristic through
+    /// `FallbackCoachProvider` when the retry is also unauthorized.
+    func testCoachRelay401FallsBackToLocalHeuristic() throws {
+        try assertCoachFallbackJourney(
+            extra: ["-CHAOS_AIRELAY_401"],
+            prompt: "Should I adjust today's bench work?",
+            failureLabel: "relay 401"
+        )
+    }
+
+    /// VOL-271: force the Foundation Models entry in the provider chain
+    /// to be unavailable and prove Coach stays quiet about model plumbing.
+    /// The user gets a normal response from the next provider, while
+    /// diagnostics record `ai.fm.unavailable` for operators and eval traces.
+    func testCoachFoundationModelsUnavailableFallsBackQuietly() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenCoachOnLaunch", "1", "-CHAOS_FM_UNAVAILABLE"]
+        )
+        app.launch()
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: 20),
+            "App should reach foreground when Foundation Models are unavailable"
+        )
+
+        let composer = app.descendants(matching: .any)
+            .matching(identifier: "coach.input")
+            .firstMatch
+        XCTAssertTrue(
+            composer.waitForExistence(timeout: 15),
+            "Coach composer should be reachable when Foundation Models are unavailable"
         )
 
         composer.tap()
@@ -377,11 +644,191 @@ final class VolumeArcCoachJourneyTests: XCTestCase {
             .firstMatch
         XCTAssertTrue(
             firstResponse.waitForExistence(timeout: 10),
-            "Local heuristic fallback should render a coach response after relay 5xx"
+            "Fallback provider should render a normal coach response"
+        )
+
+        let fallbackBanner = app.descendants(matching: .any)
+            .matching(identifier: "coach.fallbackBanner")
+            .firstMatch
+        XCTAssertFalse(
+            fallbackBanner.waitForExistence(timeout: 2),
+            "Foundation Models unavailability should not surface model-provider plumbing to the user"
+        )
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "ai",
+            name: "fm.unavailable",
+            within: 10,
+            test: self
+        )
+    }
+
+    /// VOL-127 / VOL-141: if the app is killed while a coach answer is
+    /// streaming, the partial turn must not be treated as a completed
+    /// memory entry. Relaunch emits `coach.stream.aborted` and the user
+    /// can ask again normally.
+    func testForceQuitCoachTurnDropsPartialAndEmitsAbortedOnRelaunch() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenCoachOnLaunch", "1", "-CHAOS_COACH_SLOW_STREAM"]
+        )
+        app.launch()
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: 20),
+            "App should reach foreground for slow coach stream"
+        )
+
+        var composer = app.descendants(matching: .any)
+            .matching(identifier: "coach.input")
+            .firstMatch
+        XCTAssertTrue(
+            composer.waitForExistence(timeout: 15),
+            "Coach composer should be reachable before force-quit"
+        )
+        composer.tap()
+        composer.typeText("Give me a long set-by-set plan.")
+
+        var sendButton = app.descendants(matching: .any)
+            .matching(identifier: "coach.send")
+            .firstMatch
+        XCTAssertTrue(sendButton.waitForExistence(timeout: 5))
+        sendButton.tap()
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "coach",
+            name: "first_token_received",
+            within: 10,
+            test: self
+        )
+
+        app.terminate()
+        app.launchArguments = [
+            "-UITestMode", "1",
+            "-SkipOnboarding", "1",
+            "-PreserveUITestPersistence", "1",
+            "-OpenCoachOnLaunch", "1",
+        ]
+        app.launch()
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: 20),
+            "Relaunch after killed coach stream should reach foreground"
+        )
+
+        composer = app.descendants(matching: .any)
+            .matching(identifier: "coach.input")
+            .firstMatch
+        XCTAssertTrue(
+            composer.waitForExistence(timeout: 15),
+            "Coach composer should be reachable after aborted stream recovery"
+        )
+
+        var firstResponse = app.descendants(matching: .any)
+            .matching(identifier: "coach.firstResponse")
+            .firstMatch
+        XCTAssertFalse(
+            firstResponse.waitForExistence(timeout: 2),
+            "Partial coach response should not relaunch as a completed answer"
+        )
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "coach",
+            name: "stream.aborted",
+            within: 10,
+            test: self
+        )
+
+        composer.tap()
+        composer.typeText("Can I ask again?")
+        sendButton = app.descendants(matching: .any)
+            .matching(identifier: "coach.send")
+            .firstMatch
+        XCTAssertTrue(sendButton.waitForExistence(timeout: 5))
+        sendButton.tap()
+
+        firstResponse = app.descendants(matching: .any)
+            .matching(identifier: "coach.firstResponse")
+            .firstMatch
+        XCTAssertTrue(
+            firstResponse.waitForExistence(timeout: 10),
+            "Coach should accept a fresh prompt after aborted stream recovery"
+        )
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "coach",
+            name: "ask_complete",
+            within: 10,
+            test: self
+        )
+    }
+
+    private func assertCoachFallbackJourney(
+        extra: [String],
+        prompt: String,
+        failureLabel: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenCoachOnLaunch", "1"] + extra
+        )
+        app.launch()
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: 20),
+            "App should reach foreground for \(failureLabel)",
+            file: file,
+            line: line
+        )
+
+        let composer = app.descendants(matching: .any)
+            .matching(identifier: "coach.input")
+            .firstMatch
+        XCTAssertTrue(
+            composer.waitForExistence(timeout: 15),
+            "Coach composer should be reachable under \(failureLabel) chaos",
+            file: file,
+            line: line
+        )
+
+        composer.tap()
+        composer.typeText(prompt)
+
+        let sendButton = app.descendants(matching: .any)
+            .matching(identifier: "coach.send")
+            .firstMatch
+        XCTAssertTrue(
+            sendButton.waitForExistence(timeout: 5),
+            "Coach send button should be reachable under \(failureLabel)",
+            file: file,
+            line: line
+        )
+        sendButton.tap()
+
+        let firstResponse = app.descendants(matching: .any)
+            .matching(identifier: "coach.firstResponse")
+            .firstMatch
+        XCTAssertTrue(
+            firstResponse.waitForExistence(timeout: 10),
+            "Local heuristic fallback should render a coach response after \(failureLabel)",
+            file: file,
+            line: line
         )
         XCTAssertFalse(
             firstResponse.label.localizedCaseInsensitiveContains("trouble reaching"),
-            "Relay 5xx should not surface the generic hard-failure message when fallback succeeds"
+            "\(failureLabel) should not surface the generic hard-failure message when fallback succeeds",
+            file: file,
+            line: line
+        )
+
+        let fallbackBanner = app.descendants(matching: .any)
+            .matching(identifier: "coach.fallbackBanner")
+            .firstMatch
+        XCTAssertTrue(
+            fallbackBanner.waitForExistence(timeout: 5),
+            "Coach fallback banner should be visible after \(failureLabel)",
+            file: file,
+            line: line
         )
 
         VolumeArcAppUITestSupport.assertTelemetryFired(

@@ -11,10 +11,10 @@ name: Semgrep SAST
 # runs in GH Actions on private repos, and ships public rulesets for
 # OWASP Top 10, Swift, and secrets that cover the same risk surface.
 #
-# Runner: self-hosted per the "zero GitHub-hosted jobs" policy. Semgrep
+# Runner: self-hosted per the runner policy in docs/CONTRIBUTING.md. Semgrep
 # itself is platform-independent Python; no Xcode requirement on this
-# job, but consistency with the rest of the CI fleet keeps the runner
-# topology coherent and avoids credit spend on GH-hosted macOS minutes.
+# job, but keeping security gates on the trusted runner fleet preserves the
+# same repository-history and secret-scanning boundary as Trufflehog.
 
 on:
   push:
@@ -73,12 +73,10 @@ jobs:
           semgrep --version
 
       - name: Run Semgrep
-        # VOL-253: initial rollout is non-blocking for a 1-week
-        # observation window so we can calibrate false-positive volume
-        # before promoting Semgrep to a required check. After the
-        # observation window, remove `continue-on-error` and add
-        # `Semgrep scan` to the ruleset's required-status-checks list.
-        continue-on-error: true
+        # VolumeArc Release: Semgrep is now a hard launch gate. The
+        # prior observation window is over and the release branch has
+        # removed the known false positives, so any reportable finding
+        # must block until fixed or explicitly accepted.
         env:
           # SEMGREP_RULES uses Semgrep registry shortnames. p/owasp-top-ten
           # is the canonical OWASP A1-A10 ruleset; p/secrets adds a second
@@ -88,8 +86,12 @@ jobs:
           SEMGREP_RULES: "p/owasp-top-ten p/secrets p/swift"
         run: |
           set -euo pipefail
+          semgrep_configs=()
+          for rule in $SEMGREP_RULES; do
+            semgrep_configs+=(--config "$rule")
+          done
           semgrep scan \
-            --config "$SEMGREP_RULES" \
+            "${semgrep_configs[@]}" \
             --sarif --output semgrep.sarif \
             --error \
             --metrics off \

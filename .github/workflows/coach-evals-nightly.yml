@@ -64,10 +64,11 @@ jobs:
   coach-evals:
     name: Coach evals (fixtures)
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    # Per repo policy (docs/CONTRIBUTING.md "Runner policy: zero
-    # GitHub-hosted jobs"): every workflow runs on the self-hosted
-    # mv-volumearc-runner. The eval harness is a bash + curl + jq +
-    # openssl pipeline; the self-hosted runner has all four in the
+    # Per repo policy (docs/CONTRIBUTING.md "Runner policy: Apple gates
+    # self-hosted, portable GitHub API/web CI GitHub-hosted"): this
+    # Apple-adjacent eval gate runs on the self-hosted mv-volumearc-runner.
+    # The eval harness is a bash + curl + jq + openssl pipeline; the
+    # self-hosted runner has all four in the
     # Homebrew toolchain that VOL-180 / VOL-173 already document.
     runs-on: [self-hosted, mv-volumearc-runner]
     timeout-minutes: 30

@@ -67,6 +67,27 @@ final class VolumeArcSignalsJourneyTests: XCTestCase {
         )
     }
 
+    func testSignalsExplainsHowReadinessChangesTraining() throws {
+        let app = launchSignalsTab()
+        let usageCard = app.descendants(matching: .any)
+            .matching(identifier: "signals.readiness.usage")
+            .firstMatch
+        XCTAssertTrue(
+            usageCard.waitForExistence(timeout: 10),
+            "Signals should explain how readiness changes the training prescription"
+        )
+        XCTAssertTrue(
+            app.staticTexts["How readiness changes training"].waitForExistence(timeout: 5),
+            "Signals readiness usage card should have a clear title"
+        )
+        XCTAssertTrue(
+            app.staticTexts[
+                "Readiness guides training choices. It is not a medical clearance or a reason to ignore symptoms."
+            ].waitForExistence(timeout: 5),
+            "Signals readiness usage card should include a safety boundary"
+        )
+    }
+
     // MARK: - Helpers
 
     /// Cold-launch the app into the Signals tab and confirm the

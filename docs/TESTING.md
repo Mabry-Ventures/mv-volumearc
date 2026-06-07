@@ -7,8 +7,8 @@ VolumeArc currently ships with **735+ test functions** across unit + integration
 - 80% line-coverage gate enforced on `VolumeArcCore` (VOL-52), targeted to rise to **90%** under [VOL-140](https://linear.app/mabry-ventures/issue/VOL-140) (sharpened by [VOL-205](https://linear.app/mabry-ventures/issue/VOL-205)). New gates: `VolumeArcUI` (≥85% target, **18%** staged floor after the VOL-135 snapshot ratchet), `VolumeArcCoreWatch` (≥85% target, **25%** Phase A floor — measured baseline 28.77% from [VOL-138](https://linear.app/mabry-ventures/issue/VOL-138) Phase A; ratchets up once `WatchWorkoutModel` pure logic is extracted), `VolumeArcWidgets` (≥75% target, **5%** Phase A floor — [VOL-263](https://linear.app/mabry-ventures/issue/VOL-263); `Widgets/VolumeArcWidgets.swift` is linked into `VolumeArcAppTests` so the existing 12 `NextWorkoutWidgetSnapshotTests` already exercise the widget views, real baseline TBM — Phase B ratchets to 25 with margin once the first green run lands; `VolumeArcWatchWidgets` line-coverage gate pending VOL-263 Phase B).
 - 6-metric performance budget (cold launch, scroll fps, scroll hitches, memory, coach P50, coach P95) tag-gated in CI (VOL-99).
 - 47-fixture coach eval matrix with hermetic template-layer assertions in CI; response-layer harness runs on nightly cron (`coach-evals-nightly.yml`) against the staging relay through the VOL-244 eval attestation broker.
-- User-journey catalog at [`USER_JOURNEYS.md`](USER_JOURNEYS.md); current coverage **56%** (39/69), target **100%** under [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141) (sharpened by [VOL-200](https://linear.app/mabry-ventures/issue/VOL-200) — CI parser gate).
-- Visual regression: SnapshotTesting is wired with bundled baselines for VAButton, the next-workout widget, core VAUI card/toast surfaces, the active-workout Live Activity lock-screen/banner and watch surfaces, coach transcript bubbles, the Premium paywall loaded-empty/failure shell, and the full onboarding flow; RootDashboard tab and remaining Live Activity matrices continue under [VOL-135](https://linear.app/mabry-ventures/issue/VOL-135).
+- User-journey catalog at [`USER_JOURNEYS.md`](USER_JOURNEYS.md); current automated coverage **100%** (72/72) under [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141) (sharpened by [VOL-200](https://linear.app/mabry-ventures/issue/VOL-200) — CI parser gate). Physical iPhone + paired Apple Watch UAT remains a separate launch gate.
+- Visual regression: SnapshotTesting is wired with bundled baselines for VAButton, the next-workout widget, core VAUI card/toast surfaces, the active-workout Live Activity lock-screen/banner, expanded Dynamic Island, and watch surfaces, coach transcript bubbles, the Premium paywall loaded-empty/failure shell, the full onboarding flow, and `DashboardSurfaceSnapshotTests` coverage for Today, Workouts idle, Workouts active, Coach planning, Signals, and Profile in light/dark/warm-brand plus light `.accessibility5` and light/dark/warm-brand reduce-transparency-off glass variants; watch/runtime parity, widgets beyond next-workout, and remaining Live Activity matrices continue under [VOL-135](https://linear.app/mabry-ventures/issue/VOL-135), [VOL-201](https://linear.app/mabry-ventures/issue/VOL-201), and [VOL-270](https://linear.app/mabry-ventures/issue/VOL-270).
 - Exploratory UAT: [`UAT_AGENT.md`](UAT_AGENT.md) documents the nightly LLM-driven XCUITest bridge from [VOL-169](https://linear.app/mabry-ventures/issue/VOL-169). It reads screenshots + accessibility trees, executes bounded safe actions, uploads transcripts, and posts a GitHub issue report.
 
 ```
@@ -27,7 +27,7 @@ Tests/VolumeArcAppTests/
 ├── VolumeArcCoachMemoryRetentionTests.swift      # 5 tests
 ├── VolumeArcCoachPromptTemplateTests.swift       # 6 tests
 ├── VolumeArcCoreCoverageTests.swift              # 63 tests (targets the 80% gate)
-├── VolumeArcDashboardIntegrationTests.swift      # 13 tests, @MainActor, in-memory SwiftData
+├── VolumeArcDashboardIntegrationTests.swift      # 14 tests, @MainActor, in-memory SwiftData
 ├── VolumeArcMaterialsTests.swift                 # 5 tests (Liquid Glass fallback — VOL-69)
 ├── VolumeArcMigrationTests.swift                 # 21 tests
 ├── VolumeArcPersistenceTests.swift               # 10 tests, real VolumeArcPersistenceController
@@ -140,7 +140,7 @@ A `TelemetryEvent` recorded during a journey is a much stabler assertion target 
 
 How it works:
 
-1. In deterministic mode (`-UITestMode 1`), `VolumeArcAppFactories.makeTelemetrySink` returns an `InMemoryTelemetrySink` constructed with `postsNotificationOnRecord: true`. Every recorded event fires a `.volumeArcTelemetryDidRecord` `Notification.Name` with the `TelemetryEvent` in `userInfo`.
+1. In deterministic mode (`-UITestMode 1`), the app telemetry factory returns an `InMemoryTelemetrySink` constructed with `postsNotificationOnRecord: true`. Every recorded event fires a `.volumeArcTelemetryDidRecord` `Notification.Name` with the `TelemetryEvent` in `userInfo`.
 2. `VolumeArcTelemetryDebugProbe` (an `ObservableObject` owned by `VolumeArcApp`) observes that notification and maintains a JSON-encoded rolling 50-event buffer of `{c, n, s}` records (category / name / severity).
 3. A hidden 1×1 accessibility overlay in the root `View` renders the JSON string with `accessibilityIdentifier("debug.telemetry.events")`. Production builds skip the overlay because the deterministic-mode gate is false.
 4. `VolumeArcAppUITestSupport.assertTelemetryFired(in:category:name:within:test:)` polls the overlay's `label`, parses the JSON, and returns when the target `(category, name)` appears — or attaches a snapshot and `XCTFail`s with the most-recent label on timeout.
@@ -175,7 +175,7 @@ This was the root cause behind VOL-175's "probe flakes when chaos journey is in 
 
 ## Chaos / fault injection (VOL-168)
 
-[`docs/CHAOS.md`](CHAOS.md) is the source of truth. The short version: every chaos flag is a `-CHAOS_*` launch argument that the `ChaosController` (`App/Debug/`) reads, which causes `VolumeArcAppFactories` to wrap the matching subsystem in a fault-injecting decorator. Paired journeys in `VolumeArcChaosJourneyTests` exercise the fault and assert graceful degradation — including the diagnostic telemetry event via VOL-149's `assertTelemetryFired` helper. The wiring is `#if DEBUG`-gated everywhere so Release builds compile every chaos check down to `return false`. Phase 1 ships the HealthKit-auth-denied flag + journey; Phase 2 extends to WatchConnectivity / StoreKit / BGTaskScheduler / AIRelay.
+[`docs/CHAOS.md`](CHAOS.md) is the source of truth. The short version: every chaos flag is a `-CHAOS_*` launch argument that the `ChaosController` (`App/Debug/`) reads, which causes app factories to wrap the matching subsystem in a fault-injecting decorator. Paired journeys in `VolumeArcChaosJourneyTests` and `VolumeArcCoachJourneyTests` exercise the fault and assert graceful degradation, including the diagnostic telemetry event via VOL-149's `assertTelemetryFired` helper. The wiring is `#if DEBUG`-gated everywhere so Release builds compile every chaos check down to `return false`. Current coverage ships HealthKit auth denial plus AIRelay 5xx/offline/401 safe fallback, 401 session-refresh retry proof, and deterministic slow-stream coach force-quit recovery; Phase 2 extends to WatchConnectivity, StoreKit, BGTaskScheduler, relay timeouts, malformed SSE, and rate limits.
 
 ## Exploratory UAT agent (VOL-169)
 
@@ -230,7 +230,7 @@ Visual regression coverage for VAUI components and the critical screens (Onboard
 
 - **Phase 1 (this PR's introduction):** `pointfreeco/swift-snapshot-testing` v1.19 wired into the `VolumeArcAppTests` target. `Tests/VolumeArcAppTests/Snapshots/` is the canonical home; one infrastructure smoke test (`VolumeArcSnapshotInfrastructureTests`) proves the dependency links and the directory layout works. No baseline PNGs yet.
 
-- **Phase 2+ (follow-up PRs):** active bundled baselines cover `VAButton` primary, the next-workout widget, core VAUI card/toast surfaces, the active-workout Live Activity lock-screen/banner and watch surfaces, `VACoachBubble` transcript states in light/dark plus accessibility Dynamic Type, the Premium paywall loaded-empty/failure shell, and every onboarding step. Each additional component / screen should land in its own PR with its baseline PNG committed under `Tests/VolumeArcAppTests/Snapshots/__Snapshots__/`. The generated project copies that folder into the `VolumeArcAppTests` bundle so Xcode Cloud can compare snapshots even when the source checkout is not mounted during the test phase. See VOL-135's acceptance criteria for the full matrix (light + dark, `.medium` + `.accessibility5` Dynamic Type, reduce-transparency on/off).
+- **Phase 2+ (follow-up PRs):** active bundled baselines cover `VAButton` primary, the next-workout widget, core VAUI card/toast surfaces, the active-workout Live Activity lock-screen/banner, expanded Dynamic Island, and watch surfaces, `VACoachBubble` transcript states in light/dark plus accessibility Dynamic Type, the Premium paywall loaded-empty/failure shell, every onboarding step, and the six launch-critical dashboard surfaces in light/dark/warm-brand plus light `.accessibility5` and light/dark/warm-brand reduce-transparency-off glass variants through `DashboardSurfaceSnapshotTests`. `VADesignTokenParityTests` also asserts the Claude warm-personality brand palette against native `VA.Colors`. Each additional component / screen should land in its own PR with its baseline PNG committed under `Tests/VolumeArcAppTests/Snapshots/__Snapshots__/`. The generated project copies that folder into the `VolumeArcAppTests` bundle so Xcode Cloud can compare snapshots even when the source checkout is not mounted during the test phase. See VOL-135's acceptance criteria for the full matrix (light + dark, `.medium` + `.accessibility5` Dynamic Type, reduce-transparency on/off), with VOL-270 tracking Claude-specific watch/marketing/widget signoff.
 
 ### Recording a new snapshot
 
@@ -388,14 +388,14 @@ Be specific. A test name should describe both the condition and the expected beh
 2. Update or add the paired XCUITest.
 3. **In the same PR, bump `JOURNEY_COVERAGE_THRESHOLD`** in `.github/workflows/ci.yml`'s "Journey coverage gate" step to match the new percentage. Same ratchet contract as the per-target coverage gate (VOL-205) — the threshold tracks current coverage at-or-above, never drops.
 
-The gate (`scripts/check_journey_coverage.sh`, VOL-200 Phase 1) runs in CI after the per-target coverage gates. It parses the table, counts rows with paired XCUITests vs. `[ ]` (uncovered), and fails the build below the threshold. Default threshold is **18%** (the audited 2026-05-18 baseline: 11/62 covered). Coverage target: **100%** of journeys covered by an XCUITest paired with telemetry assertions ([VOL-149](https://linear.app/mabry-ventures/issue/VOL-149) telemetry-as-UAT helper); burn-down tracked under [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141) and [VOL-200](https://linear.app/mabry-ventures/issue/VOL-200).
+The gate (`scripts/check_journey_coverage.sh`, VOL-200 Phase 1) runs in CI after the per-target coverage gates. It parses the table, counts rows with paired XCUITests vs. `[ ]` (uncovered), and fails the build below the threshold. Default threshold is **100%** as of the 2026-06-06 release branch; every simulator-safe v1 journey row must stay paired with an XCUITest and telemetry assertion ([VOL-149](https://linear.app/mabry-ventures/issue/VOL-149) telemetry-as-UAT helper). Physical iPhone + paired Apple Watch proof remains in the UAT launch checklist.
 
 ## Snapshot / visual regression
 
 **Phase 1 infrastructure landed (VOL-201).** pointfreeco SnapshotTesting is linked into `VolumeArcAppTests`, and `scripts/record_snapshots.sh` is the canonical helper for regenerating baselines locally. Phase 2+ (the actual baselines per surface family) is filed under [VOL-201](https://linear.app/mabry-ventures/issue/VOL-201) and rolls out one PR per family. Audit target:
 
 - Every VAUI design-system component (`VAButton`, `VACard`, `VACoachBubble`, `VAToast`, metric displays, `VAReadinessHero`)
-- Critical screens: `OnboardingView`, `PaywallView`, `RootDashboardView` (each tab), `ActiveWorkoutLiveActivity` lock-screen + Dynamic Island
+- Critical screens: `OnboardingView`, `PaywallView`, `RootDashboardView` dashboard surfaces, `ActiveWorkoutLiveActivity` lock-screen + Dynamic Island
 - Widgets (all supported next-workout families × 2 themes)
 - Variants per surface: light + dark × default + `.accessibility5` Dynamic Type × reduce-transparency on/off
 

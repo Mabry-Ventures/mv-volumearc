@@ -1,4 +1,4 @@
-#if canImport(SwiftUI)
+#if canImport(Combine)
 import Foundation
 
 extension WorkoutDashboardModel {

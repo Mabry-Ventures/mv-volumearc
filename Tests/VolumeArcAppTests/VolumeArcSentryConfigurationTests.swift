@@ -76,41 +76,58 @@ final class VolumeArcSentryConfigurationTests: XCTestCase {
     // MARK: - VOL-252: three-way environment classification
 
     func testEnvironmentIsDevelopmentForDebugBuilds() {
-        // Debug always wins, regardless of receipt URL — devs running
-        // tests against a sandboxReceipt-bearing dev device must not be
+        // Debug always wins, regardless of StoreKit environment — devs
+        // running tests against sandbox transactions must not be
         // misclassified as TestFlight.
         let env = VolumeArcSentryConfiguration.resolveEnvironment(
             isDebugBuild: true,
-            receiptURL: URL(fileURLWithPath: "/private/var/mobile/Containers/Data/Application/X/StoreKit/sandboxReceipt")
+            storeKitEnvironment: "sandbox"
         )
         XCTAssertEqual(env, "development")
     }
 
-    func testEnvironmentIsTestFlightForSandboxReceipt() {
+    func testEnvironmentIsTestFlightForSandboxStoreKitEnvironment() {
         let env = VolumeArcSentryConfiguration.resolveEnvironment(
             isDebugBuild: false,
-            receiptURL: URL(fileURLWithPath: "/private/var/containers/Bundle/Application/X/sandboxReceipt")
+            storeKitEnvironment: "sandbox"
         )
         XCTAssertEqual(env, "testflight")
     }
 
-    func testEnvironmentIsProductionForAppStoreReceipt() {
+    func testEnvironmentIsTestFlightForXcodeStoreKitEnvironment() {
         let env = VolumeArcSentryConfiguration.resolveEnvironment(
             isDebugBuild: false,
-            receiptURL: URL(fileURLWithPath: "/private/var/containers/Bundle/Application/X/receipt")
+            storeKitEnvironment: "xcode"
+        )
+        XCTAssertEqual(env, "testflight")
+    }
+
+    func testEnvironmentIsProductionForAppStoreEnvironment() {
+        let env = VolumeArcSentryConfiguration.resolveEnvironment(
+            isDebugBuild: false,
+            storeKitEnvironment: "production"
         )
         XCTAssertEqual(env, "production")
     }
 
-    func testEnvironmentIsProductionWhenReceiptMissing() {
-        // Defensive default — a Release build with no receipt URL falls to
+    func testEnvironmentIsProductionWhenStoreKitEnvironmentMissing() {
+        // Defensive default — a Release build without a resolved StoreKit
+        // app transaction falls to
         // "production" so we don't accidentally drop crash data into the
         // wrong bucket. This is the conservative direction (false negative
         // on testflight-bucket attribution beats false negative on
         // production crash visibility).
         let env = VolumeArcSentryConfiguration.resolveEnvironment(
             isDebugBuild: false,
-            receiptURL: nil
+            storeKitEnvironment: nil
+        )
+        XCTAssertEqual(env, "production")
+    }
+
+    func testEnvironmentIsProductionForUnknownStoreKitEnvironment() {
+        let env = VolumeArcSentryConfiguration.resolveEnvironment(
+            isDebugBuild: false,
+            storeKitEnvironment: "mystery"
         )
         XCTAssertEqual(env, "production")
     }
@@ -124,6 +141,44 @@ final class VolumeArcSentryConfigurationTests: XCTestCase {
             ["development", "testflight", "production"].contains(env),
             "Bundle-form environment '\(env)' must be one of development/testflight/production"
         )
+    }
+
+    // MARK: - DSN validation
+
+    func testValidatedDSNAcceptsSentryDSN() {
+        let dsn = VolumeArcSentryConfiguration.validatedDSN(
+            from: "https://publicKey@o123456.ingest.sentry.io/987654"
+        )
+
+        XCTAssertEqual(dsn, "https://publicKey@o123456.ingest.sentry.io/987654")
+    }
+
+    func testValidatedDSNRejectsBuildSettingPlaceholder() {
+        XCTAssertNil(VolumeArcSentryConfiguration.validatedDSN(from: "$(SENTRY_DSN)"))
+    }
+
+    func testValidatedDSNRejectsPlainHTTP() {
+        XCTAssertNil(VolumeArcSentryConfiguration.validatedDSN(
+            from: "http://publicKey@o123456.ingest.sentry.io/987654"
+        ))
+    }
+
+    func testValidatedDSNRejectsMissingPublicKey() {
+        XCTAssertNil(VolumeArcSentryConfiguration.validatedDSN(
+            from: "https://o123456.ingest.sentry.io/987654"
+        ))
+    }
+
+    func testValidatedDSNRejectsWhitespaceContamination() {
+        XCTAssertNil(VolumeArcSentryConfiguration.validatedDSN(
+            from: " https://publicKey@o123456.ingest.sentry.io/987654"
+        ))
+    }
+
+    func testValidatedDSNRejectsMissingProjectPath() {
+        XCTAssertNil(VolumeArcSentryConfiguration.validatedDSN(
+            from: "https://publicKey@o123456.ingest.sentry.io"
+        ))
     }
 }
 #endif

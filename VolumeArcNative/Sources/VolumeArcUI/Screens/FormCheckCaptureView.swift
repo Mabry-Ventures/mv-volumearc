@@ -196,7 +196,12 @@ public struct FormCheckCaptureView: View {
 
     private var privacyNote: some View {
         Text(String(
-            localized: "Video frames are processed on this device only. No camera frames upload to VolumeArc, Cloudflare, Gemini, Sentry, or iCloud.",
+            localized: """
+            Form Check uses on-device Vision body-pose landmarks, lift-specific \
+            movement heuristics, and VolumeArc exercise cues. It does not upload \
+            video or ask a cloud model to judge your form; if the camera cannot \
+            see enough, treat the result as inconclusive, not clearance.
+            """,
             comment: "Form check capture privacy note"
         ))
         .font(VA.Typography.footnote)
@@ -280,7 +285,7 @@ public struct FormCheckCaptureView: View {
             )
         }
         return String(
-            localized: "Set your phone side-on, then capture one set.",
+            localized: "Set your phone side-on. The analysis needs visible joints, bar path, and one controlled set.",
             comment: "Form check ready subtitle"
         )
     }
@@ -628,6 +633,16 @@ private struct FormCheckResultSummary: View {
                     .foregroundStyle(VA.Colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            Text(String(
+                localized: """
+                Based on visible body-pose landmarks, rep tempo, depth consistency, \
+                and lateral drift. This is a cue, not clearance to add load.
+                """,
+                comment: "Form check result methodology and safety boundary"
+            ))
+            .font(VA.Typography.captionLarge)
+            .foregroundStyle(VA.Colors.textTertiary)
+            .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityIdentifier("formCheck.result")
     }

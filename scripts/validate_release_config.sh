@@ -753,6 +753,21 @@ if [[ -n "$BUILT_APP_BUNDLE" ]]; then
       exit 1
     fi
 
+    built_sentry_dsn="$(plutil -extract "VolumeArcSentryDSN" raw -o - "$BUILT_APP_BUNDLE/Info.plist" 2>/dev/null || echo "")"
+    if [[ -z "$built_sentry_dsn" || "$built_sentry_dsn" == *'$('* ]]; then
+      echo "FAIL: Built production-signed app missing configured VolumeArcSentryDSN. TestFlight/App Store builds must initialize Sentry." >&2
+      exit 1
+    fi
+    if [[ ! "$built_sentry_dsn" =~ ^https://[^/@]+@[^/]+/.+ ]]; then
+      echo "FAIL: Built production-signed app VolumeArcSentryDSN must be an HTTPS Sentry DSN URL with public key and project path." >&2
+      exit 1
+    fi
+    built_relay_url="$(plutil -extract "VolumeArcAIRelayURL" raw -o - "$BUILT_APP_BUNDLE/Info.plist" 2>/dev/null || echo "")"
+    if [[ "$built_relay_url" != "https://relay.volumearc.app" ]]; then
+      echo "FAIL: Built production-signed app must use VolumeArcAIRelayURL=https://relay.volumearc.app (got '${built_relay_url:-<empty>}')." >&2
+      exit 1
+    fi
+
     # Must match the Release entitlements file on disk — catches the case
     # where someone edits the source file to `production` but the signed
     # bundle was built from stale settings (or the wrong entitlements

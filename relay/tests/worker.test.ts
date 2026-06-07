@@ -786,6 +786,85 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(userMessage).toContain("Sleep: 49.0h");
   });
 
+  it("short-circuits medical red flags before model routing", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "free",
+      question: "I have chest pain during my top set but want to finish the workout. What should I do?",
+      contextBlock: "## Training context\n- Readiness: 72/100\n- Next up: Bench Press at 205lb x 5",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("short-circuits red flags from prompt, rendered athlete question, and user message history", async () => {
+    const env = makeEnv();
+    const cases = [
+      JSON.stringify({
+        intent: "free",
+        style: "minimal",
+        prompt: "I feel lightheaded after deadlifts. Can I keep lifting?",
+        system: "client rendered system",
+      }),
+      JSON.stringify({
+        intent: "free",
+        style: "minimal",
+        prompt:
+          "[VAC:tmpl] intent=free style=minimal\n\n" +
+          "## System\nSafety examples mention dizziness and chest pain.\n\n" +
+          "## Athlete question\nI can't breathe after the last set.",
+        system: "client rendered system",
+      }),
+      JSON.stringify({
+        intent: "free",
+        style: "minimal",
+        prompt: "What should I do next?",
+        system: "client rendered system",
+        messages: [{ role: "user", content: "I blacked out during squats." }],
+      }),
+    ];
+
+    for (const body of cases) {
+      vi.mocked(fetch).mockClear();
+      const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+      expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+      await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+      expect(fetch).not.toHaveBeenCalled();
+    }
+  });
+
+  it("does not short-circuit normal rendered prompts because of system safety examples", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      style: "minimal",
+      prompt:
+        "[VAC:tmpl] intent=progression style=minimal\n\n" +
+        "## System\nExample acceptable response for \"I just got dizzy mid-set\".\n\n" +
+        "## Coaching focus\nProgression.\n\n" +
+        "## Athlete question\nShould I add five pounds next week?",
+      system: "SAFETY OVERRIDE: chest pain, dizziness, and pregnancy require escalation.",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("preserves client-rendered prompt and system fields when present", async () => {
     const env = makeEnv();
     const body = JSON.stringify({

@@ -121,6 +121,75 @@ final class VolumeArcAppJourneyTests: XCTestCase {
         )
     }
 
+    /// VOL-127 / VOL-141: force-quit during onboarding should resume the
+    /// last reached step instead of sending a new athlete back to the
+    /// welcome screen.
+    func testForceQuitOnboardingResumesLastStepAndEmitsTelemetry() throws {
+        let app = VolumeArcAppUITestSupport.makeOnboardingApp()
+        app.launch()
+        assertAppReachedForeground(app)
+
+        _ = waitForElement(
+            in: app,
+            identifier: "onboarding.root",
+            timeout: 15,
+            "Onboarding cover should be visible on first launch"
+        )
+
+        let continueButton = app.descendants(matching: .any)
+            .matching(identifier: "onboarding.continue")
+            .firstMatch
+        XCTAssertTrue(
+            continueButton.waitForExistence(timeout: 10),
+            "Onboarding should expose Continue on the welcome step"
+        )
+        continueButton.tap()
+
+        dismissKeyboardIfPresent(in: app)
+        XCTAssertTrue(
+            continueButton.waitForExistence(timeout: 10),
+            "Onboarding should expose Continue on the profile step"
+        )
+        continueButton.tap()
+
+        _ = waitForElement(
+            in: app,
+            identifier: "onboarding.step.2",
+            timeout: 10,
+            "Onboarding should advance to the preferences step before force-quit"
+        )
+
+        app.terminate()
+
+        app.launchArguments = [
+            "-UITestMode", "1",
+            "-PreserveUITestPersistence", "1",
+        ]
+        app.launch()
+        assertAppReachedForeground(app)
+
+        _ = waitForElement(
+            in: app,
+            identifier: "onboarding.root",
+            timeout: 15,
+            "Onboarding cover should be visible after relaunch"
+        )
+        _ = waitForElement(
+            in: app,
+            identifier: "onboarding.step.2",
+            timeout: 10,
+            "Onboarding should resume on the saved preferences step"
+        )
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "onboarding",
+            name: "resumed",
+            within: 10,
+            test: self
+        )
+    }
+
     /// VOL-115: dismiss the on-screen keyboard if one is present so it
     /// doesn't cover the action-row buttons. Tapping the navigation bar
     /// region resigns first responder without accidentally hitting any
@@ -356,6 +425,332 @@ final class VolumeArcAppJourneyTests: XCTestCase {
         )
     }
 
+    /// VOL-141: deterministic coverage for `workouts.rest-timer-expire`.
+    /// Production keeps the 90-second rest default; this test shortens
+    /// only the UI-test launch so the completion callback, toast, and
+    /// telemetry can be proven without making the suite wait.
+    func testWorkoutRestTimerExpiryEmitsTelemetryAndShowsCompletionToast() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-RestTimerDurationSeconds", "3"]
+        )
+        app.launch()
+        assertAppReachedForeground(app)
+
+        assertElementExists(app.otherElements["root.dashboard"], timeout: 15, "Seeded dashboard should be visible")
+
+        let startButton = waitForElement(
+            in: app,
+            identifier: "today.startWorkout",
+            timeout: 10,
+            "Today should expose Start Workout"
+        )
+        startButton.tap()
+
+        let workoutsTab = app.tabBars.buttons["Workouts"]
+        assertElementExists(workoutsTab, timeout: 5, "Tab bar should expose the Workouts tab")
+        workoutsTab.tap()
+
+        _ = waitForElement(
+            in: app,
+            identifier: "workouts.activeSession",
+            timeout: 10,
+            "Workouts tab should show an active session after Start Workout"
+        )
+
+        let logSetButton = waitForElement(
+            in: app,
+            identifier: "workouts.logSet",
+            timeout: 10,
+            "Active session should expose Log Set"
+        )
+        logSetButton.tap()
+
+        let restTimer = waitForElement(
+            in: app,
+            identifier: "workouts.restTimer",
+            timeout: 10,
+            "Logging a set should start the rest timer"
+        )
+        XCTAssertTrue(restTimer.exists, "Rest timer should be visible before it expires")
+
+        let restCompleteToast = app.staticTexts
+            .matching(NSPredicate(format: "label CONTAINS %@", "Rest complete"))
+            .firstMatch
+        XCTAssertTrue(
+            restCompleteToast.waitForExistence(timeout: 10),
+            "Rest timer expiry should show the completion toast"
+        )
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "workout",
+            name: "rest_timer.expired",
+            within: 10,
+            test: self
+        )
+    }
+
+    /// VOL-127/VOL-141: deterministic coverage for
+    /// `resilience.force-quit-active-workout`. The first launch seeds a
+    /// normal active session. The second launch preserves persistence
+    /// while keeping deterministic UI affordances, proving SwiftData
+    /// rehydrates the unfinished workout after a force-quit.
+    func testForceQuitActiveWorkoutRestoresLoggedSetOnRelaunch() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp()
+        app.launch()
+        assertAppReachedForeground(app)
+
+        assertElementExists(app.otherElements["root.dashboard"], timeout: 15, "Seeded dashboard should be visible")
+
+        let startButton = waitForElement(
+            in: app,
+            identifier: "today.startWorkout",
+            timeout: 10,
+            "Today should expose Start Workout"
+        )
+        startButton.tap()
+
+        let workoutsTab = app.tabBars.buttons["Workouts"]
+        assertElementExists(workoutsTab, timeout: 5, "Tab bar should expose the Workouts tab")
+        workoutsTab.tap()
+
+        _ = waitForElement(
+            in: app,
+            identifier: "workouts.activeSession",
+            timeout: 10,
+            "Workouts tab should show an active session after Start Workout"
+        )
+
+        let logSetButton = waitForElement(
+            in: app,
+            identifier: "workouts.logSet",
+            timeout: 10,
+            "Active session should expose Log Set"
+        )
+        logSetButton.tap()
+
+        XCTAssertTrue(
+            app.staticTexts["1 set logged"].waitForExistence(timeout: 10),
+            "The active session should show one logged set before force-quit"
+        )
+
+        app.terminate()
+
+        app.launchArguments = [
+            "-UITestMode", "1",
+            "-SkipOnboarding", "1",
+            "-PreserveUITestPersistence", "1",
+            "-OpenWorkoutsOnLaunch", "1",
+        ]
+        app.launch()
+        assertAppReachedForeground(app)
+
+        _ = waitForElement(
+            in: app,
+            identifier: "workouts.activeSession",
+            timeout: 15,
+            "Relaunch should restore the in-progress workout session"
+        )
+        XCTAssertTrue(
+            app.staticTexts["1 set logged"].waitForExistence(timeout: 10),
+            "Relaunch should preserve the set logged before force-quit"
+        )
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "workout",
+            name: "active_session.recovered",
+            within: 10,
+            test: self
+        )
+    }
+
+    /// Release feedback guard: Workouts must expose an actual manual
+    /// builder, not only history/templates, and the draft must be
+    /// startable as a live session.
+    func testWorkoutsManualBuilderStartsEditableWorkout() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenWorkoutsOnLaunch", "1"]
+        )
+        app.launch()
+        assertAppReachedForeground(app)
+
+        let root = waitForElement(
+            in: app,
+            identifier: "workouts.root",
+            timeout: 15,
+            "Workouts tab should open on launch"
+        )
+
+        discardRecoveredSessionIfNeeded(in: app)
+
+        let manualBuilderButton = tappableElement(
+            in: app,
+            identifier: "workouts.builder.manual",
+            buttonLabel: "Manual start"
+        )
+        XCTAssertTrue(
+            VolumeArcAppUITestSupport.scrollIntoViewAndTap(
+                manualBuilderButton,
+                in: app,
+                timeout: 10,
+                maxScrolls: 2
+            ),
+            "Workouts should expose a tappable manual builder action"
+        )
+
+        let builderSheet = waitForElement(
+            in: app,
+            identifier: "workouts.builder.sheet",
+            timeout: 10,
+            "Manual builder should present an editable sheet"
+        )
+        _ = waitForElement(
+            in: app,
+            identifier: "workouts.builder.title",
+            timeout: 5,
+            "Workout builder should expose a workout title field"
+        )
+        _ = waitForElement(
+            in: app,
+            identifier: "workouts.builder.profile",
+            timeout: 5,
+            "Workout builder should expose session profile assignment"
+        )
+        _ = waitForElement(
+            in: app,
+            identifier: "workouts.builder.exercise.name",
+            timeout: 5,
+            "Workout builder should expose editable exercise rows"
+        )
+
+        let startButton = tappableElement(
+            in: app,
+            identifier: "workouts.builder.start",
+            buttonLabel: "Start Workout"
+        )
+        for _ in 0..<4 where !startButton.exists || !startButton.isHittable {
+            builderSheet.swipeUp()
+        }
+        XCTAssertTrue(startButton.waitForExistence(timeout: 5))
+        startButton.tap()
+
+        _ = waitForElement(
+            in: app,
+            identifier: "workouts.activeSession",
+            timeout: 10,
+            "Starting a builder draft should enter a live workout session"
+        )
+        _ = waitForElement(
+            in: app,
+            identifier: "workouts.targetEditor",
+            timeout: 5,
+            "Builder-started sessions should expose set target editing"
+        )
+        _ = waitForElement(
+            in: app,
+            identifier: "workouts.exerciseList",
+            timeout: 5,
+            "Builder-started sessions should expose the full workout map"
+        )
+        _ = waitForElement(
+            in: app,
+            identifier: "workouts.exitSession.header",
+            timeout: 5,
+            "Active sessions should expose an immediate header exit affordance"
+        )
+
+        let equipmentBusy = waitForElement(
+            in: app,
+            identifier: "workouts.equipmentBusy",
+            timeout: 5,
+            "Active sessions should expose an Equipment Busy pivot"
+        )
+        equipmentBusy.tap()
+        XCTAssertTrue(
+            app.staticTexts["SET 1 OF 3"].waitForExistence(timeout: 5),
+            "Equipment Busy should resequence the blocked lift and load the next planned exercise"
+        )
+
+        let fourthMapRow = app.descendants(matching: .any)
+            .matching(identifier: "workouts.exerciseList.3")
+            .firstMatch
+        let thirdMapRow = app.descendants(matching: .any)
+            .matching(identifier: "workouts.exerciseList.2")
+            .firstMatch
+        let didTapDeferredRow = VolumeArcAppUITestSupport.scrollIntoViewAndTap(
+            fourthMapRow,
+            in: app,
+            timeout: 5,
+            maxScrolls: 2
+        ) || VolumeArcAppUITestSupport.scrollIntoViewAndTap(
+            thirdMapRow,
+            in: app,
+            timeout: 5,
+            maxScrolls: 2
+        )
+        XCTAssertTrue(
+            didTapDeferredRow,
+            "Workout map should let the athlete jump back to a deferred exercise"
+        )
+        XCTAssertTrue(
+            app.staticTexts["Exercise loaded"].waitForExistence(timeout: 5),
+            "Selecting a map row should confirm the selected exercise loaded"
+        )
+        XCTAssertTrue(root.exists, "Workouts root should remain mounted after starting a builder draft")
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "workout",
+            name: "session_started",
+            within: 10,
+            test: self
+        )
+    }
+
+    private func discardRecoveredSessionIfNeeded(in app: XCUIApplication) {
+        let activeSession = app.descendants(matching: .any)
+            .matching(identifier: "workouts.activeSession")
+            .firstMatch
+        guard activeSession.waitForExistence(timeout: 2) else { return }
+
+        let exitButton = waitForElement(
+            in: app,
+            identifier: "workouts.exitSession",
+            timeout: 5,
+            "Recovered active session should expose Exit Session"
+        )
+        exitButton.tap()
+
+        let discardButton = app.buttons["Discard Session"].firstMatch
+        XCTAssertTrue(
+            discardButton.waitForExistence(timeout: 5),
+            "Exit confirmation should expose Discard Session"
+        )
+        discardButton.tap()
+
+        _ = waitForElement(
+            in: app,
+            identifier: "workouts.builder",
+            timeout: 10,
+            "Workouts should return to the idle builder card after discarding a recovered session"
+        )
+    }
+
+    private func tappableElement(
+        in app: XCUIApplication,
+        identifier: String,
+        buttonLabel: String
+    ) -> XCUIElement {
+        let identified = app.descendants(matching: .any)
+            .matching(identifier: identifier)
+            .firstMatch
+        if identified.exists {
+            return identified
+        }
+        return app.buttons[buttonLabel].firstMatch
+    }
+
     /// VOL-141: deterministic coverage for `workouts.view-detail`.
     /// The seeded fixture contains recent completed sessions; launching
     /// directly into Workouts avoids relying on tab-bar hit testing.
@@ -403,6 +798,61 @@ final class VolumeArcAppJourneyTests: XCTestCase {
             name: "detail.opened",
             within: 10,
             test: self
+        )
+    }
+
+    /// VOL-141: deterministic coverage for `workouts.delete-session`.
+    /// The row's delete button is only shown for local persisted
+    /// sessions, not projected Apple Health imports.
+    func testWorkoutHistoryDeleteSessionRemovesRowAndEmitsTelemetry() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenWorkoutsOnLaunch", "1"]
+        )
+        app.launch()
+        assertAppReachedForeground(app)
+
+        _ = waitForElement(
+            in: app,
+            identifier: "workouts.root",
+            timeout: 15,
+            "Workouts tab should open on launch"
+        )
+
+        let deletePredicate = NSPredicate(format: "identifier BEGINSWITH %@", "workouts.deleteSession.")
+        let deleteButton = app.descendants(matching: .any)
+            .matching(deletePredicate)
+            .firstMatch
+        XCTAssertTrue(
+            deleteButton.waitForExistence(timeout: 15),
+            "Seeded Workouts history should expose a delete button for local sessions"
+        )
+        let deletedButtonIdentifier = deleteButton.identifier
+        XCTAssertTrue(
+            VolumeArcAppUITestSupport.scrollIntoViewAndTap(deleteButton, in: app, timeout: 5, maxScrolls: 3),
+            "Workout history delete button should be tappable"
+        )
+
+        let confirm = app.buttons["Delete Session"].firstMatch
+        XCTAssertTrue(
+            confirm.waitForExistence(timeout: 5),
+            "Delete confirmation should expose the destructive Delete Session action"
+        )
+        confirm.tap()
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "workout",
+            name: "deleted",
+            within: 10,
+            test: self
+        )
+
+        let deletedButton = app.descendants(matching: .any)
+            .matching(identifier: deletedButtonIdentifier)
+            .firstMatch
+        XCTAssertFalse(
+            deletedButton.waitForExistence(timeout: 2),
+            "The deleted session's row action should disappear after deletion"
         )
     }
 
@@ -511,6 +961,69 @@ final class VolumeArcAppJourneyTests: XCTestCase {
             in: app,
             category: "deeplink",
             name: "received",
+            within: 10,
+            test: self
+        )
+    }
+
+    /// VOL-141: deterministic coverage for `bg.push-notification`.
+    /// APNs delivery and SpringBoard notification banners remain
+    /// physical-device UAT, but this drives the app boundary that runs
+    /// after a notification tap extracts its deep-link payload.
+    func testNotificationTapRoutesToDeepLinkAndEmitsTelemetry() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-OpenNotificationOnLaunch", "volumearc://signals?source=notification"]
+        )
+        app.launch()
+        assertAppReachedForeground(app)
+
+        _ = waitForElement(
+            in: app,
+            identifier: "signals.root",
+            timeout: 15,
+            "Notification tap deep link should route to the Signals tab"
+        )
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "notification",
+            name: "tapped",
+            within: 10,
+            test: self
+        )
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "deeplink",
+            name: "received",
+            within: 10,
+            test: self
+        )
+    }
+
+    /// VOL-141: simulator and signed-out iCloud paths must keep the app
+    /// usable while surfacing an operator-visible degraded-sync signal.
+    func testNoICloudLaunchKeepsAppUsableAndEmitsUnavailableTelemetry() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp()
+        app.launch()
+        assertAppReachedForeground(app)
+
+        _ = waitForElement(
+            in: app,
+            identifier: "root.dashboard",
+            timeout: 15,
+            "The dashboard should still render when CloudKit sync is unavailable"
+        )
+        _ = waitForElement(
+            in: app,
+            identifier: "today.startWorkout",
+            timeout: 10,
+            "The local workout path should stay usable without iCloud sync"
+        )
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "cloudsync",
+            name: "unavailable",
             within: 10,
             test: self
         )

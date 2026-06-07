@@ -1,5 +1,39 @@
 {
   "$schema": "https://mabryventures.com/schemas/volumearc-performance-trend-v1.json",
   "description": "VOL-99 performance-suite trend data. Each entry is one run of scripts/test_performance.sh (gated to tag builds in CI). scripts/check_performance.sh appends a new entry after extracting per-metric means from the .xcresult bundle. Entries are append-only \u2014 rewrites would break the merge strategy.",
-  "runs": []
+  "runs": [
+    {
+      "timestamp": "2026-06-06T04:24:08Z",
+      "commit": "7957978f580e4f10bbd752a49cdfc848a30e01d8",
+      "ref": "refs/heads/codex/volumearc-release",
+      "passed": true,
+      "metrics": [
+        {
+          "id": "cold_launch",
+          "measured": 0.913,
+          "status": "passed"
+        },
+        {
+          "id": "today_scroll_duration",
+          "measured": 2.48,
+          "status": "passed"
+        },
+        {
+          "id": "memory_footprint_workout",
+          "measured": 77.013,
+          "status": "passed"
+        },
+        {
+          "id": "coach_first_token_p50",
+          "measured": 702.071,
+          "status": "passed"
+        },
+        {
+          "id": "coach_first_token_p95",
+          "measured": 777.378,
+          "status": "passed"
+        }
+      ]
+    }
+  ]
 }

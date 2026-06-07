@@ -38,7 +38,7 @@ jobs:
       github.event_name == 'pull_request_target' &&
       !github.event.pull_request.draft &&
       github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, mv-volumearc-runner]
+    runs-on: ubuntu-latest
     steps:
       - name: Request AI reviews for current head SHA
         uses: actions/github-script@v9
@@ -92,7 +92,7 @@ jobs:
       github.event_name == 'issue_comment' ||
       github.event_name == 'pull_request_review' ||
       github.event_name == 'pull_request_review_comment'
-    runs-on: [self-hosted, mv-volumearc-runner]
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -173,8 +173,8 @@ jobs:
               }
 
               if (
-                /(^|\n)\s*(?:✅\s*)?#{0,6}\s*Actions performed\b/i.test(text) &&
-                !/(^|\n)\s*#{1,6}\s+(?!Actions performed\b)/im.test(text.replace(/(^|\n)\s*(?:✅\s*)?#{0,6}\s*Actions performed\b[^\n]*/i, '\n'))
+                /(^|\n)\s*(?:\u2705\s*)?#{0,6}\s*Actions performed\b/i.test(text) &&
+                !/(^|\n)\s*#{1,6}\s+(?!Actions performed\b)/im.test(text.replace(/(^|\n)\s*(?:\u2705\s*)?#{0,6}\s*Actions performed\b[^\n]*/i, '\n'))
               ) {
                 return `${aiName} skipped review: actions-only automation comment is not a review signal`;
               }

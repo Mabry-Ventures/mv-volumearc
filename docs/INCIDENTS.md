@@ -155,10 +155,21 @@ These are the failure shapes most likely to fire alerts based on our current arc
 1. **`SENTRY_AUTH_TOKEN` expired** — most common. Sentry user tokens last 1 year by default.
 2. **`ci_post_xcodebuild.sh` failed silently** — Xcode Cloud's post-action ran but `sentry-cli` errored. Check the Xcode Cloud build log for "sentry-cli debug-files upload" output.
 3. **dSYM path mismatch** — recent generator change moved the dSYM output dir. Check `archive_for_distribution.sh` against the post-action's expected path.
+4. **Bundled `Sentry.framework` UUID mismatch** — Xcode may thin/process the SwiftPM framework so the vendor XCFramework dSYM no longer matches the archived binary. `ci_post_xcodebuild.sh` and `fastlane ios beta` generate `Sentry.framework.dSYM` from the archived framework before upload; if that step is missing, framework frames can remain un-symbolicated.
 
 **Mitigation:**
 - For token expiry: rotate in Sentry (`Settings → Account → API → Auth Tokens` → create new with `project:write`), update the GitHub `SENTRY_AUTH_TOKEN` secret AND the Xcode Cloud env var.
-- Manual upload as a one-off: `sentry-cli debug-files upload --include-sources <path-to-Archive.xcarchive>/dSYMs/`. Don't ship a release without dSYMs; un-symbolicated production crashes are nearly impossible to action.
+- Manual upload as a one-off: generate the framework companion with `dsymutil <path-to-Archive.xcarchive>/Products/Applications/VolumeArc.app/Frameworks/Sentry.framework/Sentry -o <path-to-Archive.xcarchive>/dSYMs/Sentry.framework.dSYM`, then run `sentry-cli debug-files upload --include-sources <path-to-Archive.xcarchive>/dSYMs/`. Don't ship a release without dSYMs; un-symbolicated production crashes are nearly impossible to action.
+
+### Sentry DSN missing from TestFlight build
+
+**Symptom:** A TestFlight build installs, but Sentry receives no crashes, sessions, feedback, or performance events from that build. `VolumeArcSentryDSN` is empty in the archived app `Info.plist`.
+
+**Mitigation:**
+- Set `SENTRY_DSN` in the Xcode Cloud archive workflow and local release shell. It is a public client DSN, not the Sentry auth token.
+- Set `VOLUMEARC_AI_RELAY_URL=https://relay.volumearc.app` in the same release environment; a build with Sentry but no cloud relay still produces misleading TestFlight coverage.
+- Re-archive and verify `VolumeArcSentryDSN` is non-empty and `VolumeArcAIRelayURL` is `https://relay.volumearc.app` before upload. `ci_post_xcodebuild.sh` and `scripts/validate_release_config.sh` now hard-fail production-signed archives that omit either value.
+- Do not call a TestFlight build release-ready until both DSN initialization and dSYM upload have been proven for the exact build number.
 
 ### App Store metadata pulled
 
@@ -186,8 +197,8 @@ Phase 1 (PR #162) shipped this document. Phase 2 lands the operational pieces; t
 
 | Piece | Status | Landed in |
 |---|---|---|
-| `fastlane ios rollback` lane | ✅ Shipped | PR #167 (VOL-178 Phase 2A) |
-| `docs/incident-log.md` template + retroactive entries | ✅ Shipped | PR #167 (VOL-178 Phase 2A) |
+| `fastlane ios rollback` lane | Done Shipped | PR #167 (VOL-178 Phase 2A) |
+| `docs/incident-log.md` template + retroactive entries | Done Shipped | PR #167 (VOL-178 Phase 2A) |
 | Sentry alert rules (crash-free-sessions, new-fingerprint, release-health) | ⏳ Blocked on Sentry-admin access | tracked in VOL-178 |
 | PagerDuty + Slack webhook wiring | ⏳ Blocked on PagerDuty/Slack admin setup | tracked in VOL-178 |
 | Pre-release dry-run drill | ⏳ Pending — runs after the above land | tracked in VOL-178 |

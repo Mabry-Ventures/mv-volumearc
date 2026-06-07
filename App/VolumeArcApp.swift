@@ -15,109 +15,6 @@ extension Notification.Name {
     static let volumeArcReachabilityChanged = Notification.Name("VolumeArc.ReachabilityChanged")
 }
 
-/// Launch argument flags the app respects at startup. XCUITests set these
-/// to produce deterministic state.
-enum VolumeArcLaunchArguments {
-    private static func value(after flag: String) -> String? {
-        let arguments = ProcessInfo.processInfo.arguments
-        guard let index = arguments.firstIndex(of: flag) else { return nil }
-
-        let nextIndex = arguments.index(after: index)
-        guard nextIndex < arguments.endIndex else { return nil }
-        let value = arguments[nextIndex]
-        guard value.hasPrefix("-") == false else { return nil }
-        return value
-    }
-
-    private static func flagEnabled(_ flag: String) -> Bool {
-        let arguments = ProcessInfo.processInfo.arguments
-        guard let index = arguments.firstIndex(of: flag) else { return false }
-
-        let nextIndex = arguments.index(after: index)
-        guard nextIndex < arguments.endIndex else { return true }
-
-        let rawValue = arguments[nextIndex]
-        guard rawValue.hasPrefix("-") == false else { return true }
-        return rawValue != "0"
-    }
-
-    /// `-UITestMode 1` — disables analytics, skips permission prompts, seeds
-    /// deterministic state, and exposes accessibility identifiers on UI.
-    static var isUITestMode: Bool {
-        flagEnabled("-UITestMode")
-    }
-
-    /// `-SkipOnboarding 1` — skips the onboarding flow and seeds defaults.
-    static var skipOnboarding: Bool {
-        flagEnabled("-SkipOnboarding")
-    }
-
-    /// `-SeedFixtures 1` — seeds the persistence layer with demo fixture data.
-    static var seedFixtures: Bool {
-        flagEnabled("-SeedFixtures")
-    }
-
-    /// `-UseScreenshotStoreKitFixtures 1` — Debug-only screenshot hook.
-    /// Renders submitted subscription prices without depending on the
-    /// simulator StoreKit daemon, which can return an empty product list
-    /// even when the local `.storekit` catalog is attached.
-    static var useScreenshotStoreKitFixtures: Bool {
-        isUITestMode && flagEnabled("-UseScreenshotStoreKitFixtures")
-    }
-
-    /// `-PerfTestMode 1` — VOL-99. Seeds a 50-session history and enables
-    /// the full recent-sessions list on the Today tab so the scroll
-    /// performance test (`VolumeArcPerfTests.testTodayScrollPerformance`)
-    /// has real rows to scroll through. Implies `-SeedFixtures 1` and
-    /// `-SkipOnboarding 1` via the bootstrapper.
-    static var isPerfTestMode: Bool {
-        flagEnabled("-PerfTestMode")
-    }
-
-    /// `-SimulatePermissionPrompts 1` — VOL-109. Re-enables system
-    /// permission prompts (HealthKit, Notifications) inside
-    /// `-UITestMode 1` so XCUITests can drive the prompt path via
-    /// `addUIInterruptionMonitor`. Without this flag,
-    /// `VolumeArcRuntimeFlags.isDeterministicMode` short-circuits every
-    /// prompt site so existing journey tests don't trip on the system
-    /// dialog. The pair `-UITestMode 1 -SimulatePermissionPrompts 1` is
-    /// the signature for permission-flow XCUITests.
-    static var simulatePermissionPrompts: Bool {
-        flagEnabled("-SimulatePermissionPrompts")
-    }
-
-    /// `-StrictPrivacyMode 1` — deterministic-mode-only hook used by
-    /// coach privacy journey tests to seed the profile in strict mode.
-    static var strictPrivacyMode: Bool {
-        isUITestMode && flagEnabled("-StrictPrivacyMode")
-    }
-
-    /// `-PostFakeWatchPayload <kind>` — VOL-112. Tells the app to post a
-    /// simulated `WatchPayload` notification at launch, as if a paired
-    /// Apple Watch had sent the named kind. Used by
-    /// `VolumeArcWatchSimulationJourneyTests` to exercise the iPhone
-    /// dashboard's watch-payload arrival path without spinning up a
-    /// paired-simulator session (full pairing coverage lives in VOL-94's
-    /// real-device canary).
-    ///
-    /// `<kind>` is a `WatchPayloadKind` rawValue: `restTimer`,
-    /// `liveState`, `startSession`, `endSession`, `coachCue`,
-    /// `completedWorkout`, `voiceCoachToggle`, or a form-check payload
-    /// kind. The flag is gated on `-UITestMode 1` — production app
-    /// launches ignore it even if accidentally set.
-    static var postFakeWatchPayloadKind: String? {
-        value(after: "-PostFakeWatchPayload")
-    }
-
-    /// `-OpenDeepLinkOnLaunch <url>` — VOL-141. Deterministic-mode-only
-    /// XCUITest hook that sends a VolumeArc deep link through the same
-    /// app URL handler App Intents / widgets use in production.
-    static var openDeepLinkURL: URL? {
-        guard isUITestMode, let rawValue = value(after: "-OpenDeepLinkOnLaunch") else { return nil }
-        return URL(string: rawValue)
-    }
-}
-
 @main
 struct VolumeArcApp: App {
     @StateObject private var navigation = DashboardNavigationModel()
@@ -144,7 +41,7 @@ struct VolumeArcApp: App {
     #if canImport(MetricKit)
     private let metricKitSubscriber: VolumeArcMetricKitSubscriber
     #endif
-    /// VOL-176: handler that turns the Profile feedback sheet's
+    /// VOL-176: handler that turns the Profile feedback surface's
     /// (category, description) tuple into a Sentry user-feedback +
     /// telemetry confirmation. Captured by the closure passed to
     /// `RootDashboardView` below.
@@ -176,6 +73,12 @@ struct VolumeArcApp: App {
         // sites can re-enable the system dialog inside `-UITestMode 1`
         // for the permission-flow XCUITests.
         VolumeArcRuntimeFlags.simulatePermissionPrompts = VolumeArcLaunchArguments.simulatePermissionPrompts
+        VolumeArcRuntimeFlags.suppressSubscriptionManageExternalURL =
+            VolumeArcLaunchArguments.suppressSubscriptionManageExternalURL
+        VolumeArcRuntimeFlags.restTimerDurationOverride =
+            VolumeArcLaunchArguments.restTimerDurationOverride
+        VolumeArcRuntimeFlags.voicePromptTranscriptFixture =
+            VolumeArcLaunchArguments.voicePromptTranscriptFixture
         #if canImport(Sentry)
         VolumeArcSentryConfiguration.bootstrapIfNeeded()
         #endif
@@ -195,7 +98,8 @@ struct VolumeArcApp: App {
                     skipOnboarding: VolumeArcLaunchArguments.skipOnboarding,
                     seedFixtures: VolumeArcLaunchArguments.seedFixtures,
                     isPerfTestMode: VolumeArcLaunchArguments.isPerfTestMode,
-                    strictPrivacyMode: VolumeArcLaunchArguments.strictPrivacyMode
+                    strictPrivacyMode: VolumeArcLaunchArguments.strictPrivacyMode,
+                    preservePersistence: VolumeArcLaunchArguments.preserveUITestPersistence
                 )
             } catch {
                 // Surface bootstrap failure rather than silently swallowing
@@ -222,12 +126,12 @@ struct VolumeArcApp: App {
         let voicePermissionStore = Self.makeVoicePermissionStore()
         let accountSessionStore = Self.makeAccountSessionStore()
         let notificationStore = Self.makeNotificationStore()
-        let watchConnectivityCoordinator = Self.makeWatchConnectivityCoordinator()
         #if canImport(SwiftData)
         let telemetrySink = Self.makeTelemetrySink(initialEvents: persistence.bootstrapTelemetryEvents)
         #else
         let telemetrySink = Self.makeTelemetrySink()
         #endif
+        let watchConnectivityCoordinator = Self.makeWatchConnectivityCoordinator(telemetrySink: telemetrySink)
         // VOL-204: capture the telemetry sink as an instance property so
         // `.onAppear` can publish it to `VolumeArcBackgroundTasks.telemetrySink`
         // alongside the existing `sharedModel` handoff. The local
@@ -278,9 +182,13 @@ struct VolumeArcApp: App {
         let subscriptionStore: StoreKitSubscriptionStore
         #if DEBUG
         if VolumeArcLaunchArguments.useScreenshotStoreKitFixtures {
+            let fixtureEntitlements: Set<String> = VolumeArcLaunchArguments.usePremiumEntitlementFixture
+                ? Set(VolumeArcPremiumCatalog.subscriptionProductIDs.prefix(1))
+                : []
             subscriptionStore = StoreKitSubscriptionStore.screenshotFixture(
                 productIDs: VolumeArcPremiumCatalog.subscriptionProductIDs,
                 productDisplays: VolumeArcPremiumCatalog.screenshotProductDisplays,
+                purchasedProductIDs: fixtureEntitlements,
                 telemetry: telemetrySink
             )
         } else {
@@ -356,7 +264,7 @@ struct VolumeArcApp: App {
                     reason: """
                         Storage mode is \(storageMode); outbound sync is \
                         disabled until cloud-backed persistence is available.
-                        """
+                    """
                 )
             }
             let repository = SwiftDataWorkoutRepository(container: container, outboundQueue: outboundQueue)
@@ -527,20 +435,29 @@ struct VolumeArcApp: App {
         RootDashboardView(
             navigation: navigation,
             model: dashboardModel,
+            onRequestNotifications: {
+                #if canImport(UserNotifications)
+                let scheduler = VolumeArcNotificationScheduler()
+                scheduler.registerCategories()
+                return await scheduler.requestPermissionIfNeeded()
+                #else
+                return false
+                #endif
+            },
             onSendFeedback: { category, description in
                 feedbackSubmitter.submit(category: category, description: description)
             }
         )
             .task {
+                dashboardModel.recordAbortedCoachStreamIfNeeded()
+                await dashboardModel.recordCloudSyncUnavailableIfNeeded()
+                await dashboardModel.flushWatchConnectivityPendingPayloads()
                 #if canImport(ActivityKit)
                 await liveActivityController.restoreStoredStateIfAvailable()
                 #endif
                 #if canImport(UserNotifications)
                 let scheduler = VolumeArcNotificationScheduler()
                 scheduler.registerCategories()
-                if !VolumeArcRuntimeFlags.isDeterministicMode {
-                    _ = await scheduler.requestPermissionIfNeeded()
-                }
                 #endif
                 #if canImport(Network)
                 Self.startNetworkReachabilityMonitor()
@@ -571,6 +488,12 @@ struct VolumeArcApp: App {
                 // because `VolumeArcLaunchArguments.openDeepLinkURL`
                 // is gated on `-UITestMode 1`.
                 await handleLaunchDeepLinkIfRequested()
+
+                // VOL-141: deterministic push/local-notification tap
+                // coverage. This records `notification.tapped` before
+                // reusing the same deep-link router as widgets,
+                // universal links, and App Intents.
+                await handleLaunchNotificationIfRequested()
             }
             // VOL-112: hidden test-only overlay surfacing the most-recent
             // received Watch payload kind. Gated on deterministic mode so
@@ -659,6 +582,15 @@ struct VolumeArcApp: App {
     }
 
     @MainActor
+    private func handleLaunchNotificationIfRequested() async {
+        guard let url = VolumeArcLaunchArguments.openNotificationURL else { return }
+        for _ in 0..<50 where dashboardModel.hasLoadedInitialData == false {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        handle(notificationURL: url)
+    }
+
+    @MainActor
     private func handle(url: URL) {
         guard let destination = VolumeArcDeepLink.destination(for: url) else { return }
 
@@ -693,6 +625,32 @@ struct VolumeArcApp: App {
         }
     }
 
+    @MainActor
+    private func handle(notificationURL url: URL) {
+        guard let destination = VolumeArcDeepLink.destination(for: url) else { return }
+        recordNotificationTapTelemetry(for: url, destination: destination)
+        handle(url: url)
+    }
+
+    private func recordNotificationTapTelemetry(
+        for url: URL,
+        destination: VolumeArcDeepLink.Destination
+    ) {
+        let source = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?
+            .first(where: { $0.name == "source" })?
+            .value ?? "notification"
+        let safeSource = Self.telemetrySourceName(from: source)
+        let destinationName = telemetryDestinationName(for: destination)
+        telemetrySink.record(TelemetryEvent(
+            category: "notification",
+            name: "tapped",
+            severity: .info,
+            message: "Notification opened VolumeArc to \(destinationName).",
+            metadata: ["destination": destinationName, "source": safeSource]
+        ))
+    }
+
     private func recordDeepLinkTelemetry(
         for url: URL,
         destination: VolumeArcDeepLink.Destination
@@ -701,14 +659,25 @@ struct VolumeArcApp: App {
             .queryItems?
             .first(where: { $0.name == "source" })?
             .value ?? "unknown"
+        let safeSource = Self.telemetrySourceName(from: source)
         let destinationName = telemetryDestinationName(for: destination)
         telemetrySink.record(TelemetryEvent(
             category: "deeplink",
             name: "received",
             severity: .info,
             message: "Deep link received for \(destinationName).",
-            metadata: ["destination": destinationName, "source": source]
+            metadata: ["destination": destinationName, "source": safeSource]
         ))
+    }
+
+    private static func telemetrySourceName(from rawValue: String) -> String {
+        let normalized = rawValue
+            .lowercased()
+            .filter { character in
+                character.isLetter || character.isNumber || character == "_" || character == "-"
+            }
+        guard !normalized.isEmpty else { return "unknown" }
+        return String(normalized.prefix(40))
     }
 
     private func recordIntentTelemetryIfPresent(in url: URL) {
@@ -723,12 +692,13 @@ struct VolumeArcApp: App {
            let queryItems = components.queryItems,
            queryItems.first(where: { $0.name == "source" })?.value == "intent",
            let intentName = queryItems.first(where: { $0.name == "intent" })?.value {
+            let safeIntentName = Self.telemetrySourceName(from: intentName)
             telemetrySink.record(TelemetryEvent(
                 category: "intent",
-                name: "\(intentName).invoked",
+                name: "\(safeIntentName).invoked",
                 severity: .info,
-                message: "App Intent \(intentName) invoked via deep link.",
-                metadata: ["intent": intentName]
+                message: "App Intent invoked via deep link.",
+                metadata: ["intent": safeIntentName]
             ))
         }
     }

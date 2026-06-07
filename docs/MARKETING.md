@@ -2,11 +2,11 @@
 
 The VolumeArc marketing site (`volumearc.app`) is a Next.js 16 app under [`marketing/`](../marketing). It serves the public landing page, legal pages (Terms, Privacy), Support, and the public coach-quality eval-trend page.
 
-> **Status:** Scaffold landed (Wave 1 of [VolumeArc Production Readiness](https://linear.app/mabry-ventures/project/volumearc-production-readiness-af810008523d)). Custom-domain DNS, Vercel project linking, legal-counsel review of `/terms` + `/privacy`, and final copywriting are pending — see [VOL-124](https://linear.app/mabry-ventures/issue/VOL-124), [VOL-160](https://linear.app/mabry-ventures/issue/VOL-160), [VOL-161](https://linear.app/mabry-ventures/issue/VOL-161).
+> **Status:** Live and release-gated under [VolumeArc Release](https://linear.app/mabry-ventures/initiative/volumearc-release-68a38ea2d762). Custom-domain DNS and Vercel deployment are live. `/terms` and `/privacy` are placeholder-free and pass the legal-page guard; final legal counsel approval, pricing confirmation, and launch copy signoff remain release gates.
 
 ## Why this lives in the same repo
 
-The legal pages (`/terms`, `/privacy`) are hard-linked from the iOS paywall via [`App/LegalLinks.swift`](../App/LegalLinks.swift). Keeping them in the same repo means:
+The legal pages (`/terms`, `/privacy`) are hard-linked from the iOS paywall via [`LegalLinks.swift`](../VolumeArcNative/Sources/VolumeArcCore/Legal/LegalLinks.swift). Keeping them in the same repo means:
 - Any change to `LegalLinks` URLs and the marketing pages they point at lands in the same PR
 - The CI gate that prevents placeholder URLs from shipping in the iOS app (VOL-124 contract test) can verify the marketing pages exist as a CI step
 - Subscription pricing, feature claims, and coach-quality evidence stay in lockstep with the app's actual behavior — `docs/FEATURES.md` is the source of truth and the marketing site reflects it
@@ -32,8 +32,8 @@ marketing/src/app/
 ├── (main)/
 │   ├── layout.tsx                  Header + Footer chrome (delegates to components/Layout.tsx)
 │   ├── page.tsx                    Landing — Hero, PrimaryFeatures, SecondaryFeatures, CallToAction, Pricing, FAQs
-│   ├── terms/page.tsx              Terms of Service (DRAFT — VOL-124)
-│   ├── privacy/page.tsx            Privacy Policy (DRAFT — VOL-124)
+│   ├── terms/page.tsx              Terms of Service (placeholder-free; counsel approval gate)
+│   ├── privacy/page.tsx            Privacy Policy (placeholder-free; counsel approval gate)
 │   ├── support/page.tsx            Contact form, common issues, press
 │   └── quality/page.tsx            Public coach-quality eval-trend from docs/coach-eval-trend.json
 └── not-found.tsx                   Fallback 404
@@ -80,7 +80,7 @@ The CI gate at [`.github/workflows/marketing.yml`](../.github/workflows/marketin
 - `npm run test:a11y` — axe-core scan over the same five routes; serious and critical violations fail the build.
 - `npm run test:lighthouse` — starts the production Next server, runs Lighthouse CI for the same five routes, writes JSON reports under `marketing/.lighthouseci/`, and enforces the configured LCP, CLS, INP, Performance, Accessibility, Best Practices, and SEO floors in [`marketing/lighthouserc.json`](../marketing/lighthouserc.json).
 
-**Where it runs (VOL-213 — updated 2026-05-18):** the workflow targets the privileged `mv-volumearc-runner` self-hosted macOS host alongside the Apple toolchain, not `ubuntu-latest`. The previous docs claim of "ubuntu-latest, fork-safe via `pull_request` semantics" was wrong — secret theft isn't the only attack surface, and `npm` postinstall scripts on the self-hosted runner have access to the same Keychain, signing identity, and DerivedData as the Apple builds. VOL-193 (closed 2026-05-18) added the explicit fork-PR guard: same-repo PRs and pushes to `main` run as normal, fork PRs are skipped. Fork contributors should ask a maintainer to push their branch into the upstream so CI can execute against trusted code. `SHADCNBLOCKS_API_KEY` was also removed from the PR job env in VOL-193 — it's only needed at install-time, not for `next build`.
+**Where it runs (VOL-274 — updated 2026-06-06):** the workflow runs on GitHub-hosted Ubuntu because it is pure Node/Playwright/Lighthouse work and does not need Apple signing credentials, Keychain access, DerivedData, SPM caches, or simulator runtimes. Apple build, release, repo-integrity, security, and AI-review gates remain on the self-hosted Mabry Ventures runner fleet. The explicit fork-PR guard remains: same-repo PRs and pushes to `main` run as normal, fork PRs are skipped until a maintainer brings the branch into the upstream repo. `SHADCNBLOCKS_API_KEY` is not present in the CI job env because it is only needed at install-time for new block development, not for `next build`.
 
 **Typecheck (VOL-213 — updated 2026-05-18):** `next build` runs the TypeScript compiler as part of the production build step, so a separate `tsc --noEmit` step would be redundant (and fails on a fresh checkout because `next build` is what generates `next-env.d.ts`). Local contributors run `npm run typecheck` after one initial build. The previous docs claim that CI ran `npm run typecheck` separately was wrong.
 
@@ -98,7 +98,7 @@ SHADCNBLOCKS_API_KEY=$(grep SHADCNBLOCKS_API_KEY .env.local | cut -d= -f2) \
   npx shadcn@latest add @shadcnblocks/<block-name>
 ```
 
-Reference: [`mv-design/docs/shadcnblocks.md`](../../mv-design/docs/shadcnblocks.md). The same `SHADCNBLOCKS_API_KEY` GitHub secret used in `mv-design` should be mirrored in `mv-volumearc` for CI/Vercel installs.
+Reference the sibling `mv-design/docs/shadcnblocks.md` guide when that repository is available locally. The same `SHADCNBLOCKS_API_KEY` GitHub secret used in `mv-design` should be mirrored in `mv-volumearc` for CI/Vercel installs.
 
 ## Content ownership
 
@@ -125,7 +125,7 @@ The Tailwind Plus Pocket template ships with the legacy ESLint 8 + `next lint` s
 
 | The marketing site touches | Single source of truth |
 |---|---|
-| `LegalLinks` Swift wrapper | [`App/LegalLinks.swift`](../App/LegalLinks.swift) — keep `/terms` and `/privacy` URL paths in sync |
+| `LegalLinks` Swift wrapper | [`LegalLinks.swift`](../VolumeArcNative/Sources/VolumeArcCore/Legal/LegalLinks.swift) — keep `/terms` and `/privacy` URL paths in sync |
 | Pricing / StoreKit IDs | [`docs/PLATFORM.md`](PLATFORM.md) Subscriptions section |
 | Feature claims | [`docs/FEATURES.md`](FEATURES.md) — canonical per-feature status |
 | Coach quality narrative | [`docs/COACH_EVALS.md`](COACH_EVALS.md) — eval harness mechanics |

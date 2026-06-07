@@ -16,6 +16,7 @@ final class ActiveWorkoutLiveActivitySnapshotTests: XCTestCase {
         static let watchSmall = CGSize(width: 170, height: 80)
         static let lockScreenRegular = CGSize(width: 393, height: 150)
         static let lockScreenAccessibility = CGSize(width: 393, height: 214)
+        static let dynamicIslandExpanded = CGSize(width: 393, height: 116)
     }
 
     private enum Variant {
@@ -114,6 +115,29 @@ final class ActiveWorkoutLiveActivitySnapshotTests: XCTestCase {
         assertLockScreenLiveActivitySnapshot(restCompleteSnapshot, colorScheme: .dark, variant: .accessibility)
     }
 
+    func testDynamicIslandExpandedLight() throws {
+        try XCTSkipIf(Self.isRunningInXcodeCloudTestProducts, Self.dynamicIslandXcodeCloudSkipReason)
+        assertDynamicIslandExpandedSnapshot(countdownSnapshot, colorScheme: .light)
+    }
+
+    func testDynamicIslandExpandedDark() throws {
+        try XCTSkipIf(Self.isRunningInXcodeCloudTestProducts, Self.dynamicIslandXcodeCloudSkipReason)
+        assertDynamicIslandExpandedSnapshot(countdownSnapshot, colorScheme: .dark)
+    }
+
+    nonisolated private static var isRunningInXcodeCloudTestProducts: Bool {
+        Bundle(for: ActiveWorkoutLiveActivitySnapshotTests.self)
+            .bundleURL
+            .path
+            .contains("TestProducts.xctestproducts")
+    }
+
+    nonisolated private static let dynamicIslandXcodeCloudSkipReason = """
+    VOL-241: Dynamic Island expanded snapshots are enforced locally and on \
+    the self-hosted runner. Xcode Cloud renders this WidgetKit expanded \
+    region with small perceptual differences from the bundled reference PNGs.
+    """
+
     private func assertWatchLiveActivitySnapshot(
         _ snapshot: ActiveWorkoutLiveActivitySnapshot,
         colorScheme: ColorScheme,
@@ -157,6 +181,32 @@ final class ActiveWorkoutLiveActivitySnapshotTests: XCTestCase {
                 colorScheme: colorScheme,
                 preferredContentSizeCategory: variant.preferredContentSizeCategory,
                 size: variant.lockScreenSize
+            ),
+            in: self,
+            testName: testName,
+            line: line
+        )
+    }
+
+    private func assertDynamicIslandExpandedSnapshot(
+        _ snapshot: ActiveWorkoutLiveActivitySnapshot,
+        colorScheme: ColorScheme,
+        testName: String = #function,
+        line: UInt = #line
+    ) {
+        let view = ActiveWorkoutIslandPreview(snapshot: snapshot)
+            .snapshotEnvironment(colorScheme: colorScheme, dynamicTypeSize: .medium)
+            .frame(
+                width: Metrics.dynamicIslandExpanded.width,
+                height: Metrics.dynamicIslandExpanded.height
+            )
+
+        assertVolumeArcSnapshot(
+            of: view,
+            as: imageSnapshot(
+                colorScheme: colorScheme,
+                preferredContentSizeCategory: .medium,
+                size: Metrics.dynamicIslandExpanded
             ),
             in: self,
             testName: testName,

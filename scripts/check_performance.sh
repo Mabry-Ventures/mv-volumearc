@@ -34,6 +34,17 @@ PERF_BUDGETS="${PERF_BUDGETS:-$ROOT/docs/performance-budgets.json}"
 PERF_TREND="${PERF_TREND:-$ROOT/docs/performance-trend.json}"
 PERF_SKIP_TREND_WRITE="${PERF_SKIP_TREND_WRITE:-0}"
 
+if ! xcrun -find xcresulttool >/dev/null 2>&1; then
+  if [[ -z "${DEVELOPER_DIR:-}" && -d "/Applications/Xcode.app/Contents/Developer" ]]; then
+    export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+  fi
+fi
+
+if ! xcrun -find xcresulttool >/dev/null 2>&1; then
+  echo "FAIL: xcresulttool is unavailable. Install Xcode or set DEVELOPER_DIR to a full Xcode developer directory." >&2
+  exit 72
+fi
+
 if [[ ! -d "$PERF_XCRESULT" ]]; then
   echo "FAIL: No xcresult bundle at $PERF_XCRESULT — did scripts/test_performance.sh run?" >&2
   exit 1
@@ -215,8 +226,16 @@ def reduce_samples(metric, budget):
 metrics = iterate_metrics(metrics_doc)
 rows = []
 failed = False
+performance_budgets = [
+    metric
+    for metric in budgets_doc["metrics"]
+    if str(metric.get("test", "")).startswith("VolumeArcPerfTests.")
+]
+if not performance_budgets:
+    print("FAIL: no VolumeArcPerfTests performance budgets were found.", file=sys.stderr)
+    sys.exit(1)
 
-for budget in budgets_doc["metrics"]:
+for budget in performance_budgets:
     matches = [metric for metric in metrics if match_metric(metric, budget)]
     if not matches:
         rows.append({

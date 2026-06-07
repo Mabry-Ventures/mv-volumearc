@@ -74,6 +74,8 @@ final class VolumeArcCoachPromptTemplateTests: XCTestCase {
 
     func testInferIntentMapsKeywordsToIntents() {
         XCTAssertEqual(CoachPromptTemplate.inferIntent(from: "Am I ready to push?"), .recovery)
+        XCTAssertEqual(CoachPromptTemplate.inferIntent(from: "I feel sick today, should I train?"), .recovery)
+        XCTAssertEqual(CoachPromptTemplate.inferIntent(from: "My hips are tight and I feel run-down"), .recovery)
         XCTAssertEqual(CoachPromptTemplate.inferIntent(from: "Should I deload this week?"), .deload)
         XCTAssertEqual(CoachPromptTemplate.inferIntent(from: "Form check on my squat?"), .form)
         XCTAssertEqual(CoachPromptTemplate.inferIntent(from: "Can I substitute pull-ups for rows?"), .substitution)
@@ -82,6 +84,65 @@ final class VolumeArcCoachPromptTemplateTests: XCTestCase {
         XCTAssertEqual(CoachPromptTemplate.inferIntent(from: "Can you set up my week?"), .planning)
         XCTAssertEqual(CoachPromptTemplate.inferIntent(from: "How was the weekend?"), .free)
         XCTAssertEqual(CoachPromptTemplate.inferIntent(from: "Hello coach"), .free)
+    }
+
+    func testRecoveryPromptAddsNoPressureSicknessAndSorenessGuardrails() {
+        let rendered = CoachPromptTemplate.render(
+            intent: .recovery,
+            context: makeContext(),
+            question: "I'm sick and sore. Should I push through?",
+            style: .motivational
+        )
+
+        XCTAssertTrue(rendered.contains("rest is"))
+        XCTAssertTrue(rendered.contains("valid win"))
+        XCTAssertTrue(rendered.contains("light technique"))
+        XCTAssertTrue(rendered.contains("easy accessories"))
+        XCTAssertTrue(rendered.contains("no guilt"))
+        XCTAssertTrue(rendered.contains("Never recommend lifting through pain"))
+    }
+
+    func testCoachWorkoutPlanExtractorBuildsStartablePlanFromSetRepBullets() {
+        let response = """
+        Keep it light and focused on form.
+
+        Here's a sample workout plan for you:
+        - Dumbbell rows: 3 sets of 10 reps
+        - Light lunges: 3 sets of 10 reps per leg
+        - Light planks: 3 sets of 30 seconds
+        - Side plank: 30 seconds per side
+        - Light calf raises: 3 sets of 15 reps
+        """
+
+        guard let extractedPlan = CoachWorkoutPlanExtractor.plan(from: response, title: "Coach Workout") else {
+            XCTFail("Expected set/rep bullets to produce a startable workout plan")
+            return
+        }
+
+        XCTAssertEqual(extractedPlan.title, "Coach Workout")
+        XCTAssertEqual(extractedPlan.targetRPE, 6)
+        XCTAssertEqual(extractedPlan.exercises.map(\.name), [
+            "Dumbbell rows",
+            "Light lunges",
+            "Light planks",
+            "Side plank",
+            "Light calf raises",
+        ])
+        XCTAssertEqual(extractedPlan.exercises.first?.sets, 3)
+        XCTAssertEqual(extractedPlan.exercises.first?.reps, 10)
+        XCTAssertEqual(extractedPlan.exercises.first?.weight, 20)
+        XCTAssertEqual(extractedPlan.exercises[2].reps, 30)
+        XCTAssertEqual(extractedPlan.exercises[3].sets, 1)
+        XCTAssertEqual(extractedPlan.exercises[3].reps, 30)
+    }
+
+    func testCoachWorkoutPlanExtractorIgnoresVagueAdviceWithoutSetsAndReps() {
+        let plan = CoachWorkoutPlanExtractor.plan(
+            from: "Take it easy today. Walk, hydrate, and resume lifting when symptoms improve.",
+            title: "Coach Workout"
+        )
+
+        XCTAssertNil(plan)
     }
 
     func testPlanningIntentAddsHardHorizonGuardrails() {
@@ -209,6 +270,20 @@ final class VolumeArcCoachPromptTemplateTests: XCTestCase {
             response.contains("78"),
             "Local heuristic must still extract the readiness score after the template wrapping (got: \(response))"
         )
+    }
+
+    func testLocalHeuristicProviderHandlesSicknessWithRestAndLightOptions() async throws {
+        let provider = LocalHeuristicAICoachProvider()
+        let response = try await provider.coachResponse(
+            for: "I'm sick, sore, and tight. Should I push today?",
+            context: makeContext().asPromptBlock(privacyMode: .standard)
+        )
+        let lowercased = response.lowercased()
+
+        XCTAssertTrue(lowercased.contains("rest"))
+        XCTAssertTrue(lowercased.contains("light"))
+        XCTAssertFalse(lowercased.contains("push through"))
+        XCTAssertFalse(lowercased.contains("no excuses"))
     }
 
     // MARK: - Helpers

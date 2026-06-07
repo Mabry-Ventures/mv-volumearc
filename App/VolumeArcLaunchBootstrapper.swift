@@ -18,7 +18,8 @@ enum VolumeArcLaunchBootstrapper {
         skipOnboarding: Bool,
         seedFixtures: Bool,
         isPerfTestMode: Bool = false,
-        strictPrivacyMode: Bool = false
+        strictPrivacyMode: Bool = false,
+        preservePersistence: Bool = false
     ) throws {
         // VOL-99: perf mode implies a deterministic seed, skipped
         // onboarding, and UI test mode (for accessibility identifiers
@@ -28,6 +29,10 @@ enum VolumeArcLaunchBootstrapper {
         let resolvedSkipOnboarding = skipOnboarding || isPerfTestMode
         let resolvedSeedFixtures = seedFixtures || isPerfTestMode
         let resolvedStrictPrivacyMode = strictPrivacyMode && resolvedUITestMode
+        let shouldPreservePersistence = preservePersistence
+            && resolvedUITestMode
+            && !resolvedSeedFixtures
+            && !isPerfTestMode
 
         guard resolvedUITestMode || resolvedSkipOnboarding || resolvedSeedFixtures else { return }
 
@@ -40,11 +45,13 @@ enum VolumeArcLaunchBootstrapper {
         // `isUITestMode` alone also resets, for any test setup that doesn't
         // need fixtures but still wants a clean slate (e.g., the onboarding
         // gate test that verifies first-launch behavior).
-        if resolvedUITestMode || resolvedSeedFixtures {
+        if (resolvedUITestMode || resolvedSeedFixtures) && !shouldPreservePersistence {
             try resetState(in: container)
+            OnboardingProgressStore.clear()
         }
 
         if resolvedSkipOnboarding || resolvedSeedFixtures {
+            OnboardingProgressStore.clear()
             let deterministicProfile = deterministicUserProfile(
                 privacyMode: resolvedStrictPrivacyMode ? .strict : .standard
             )

@@ -6,11 +6,17 @@ import VolumeArcCore
 public struct TodayView: View {
     @ObservedObject var model: WorkoutDashboardModel
     @ObservedObject var navigation: DashboardNavigationModel
+    private let now: () -> Date
     @Namespace private var heroNamespace
 
-    public init(model: WorkoutDashboardModel, navigation: DashboardNavigationModel) {
+    public init(
+        model: WorkoutDashboardModel,
+        navigation: DashboardNavigationModel,
+        now: @escaping () -> Date = { Date.now }
+    ) {
         self.model = model
         self.navigation = navigation
+        self.now = now
     }
 
     public var body: some View {
@@ -84,11 +90,11 @@ public struct TodayView: View {
     }
 
     private var todayLabel: String {
-        Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day())
+        now().formatted(.dateTime.weekday(.wide).month(.wide).day())
     }
 
     private var greetingText: String {
-        let hour = Calendar.current.component(.hour, from: .now)
+        let hour = Calendar.current.component(.hour, from: now())
         switch hour {
         case 4..<12:
             return String(localized: "Good morning", comment: "Morning greeting header")
@@ -134,12 +140,23 @@ public struct TodayView: View {
     private var overviewMetrics: some View {
         TodayOverviewMetrics(
             readiness: model.readiness,
+            isHealthAuthorized: model.isHealthAuthorized,
             weeklyVolumeLoad: weeklyVolumeLoad,
             sparklineValues: weeklySparklineValues,
             trendLabel: volumeTrendLabel,
             trendIsPositive: volumeTrendIsPositive,
-            onReadinessTap: { navigation.openSignals() }
+            onReadinessTap: {
+                if model.isHealthAuthorized {
+                    navigation.openSignals()
+                } else {
+                    navigation.openProfile()
+                }
+            }
         )
+        .task(id: model.isHealthAuthorized) {
+            guard !model.isHealthAuthorized else { return }
+            model.recordHealthKitUnavailableShown(source: "today")
+        }
     }
 
     // MARK: - Next workout card
@@ -271,7 +288,7 @@ public struct TodayView: View {
             .accessibilityIdentifier("today.startWorkout")
 
             VAButton(
-                String(localized: "Ask Coach", comment: "Quick action to open the AI coach"),
+                String(localized: "Ask Coach", comment: "Quick action to open the coach"),
                 icon: "waveform",
                 style: .secondary
             ) {
@@ -395,9 +412,10 @@ public struct TodayView: View {
 
     private var recentSessionsSection: some View {
         let count = weeklyVolumeSummary.currentWeekSessionCount
-        let subtitle = count == 1
-            ? String(localized: "1 session this week", comment: "Recent sessions subtitle, singular form")
-            : String(localized: "\(count) sessions this week", comment: "Recent sessions subtitle, zero or plural form")
+        let subtitle = String(
+            localized: "^[\(count) session](inflect: true) this week",
+            comment: "Recent sessions subtitle with current week session count"
+        )
         return VStack(alignment: .leading, spacing: VA.Space.md) {
             VASectionHeader(
                 String(localized: "Recent", comment: "Section header on Today tab for recent workout history"),
@@ -551,10 +569,12 @@ public struct TodayView: View {
             comment: "Target line: weight × rep range @ target RPE for the next set"
         )
     }
+}
 
+private extension TodayView {
     // MARK: - Signals
 
-    private var signalsSection: some View {
+    var signalsSection: some View {
         VStack(alignment: .leading, spacing: VA.Space.md) {
             VASectionHeader(String(
                 localized: "System status",
@@ -566,7 +586,7 @@ public struct TodayView: View {
         }
     }
 
-    private func signalRow(_ signal: OperationalSignalSummary) -> some View {
+    func signalRow(_ signal: OperationalSignalSummary) -> some View {
         VACard(style: .flat) {
             HStack(spacing: VA.Space.md) {
                 Image(systemName: signalIcon(signal.severity))
@@ -585,7 +605,7 @@ public struct TodayView: View {
         }
     }
 
-    private func signalIcon(_ severity: TelemetrySeverity) -> String {
+    func signalIcon(_ severity: TelemetrySeverity) -> String {
         switch severity {
         case .info: return "info.circle.fill"
         case .warning: return "exclamationmark.triangle.fill"
@@ -593,16 +613,16 @@ public struct TodayView: View {
         }
     }
 
-    private func signalColor(_ severity: TelemetrySeverity) -> Color {
+    func signalColor(_ severity: TelemetrySeverity) -> Color {
         switch severity {
         case .info: return VA.Colors.info
         case .warning: return VA.Colors.warning
         case .error: return VA.Colors.error
         }
     }
-}
 
-private extension TodayView {
+    // MARK: - Recent session display
+
     func sessionTitle(for session: RecentSession) -> String {
         if session.isExternalHealthSession, let title = session.title, !title.isEmpty {
             return title
@@ -617,9 +637,10 @@ private extension TodayView {
             return "\(source) • \(session.durationMinutes)min"
         }
         let rpeText = String(format: "%.1f", session.averageRPE)
-        let setsText = session.completedSetCount == 1
-            ? String(localized: "1 set", comment: "Session summary set count, singular")
-            : String(localized: "\(session.completedSetCount) sets", comment: "Session summary set count, plural")
+        let setsText = String(
+            localized: "^[\(session.completedSetCount) set](inflect: true)",
+            comment: "Session summary set count"
+        )
         return "\(setsText) • \(session.durationMinutes)min • RPE \(rpeText)"
     }
 

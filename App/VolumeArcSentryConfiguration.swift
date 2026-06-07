@@ -1,14 +1,19 @@
 #if canImport(Sentry)
 import Foundation
 import Sentry
+#if canImport(StoreKit)
+import StoreKit
+#endif
 import VolumeArcCore
 
 enum VolumeArcSentryConfiguration {
     private static let secureStore = VolumeArcSecureStore()
     private static let dsnKey = "sentry.dsn"
+    private static let storeKitEnvironmentKey = "volumearc.sentry.storeKitEnvironment"
 
     static func bootstrapIfNeeded() {
         guard let dsn = resolveDSN() else { return }
+        let startupEnvironment = resolveEnvironment()
 
         SentrySDK.start { options in
             options.dsn = dsn
@@ -139,42 +144,96 @@ enum VolumeArcSentryConfiguration {
             #if DEBUG
             options.debug = true
             #endif
-            options.environment = Self.resolveEnvironment()
+            options.environment = startupEnvironment
         }
+
+        applyResolvedStoreKitEnvironmentIfNeeded(startupEnvironment: startupEnvironment)
     }
 
     /// VOL-252. Three-way environment classification.
     ///
     /// - `development`: any Debug build (simulator, dev device).
-    /// - `testflight`: non-Debug build whose receipt URL ends in
-    ///   `sandboxReceipt` — Apple uses this for both TestFlight and the
-    ///   StoreKit sandbox. For our purposes both are "beta" tier and
+    /// - `testflight`: non-Debug builds whose StoreKit app transaction
+    ///   reports `sandbox` or `xcode`; both are beta/testing tiers and
     ///   should be separated from production users.
-    /// - `production`: a non-Debug build with a real App Store receipt.
+    /// - `production`: a non-Debug build with a production StoreKit
+    ///   environment, unknown StoreKit environment, or unresolved first
+    ///   launch environment.
     ///
-    /// Pure overload `resolveEnvironment(isDebugBuild:receiptURL:)` exists
+    /// Pure overload `resolveEnvironment(isDebugBuild:storeKitEnvironment:)` exists
     /// so the unit suite can exercise every branch without mocking
-    /// `Bundle.main` / `#if DEBUG`.
-    static func resolveEnvironment(bundle: Bundle = .main) -> String {
-        #if DEBUG
-        let isDebugBuild = true
-        #else
-        let isDebugBuild = false
-        #endif
+    /// `UserDefaults` / `#if DEBUG`.
+    static func resolveEnvironment() -> String {
         return resolveEnvironment(
             isDebugBuild: isDebugBuild,
-            receiptURL: bundle.appStoreReceiptURL
+            storeKitEnvironment: UserDefaults.standard.string(forKey: storeKitEnvironmentKey)
         )
     }
 
     static func resolveEnvironment(
         isDebugBuild: Bool,
-        receiptURL: URL?
+        storeKitEnvironment: String?
     ) -> String {
         if isDebugBuild { return "development" }
-        if receiptURL?.lastPathComponent == "sandboxReceipt" { return "testflight" }
-        return "production"
+
+        switch storeKitEnvironment?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "sandbox", "xcode":
+            return "testflight"
+        case "production":
+            return "production"
+        default:
+            return "production"
+        }
     }
+
+    private static var isDebugBuild: Bool {
+        #if DEBUG
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    private static func applyResolvedStoreKitEnvironmentIfNeeded(startupEnvironment: String) {
+        guard isDebugBuild == false else { return }
+
+        #if canImport(StoreKit)
+        Task {
+            guard let rawStoreKitEnvironment = await resolveStoreKitEnvironmentRawValue() else { return }
+            let resolvedEnvironment = resolveEnvironment(
+                isDebugBuild: false,
+                storeKitEnvironment: rawStoreKitEnvironment
+            )
+
+            await MainActor.run {
+                UserDefaults.standard.set(rawStoreKitEnvironment, forKey: storeKitEnvironmentKey)
+
+                SentrySDK.configureScope { scope in
+                    scope.setEnvironment(resolvedEnvironment)
+                    scope.setTag(value: rawStoreKitEnvironment, key: "storekit_environment")
+                }
+
+                guard resolvedEnvironment != startupEnvironment else { return }
+                SentrySDK.endSession()
+                SentrySDK.startSession()
+            }
+        }
+        #endif
+    }
+
+    #if canImport(StoreKit)
+    private static func resolveStoreKitEnvironmentRawValue() async -> String? {
+        guard #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) else { return nil }
+
+        do {
+            let result = try await AppTransaction.shared
+            let transaction = (try? result.payloadValue) ?? result.unsafePayloadValue
+            return transaction.environment.rawValue
+        } catch {
+            return nil
+        }
+    }
+    #endif
 
     static var isConfigured: Bool {
         resolveDSN() != nil
@@ -187,12 +246,33 @@ enum VolumeArcSentryConfiguration {
     }
 
     private static func resolveDSN() -> String? {
-        let dsn = (try? secureStore.load(dsnKey))
+        let rawDSN = (try? secureStore.load(dsnKey))
             ?? ProcessInfo.processInfo.environment["VOLUMEARC_SENTRY_DSN"]
             ?? Bundle.main.object(forInfoDictionaryKey: "VolumeArcSentryDSN") as? String
 
-        guard let dsn, dsn.isEmpty == false else { return nil }
-        return dsn
+        return validatedDSN(from: rawDSN)
+    }
+
+    static func validatedDSN(from rawValue: String?) -> String? {
+        guard let rawValue else { return nil }
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false, trimmed == rawValue else { return nil }
+        guard trimmed.contains("$(") == false else { return nil }
+
+        guard let components = URLComponents(string: trimmed),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "https",
+              let publicKey = components.user,
+              publicKey.isEmpty == false,
+              components.password == nil,
+              let host = components.host,
+              host.isEmpty == false,
+              components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).isEmpty == false
+        else {
+            return nil
+        }
+
+        return trimmed
     }
 
     /// Build a release identifier matching Sentry's recommended convention

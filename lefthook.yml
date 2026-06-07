@@ -79,7 +79,7 @@ pre-commit:
       run: |
         if grep -nE '(DEMOFIX|TEMPFIX|DELETEME|XXX-HACK)' {staged_files}; then
           echo ""
-          echo "✗ lefthook: found a TEMPFIX-style marker in staged files."
+          echo "FAIL lefthook: found a TEMPFIX-style marker in staged files."
           echo "  Either resolve it before committing, or set LEFTHOOK=0 to bypass."
           exit 1
         fi

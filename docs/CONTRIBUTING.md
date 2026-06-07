@@ -188,16 +188,21 @@ The AI review gate (`.github/workflows/ai-review-gate.yml`) carries the same for
 
 External contributors should ask a maintainer to push their branch directly into the upstream repo — that branch then triggers CI normally. Until then the AI review gate will time out (no `Build & Test` signal), which is the correct behavior.
 
-### Runner policy: zero GitHub-hosted jobs
+### Runner policy: Apple gates self-hosted, portable GitHub API/web CI GitHub-hosted
 
-**Every workflow in this repo runs on the self-hosted `mv-volumearc-runner` label** — there are no `runs-on: ubuntu-latest` / `macos-latest` jobs. The standard is enforced by code review: any new workflow file MUST use `runs-on: [self-hosted, mv-volumearc-runner]`.
+Apple build/test, release, repo-integrity, security, response-eval, and UAT workflows run on the Mabry Ventures self-hosted runner fleet. Portable jobs may use GitHub-hosted Linux when they do not need Apple signing credentials, Keychain access, local simulator runtimes, DerivedData, SPM caches, Homebrew-only tooling, or repo-persistent state. Today those exceptions are the marketing CI workflow and the AI review gate's GitHub API polling jobs, which run on `ubuntu-latest`.
 
-Rationale:
+Self-hosted rationale:
 
 - **Caching.** Persistent `~/Library/Developer/Xcode/DerivedData/`, SPM `SourcePackages/`, Homebrew, mise toolchains, etc. on the self-hosted runner cut a typical build from ~15 min (cold GitHub-hosted Mac) to ~3 min (warm cache).
 - **Signing.** The Apple Developer identity, App Store Connect API key, and provisioning profile live in the runner's Keychain — GitHub-hosted Macs would need credential injection on every run.
-- **Cost.** GitHub-hosted macOS is billed per minute and adds up under the Sprint-3 cadence; the dedicated machine amortizes.
 - **Determinism.** A single known-good Xcode + simulator runtime install across all workflows avoids "works on GitHub but not the deploy runner" drift.
+
+GitHub-hosted portable-CI rationale:
+
+- **Isolation.** Marketing dependency install/build scripts do not need to run on the Apple signing host.
+- **Availability.** Node, Playwright, axe, Lighthouse, and GitHub API polling gates can run when the Apple runner fleet is busy or offline.
+- **Cost control.** Fork PRs remain guarded; same-repo marketing PRs and AI review polling jobs spend GitHub-hosted Linux minutes instead of scarce Apple runner capacity.
 
 #### Runner fleet topology (`MVGHRUN01`)
 
@@ -207,8 +212,8 @@ The host runs multiple per-tenant runner instances, each as its own macOS user a
 
 | Runner label | macOS account (UID) | ASC API key access |
 |---|---|---|
-| `mv-volumearc-runner` | `volumearc-runner` (UID 505) | ✅ `/Users/volumearc-runner/secrets/AuthKey_7LZU8Z373U.p8` |
-| `mv-shared-01..04` | `githubrunner` (UID 502) — flex pool | ❌ |
+| `mv-volumearc-runner` | `volumearc-runner` (UID 505) | Done `/Users/volumearc-runner/secrets/AuthKey_YR7UQCU7GN.p8` |
+| `mv-shared-01..04` | `githubrunner` (UID 502) — flex pool | Not supported |
 
 **Label-routing matrix:** a job with `runs-on: [self-hosted, mv-volumearc-runner]` matches **5 runners** (1 dedicated `volumearc-runner` + 4 flex). The 4 flex runners do NOT have the ASC key on-disk. Other shared labels:
 
@@ -227,9 +232,9 @@ Env vars available in every job (sourced from `~/.env`, mode `600`):
 
 ```
 DEVELOPMENT_TEAM=A886EMZZW6
-APP_STORE_CONNECT_API_KEY_PATH=/Users/volumearc-runner/secrets/AuthKey_7LZU8Z373U.p8  # dedicated runner only
+APP_STORE_CONNECT_API_KEY_PATH=/Users/volumearc-runner/secrets/AuthKey_YR7UQCU7GN.p8  # dedicated runner only
 APP_STORE_CONNECT_ISSUER_ID=69a6de72-e4ca-47e3-e053-5b8c7c11a4d1
-APP_STORE_CONNECT_KEY_ID=7LZU8Z373U
+APP_STORE_CONNECT_KEY_ID=YR7UQCU7GN
 HOMEBREW_NO_AUTO_UPDATE=1
 HOMEBREW_NO_ANALYTICS=1
 ```
@@ -280,7 +285,7 @@ Notarization concurrency: Apple rate-limits `notarytool` at the team level. If a
 /Library/Logs/MabryVentures/                   # maintenance logs (root-only)
 /Library/Logs/MabryVentures/runner-archive/mv-volumearc-runner/   # archived _diag for this repo
 /var/run/mv-active-jobs/                        # job sentinels (root-owned)
-~/secrets/AuthKey_7LZU8Z373U.p8                 # ASC key (volumearc-runner account, dedicated runner)
+~/secrets/AuthKey_YR7UQCU7GN.p8                 # ASC key (volumearc-runner account, dedicated runner)
 ~/.env                                          # per-account env exports (mode 600)
 ```
 
@@ -350,18 +355,18 @@ A `Tests/.swiftlint.yml` override disables `implicitly_unwrapped_optional`, `for
 
 ## Security tooling (VOL-143, VOL-253)
 
-Two security workflows run on the self-hosted runner per the "zero GitHub-hosted jobs" policy:
+Security workflows run on the self-hosted runner because they inspect repository history and release gates. Portable GitHub API/web jobs may use GitHub-hosted Linux under the runner policy above.
 
 | Workflow | What | Triggers |
 |---|---|---|
 | `trufflehog.yml` | Secret-leak detection. Scans diffs on PRs and full history on main. Catches committed `.env`s, API keys, JWTs. | PRs against main · push to main · weekly cron · manual dispatch |
-| `semgrep.yml` (VOL-253) | SAST. Runs the public `p/owasp-top-ten`, `p/secrets`, `p/swift` rulesets. Catches CWE patterns the style linter and secret scanner miss: unsafe memory access, race conditions on shared state, weak TLS configuration, sensitive-data logging, etc. SARIF uploaded to the GitHub Security tab. | PRs against main · push to main · weekly cron |
+| `semgrep.yml` (VOL-253) | SAST. Runs the public `p/owasp-top-ten`, `p/secrets`, `p/swift` rulesets. Catches CWE patterns the style linter and secret scanner miss: unsafe memory access, race conditions on shared state, weak TLS configuration, sensitive-data logging, etc. SARIF is archived as a workflow artifact because GitHub code scanning for private repos requires GHAS. | PRs against main · push to main · weekly cron |
 
-**Semgrep rollout** is non-blocking (`continue-on-error: true` on the scan step) for a 1-week observation window starting at the VOL-253 merge. After the window, remove the `continue-on-error` and add `Semgrep scan` to the ruleset's required-status-checks list. SARIF upload runs unconditionally so findings appear in the Security tab from day one — only the merge gate is deferred.
+**Semgrep is a blocking release gate.** The VOL-253 observation window is over, the release branch removed the prior false positives, and `.github/workflows/semgrep.yml` now runs with `--error` and no `continue-on-error`. Add `Semgrep scan` to the repository ruleset's required-status-checks list before treating the release branch as merge-ready.
 
 CodeQL static analysis is **not** wired into the repo: GitHub Code Scanning requires GitHub Advanced Security (GHAS) on private repos (~$49/active-user/month) and the cost/benefit doesn't pencil out for this codebase right now. Semgrep covers the same OWASP / CWE pattern surface via the public rulesets above. The AI Review Gate (CodeRabbit Pro + Codex on every PR) provides a third layer of SAST-style coverage. If GHAS pricing changes or the repo goes public, revisit and restore `.github/workflows/codeql.yml` from git history (it existed through commit `bcdf079`).
 
-Findings surface via GitHub's Security tab (Trufflehog → Secret Scanning, Semgrep → Code Scanning Alerts). PR-time Trufflehog failures should block merge — credentials in a PR diff is a near-certain leak even if the commit is "private". Semgrep findings during the observation window are advisory; review them in the Security tab and flip individual finding suppressions only with PR-level justification.
+Findings surface through Trufflehog's workflow log and Semgrep's uploaded SARIF artifact. PR-time Trufflehog failures should block merge because credentials in a PR diff are a near-certain leak even if the commit is private. Semgrep findings also block until fixed or explicitly accepted with PR-level justification.
 
 Both workflows shell out to the Homebrew-installed binary rather than the upstream Docker-based actions because the self-hosted Apple Silicon runner doesn't ship Docker. Update path: `brew upgrade trufflehog`, `brew upgrade semgrep`.
 

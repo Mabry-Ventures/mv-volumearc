@@ -122,6 +122,15 @@ final class OnboardingSnapshotTests: XCTestCase {
                 return nil
             }
         }
+
+        var appleAccountHandler: ((OnboardingAppleAccount) async -> Void)? {
+            switch self {
+            case .profile:
+                return { _ in }
+            case .preferences, .coachingStyle, .permissions, .done:
+                return nil
+            }
+        }
     }
 
     private var savedDeterministicMode: Bool?
@@ -285,6 +294,7 @@ final class OnboardingSnapshotTests: XCTestCase {
             isPresented: .constant(true),
             onComplete: { _ in },
             onRequestHealthAuthorization: step.healthAuthorizationHandler,
+            onConnectAppleAccount: step.appleAccountHandler,
             snapshotStep: step.onboardingStep,
             snapshotResult: step.result
         )

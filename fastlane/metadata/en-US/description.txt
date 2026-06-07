@@ -1,6 +1,6 @@
 VolumeArc is a strength-training coach for lifters who want more than a generic template.
 
-The app combines workout tracking, readiness signals, Apple Watch support, and an AI coach so each session starts with a clear next step: what to train, how hard to push, and when to back off.
+The app combines workout tracking, readiness signals, Apple Watch support, and coach-guided prescriptions so each session starts with a clear next step: what to train, how hard to push, and when to back off.
 
 Strength coaching that follows your training
 - See today's recommended workout, next lift, target reps, and readiness.
@@ -14,13 +14,13 @@ Built for Apple Health and Apple Watch
 - Keep your workout history in your private iCloud account with CloudKit.
 - Use widgets, Live Activities, App Intents, and Apple Watch surfaces to stay close to the next session.
 
-Privacy-first AI coaching
+Privacy-first coaching
 - Raw HealthKit samples stay on your device.
-- When you ask the cloud AI coach a question, VolumeArc may send computed training and recovery summaries through the VolumeArc relay to Google Gemini so the coach can answer with context.
+- When you ask the cloud coach a question, VolumeArc may send computed training and recovery summaries through the secure VolumeArc relay so the coach can answer with context.
 - Strict privacy mode reduces personal context before cloud coaching requests.
 - Crash and diagnostics reporting is configured to mask text and images.
 
 VolumeArc Pro
-The core tracker, readiness experience, Apple Watch support, widgets, Live Activities, App Intents, CloudKit sync, and on-device/local coach fallback are available without Pro. VolumeArc Pro upgrades the AI coach to the Gemini Pro tier and unlocks live voice coaching.
+The core tracker, readiness experience, Apple Watch support, widgets, Live Activities, App Intents, CloudKit sync, and on-device/local coach fallback are available without Pro. VolumeArc Pro upgrades cloud coach capacity and unlocks live voice coaching.
 
-AI coaching is not medical advice. Consult a physician before starting a new training program or training with pain, dizziness, chest pain, shortness of breath, or other concerning symptoms.
+Coaching recommendations are not medical advice. Consult a physician before starting a new training program or training with pain, dizziness, chest pain, shortness of breath, or other concerning symptoms.

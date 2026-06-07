@@ -16,7 +16,7 @@ import XCTest
 /// Wiring:
 /// - The app, when launched with `-UITestMode 1 -PostFakeWatchPayload <kind>`,
 ///   posts a `WatchConnectivityNotifications.payloadDidArrive` notification
-///   on first appearance via `VolumeArcAppFactories.postSimulatedWatchPayloadIfRequested()`.
+///   on first appearance via `VolumeArcApp.postSimulatedWatchPayloadIfRequested()`.
 /// - `VolumeArcApp`'s `.onReceive` for that notification forwards the
 ///   payload to `dashboardModel.handleWatchPayload(_:)`.
 /// - That handler records a telemetry event and, critically, sets
@@ -53,6 +53,21 @@ final class VolumeArcWatchSimulationJourneyTests: XCTestCase {
     /// timer expires) so it's the highest-signal kind to gate on.
     func testRestTimerPayloadFromWatchUpdatesDashboardState() throws {
         try assertSimulatedPayloadIsObservedByDashboard(kind: "restTimer")
+    }
+
+    /// Post a `startSession` payload at launch and confirm the dashboard
+    /// observes the kind. This is the phone-side contract for the
+    /// `watch.start-workout` journey; the actual HKWorkoutSession start
+    /// remains covered by the watch unit target and physical-device UAT.
+    func testStartSessionPayloadFromWatchUpdatesDashboardState() throws {
+        try assertSimulatedPayloadIsObservedByDashboard(kind: "startSession")
+    }
+
+    /// Post a `liveState` payload at launch and confirm the dashboard
+    /// observes the kind. The watch sends this after between-set
+    /// decisions and set-log state changes.
+    func testDecisionPayloadFromWatchUpdatesDashboardState() throws {
+        try assertSimulatedPayloadIsObservedByDashboard(kind: "liveState")
     }
 
     /// Post an `endSession` payload at launch and confirm the dashboard

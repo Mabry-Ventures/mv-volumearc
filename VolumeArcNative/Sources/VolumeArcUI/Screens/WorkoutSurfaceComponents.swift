@@ -83,18 +83,14 @@ struct WorkoutIdleLibrary: View {
     private var thisWeekSection: some View {
         VStack(alignment: .leading, spacing: VA.Space.md) {
             VASectionHeader(
-                String(localized: "This week", comment: "Workouts this week section"),
-                action: (
-                    label: String(localized: "Edit plan", comment: "Workouts edit plan action"),
-                    handler: { VAHaptics.tap() }
-                )
+                String(localized: "This week", comment: "Workouts this week section")
             )
             VStack(spacing: VA.Space.md) {
                 workoutPlanRow(
                     title: String(localized: "Pull A", comment: "Workout library row title"),
                     focus: String(localized: "Back · Biceps", comment: "Workout library row focus"),
                     schedule: String(localized: "Sat", comment: "Workout library row schedule"),
-                    icon: "figure.pull",
+                    icon: "dumbbell.fill",
                     duration: 50,
                     exercises: 6
                 )
@@ -125,20 +121,14 @@ struct WorkoutIdleLibrary: View {
                 .foregroundStyle(VA.Colors.textPrimary)
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: VA.Space.md) {
-                    templateCard(title: String(localized: "Quick HIIT", comment: "Workout template title"),
-                                 duration: 18,
-                                 icon: "figure.run")
-                    templateCard(title: String(localized: "Cooldown", comment: "Workout template title"),
-                                 duration: 8,
-                                 icon: "lungs.fill")
+                    ForEach(Self.templates) { template in
+                        templateCard(template)
+                    }
                 }
                 VStack(spacing: VA.Space.md) {
-                    templateCard(title: String(localized: "Quick HIIT", comment: "Workout template title"),
-                                 duration: 18,
-                                 icon: "figure.run")
-                    templateCard(title: String(localized: "Cooldown", comment: "Workout template title"),
-                                 duration: 8,
-                                 icon: "lungs.fill")
+                    ForEach(Self.templates) { template in
+                        templateCard(template)
+                    }
                 }
             }
         }
@@ -167,7 +157,7 @@ struct WorkoutIdleLibrary: View {
                             .font(VA.Typography.footnote)
                             .foregroundStyle(VA.Colors.textSecondary)
                         Text(String(
-                            localized: "\(duration) min · \(exercises) exercises",
+                            localized: "\(duration) min · ^[\(exercises) exercise](inflect: true)",
                             comment: "Workout library row duration and exercise count"
                         ))
                         .font(VA.Typography.footnote)
@@ -183,27 +173,133 @@ struct WorkoutIdleLibrary: View {
         .buttonStyle(.plain)
     }
 
-    private func templateCard(title: String, duration: Int, icon: String) -> some View {
+    private func templateCard(_ template: WorkoutTemplateSummary) -> some View {
         Button(action: startWorkout) {
             VACard(style: .elevated) {
                 VStack(alignment: .leading, spacing: VA.Space.sm) {
-                    WorkoutIllustrationTile(systemImage: icon, size: 72, accent: VA.Colors.primary)
-                    Text(title)
+                    WorkoutIllustrationTile(systemImage: template.icon, size: 72, accent: VA.Colors.primary)
+                    Text(template.title)
                         .font(VA.Typography.headline)
                         .foregroundStyle(VA.Colors.textPrimary)
-                    Text(String(localized: "\(duration) min", comment: "Workout template duration"))
+                    Text(String(localized: "\(template.duration) min", comment: "Workout template duration"))
                         .font(VA.Typography.footnote)
                         .foregroundStyle(VA.Colors.textSecondary)
+                    Text(template.detail)
+                        .font(VA.Typography.captionLarge)
+                        .foregroundStyle(VA.Colors.textTertiary)
+                        .lineLimit(2)
                 }
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private static var templates: [WorkoutTemplateSummary] {
+        [
+            WorkoutTemplateSummary(
+                title: String(localized: "Upper Strength", comment: "Workout template title"),
+                detail: String(localized: "Press, pull, accessories", comment: "Workout template detail"),
+                duration: 50,
+                icon: "dumbbell.fill"
+            ),
+            WorkoutTemplateSummary(
+                title: String(localized: "Lower Strength", comment: "Workout template title"),
+                detail: String(localized: "Squat, hinge, trunk", comment: "Workout template detail"),
+                duration: 55,
+                icon: "figure.strengthtraining.traditional"
+            ),
+            WorkoutTemplateSummary(
+                title: String(localized: "Full Body", comment: "Workout template title"),
+                detail: String(localized: "Three big patterns", comment: "Workout template detail"),
+                duration: 45,
+                icon: "figure.mixed.cardio"
+            ),
+            WorkoutTemplateSummary(
+                title: String(localized: "Conditioning", comment: "Workout template title"),
+                detail: String(localized: "Short intervals, clean form", comment: "Workout template detail"),
+                duration: 24,
+                icon: "figure.run"
+            ),
+            WorkoutTemplateSummary(
+                title: String(localized: "Recovery Lift", comment: "Workout template title"),
+                detail: String(localized: "Easy technique and mobility", comment: "Workout template detail"),
+                duration: 28,
+                icon: "figure.cooldown"
+            ),
+        ]
+    }
+}
+
+private struct WorkoutTemplateSummary: Identifiable {
+    let id = UUID()
+    let title: String
+    let detail: String
+    let duration: Int
+    let icon: String
+}
+
+struct WorkoutBuilderCard: View {
+    let profileSummary: String
+    let startManual: () -> Void
+    let askCoach: () -> Void
+
+    var body: some View {
+        VACard(style: .glass) {
+            VStack(alignment: .leading, spacing: VA.Space.lg) {
+                HStack(alignment: .top, spacing: VA.Space.md) {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(VA.Typography.title2)
+                        .foregroundStyle(VA.Colors.primary)
+                        .frame(width: 44, height: 44)
+                        .background(VA.Colors.primary.opacity(0.12), in: Circle())
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                        Text(String(localized: "Build a workout", comment: "Workouts builder card title"))
+                            .font(VA.Typography.headline)
+                            .foregroundStyle(VA.Colors.textPrimary)
+                        Text(String(
+                            localized: "Start \(profileSummary) now, or ask the coach to design a session you can schedule.",
+                            comment: "Workouts builder card subtitle"
+                        ))
+                        .font(VA.Typography.footnote)
+                        .foregroundStyle(VA.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: VA.Space.md) { actions }
+                    VStack(spacing: VA.Space.md) { actions }
+                }
+            }
+        }
+        .accessibilityIdentifier("workouts.builder")
+        .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private var actions: some View {
+        VAButton(
+            String(localized: "Manual start", comment: "Workouts manual builder action"),
+            icon: "plus",
+            style: .primary,
+            accessibilityIdentifier: "workouts.builder.manual",
+            action: startManual
+        )
+        VAButton(
+            String(localized: "Ask Coach", comment: "Workouts coach builder action"),
+            icon: "brain.head.profile",
+            style: .secondary,
+            accessibilityIdentifier: "workouts.builder.coach",
+            action: askCoach
+        )
     }
 }
 
 struct WorkoutHistorySection: View {
     let sessions: [RecentSession]
     let onOpen: (RecentSession) -> Void
+    let onDelete: (RecentSession) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: VA.Space.md) {
@@ -228,41 +324,78 @@ struct WorkoutHistorySection: View {
     }
 
     private func historyRow(_ session: RecentSession) -> some View {
-        NavigationLink {
-            SessionDetailView(session: session) {
-                onOpen(session)
-            }
-        } label: {
-            VACard(style: .flat) {
-                HStack(spacing: VA.Space.md) {
-                    WorkoutIllustrationTile(systemImage: "checkmark.circle.fill", size: 52, accent: VA.Colors.success)
-                    VStack(alignment: .leading, spacing: VA.Space.xxs) {
-                        Text(title(for: session))
-                            .font(VA.Typography.headline)
-                            .foregroundStyle(VA.Colors.textPrimary)
-                        Text(summary(for: session))
-                            .font(VA.Typography.footnote)
-                            .foregroundStyle(VA.Colors.textSecondary)
-                    }
-                    Spacer()
-                    VAMetricDisplay(
-                        label: metricLabel(for: session),
-                        value: metricValue(for: session),
-                        unit: metricUnit(for: session),
-                        style: .compact
-                    )
-                    Image(systemName: "chevron.right")
-                        .font(VA.Typography.caption)
-                        .foregroundStyle(VA.Colors.textTertiary)
+        HStack(alignment: .center, spacing: VA.Space.sm) {
+            NavigationLink {
+                SessionDetailView(session: session) {
+                    onOpen(session)
                 }
+            } label: {
+                historyRowCard(session)
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .accessibilityHint(String(
+                localized: "Opens this session's details",
+                comment: "Accessibility hint for tapping a workout history row"
+            ))
+            .accessibilityIdentifier("workouts.historyRow")
+
+            if session.isUserDeletable {
+                Button(role: .destructive) {
+                    onDelete(session)
+                } label: {
+                    Image(systemName: "trash")
+                        .font(VA.Typography.headline)
+                        .foregroundStyle(VA.Colors.error)
+                        .frame(width: 44, height: 44)
+                        .background(VA.Colors.error.opacity(VA.Opacity.subtleFill), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(
+                    localized: "Delete session",
+                    comment: "VoiceOver label for workout history delete button"
+                ))
+                .accessibilityHint(String(
+                    localized: "Asks for confirmation before removing this session from history.",
+                    comment: "VoiceOver hint for workout history delete button"
+                ))
+                .accessibilityIdentifier(deleteIdentifier(for: session))
             }
         }
-        .buttonStyle(.plain)
-        .accessibilityHint(String(
-            localized: "Opens this session's details",
-            comment: "Accessibility hint for tapping a workout history row"
-        ))
-        .accessibilityIdentifier("workouts.historyRow")
+    }
+
+    private func historyRowCard(_ session: RecentSession) -> some View {
+        VACard(style: .flat) {
+            HStack(spacing: VA.Space.md) {
+                WorkoutIllustrationTile(systemImage: "checkmark.circle.fill", size: 52, accent: VA.Colors.success)
+                VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                    Text(title(for: session))
+                        .font(VA.Typography.headline)
+                        .foregroundStyle(VA.Colors.textPrimary)
+                    Text(summary(for: session))
+                        .font(VA.Typography.footnote)
+                        .foregroundStyle(VA.Colors.textSecondary)
+                }
+                Spacer()
+                VAMetricDisplay(
+                    label: metricLabel(for: session),
+                    value: metricValue(for: session),
+                    unit: metricUnit(for: session),
+                    style: .compact
+                )
+                Image(systemName: "chevron.right")
+                    .font(VA.Typography.caption)
+                    .foregroundStyle(VA.Colors.textTertiary)
+            }
+        }
+    }
+
+    private func deleteIdentifier(for session: RecentSession) -> String {
+        guard let identifier = session.identifier else { return "workouts.deleteSession" }
+        let safeIdentifier = identifier
+            .replacingOccurrences(of: " ", with: "-")
+            .replacingOccurrences(of: "/", with: "-")
+        return "workouts.deleteSession.\(safeIdentifier)"
     }
 
     private func title(for session: RecentSession) -> String {
@@ -280,7 +413,7 @@ struct WorkoutHistorySection: View {
         let rpeText = String(format: "%.1f", session.averageRPE)
         let setsText = session.completedSetCount == 1
             ? String(localized: "1 set", comment: "Session summary set count, singular")
-            : String(localized: "\(session.completedSetCount) sets", comment: "Session summary set count, plural")
+            : String(localized: "^[\(session.completedSetCount) set](inflect: true)", comment: "Session summary set count")
         return "\(setsText) - \(session.durationMinutes)min - RPE \(rpeText)"
     }
 
@@ -400,6 +533,7 @@ struct SetLogRow: View {
 struct RestTimerDisplay: View {
     let endsAt: Date
     let active: Bool
+    let totalDuration: TimeInterval
     let onComplete: () -> Void
 
     @State private var lastFired: Bool = false
@@ -407,7 +541,7 @@ struct RestTimerDisplay: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let remaining = max(0, Int(endsAt.timeIntervalSince(context.date)))
-            let total: TimeInterval = 90
+            let total: TimeInterval = max(1, totalDuration)
             let elapsed = total - endsAt.timeIntervalSince(context.date)
             let progress = max(0, min(1, elapsed / total))
 
@@ -422,16 +556,16 @@ struct RestTimerDisplay: View {
                             comment: "Rest timer countdown accessibility value"
                         )
                 )
+                .task(id: remaining) {
+                    updateCompletionState(remaining: remaining)
+                }
                 .onChange(of: remaining) { _, newValue in
-                    if active && newValue == 0 && !lastFired {
-                        lastFired = true
-                        onComplete()
-                    }
-                    if newValue > 0 { lastFired = false }
+                    updateCompletionState(remaining: newValue)
                 }
         }
         .frame(maxWidth: .infinity)
         .frame(height: 212)
+        .accessibilityIdentifier("workouts.restTimer")
     }
 
     private func restRing(remaining: Int, progress: Double) -> some View {
@@ -458,6 +592,17 @@ struct RestTimerDisplay: View {
 
     private func restDisplay(_ seconds: Int) -> String {
         "\(seconds / 60):\(String(format: "%02d", seconds % 60))"
+    }
+
+    @MainActor
+    private func updateCompletionState(remaining: Int) {
+        if active && remaining == 0 && !lastFired {
+            lastFired = true
+            onComplete()
+        }
+        if remaining > 0 {
+            lastFired = false
+        }
     }
 }
 #endif

@@ -1,5 +1,10 @@
 require "fileutils"
+require "json"
 require "shellwords"
+require "time"
+require "tmpdir"
+
+opt_out_usage
 
 default_platform(:ios)
 
@@ -64,6 +69,105 @@ def build_what_to_test_note(max_chars: 3800)
   body
 end
 
+def volume_arc_app_store_connect_api_key
+  key_id = ENV["APP_STORE_CONNECT_KEY_ID"].to_s.strip
+  issuer_id = ENV["APP_STORE_CONNECT_ISSUER_ID"].to_s.strip
+  key_path = ENV["APP_STORE_CONNECT_API_KEY_PATH"].to_s.strip
+
+  missing = []
+  missing << "APP_STORE_CONNECT_KEY_ID" if key_id.empty?
+  missing << "APP_STORE_CONNECT_ISSUER_ID" if issuer_id.empty?
+  missing << "APP_STORE_CONNECT_API_KEY_PATH" if key_path.empty?
+  unless missing.empty?
+    UI.user_error!("App Store Connect API key env missing: #{missing.join(', ')}")
+  end
+
+  expanded_key_path = File.expand_path(key_path)
+  unless File.file?(expanded_key_path)
+    UI.user_error!("APP_STORE_CONNECT_API_KEY_PATH does not point to a readable .p8 file.")
+  end
+
+  mode = File.stat(expanded_key_path).mode & 0o777
+  if (mode & 0o077) != 0
+    UI.user_error!(
+      "APP_STORE_CONNECT_API_KEY_PATH must be owner-only (chmod 600). " \
+        "Refusing to use a group/world-readable ASC key."
+    )
+  end
+
+  app_store_connect_api_key(
+    key_id: key_id,
+    issuer_id: issuer_id,
+    key_filepath: expanded_key_path,
+    duration: 1200,
+    in_house: false
+  )
+end
+
+def volume_arc_generate_sentry_framework_dsym(archive_path)
+  sentry_binary = File.join(
+    archive_path,
+    "Products/Applications/VolumeArc.app/Frameworks/Sentry.framework/Sentry"
+  )
+  unless File.file?(sentry_binary)
+    UI.user_error!("VOL-133: bundled Sentry.framework binary missing at #{sentry_binary}")
+  end
+
+  sentry_dsym = File.join(archive_path, "dSYMs/Sentry.framework.dSYM")
+  FileUtils.rm_rf(sentry_dsym)
+  sh("xcrun", "dsymutil", sentry_binary, "-o", sentry_dsym)
+
+  binary_uuid = sh("xcrun", "dwarfdump", "--uuid", sentry_binary, log: false)
+    .lines
+    .first
+    .to_s
+    .split[1]
+  dsym_uuid = sh("xcrun", "dwarfdump", "--uuid", sentry_dsym, log: false)
+    .lines
+    .first
+    .to_s
+    .split[1]
+  if binary_uuid.to_s.empty? || binary_uuid != dsym_uuid
+    UI.user_error!(
+      "VOL-133: generated Sentry.framework dSYM UUID mismatch " \
+        "(binary=#{binary_uuid || '<empty>'}, dSYM=#{dsym_uuid || '<empty>'})."
+    )
+  end
+
+  UI.message("VOL-133: generated archived Sentry.framework dSYM (#{binary_uuid})")
+  sentry_dsym
+end
+
+def volume_arc_write_dsym_manifest(dsym_dir, manifest_path)
+  debug_files = Dir.glob(File.join(dsym_dir, "*.dSYM", "Contents/Resources/DWARF", "*"))
+    .sort
+    .flat_map do |debug_file|
+      sh("xcrun", "dwarfdump", "--uuid", debug_file, log: false)
+        .lines
+        .map do |line|
+          match = line.chomp.match(/\AUUID:\s+([A-F0-9-]+)\s+\(([^)]+)\)\s+(.+)\z/i)
+          next unless match
+
+          {
+            uuid: match[1].downcase,
+            arch: match[2],
+            binary: File.basename(match[3]),
+            path: debug_file
+          }
+        end
+        .compact
+    end
+
+  File.write(
+    manifest_path,
+    JSON.pretty_generate(
+      generated_at: Time.now.utc.iso8601,
+      debug_file_count: debug_files.length,
+      debug_files: debug_files
+    )
+  )
+end
+
 platform :ios do
   desc "Run tests on iPhone 17 simulator"
   lane :test do
@@ -93,6 +197,49 @@ platform :ios do
   lane :beta do
     version = File.read("../VERSION").strip
     build_number = sh("git rev-list --count HEAD").strip
+    asc_api_key = volume_arc_app_store_connect_api_key
+    sentry_dsn = ENV["SENTRY_DSN"].to_s.strip
+    sentry_dsn = ENV["VOLUMEARC_SENTRY_DSN"].to_s.strip if sentry_dsn.empty?
+    if sentry_dsn.empty?
+      UI.user_error!(
+        "SENTRY_DSN or VOLUMEARC_SENTRY_DSN must be set before TestFlight upload. " \
+          "Refusing to ship a build without crash reporting."
+      )
+    elsif sentry_dsn.include?("$(") || sentry_dsn !~ %r{\Ahttps://[^/@]+@[^/]+/.+}
+      UI.user_error!(
+        "SENTRY_DSN or VOLUMEARC_SENTRY_DSN must be a configured HTTPS Sentry DSN URL with public key, " \
+          "not a placeholder or malformed value."
+      )
+    end
+    ENV["SENTRY_DSN"] = sentry_dsn
+    relay_url = ENV["VOLUMEARC_AI_RELAY_URL"].to_s.strip
+    if relay_url.empty?
+      UI.user_error!(
+        "VOLUMEARC_AI_RELAY_URL must be set before TestFlight upload. " \
+          "Refusing to ship a build without the production AI relay."
+      )
+    elsif relay_url != "https://relay.volumearc.app"
+      UI.user_error!(
+        "VOLUMEARC_AI_RELAY_URL must be https://relay.volumearc.app for TestFlight upload, " \
+          "got #{relay_url.inspect}."
+      )
+    end
+    ENV["VOLUMEARC_AI_RELAY_URL"] = relay_url
+    # `SENTRY_DSN` is declared as an empty generated Xcode build setting so
+    # `$(SENTRY_DSN)` resolves cleanly in local/dev builds. A plain shell env
+    # var does not override that target setting during Info.plist processing, so
+    # the release lane injects runtime config through a temporary xcconfig. The
+    # `https:/$()/` form avoids xcconfig's `//` comment parsing while still
+    # resolving to `https://` in the processed build setting.
+    relay_xcconfig_url = relay_url.sub(%r{\Ahttps://}, "https:/$()/")
+    sentry_xcconfig_dsn = sentry_dsn.sub(%r{\Ahttps://}, "https:/$()/")
+    sentry_xcconfig_path = File.join(Dir.tmpdir, "volumearc-sentry-#{Process.pid}.xcconfig")
+    File.write(
+      sentry_xcconfig_path,
+      "SENTRY_DSN = #{sentry_xcconfig_dsn}\n" \
+        "VOLUMEARC_AI_RELAY_URL = #{relay_xcconfig_url}\n"
+    )
+    FileUtils.chmod(0o600, sentry_xcconfig_path)
 
     increment_version_number(
       version_number: version,
@@ -112,18 +259,22 @@ platform :ios do
     # before sentry-cli or upload_to_testflight even runs). The
     # `DEVELOPMENT_TEAM` env var comes from the GitHub Actions secret
     # of the same name in the deploy-testflight job.
-    build_app(
-      project: "VolumeArcApple.xcodeproj",
-      scheme: "VolumeArcApp",
-      configuration: "Release",
-      export_method: "app-store",
-      export_team_id: ENV.fetch("DEVELOPMENT_TEAM"),
-      output_directory: "build/export",
-      output_name: "VolumeArc.ipa",
-      include_symbols: true,
-      include_bitcode: false,
-      xcargs: "CODE_SIGNING_ALLOWED=YES"
-    )
+    begin
+      build_app(
+        project: "VolumeArcApple.xcodeproj",
+        scheme: "VolumeArcApp",
+        configuration: "Release",
+        export_method: "app-store",
+        export_team_id: ENV.fetch("DEVELOPMENT_TEAM"),
+        output_directory: "build/export",
+        output_name: "VolumeArc.ipa",
+        include_symbols: true,
+        include_bitcode: false,
+        xcargs: "CODE_SIGNING_ALLOWED=YES -xcconfig #{Shellwords.escape(sentry_xcconfig_path)}"
+      )
+    ensure
+      FileUtils.rm_f(sentry_xcconfig_path)
+    end
 
     # VOL-92: validate signed entitlements on the archived bundle before
     # uploading. gym populates Actions.lane_context[SharedValues::XCODEBUILD_ARCHIVE]
@@ -147,16 +298,13 @@ platform :ios do
     # symbolicate. Without this step, every crash that lands in Sentry
     # arrives as obfuscated frames and root-cause analysis is blocked.
     #
-    # Skipped (with a UI warning) when SENTRY_AUTH_TOKEN is unset so
-    # local archive builds don't fail. CI sets the token via the
-    # `SENTRY_AUTH_TOKEN` repo secret on the deploy-testflight job.
-    #
-    # Hard-fails the lane on sentry-cli error so a silent upload failure
-    # can't reach App Store Connect with unsymbolicated dSYMs.
+    # Hard-fails when SENTRY_AUTH_TOKEN is unset or sentry-cli errors so
+    # a silent upload failure can't reach App Store Connect with missing
+    # crash telemetry or unsymbolicated dSYMs.
     if ENV["SENTRY_AUTH_TOKEN"].to_s.empty?
-      UI.important(
-        "SENTRY_AUTH_TOKEN unset — skipping dSYM upload. " \
-          "Crashes from this build will arrive in Sentry as obfuscated frames."
+      UI.user_error!(
+        "SENTRY_AUTH_TOKEN must be set before TestFlight upload. " \
+          "Refusing to ship a build without Sentry dSYM upload."
       )
     elsif archive_path.nil? || !File.directory?(archive_path)
       UI.user_error!("VOL-133: cannot upload dSYMs — no .xcarchive recorded by gym.")
@@ -165,6 +313,7 @@ platform :ios do
       unless File.directory?(dsym_dir) && !Dir.empty?(dsym_dir)
         UI.user_error!("VOL-133: dSYM directory missing or empty at #{dsym_dir}.")
       end
+      volume_arc_generate_sentry_framework_dsym(archive_path)
 
       sentry_org = ENV.fetch("SENTRY_ORG", "mabry-ventures-llc")
       sentry_project = ENV.fetch("SENTRY_PROJECT", "volumearc-ios")
@@ -182,16 +331,11 @@ platform :ios do
         dsym_dir
       )
 
-      # Capture the upload manifest so CI can attach it as an artifact for
-      # traceability. `sentry-cli debug-files list` shows what landed for
-      # the configured project; filtering to our build's UUIDs keeps the
-      # JSON focused on this release.
-      sh(
-        "sentry-cli debug-files list " \
-          "--org #{Shellwords.escape(sentry_org)} " \
-          "--project #{Shellwords.escape(sentry_project)} " \
-          "> #{Shellwords.escape(manifest_path)}"
-      )
+      # Capture the uploaded UUID inventory as a local artifact for
+      # traceability. sentry-cli 3.x removed the old server-side
+      # `debug-files list` command, so derive the manifest from the exact
+      # dSYMs we just uploaded.
+      volume_arc_write_dsym_manifest(dsym_dir, manifest_path)
       UI.success("VOL-133: dSYMs uploaded; manifest at #{manifest_path}")
     end
 
@@ -219,7 +363,7 @@ platform :ios do
         # 30 minute ceiling for App Store Connect processing. If processing
         # exceeds this window we fail loudly rather than silently succeed.
         wait_processing_timeout_duration: 1800,
-        api_key_path: ENV["APP_STORE_CONNECT_API_KEY_PATH"],
+        api_key: asc_api_key,
         # VOL-150: tester-facing release notes for this TestFlight
         # build. `changelog:` is the documented `pilot` parameter for
         # the What-To-Test field. Apple caps the body at 4000 chars;
@@ -346,13 +490,7 @@ platform :ios do
       UI.user_error!("VOL-178: severity must be one of SEV1, SEV2, SEV3, SEV4 (default SEV2)")
     end
 
-    api_key_path = ENV["APP_STORE_CONNECT_API_KEY_PATH"]
-    if api_key_path.to_s.empty? || !File.exist?(api_key_path.to_s)
-      UI.user_error!(
-        "VOL-178: APP_STORE_CONNECT_API_KEY_PATH unset or path missing. " \
-          "Rollback requires App Store Connect API access — see docs/RELEASE.md."
-      )
-    end
+    asc_api_key = volume_arc_app_store_connect_api_key
 
     version = File.read("../VERSION").strip
     UI.message("VOL-178: rolling back TestFlight to build #{target_build_number} of v#{version}")
@@ -363,15 +501,6 @@ platform :ios do
     # the latest processed build for this version. If the target equals
     # latest, the operator is rolling sideways, not back; abort with a
     # clear error rather than letting them paste a no-op walk-through.
-    #
-    # NOTE (Codex P2 on PR #167): The `api_key_path:` parameter expects a
-    # fastlane API key JSON file, not the `.p8` key file path that
-    # `APP_STORE_CONNECT_API_KEY_PATH` points to per docs/RELEASE.md.
-    # That auth-shape mismatch means this validation call may fail with
-    # an auth error before the operator sees the walk-through, which
-    # would be unhelpful — fall through to the manual flow with a clear
-    # warning rather than hard-aborting. The walk-through itself is the
-    # canonical rollback mechanic; the validation is bonus.
     UI.message("VOL-178: verifying target build state in App Store Connect (best-effort)...")
     bundle_id = ENV.fetch("VOLUMEARC_BUNDLE_ID", "com.mabryventures.VolumeArc")
 
@@ -379,7 +508,7 @@ platform :ios do
       latest = latest_testflight_build_number(
         version: version,
         app_identifier: bundle_id,
-        api_key_path: api_key_path
+        api_key: asc_api_key
       )
       UI.message("VOL-178: latest processed TestFlight build for v#{version}: #{latest}")
 
@@ -395,8 +524,7 @@ platform :ios do
     rescue => e
       UI.important(
         "VOL-178: could not confirm build state via fastlane API " \
-          "(this is expected if APP_STORE_CONNECT_API_KEY_PATH is a .p8 " \
-          "rather than fastlane JSON). Continuing with operator walk-through. " \
+          "(continuing with the manual operator walk-through). " \
           "Underlying error: #{e.message.lines.first&.strip}"
       )
     end
@@ -512,7 +640,7 @@ platform :ios do
       force: true,
       skip_screenshots: false,
       screenshots_path: "fastlane/screenshots",
-      api_key_path: ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+      api_key: volume_arc_app_store_connect_api_key
     )
   end
 end

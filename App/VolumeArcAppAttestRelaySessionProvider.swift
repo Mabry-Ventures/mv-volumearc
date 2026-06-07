@@ -1,7 +1,7 @@
 import Foundation
 import VolumeArcCore
 
-actor VolumeArcAppAttestRelaySessionProvider: AIRelayCredentialsProviding {
+actor VolumeArcAppAttestRelaySessionProvider: AIRelayCredentialsProviding, AIRelaySessionRefreshing {
     private struct ChallengeResponse: Decodable {
         let challenge: String
         let expiresAt: String
@@ -78,6 +78,13 @@ actor VolumeArcAppAttestRelaySessionProvider: AIRelayCredentialsProviding {
                 reason: "App Attest relay auth failed: \(error.localizedDescription)"
             )
         }
+    }
+
+    func refreshAfterUnauthorized() async {
+        try? secureStore.save("", for: confirmedKeyIDKey)
+        clearPendingBootstrap()
+        await coordinator.reset()
+        record(name: "session_refreshed", severity: .info, metadata: ["reason": "relay_401"])
     }
 
     private func ensureBootstrapped() async throws -> String {

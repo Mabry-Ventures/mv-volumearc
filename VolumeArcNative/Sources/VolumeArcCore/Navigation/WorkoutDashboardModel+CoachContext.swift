@@ -1,4 +1,4 @@
-#if canImport(SwiftUI)
+#if canImport(Combine)
 import Foundation
 
 /// VOL-181 Phase 1B: coach-context construction extracted from

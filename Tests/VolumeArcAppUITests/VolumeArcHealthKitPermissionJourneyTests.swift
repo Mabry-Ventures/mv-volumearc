@@ -112,6 +112,24 @@ final class VolumeArcHealthKitPermissionJourneyTests: XCTestCase {
                 }
             }
 
+            if stepIndex == 1 {
+                let appleSignIn = app.descendants(matching: .any)
+                    .matching(identifier: "onboarding.appleSignIn")
+                    .firstMatch
+                XCTAssertTrue(
+                    appleSignIn.waitForExistence(timeout: 5),
+                    "Profile step should expose Sign in with Apple before users finish onboarding"
+                )
+
+                let accountCopy = app.staticTexts
+                    .matching(NSPredicate(format: "label CONTAINS[c] %@", "private iCloud database"))
+                    .firstMatch
+                XCTAssertTrue(
+                    accountCopy.waitForExistence(timeout: 5),
+                    "Onboarding Apple ID copy should explain profile continuity without implying a VolumeArc-owned sync cloud"
+                )
+            }
+
             continueButton.tap()
         }
 
@@ -129,6 +147,94 @@ final class VolumeArcHealthKitPermissionJourneyTests: XCTestCase {
             dashboard.waitForExistence(timeout: 20),
             "Dashboard should appear within 20s after onboarding completes via skipping permissions"
         )
+    }
+
+    /// VOL-141 release journey proof for `onboard.healthkit-grant`.
+    /// Uses the debug-only authorized Health fixture so the Connect tap
+    /// exercises the onboarding/model integration without opening the
+    /// flaky system HealthKit sheet on CI simulators.
+    func testOnboardingHealthKitGrantFixtureConnectsAndEmitsTelemetry() throws {
+        let app = VolumeArcAppUITestSupport.makeOnboardingApp(extra: [
+            "-SimulatePermissionPrompts", "1",
+            "-UseAuthorizedHealthFixture",
+        ])
+        app.launch()
+
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: 20),
+            "App should reach foreground on cold launch"
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)
+                .matching(identifier: "onboarding.root").firstMatch
+                .waitForExistence(timeout: 20),
+            "Onboarding cover should be visible on first launch"
+        )
+
+        advanceToPermissionsStep(in: app)
+
+        let connectButton = app.descendants(matching: .any)
+            .matching(identifier: "onboarding.permissions.connect-health")
+            .firstMatch
+        XCTAssertTrue(connectButton.waitForExistence(timeout: 10))
+        connectButton.tap()
+
+        XCTAssertTrue(
+            waitForLabel("Connected", on: connectButton, timeout: 10),
+            "Authorized Health fixture should move the onboarding button to Connected"
+        )
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "healthkit",
+            name: "authorized",
+            test: self
+        )
+
+        finishOnboardingFromPermissions(in: app)
+    }
+
+    /// VOL-141 release journey proof for `onboard.healthkit-deny`.
+    /// The chaos health store simulates the user denying authorization
+    /// at the model boundary. The UI should stay retryable and still let
+    /// the user finish onboarding.
+    func testOnboardingHealthKitDeniedFixtureKeepsFlowUsableAndEmitsTelemetry() throws {
+        let app = VolumeArcAppUITestSupport.makeOnboardingApp(extra: [
+            "-SimulatePermissionPrompts", "1",
+            "-CHAOS_HEALTH_AUTH_DENIED",
+        ])
+        app.launch()
+
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: 20),
+            "App should reach foreground on cold launch"
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)
+                .matching(identifier: "onboarding.root").firstMatch
+                .waitForExistence(timeout: 20),
+            "Onboarding cover should be visible on first launch"
+        )
+
+        advanceToPermissionsStep(in: app)
+
+        let connectButton = app.descendants(matching: .any)
+            .matching(identifier: "onboarding.permissions.connect-health")
+            .firstMatch
+        XCTAssertTrue(connectButton.waitForExistence(timeout: 10))
+        connectButton.tap()
+
+        XCTAssertTrue(
+            waitForLabel("Connect Apple Health", on: connectButton, timeout: 10),
+            "Denied HealthKit authorization should leave the Connect button retryable"
+        )
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "healthkit",
+            name: "denied",
+            test: self
+        )
+
+        finishOnboardingFromPermissions(in: app)
     }
 
     /// VOL-109 contract: tapping the Profile-tab Apple Health row routes
@@ -242,6 +348,51 @@ final class VolumeArcHealthKitPermissionJourneyTests: XCTestCase {
         }
 
         return row
+    }
+
+    private func advanceToPermissionsStep(in app: XCUIApplication) {
+        for stepIndex in 0..<4 {
+            dismissKeyboardIfPresent(in: app)
+            let continueButton = app.descendants(matching: .any)
+                .matching(identifier: "onboarding.continue").firstMatch
+            XCTAssertTrue(
+                continueButton.waitForExistence(timeout: 15),
+                "Continue should be reachable before permissions step \(stepIndex + 1)"
+            )
+            continueButton.tap()
+        }
+
+        let connectButton = app.descendants(matching: .any)
+            .matching(identifier: "onboarding.permissions.connect-health")
+            .firstMatch
+        XCTAssertTrue(
+            connectButton.waitForExistence(timeout: 10),
+            "Permissions step should expose the Connect Apple Health button"
+        )
+    }
+
+    private func finishOnboardingFromPermissions(in app: XCUIApplication) {
+        let continueButton = app.descendants(matching: .any)
+            .matching(identifier: "onboarding.continue").firstMatch
+        XCTAssertTrue(
+            continueButton.waitForExistence(timeout: 15),
+            "Continue should be reachable on permissions"
+        )
+        continueButton.tap()
+
+        let finishButton = app.descendants(matching: .any)
+            .matching(identifier: "onboarding.finish").firstMatch
+        XCTAssertTrue(
+            finishButton.waitForExistence(timeout: 15),
+            "Finish button should be reachable on the done step"
+        )
+        finishButton.tap()
+
+        let dashboard = app.otherElements["root.dashboard"]
+        XCTAssertTrue(
+            dashboard.waitForExistence(timeout: 20),
+            "Dashboard should appear after completing onboarding from HealthKit permissions"
+        )
     }
 
     private func profileHealthRow(in app: XCUIApplication) -> XCUIElement {

@@ -113,6 +113,65 @@ final class VolumeArcBackgroundTasksTests: XCTestCase {
         )
     }
 
+    /// BGProcessing uses the same bracketing observability shape as
+    /// app refresh, but routes through `syncNow()` because the work is
+    /// intended for longer sync/maintenance windows.
+    func testPerformBackgroundProcessingRecordsBracketingTelemetry() async throws {
+        let telemetry = CapturingTelemetrySink()
+        let model = makeDashboardModel(telemetrySink: telemetry)
+
+        let success = await model.performBackgroundProcessing()
+        XCTAssertTrue(success, "Background processing should complete successfully on a healthy model")
+
+        let backgroundEvents = telemetry.events.filter { $0.category == "background" }
+        XCTAssertEqual(
+            backgroundEvents.map(\.name),
+            ["processing_started", "processing_completed"],
+            "BGProcessing should record started/completed bracketing events in order"
+        )
+        XCTAssertTrue(
+            backgroundEvents.allSatisfy { $0.severity == .info },
+            "BGProcessing bracketing events should be info severity"
+        )
+    }
+
+    /// VOL-141 release journey proof for `resilience.app-killed-bgtask`.
+    /// We cannot force iOS to deliver a real BGTask after a user
+    /// force-quit inside hermetic CI, so this test pins the app-boundary
+    /// contract the system handler delegates to: a fresh model instance
+    /// receiving post-relaunch BGTask wake calls must recover the active
+    /// session, emit `bgtask.fired`, and avoid duplicate local writes.
+    func testBackgroundTaskWakeAfterProcessRestartRecoversWithoutDuplicateWorkouts() async throws {
+        let setupTelemetry = CapturingTelemetrySink()
+        let originalModel = makeDashboardModel(telemetrySink: setupTelemetry)
+        await originalModel.refresh()
+        await originalModel.startWorkoutSession()
+
+        let originalWorkout = try XCTUnwrap(workoutRepository.activeWorkout())
+        let originalWorkoutID = originalWorkout.identifier
+        XCTAssertEqual(try workoutRepository.recentWorkouts(limit: 10).count, 1)
+
+        let wakeTelemetry = CapturingTelemetrySink()
+        let relaunchedModel = makeDashboardModel(telemetrySink: wakeTelemetry)
+
+        let refreshSucceeded = await relaunchedModel.performBackgroundRefresh()
+        XCTAssertTrue(refreshSucceeded)
+        let processingSucceeded = await relaunchedModel.performBackgroundProcessing()
+        XCTAssertTrue(processingSucceeded)
+
+        XCTAssertTrue(relaunchedModel.isSessionActive)
+        XCTAssertEqual(relaunchedModel.activeWorkoutID, originalWorkoutID)
+        XCTAssertEqual(
+            try workoutRepository.recentWorkouts(limit: 10).map(\.identifier),
+            [originalWorkoutID],
+            "Repeated BGTask wake handling after process restart must not create duplicate active workouts."
+        )
+
+        let wakeEvents = wakeTelemetry.events.filter { $0.category == "bgtask" && $0.name == "fired" }
+        XCTAssertEqual(wakeEvents.map { $0.metadata["kind"] }, ["app_refresh", "app_processing"])
+        XCTAssertTrue(wakeEvents.allSatisfy { $0.severity == .info })
+    }
+
     // MARK: - VOL-110 widget snapshot round-trip
 
     /// VOL-110 contract: the widget snapshot writer + reader round-trip

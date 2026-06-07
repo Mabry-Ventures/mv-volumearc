@@ -278,7 +278,21 @@ actor MockVoicePermissionStore: VoicePermissionStore {
 
 // MARK: - Account
 
-struct MockAccountSessionStore: AccountSessionStore {}
+final class MockAccountSessionStore: AccountSessionStore, @unchecked Sendable {
+    private let store = InMemoryAccountSessionStore()
+
+    func load() -> AccountSession? {
+        store.load()
+    }
+
+    func save(_ session: AccountSession) {
+        store.save(session)
+    }
+
+    func clear() {
+        store.clear()
+    }
+}
 
 // MARK: - Voice Transport
 

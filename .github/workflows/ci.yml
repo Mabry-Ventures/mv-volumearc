@@ -259,6 +259,9 @@ jobs:
       - name: Generate Xcode project
         run: ruby scripts/generate_xcode_project.rb
 
+      - name: Release hygiene gate
+        run: ./scripts/check_release_hygiene.sh
+
       - name: Xcode project determinism gate
         # VOL-95: regenerate twice and fail if the output diverges. Without
         # this, xcodeproj's random SecureRandom UUIDs would thrash every

@@ -1,5 +1,9 @@
 #if canImport(SwiftUI)
+import Foundation
 import SwiftUI
+#if canImport(PhotosUI)
+import PhotosUI
+#endif
 import VolumeArcCore
 
 /// Editable profile form. Presented as a sheet from ProfileView.
@@ -17,6 +21,13 @@ public struct EditProfileView: View {
     @State private var coachingStyle: CoachingStyle
     @State private var privacyMode: PrivacyMode
     @State private var selectedEquipment: Set<Equipment>
+    @AppStorage(ProfileAvatarStorage.storageKey)
+    private var persistedAvatarImageData: Data?
+    @State private var avatarImageData: Data?
+    #if canImport(PhotosUI)
+    @State private var selectedAvatarItem: PhotosPickerItem?
+    @State private var avatarLoadTask: Task<Void, Never>?
+    #endif
 
     public init(
         isPresented: Binding<Bool>,
@@ -45,11 +56,14 @@ public struct EditProfileView: View {
             // journey test can confirm the edit sheet appeared after
             // tapping a row in `ProfileView`.
             Form {
+                profilePhotoSection
+
                 Section(String(localized: "About You", comment: "Edit profile section header — personal info")) {
                     TextField(
                         String(localized: "Name", comment: "Edit profile name field placeholder"),
                         text: $name
                     )
+                    .accessibilityIdentifier("editProfile.name")
                     Picker(
                         String(localized: "Experience", comment: "Edit profile experience level picker"),
                         selection: $advancementLevel
@@ -62,7 +76,10 @@ public struct EditProfileView: View {
 
                 Section(String(localized: "Training Schedule", comment: "Edit profile section header — schedule")) {
                     Stepper(
-                        String(localized: "Days per week: \(weeklyDays)", comment: "Edit profile days-per-week stepper label"),
+                        String(
+                            localized: "Days per week: ^[\(weeklyDays) day](inflect: true)",
+                            comment: "Edit profile days-per-week stepper label"
+                        ),
                         value: $weeklyDays,
                         in: 1...7
                     )
@@ -129,6 +146,10 @@ public struct EditProfileView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(String(localized: "Cancel", comment: "Edit profile cancel button")) {
                         VAHaptics.tap()
+                        #if canImport(PhotosUI)
+                        avatarLoadTask?.cancel()
+                        #endif
+                        avatarImageData = persistedAvatarImageData
                         isPresented = false
                     }
                     .accessibilityIdentifier("editProfile.cancel")
@@ -146,9 +167,107 @@ public struct EditProfileView: View {
                 }
             }
         }
+        .onAppear {
+            if avatarImageData == nil {
+                avatarImageData = persistedAvatarImageData
+            }
+        }
+        #if canImport(PhotosUI)
+        .onDisappear {
+            avatarLoadTask?.cancel()
+        }
+        #endif
     }
 
+    @ViewBuilder
+    private var profilePhotoSection: some View {
+        Section {
+            HStack(spacing: VA.Space.md) {
+                ProfileAvatarImage(
+                    imageData: avatarImageData,
+                    initials: editedInitials,
+                    size: 72,
+                    foreground: VA.Colors.textOnPrimary,
+                    background: VA.Colors.primary
+                )
+                VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                    Text(String(localized: "Profile photo", comment: "Edit profile photo row title"))
+                        .font(VA.Typography.body)
+                        .foregroundStyle(VA.Colors.textPrimary)
+                    Text(String(
+                        localized: "Used across VolumeArc on this device. Apple sign-in does not provide a profile photo.",
+                        comment: "Edit profile photo explanatory copy"
+                    ))
+                    .font(VA.Typography.caption)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("editProfile.avatar.preview")
+
+            #if canImport(PhotosUI)
+            PhotosPicker(selection: $selectedAvatarItem, matching: .images, photoLibrary: .shared()) {
+                Label {
+                    Text(String(localized: "Choose Photo", comment: "Edit profile choose photo action"))
+                } icon: {
+                    Image(systemName: "photo")
+                }
+            }
+            .accessibilityIdentifier("editProfile.avatar.photoPicker")
+            .onChange(of: selectedAvatarItem) { _, newValue in
+                avatarLoadTask?.cancel()
+                avatarLoadTask = Task {
+                    await loadAvatar(from: newValue)
+                }
+            }
+            #endif
+
+            if avatarImageData != nil {
+                Button(
+                    String(localized: "Remove Photo", comment: "Edit profile remove photo action"),
+                    role: .destructive
+                ) {
+                    avatarImageData = nil
+                    #if canImport(PhotosUI)
+                    selectedAvatarItem = nil
+                    #endif
+                    VAHaptics.selection()
+                }
+                .accessibilityIdentifier("editProfile.avatar.remove")
+            }
+        } header: {
+            Text(String(localized: "Photo", comment: "Edit profile photo section header"))
+        }
+    }
+
+    private var editedInitials: String {
+        AthleteProfile(name: name).initials
+    }
+
+    #if canImport(PhotosUI)
+    @MainActor
+    private func loadAvatar(from item: PhotosPickerItem?) async {
+        guard let item else { return }
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self),
+                  let normalized = ProfileAvatarStorage.normalizedAvatarData(from: data)
+            else {
+                VAHaptics.warning()
+                return
+            }
+            guard !Task.isCancelled else { return }
+            avatarImageData = normalized
+            VAHaptics.setLogged()
+        } catch {
+            guard !Task.isCancelled else { return }
+            VAHaptics.warning()
+        }
+    }
+    #endif
+
     private func save() {
+        persistedAvatarImageData = avatarImageData
         let defaults = UserProfileDefaults(
             name: name,
             coachingStyle: coachingStyle,

@@ -93,8 +93,10 @@ The binary screenshot output is intentionally gitignored. Before final submissio
 
 Current blockers:
 
-- `fastlane` cannot run on this Mac until Ruby/Bundler matches `Gemfile.lock` (`Bundler 4.0.10` requires Ruby 3.2+, but `/usr/bin/ruby` is 2.6.10).
+- Full screenshot/upload lanes still require explicit App Store submission approval before mutating ASC.
 - Final human visual approval is still required before uploading screenshots to ASC.
+
+Local tooling note: on 2026-06-06 this Mac was provisioned with Homebrew Ruby 4 and Bundler 4.0.10, and `bundle exec fastlane lanes` parses successfully with usage analytics disabled in `fastlane/Fastfile`.
 
 ## Recent ASC Upload Rejection
 

@@ -8,15 +8,15 @@ import { Button } from '@/components/Button'
 import { Container } from '@/components/Container'
 import { Logomark } from '@/components/Logo'
 
-// TODO(VOL-91 follow-up): confirm final pricing with App Store Connect StoreKit products
-// before launch. Current placeholders match the StoreKit 2 product IDs in PLATFORM.md.
+// VOL-273 owns the final App Store Connect price/signoff pass. Keep these
+// values aligned with StoreKit products and App Store metadata before release.
 const plans = [
   {
     name: 'Free',
     featured: false,
     price: { Monthly: '$0', Annually: '$0' },
     description:
-      'Track every set, every workout. Get the coach on Gemini Flash Lite + on-device Foundation Models. Cloud sync across all your Apple devices.',
+      'Track every set, every workout. Get coach-guided progression, on-device fallback, and CloudKit sync across your Apple devices.',
     button: {
       label: 'Download for iPhone',
       // VOL-208 / VOL-198: route through the `/download` redirect rather
@@ -29,8 +29,8 @@ const plans = [
       'Apple Watch app + complications',
       'Live Activities + widgets',
       'Cloud sync (CloudKit private DB)',
-      'AI coach — Flash Lite tier',
-      'On-device Foundation Models fallback',
+      'Coach-guided progression',
+      'On-device fallback',
       'Readiness from HealthKit (HRV, sleep, training load)',
     ],
     logomarkClassName: 'fill-gray-300',
@@ -47,14 +47,14 @@ const plans = [
     featured: true,
     price: { Monthly: '$9.99', Annually: '$79.99' },
     description:
-      'The full AI coach experience — Gemini Pro tier and live voice coaching. For lifters who want the deepest prescription their data can give them.',
+      'The full coach experience with the higher-capacity cloud tier and live voice coaching. For lifters who want the deepest prescription their data can give them.',
     button: {
       label: 'Start with Pro',
       href: '/download',
     },
     features: [
       'Everything in Free',
-      'AI coach — Gemini Pro tier',
+      'Higher-capacity cloud coach tier',
       'Live voice coaching (hands-free between sets)',
     ],
     logomarkClassName: 'fill-sunrise-500',
@@ -223,8 +223,8 @@ export function Pricing() {
             Simple pricing. Subscription auto-renews under App Store rules.
           </h2>
           <p className="mt-2 text-lg text-gray-600">
-            Free covers the full tracker, sync, and on-device AI. Pro unlocks
-            Gemini Pro and live voice coaching.
+            Free covers the full tracker, sync, and on-device coaching. Pro
+            unlocks higher-capacity cloud coaching and live voice coaching.
           </p>
         </div>
 

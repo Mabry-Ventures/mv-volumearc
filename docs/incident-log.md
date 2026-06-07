@@ -1,6 +1,6 @@
 # VolumeArc incident log
 
-Append-only log of production incidents, runner outages, and rollback events. See [`docs/INCIDENTS.md`](INCIDENTS.md) for the severity ladder, alert routing, postmortem template, and per-subsystem runbooks. Postmortems themselves live in Linear under the [VolumeArc Production Readiness](https://linear.app/mabry-ventures/project/volumearc-production-readiness-af810008523d) project; this file is the chronological index.
+Append-only log of production incidents, runner outages, and rollback events. See [`docs/INCIDENTS.md`](INCIDENTS.md) for the severity ladder, alert routing, postmortem template, and per-subsystem runbooks. New postmortems live in Linear under the [VolumeArc Release](https://linear.app/mabry-ventures/initiative/volumearc-release-68a38ea2d762) initiative; this file is the chronological index.
 
 ## Conventions
 

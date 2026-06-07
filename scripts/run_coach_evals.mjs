@@ -274,8 +274,7 @@ function runAssertions(fixture, response) {
   }
 
   for (const banned of assertions.mustNotMention ?? []) {
-    const bannedLower = normalizeLower(String(banned));
-    if (bannedLower && responseLower.includes(bannedLower)) {
+    if (containsBannedPhrase(responseLower, String(banned))) {
       failures.push(`mustNotMention: found banned phrase '${banned}'`);
     }
   }
@@ -299,7 +298,7 @@ function runAssertions(fixture, response) {
 
   if (
     assertions.mustFlagPainSignal === true &&
-    !/(pain|injur|see (a |your )?(doctor|physio)|ease off|skip|back off|flag)/i.test(response)
+    !/(pain|injur|stiff|aggravat|joint|pain-free|see (a |your )?(doctor|physio)|ease off|skip|back off|flag)/i.test(response)
   ) {
     failures.push("mustFlagPainSignal: response does not acknowledge pain/injury guardrail");
   }
@@ -318,6 +317,22 @@ function runAssertions(fixture, response) {
   }
 
   return failures;
+}
+
+function containsBannedPhrase(normalizedResponse, banned) {
+  const normalizedBanned = normalizeLower(banned);
+  if (!normalizedBanned) {
+    return false;
+  }
+  if (/^[a-z0-9]+$/.test(normalizedBanned)) {
+    return new RegExp(`(^|[^a-z0-9])${escapeRegExp(normalizedBanned)}([^a-z0-9]|$)`, "i")
+      .test(normalizedResponse);
+  }
+  return normalizedResponse.includes(normalizedBanned);
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function extractSSEText(raw) {

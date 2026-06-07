@@ -1,4 +1,4 @@
-#if canImport(SwiftUI)
+#if canImport(Combine)
 
 extension WorkoutDashboardModel {
     func recordProfilePreferenceTelemetry(
@@ -31,6 +31,30 @@ extension WorkoutDashboardModel {
                 ]
             ))
         }
+    }
+
+    public func recordSubscriptionManageOpened(source: String) {
+        telemetrySink.record(TelemetryEvent(
+            category: "subscription",
+            name: "manage_opened",
+            severity: .info,
+            message: "Subscription management opened.",
+            metadata: [
+                "source": source,
+            ]
+        ))
+    }
+
+    public func recordHealthKitUnavailableShown(source: String) {
+        telemetrySink.record(TelemetryEvent(
+            category: "healthkit",
+            name: "unavailable",
+            severity: .info,
+            message: "Apple Health is not connected on this surface.",
+            metadata: [
+                "source": source,
+            ]
+        ))
     }
 }
 

@@ -1,6 +1,6 @@
 import Foundation
-#if canImport(SwiftUI)
-import SwiftUI
+#if canImport(Combine)
+import Combine
 
 public enum DashboardTab: String, Sendable, Hashable, CaseIterable {
     case today

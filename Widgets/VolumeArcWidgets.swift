@@ -552,35 +552,99 @@ struct ActiveWorkoutDynamicIslandView {
     var body: DynamicIsland {
         DynamicIsland {
             DynamicIslandExpandedRegion(.leading) {
-                VStack(alignment: .leading, spacing: VA.Space.xxs) {
-                    Text(snapshot.workoutTitle)
-                        .font(VA.Typography.captionLarge)
-                        .foregroundStyle(VA.Colors.textSecondary)
-                    Text(snapshot.activeExerciseName)
-                        .font(VA.Typography.headline)
-                }
+                ActiveWorkoutDynamicIslandLeadingView(snapshot: snapshot)
             }
             DynamicIslandExpandedRegion(.trailing) {
-                Text(snapshot.restCompactHeadline)
-                    .font(VA.Typography.dynamicIslandTitle.monospacedDigit())
-                    .foregroundStyle(snapshot.restSecondsRemaining == nil ? VA.Colors.success : VA.Colors.primary)
+                ActiveWorkoutDynamicIslandTrailingView(snapshot: snapshot)
             }
             DynamicIslandExpandedRegion(.bottom) {
-                Text(snapshot.setLine)
-                    .font(VA.Typography.footnote)
-                    .foregroundStyle(VA.Colors.textSecondary)
+                ActiveWorkoutDynamicIslandBottomView(snapshot: snapshot)
             }
         } compactLeading: {
-            Image(systemName: "figure.strengthtraining.traditional")
-                .foregroundStyle(VA.Colors.primary)
+            ActiveWorkoutDynamicIslandGlyphView()
         } compactTrailing: {
-            Text(snapshot.restCompactHeadline)
-                .font(VA.Typography.dynamicIslandCompact.monospacedDigit())
+            ActiveWorkoutIslandTimerView(snapshot: snapshot)
         } minimal: {
-            Image(systemName: "figure.strengthtraining.traditional")
-                .foregroundStyle(VA.Colors.primary)
+            ActiveWorkoutDynamicIslandGlyphView()
         }
         .keylineTint(VA.Colors.primary)
+    }
+}
+
+struct ActiveWorkoutIslandPreview: View {
+    let snapshot: ActiveWorkoutLiveActivitySnapshot
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: VA.Space.sm) {
+            HStack(alignment: .center, spacing: VA.Space.md) {
+                ActiveWorkoutDynamicIslandLeadingView(snapshot: snapshot)
+                Spacer(minLength: VA.Space.sm)
+                ActiveWorkoutDynamicIslandTrailingView(snapshot: snapshot)
+            }
+            ActiveWorkoutDynamicIslandBottomView(snapshot: snapshot)
+        }
+        .padding(.horizontal, VA.Space.lg)
+        .padding(.vertical, VA.Space.md)
+        .background(VA.Colors.surfacePrimary)
+        .clipShape(RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous))
+    }
+}
+
+private struct ActiveWorkoutDynamicIslandLeadingView: View {
+    let snapshot: ActiveWorkoutLiveActivitySnapshot
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: VA.Space.xxs) {
+            Text(snapshot.workoutTitle)
+                .font(VA.Typography.captionLarge)
+                .foregroundStyle(VA.Colors.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(VA.Typography.dynamicIslandTitleMinimumScale)
+            Text(snapshot.activeExerciseName)
+                .font(VA.Typography.headline)
+                .lineLimit(1)
+                .minimumScaleFactor(VA.Typography.dynamicIslandSubtitleMinimumScale)
+        }
+    }
+}
+
+private struct ActiveWorkoutDynamicIslandTrailingView: View {
+    let snapshot: ActiveWorkoutLiveActivitySnapshot
+
+    var body: some View {
+        Text(snapshot.restCompactHeadline)
+            .font(VA.Typography.dynamicIslandTitle.monospacedDigit())
+            .foregroundStyle(snapshot.restSecondsRemaining == nil ? VA.Colors.success : VA.Colors.primary)
+            .lineLimit(1)
+            .minimumScaleFactor(VA.Widget.liveActivityTimerMinimumScale)
+    }
+}
+
+private struct ActiveWorkoutDynamicIslandBottomView: View {
+    let snapshot: ActiveWorkoutLiveActivitySnapshot
+
+    var body: some View {
+        Text(snapshot.setLine)
+            .font(VA.Typography.footnote)
+            .foregroundStyle(VA.Colors.textSecondary)
+            .lineLimit(1)
+            .minimumScaleFactor(VA.Widget.liveActivitySetLineMinimumScale)
+    }
+}
+
+private struct ActiveWorkoutDynamicIslandGlyphView: View {
+    var body: some View {
+        Image(systemName: "figure.strengthtraining.traditional")
+            .foregroundStyle(VA.Colors.primary)
+    }
+}
+
+private struct ActiveWorkoutIslandTimerView: View {
+    let snapshot: ActiveWorkoutLiveActivitySnapshot
+
+    var body: some View {
+        Text(snapshot.restCompactHeadline)
+            .font(VA.Typography.dynamicIslandCompact.monospacedDigit())
     }
 }
 

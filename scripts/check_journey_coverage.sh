@@ -5,28 +5,27 @@
 # column is `[ ]` (uncovered) vs. paired with a test method, and fails
 # the build when coverage drops below `JOURNEY_COVERAGE_THRESHOLD`.
 #
-# The default threshold is **18**, the audited 2026-05-18 baseline
-# (11 of 62 journeys covered). This is a guard-rail floor, not an
-# aspirational target — the platform commits to 100% by end of
-# Wave 2 (VOL-141 / VOL-200). The pattern is:
+# The default threshold is **100**. The release branch reached 72/72
+# simulator-safe v1 rows on 2026-06-06 (VOL-271), so this gate is now
+# a launch-grade regression block rather than the older staged floor.
+# The pattern is:
 #
-#   * Today's PRs must not regress below 18%.
-#   * Every PR that adds a journey test bumps the threshold in
-#     lockstep so the gate is always at-or-above current coverage.
+#   * Every PR must preserve 100% journey-row coverage.
+#   * Hardware-only proof lives in physical UAT, not uncovered rows.
 #   * No silent regression.
 #
 # Mirrors the per-target ratchet pattern from `scripts/check_coverage.sh`
 # (VOL-205). Step summary written to $GITHUB_STEP_SUMMARY when set.
 #
 # Override via env vars for diagnostic runs:
-#   JOURNEY_COVERAGE_THRESHOLD=25 ./scripts/check_journey_coverage.sh
+#   JOURNEY_COVERAGE_THRESHOLD=100 ./scripts/check_journey_coverage.sh
 #   USER_JOURNEYS_PATH=/path/to/USER_JOURNEYS.md ./scripts/check_journey_coverage.sh
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 JOURNEYS_PATH="${USER_JOURNEYS_PATH:-$ROOT/docs/USER_JOURNEYS.md}"
-THRESHOLD="${JOURNEY_COVERAGE_THRESHOLD:-18}"
+THRESHOLD="${JOURNEY_COVERAGE_THRESHOLD:-100}"
 
 if [[ ! -f "$JOURNEYS_PATH" ]]; then
   echo "FAIL: docs/USER_JOURNEYS.md not found at $JOURNEYS_PATH" >&2

@@ -20,24 +20,24 @@ VOLUMEARC_RELEASE_READY=1 bash scripts/validate_release_config.sh
 
 | File | Status | Notes |
 |---|---|---|
-| `name.txt` | ✅ Done | "VolumeArc" |
-| `subtitle.txt` | ✅ Done | Max 30 chars |
-| `description.txt` | ✅ Done | Max 4000 chars; should match marketing landing-page hero + features |
-| `keywords.txt` | ✅ Done | Comma-separated, max 100 chars |
-| `promotional_text.txt` | ✅ Done | Max 170 chars; updatable without a new app version |
-| `release_notes.txt` | ✅ Done | App Store-facing "what's new" (separate from TestFlight What-To-Test) |
-| `marketing_url.txt` | ✅ Done | `https://volumearc.app` |
-| `privacy_url.txt` | ✅ Done | `https://volumearc.app/privacy` (subject to VOL-195 legal copy finalization) |
-| `support_url.txt` | ✅ Done | `https://volumearc.app/support` |
-| `copyright.txt` | ✅ Done | "© 2026 Mabry Ventures LLC" |
-| `primary_category.txt` | ✅ Done | `HEALTH_AND_FITNESS` |
-| `review_information/notes.txt` | ✅ Done | App Review notes |
-| `review_information/demo_user.txt` | ✅ Done | No app-owned login required |
-| `review_information/demo_password.txt` | ✅ Done | No app-owned login required |
-| `review_information/email_address.txt` | ✅ Done | `jared@mabryventures.com` |
-| `review_information/first_name.txt` | ✅ Done | "Jared" |
-| `review_information/last_name.txt` | ✅ Done | "Mabry" |
-| `review_information/phone_number.txt` | ✅ Done | Escalation phone for App Review |
+| `name.txt` | Done | "VolumeArc" |
+| `subtitle.txt` | Done | Max 30 chars |
+| `description.txt` | Done | Max 4000 chars; should match marketing landing-page hero + features |
+| `keywords.txt` | Done | Comma-separated, max 100 chars |
+| `promotional_text.txt` | Done | Max 170 chars; updatable without a new app version |
+| `release_notes.txt` | Done | App Store-facing "what's new" (separate from TestFlight What-To-Test) |
+| `marketing_url.txt` | Done | `https://volumearc.app` |
+| `privacy_url.txt` | Done | `https://volumearc.app/privacy` (subject to legal copy finalization) |
+| `support_url.txt` | Done | `https://volumearc.app/support` |
+| `copyright.txt` | Done | "© 2026 Mabry Ventures LLC" |
+| `primary_category.txt` | Done | `HEALTH_AND_FITNESS` |
+| `review_information/notes.txt` | Done | App Review notes |
+| `review_information/demo_user.txt` | Done | No app-owned login required |
+| `review_information/demo_password.txt` | Done | No app-owned login required |
+| `review_information/email_address.txt` | Done | `jared@mabryventures.com` |
+| `review_information/first_name.txt` | Done | "Jared" |
+| `review_information/last_name.txt` | Done | "Mabry" |
+| `review_information/phone_number.txt` | Done | Escalation phone for App Review |
 
 ## Screenshots
 

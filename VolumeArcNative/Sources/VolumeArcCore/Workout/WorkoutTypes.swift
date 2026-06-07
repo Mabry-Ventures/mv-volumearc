@@ -6,19 +6,19 @@ public enum WorkoutAction: String, Sendable, CaseIterable, Codable {
     case decrease
 }
 
-public enum AdvancementLevel: String, Sendable, CaseIterable {
+public enum AdvancementLevel: String, Sendable, CaseIterable, Codable {
     case beginner
     case intermediate
     case advanced
 }
 
-public enum CoachingStyle: String, Sendable, CaseIterable {
+public enum CoachingStyle: String, Sendable, CaseIterable, Codable {
     case motivational
     case analytical
     case minimal
 }
 
-public enum PrivacyMode: String, Sendable, CaseIterable {
+public enum PrivacyMode: String, Sendable, CaseIterable, Codable {
     case standard
     case strict
 }
@@ -59,6 +59,108 @@ public struct WorkoutAutopilotState: Sendable {
         self.bestCue = bestCue
         self.recommendationReason = recommendationReason
         self.suggestedAction = suggestedAction
+    }
+}
+
+public enum CoachWorkoutPlanExtractor {
+    public static func plan(from response: String, title: String) -> WorkoutSessionPlan? {
+        let exercises = response
+            .split(whereSeparator: \.isNewline)
+            .compactMap { exercise(from: String($0), response: response) }
+            .prefix(8)
+        guard !exercises.isEmpty else { return nil }
+
+        let exerciseList = Array(exercises)
+        let targetRPE = conservativeResponse(response) ? 6 : 7
+        return WorkoutSessionPlan(
+            title: title,
+            durationMinutes: min(75, max(20, exerciseList.count * 10)),
+            targetRPE: targetRPE,
+            exercises: exerciseList
+        )
+    }
+
+    private static func exercise(from line: String, response: String) -> WeeklyWorkoutExercise? {
+        let trimmed = line
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-* "))
+        let seconds = firstInt(matching: #"(\d+)\s*seconds?"#, in: trimmed)
+        guard trimmed.range(of: "rep", options: .caseInsensitive) != nil
+                || seconds != nil
+        else { return nil }
+
+        guard let name = exerciseName(from: trimmed),
+              !name.isEmpty,
+              let sets = firstInt(matching: #"(\d+)\s*sets?"#, in: trimmed) ?? (seconds == nil ? nil : 1)
+        else { return nil }
+
+        let reps = firstInt(matching: #"(\d+)\s*reps?"#, in: trimmed)
+            ?? seconds
+            ?? 1
+        let targetRPE = conservativeResponse(response) ? 6 : 7
+        let weight = firstInt(matching: #"(\d+)\s*(?:lb|lbs|pounds?)"#, in: trimmed)
+            ?? defaultWeight(for: name, response: response)
+        return WeeklyWorkoutExercise(
+            name: name,
+            sets: max(1, min(sets, 8)),
+            reps: max(1, min(reps, 50)),
+            weight: max(0, weight),
+            targetRPE: targetRPE,
+            restSeconds: targetRPE <= 6 ? 75 : 120
+        )
+    }
+
+    private static func exerciseName(from line: String) -> String? {
+        let delimiterRanges = [
+            line.range(of: ":"),
+            line.range(of: " - "),
+            line.range(of: " -- "),
+        ].compactMap { $0 }
+        guard let delimiter = delimiterRanges.min(by: { $0.lowerBound < $1.lowerBound }) else {
+            return nil
+        }
+        let name = line[..<delimiter.lowerBound]
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.localizedCaseInsensitiveContains("sample workout") else { return nil }
+        guard !name.localizedCaseInsensitiveContains("workout plan") else { return nil }
+        return name
+    }
+
+    private static func firstInt(matching pattern: String, in text: String) -> Int? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return nil }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = regex.firstMatch(in: text, range: range),
+              match.numberOfRanges > 1,
+              let matchRange = Range(match.range(at: 1), in: text)
+        else { return nil }
+        return Int(text[matchRange])
+    }
+
+    private static func conservativeResponse(_ response: String) -> Bool {
+        let lowered = response.lowercased()
+        return lowered.contains("light")
+            || lowered.contains("take it easy")
+            || lowered.contains("sick")
+            || lowered.contains("sore")
+            || lowered.contains("pain")
+            || lowered.contains("tight")
+            || lowered.contains("run down")
+            || lowered.contains("rpe 6")
+    }
+
+    private static func defaultWeight(for name: String, response: String) -> Int {
+        let loweredName = name.lowercased()
+        let isConservative = conservativeResponse(response)
+        if loweredName.contains("dumbbell") {
+            return isConservative ? 20 : 35
+        }
+        if loweredName.contains("barbell")
+            || loweredName.contains("squat")
+            || loweredName.contains("deadlift")
+            || loweredName.contains("bench") {
+            return isConservative ? 45 : 95
+        }
+        return 0
     }
 }
 
@@ -173,6 +275,7 @@ public extension AthleteProfile {
 
 /// A completed training session.
 public struct RecentSession: Sendable {
+    public let identifier: String?
     public let title: String?
     public let sourceName: String?
     public let date: Date
@@ -183,6 +286,7 @@ public struct RecentSession: Sendable {
     public let completedSetCount: Int
 
     public init(
+        identifier: String? = nil,
         title: String? = nil,
         sourceName: String? = nil,
         date: Date,
@@ -192,6 +296,7 @@ public struct RecentSession: Sendable {
         averageRPE: Double = 7.0,
         completedSetCount: Int = 0
     ) {
+        self.identifier = identifier
         self.title = title
         self.sourceName = sourceName
         self.date = date
@@ -204,6 +309,10 @@ public struct RecentSession: Sendable {
 
     public var isExternalHealthSession: Bool {
         completedSetCount == 0 && exerciseIDs.contains { $0.hasPrefix("healthkit-") }
+    }
+
+    public var isUserDeletable: Bool {
+        identifier != nil && !isExternalHealthSession
     }
 }
 

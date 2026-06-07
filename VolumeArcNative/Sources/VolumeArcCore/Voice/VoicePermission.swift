@@ -7,13 +7,23 @@ public enum FeaturePermissionStatus: String, Sendable {
     case unavailable
 }
 
-public struct VoicePermissionStatus: Sendable {
+public struct VoicePermissionStatus: Sendable, Equatable {
     public let microphone: FeaturePermissionStatus
     public let speechRecognition: FeaturePermissionStatus
 
     public init(microphone: FeaturePermissionStatus, speechRecognition: FeaturePermissionStatus) {
         self.microphone = microphone
         self.speechRecognition = speechRecognition
+    }
+
+    public var isAuthorized: Bool {
+        microphone == .authorized && speechRecognition == .authorized
+    }
+
+    public var isDeniedOrUnavailable: Bool {
+        [microphone, speechRecognition].contains { status in
+            status == .denied || status == .unavailable
+        }
     }
 }
 

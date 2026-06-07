@@ -55,6 +55,233 @@ public extension AICoachProvider {
     }
 }
 
+/// Last-mile guard for coach responses that could affect athlete safety.
+///
+/// The prompt template tells model-backed providers what to do, but this
+/// filter enforces the same boundary after generation. High-risk symptom
+/// prompts are buffered before rendering so unsafe relay chunks never flash
+/// in the chat UI.
+public enum CoachSafetyFilter {
+    public static func shouldBufferResponse(prompt: String) -> Bool {
+        shouldBufferResponse(prompt: prompt, context: "")
+    }
+
+    public static func shouldBufferResponse(prompt: String, context: String) -> Bool {
+        medicalRedFlagResponse(prompt: prompt, context: context) != nil
+            || hasRecoverySymptoms(prompt)
+            || hasCurrentRecoverySymptoms(inContext: context)
+    }
+
+    public static func filteredResponse(prompt: String, context: String, response: String) -> String {
+        if let redFlagResponse = medicalRedFlagResponse(prompt: prompt, context: context) {
+            return redFlagResponse
+        }
+        guard hasRecoverySymptoms(prompt) || hasCurrentRecoverySymptoms(inContext: context) else {
+            return response
+        }
+
+        let lowered = response.lowercased()
+        let hasRestPermission = [
+            "rest", "take the day", "skip training", "do not train", "don't train"
+        ].contains { lowered.contains($0) }
+        let hasLightOption = [
+            "light", "easy", "technique", "40-60", "forty", "mobility"
+        ].contains { lowered.contains($0) }
+        let hasStopCondition = lowered.contains("stop") && [
+            "pain", "dizz", "fever", "symptom", "worse", "worsening"
+        ].contains { lowered.contains($0) }
+        let unsafeLanguage = [
+            "push through", "power through", "fight through", "no excuses",
+            "go heavy", "go heavier", "max out", "1rm", "pr today",
+            "add weight", "grind", "don't skip", "do not skip"
+        ].contains { lowered.contains($0) }
+
+        guard unsafeLanguage || !hasRestPermission || !hasLightOption || !hasStopCondition else {
+            return response
+        }
+        return conservativeRecoveryResponse(prompt: prompt, context: context)
+    }
+
+    public static func conservativeRecoveryResponse(prompt: String, context: String) -> String {
+        let score = extractReadinessScore(from: context)
+        let scoreLine = score.map {
+            String(
+                localized: "Readiness is \($0), but your symptoms matter more than the score.",
+                comment: "Coach safety filter line when recovery symptoms override readiness"
+            )
+        } ?? String(
+            localized: "Your symptoms matter more than any training target.",
+            comment: "Coach safety filter line when symptoms are present without readiness"
+        )
+        return String(
+            localized: """
+            \(scoreLine) Rest is a valid win today. If you still want to move, \
+            keep it to 15-25 minutes of easy technique work, mobility, or light \
+            accessories at 40-60% effort, and stop at any pain, dizziness, \
+            fever, or worsening symptoms.
+            """,
+            comment: "Coach safety filter response for sick, sore, tight, or run-down athletes"
+        )
+    }
+
+    public static func medicalRedFlagResponse(prompt: String, context: String) -> String? {
+        _ = context
+        return medicalRedFlagResponse(from: prompt)
+    }
+
+    public static func medicalRedFlagResponse(from text: String) -> String? {
+        let nearby = "[\\s\\S]{0,80}"
+        let redFlagPatterns = [
+            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+                nearby + "\\bchest\\s+pain\\b",
+            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+                nearby + "\\bdizz(?:y|iness)\\b",
+            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+                nearby + "\\blightheaded\\b",
+            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+                nearby + "\\bfaint(?:ed|ing)?\\b",
+            "\\b(i\\s*(?:passed\\s+out|blacked\\s+out|have\\s+syncope|had\\s+syncope)|i\\W?ve\\s+(?:passed|blacked)\\s+out)\\b",
+            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+                nearby +
+                "\\b(?:severe\\s+)?short(?:ness)?\\s+of\\s+breath\\b",
+            "\\b(i\\s*(?:can'?t|cannot)\\s+breathe|hard\\s+to\\s+breathe)\\b",
+            "\\b(i\\s*(?:am|might\\s+be|may\\s+be)|i\\W?m)\\s+pregnant\\b",
+            "\\b(?:during|while)\\s+(?:my\\s+)?pregnancy\\b",
+            "\\b(i\\s*(?:have|had|am\\s+dealing\\s+with)|i\\W?m\\s+dealing\\s+with)\\b" +
+                nearby + "\\b(?:eating\\s+disorder|starv\\w*|purg\\w*|not\\s+eating)\\b",
+            "\\bi\\s*(?:haven'?t|have\\s+not)\\s+eaten\\b",
+            "\\b(i\\s*(?:have|had|experienced|experience)|my)\\b" +
+                nearby + "\\b(?:cardiac\\s+event|heart\\s+attack)\\b",
+        ]
+        let minorSafetyConcern =
+            containsPattern("\\b(i\\s*am|i\\W?m|age(?:d)?|as\\s+a)\\s+1[0-7]\\b", in: text) ||
+            containsPattern("\\bunder\\s+18\\b", in: text) ||
+            containsPattern("\\b(?:i\\s*(?:am|\\W?m)\\s+a|as\\s+a)\\s+minor\\b", in: text)
+        let strengthRisk =
+            containsPattern("\\b(max|1\\s*rm|one[- ]rep|max|pr|personal\\s+record|heavy|heavier|attempt)\\b", in: text)
+
+        guard redFlagPatterns.contains(where: { containsPattern($0, in: text) }) ||
+            (minorSafetyConcern && strengthRisk) else {
+            return nil
+        }
+        return String(
+            localized: """
+            Stop the session now and seek medical care before training again. \
+            If symptoms are severe or include chest pain, fainting, or severe \
+            shortness of breath, use emergency care.
+            """,
+            comment: "Safety response when medical red-flag terms are detected in coach input"
+        )
+    }
+
+    private static func hasRecoverySymptoms(_ text: String) -> Bool {
+        recoverySymptomPatterns.contains { containsPattern($0, in: text) }
+    }
+
+    private static func hasCurrentRecoverySymptoms(inContext context: String) -> Bool {
+        context
+            .components(separatedBy: .newlines)
+            .contains { line in
+                let lowered = line.lowercased()
+                guard !lowered.contains("pain-free"),
+                      !lowered.contains("historical note"),
+                      !lowered.contains("last year"),
+                      !lowered.contains("prior ")
+                else { return false }
+                return hasRecoverySymptoms(line)
+            }
+    }
+
+    private static func containsPattern(_ pattern: String, in text: String) -> Bool {
+        text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    private static let recoverySymptomPatterns = [
+        #"\bsick\b"#,
+        #"\bill\b"#,
+        #"\bcold\b"#,
+        #"\bflu\b"#,
+        #"\bfever\b"#,
+        #"\bsore(?:ness)?\b"#,
+        #"\btight(?:ness)?\b"#,
+        #"\brun[- ]?down\b"#,
+        #"\bslept\s+badly\b"#,
+        #"\bbad\s+sleep\b"#,
+        #"\bexhausted\b"#,
+        #"\bdrained\b"#,
+        #"\bbeat\s+up\b"#,
+        #"\baches?\b"#,
+        #"\bpain\b"#,
+        #"\bhurts?\b"#,
+        #"\binjur(?:y|ed)\b"#,
+        #"\btweaked\b"#,
+        #"\bstrain(?:ed)?\b"#,
+        #"\bsharp\b"#,
+        #"\btwinge\b"#,
+        #"\bfighting\s+illness\b"#,
+        #"\bsymptoms?\b"#,
+        #"\bunder\s+the\s+weather\b"#,
+    ]
+
+    private static func extractReadinessScore(from context: String) -> Int? {
+        guard let range = context.range(of: "Readiness: ") else { return nil }
+        let remainder = context[range.upperBound...]
+        guard let slashRange = remainder.range(of: "/") else { return nil }
+        let scoreString = String(remainder[remainder.startIndex..<slashRange.lowerBound])
+        return Int(scoreString)
+    }
+}
+
+public struct SafetyFilteredCoachProvider: AICoachProvider {
+    private let base: AICoachProvider
+
+    public init(base: AICoachProvider) {
+        self.base = base
+    }
+
+    public func coachResponse(for prompt: String, context: String) async throws -> String {
+        if let redFlagResponse = CoachSafetyFilter.medicalRedFlagResponse(prompt: prompt, context: context) {
+            return redFlagResponse
+        }
+        let response = try await base.coachResponse(for: prompt, context: context)
+        return CoachSafetyFilter.filteredResponse(prompt: prompt, context: context, response: response)
+    }
+
+    public func streamCoachResponse(for prompt: String, context: String) -> AsyncThrowingStream<String, Error> {
+        if let redFlagResponse = CoachSafetyFilter.medicalRedFlagResponse(prompt: prompt, context: context) {
+            return AsyncThrowingStream { continuation in
+                continuation.yield(redFlagResponse)
+                continuation.finish()
+            }
+        }
+
+        guard CoachSafetyFilter.shouldBufferResponse(prompt: prompt, context: context) else {
+            return base.streamCoachResponse(for: prompt, context: context)
+        }
+
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    var accumulated = ""
+                    for try await chunk in base.streamCoachResponse(for: prompt, context: context) {
+                        accumulated += chunk
+                    }
+                    let filtered = CoachSafetyFilter.filteredResponse(
+                        prompt: prompt,
+                        context: context,
+                        response: accumulated
+                    )
+                    continuation.yield(filtered)
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+}
+
 public struct AIRelayConfiguration: Sendable {
     public let baseURL: URL
     public let bearerToken: String
@@ -255,8 +482,11 @@ public struct LocalHeuristicAICoachProvider: AICoachProvider {
     }
 
     public func coachResponse(for prompt: String, context: String) async throws -> String {
-        if let redFlagResponse = medicalRedFlagResponse(from: prompt) {
+        if let redFlagResponse = CoachSafetyFilter.medicalRedFlagResponse(from: prompt) {
             return redFlagResponse
+        }
+        if CoachSafetyFilter.shouldBufferResponse(prompt: prompt, context: context) {
+            return CoachSafetyFilter.conservativeRecoveryResponse(prompt: prompt, context: context)
         }
 
         // Route through the template so the same intent classification and
@@ -290,31 +520,65 @@ public struct LocalHeuristicAICoachProvider: AICoachProvider {
     private func readinessResponse(from context: String) -> String {
         if let score = extractReadinessScore(from: context) {
             switch score {
-            case 80...: return "Readiness is \(score) — you're ready to push. Hit your targets and don't second-guess."
-            case 60..<80: return "Readiness is \(score). Moderate recovery. Stick to the plan, skip the heroics."
-            case 40..<60: return "Readiness is \(score) — fatigue is accumulating. Hold load and focus on bar speed."
-            default: return "Readiness is \(score). Strong case for a lighter session today. Move well, don't grind."
+            case 80...:
+                return String(
+                    localized: "Readiness is \(score). You can train, but keep the first set honest and stop if form or pain changes.",
+                    comment: "Offline coach readiness response for high readiness"
+                )
+            case 60..<80:
+                return String(
+                    localized: "Readiness is \(score). Keep the plan, skip heroics, and choose clean reps over more load.",
+                    comment: "Offline coach readiness response for moderate readiness"
+                )
+            case 40..<60:
+                return String(
+                    localized: "Readiness is \(score). Back off today: hold load, trim volume, and leave several reps in reserve.",
+                    comment: "Offline coach readiness response for low readiness"
+                )
+            default:
+                return String(
+                    localized: "Readiness is \(score). Rest is the best call today; if you need to move, keep it light and easy.",
+                    comment: "Offline coach readiness response for very low readiness"
+                )
             }
         }
-        return "Log a set or two and I'll gauge how the bar is moving."
+        return String(
+            localized: "I need more context before calling intensity. Start easy, log how it feels, and stop if anything hurts.",
+            comment: "Offline coach readiness response when context is missing"
+        )
     }
 
     private func progressionResponse(from context: String) -> String {
         if let score = extractReadinessScore(from: context), score >= 75 {
-            return "Green light — if the last set moved cleanly at target RPE, add a small jump. If it was a grind, hold and earn it."
+            return String(
+                localized: "You can consider a small jump only if the last set moved cleanly at target RPE. If it was a grind, hold.",
+                comment: "Offline coach progression response when readiness supports a small increase"
+            )
         }
-        return "Hold the load. Progression needs a clean baseline — own today, push next session."
+        return String(
+            localized: "Hold the load. Progression needs a clean baseline; make today crisp and reassess next session.",
+            comment: "Offline coach progression response when readiness is not high enough"
+        )
     }
 
     private func cueResponse(from context: String) -> String {
-        "Brace hard before the rep starts. Move with intent. If the last set drifted, dial back 5-10% and rebuild."
+        String(
+            localized: "Brace before the rep starts, move smoothly, and keep every rep pain-free. If form drifts, reduce load 5-10%.",
+            comment: "Offline coach form cue response"
+        )
     }
 
     private func deloadResponse(from context: String) -> String {
         if let score = extractReadinessScore(from: context), score < 60 {
-            return "Readiness is \(score) — deload makes sense. Drop intensity 10-15% and cut volume in half."
+            return String(
+                localized: "Readiness is \(score) — deload makes sense. Drop intensity 10-15% and cut volume in half.",
+                comment: "Offline coach deload response when readiness is low"
+            )
         }
-        return "You might not need a full deload yet. Try a lighter top set today and reassess tomorrow."
+        return String(
+            localized: "You might not need a full deload yet. Try a lighter top set today and reassess tomorrow.",
+            comment: "Offline coach deload response when readiness does not demand deload"
+        )
     }
 
     private func planningResponse(from context: String) -> String {
@@ -359,59 +623,19 @@ public struct LocalHeuristicAICoachProvider: AICoachProvider {
 
     private func defaultResponse(from context: String) -> String {
         if context.contains("Readiness") {
-            return """
-                Based on what I'm seeing, hold the target load and move each \
-                rep well. Ask me something specific and I'll give you a \
-                sharper read.
-                """
-        }
-        return "Log a couple of sets so I have something to work with, then ask me again."
-    }
-
-    private func medicalRedFlagResponse(from text: String) -> String? {
-        let nearby = "[\\s\\S]{0,80}"
-        let redFlagPatterns = [
-            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
-                nearby + "\\bchest\\s+pain\\b",
-            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
-                nearby + "\\bdizz(?:y|iness)\\b",
-            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
-                nearby + "\\bfaint(?:ed|ing)?\\b",
-            "\\b(i\\s*(?:passed\\s+out|have\\s+syncope|had\\s+syncope)|i\\W?ve\\s+passed\\s+out)\\b",
-            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
-                nearby +
-                "\\b(?:severe\\s+)?short(?:ness)?\\s+of\\s+breath\\b",
-            "\\b(i\\s*(?:am|might\\s+be|may\\s+be)|i\\W?m)\\s+pregnant\\b",
-            "\\b(?:during|while)\\s+(?:my\\s+)?pregnancy\\b",
-            "\\b(i\\s*(?:have|had|am\\s+dealing\\s+with)|i\\W?m\\s+dealing\\s+with)\\b" +
-                nearby + "\\b(?:eating\\s+disorder|starv\\w*|purg\\w*|not\\s+eating)\\b",
-            "\\bi\\s*(?:haven'?t|have\\s+not)\\s+eaten\\b",
-            "\\b(i\\s*(?:have|had|experienced|experience)|my)\\b" +
-                nearby + "\\b(?:cardiac\\s+event|heart\\s+attack)\\b",
-        ]
-        let minorSafetyConcern =
-            containsPattern("\\b(i\\s*am|i\\W?m|age(?:d)?|as\\s+a)\\s+1[0-7]\\b", in: text) ||
-            containsPattern("\\bunder\\s+18\\b", in: text) ||
-            containsPattern("\\b(?:i\\s*(?:am|\\W?m)\\s+a|as\\s+a)\\s+minor\\b", in: text)
-        let strengthRisk =
-            containsPattern("\\b(max|1\\s*rm|one[- ]rep|max|pr|personal\\s+record|heavy|heavier|attempt)\\b", in: text)
-
-        guard redFlagPatterns.contains(where: { containsPattern($0, in: text) }) ||
-            (minorSafetyConcern && strengthRisk) else {
-            return nil
+            return String(
+                localized: """
+                Based on what I can see, choose the lowest-risk option: clean reps, \
+                no grinding, and stop if pain shows up. Ask me about the exact lift \
+                and I can be more specific.
+                """,
+                comment: "Offline coach default response when readiness context is available"
+            )
         }
         return String(
-            localized: """
-            Stop the session now and seek medical care before training again. \
-            If symptoms are severe or include chest pain, fainting, or severe \
-            shortness of breath, use emergency care.
-            """,
-            comment: "Safety response when medical red-flag terms are detected in coach input"
+            localized: "Log a couple of sets so I have something to work with, then ask me again.",
+            comment: "Offline coach default response when no useful context is available"
         )
-    }
-
-    private func containsPattern(_ pattern: String, in text: String) -> Bool {
-        text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     private func extractWeeklySchedule(from context: String) -> [String] {
@@ -457,10 +681,16 @@ import FoundationModels
 public struct FoundationModelCoachProvider: AICoachProvider {
     private let fallback: AICoachProvider
     private let coachingStyle: CoachingStyle
+    private let telemetrySink: (any TelemetrySink)?
 
-    public init(fallback: AICoachProvider, coachingStyle: CoachingStyle = .motivational) {
+    public init(
+        fallback: AICoachProvider,
+        coachingStyle: CoachingStyle = .motivational,
+        telemetrySink: (any TelemetrySink)? = nil
+    ) {
         self.fallback = fallback
         self.coachingStyle = coachingStyle
+        self.telemetrySink = telemetrySink
     }
 
     public func coachResponse(for prompt: String, context: String) async throws -> String {
@@ -479,8 +709,23 @@ public struct FoundationModelCoachProvider: AICoachProvider {
             let response = try await session.respond(to: rendered)
             return response.content
         } catch {
+            recordUnavailableTelemetry(error: error)
             return try await fallback.coachResponse(for: prompt, context: context)
         }
+    }
+
+    private func recordUnavailableTelemetry(error: Error) {
+        telemetrySink?.record(TelemetryEvent(
+            category: "ai",
+            name: "fm.unavailable",
+            severity: .warning,
+            message: "Foundation Models coach unavailable; falling back to configured provider.",
+            metadata: [
+                "reason": "runtime_error",
+                "fallback_path": "configured_fallback",
+                "error_type": String(reflecting: Swift.type(of: error)),
+            ]
+        ))
     }
 }
 #endif

@@ -11,10 +11,10 @@ A Cloudflare Worker that proxies iOS coach requests to Google's Gemini API with 
 
 | Tier | Gemini model | Header | Default |
 |------|--------------|--------|---------|
-| Flash Lite | `gemini-3.1-flash-lite-preview` | `X-Coach-Tier: flash-lite` | ✅ |
-| Pro        | `gemini-3.1-pro-preview`        | `X-Coach-Tier: pro`        | Premium entitlement only |
+| Flash Lite | `gemini-3.1-flash-lite` | `X-Coach-Tier: flash-lite` | Done |
+| Pro        | `gemini-3.5-flash`      | `X-Coach-Tier: pro`        | Premium entitlement only |
 
-Model IDs live in `relay/wrangler.toml` as `MODEL_DEFAULT` / `MODEL_PREMIUM`. Swapping a model is a `wrangler deploy` away — no iOS release.
+Model IDs live in `relay/wrangler.toml` as `MODEL_DEFAULT` / `MODEL_PREMIUM`. Swapping a model is a `wrangler deploy` away — no iOS release. The VolumeArc Release branch pins Premium to stable `gemini-3.5-flash` instead of the hot-swapped `gemini-flash-latest` alias; `gemini-3.1-flash-lite` stays on the free/default path with a documented May 7, 2027 deprecation review requirement.
 
 ## Endpoints
 
@@ -93,11 +93,11 @@ The Worker validates the Apple App Attestation Root CA chain, pins the root hash
 For response-layer coach evals, staging Workers can enable `/v1/eval-attest/bootstrap` and `/v1/eval-attest/challenge`. The runner bootstraps an ephemeral P-256 public key with a broker token, signs each fixture request over `requestBody || challenge || counter`, and the relay consumes the challenge plus advances the counter in the `EVAL_ATTEST_STATE` Durable Object before forwarding. This path is deliberately fail-closed behind an explicit staging-host allowlist.
 
 **Threat model:**
-- ✅ Protects the Gemini API key (never leaves the Worker)
-- ✅ Rate limits by attested App Attest key ID
-- ✅ Valid App Attest assertions prove the request came from a genuine VolumeArc build on Apple hardware
-- ✅ Tampered App Attest headers fail closed
-- ✅ Missing App Attest headers return 410 instead of using a retired shared-secret fallback.
+- Done Protects the Gemini API key (never leaves the Worker)
+- Done Rate limits by attested App Attest key ID
+- Done Valid App Attest assertions prove the request came from a genuine VolumeArc build on Apple hardware
+- Done Tampered App Attest headers fail closed
+- Done Missing App Attest headers return 410 instead of using a retired shared-secret fallback.
 
 ## Rate limiting
 

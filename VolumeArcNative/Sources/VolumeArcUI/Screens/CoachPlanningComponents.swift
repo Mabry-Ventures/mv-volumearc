@@ -100,17 +100,19 @@ struct CoachPlanningCard: View {
     @Binding var plan: CoachPlanDraft
     @Binding var expandedExerciseID: String?
     let sendPlanFeedback: (String) -> Void
+    let schedulePlan: () -> Void
     let startNow: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: VA.Space.lg) {
             summary
+            actionGrid
             targetChips
             exerciseList
-            actionGrid
         }
         .padding(VA.Space.lg)
         .vaGlassBackground(in: RoundedRectangle(cornerRadius: VA.Radius.xl, style: .continuous))
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("coach.planDraft")
     }
 
@@ -172,6 +174,7 @@ struct CoachPlanningCard: View {
             VStack(spacing: VA.Space.sm) {
                 ForEach(Array(plan.exercises.enumerated()), id: \.element.id) { index, exercise in
                     CoachPlanExerciseRow(
+                        exerciseIndex: index,
                         exercise: exercise,
                         isExpanded: expandedExerciseID == exercise.id.uuidString,
                         canMoveUp: index > 0,
@@ -191,17 +194,28 @@ struct CoachPlanningCard: View {
         VStack(spacing: VA.Space.sm) {
             HStack(spacing: VA.Space.sm) {
                 VAButton(
-                    String(localized: "Save template", comment: "Co-design save template action"),
-                    icon: "square.and.arrow.down",
-                    style: .secondary
+                    String(localized: "Refine plan", comment: "Co-design refine plan action"),
+                    icon: "slider.horizontal.3",
+                    style: .secondary,
+                    accessibilityIdentifier: "coach.plan.refine"
                 ) {
-                    sendPlanFeedback(String(localized: "Save this as a template", comment: "Coach plan feedback prompt"))
+                    sendPlanFeedback(String(localized: "Refine this plan around my recovery and equipment", comment: "Coach plan feedback prompt"))
                 }
-                VAButton(String(localized: "Schedule", comment: "Co-design schedule action"), icon: "calendar", style: .secondary) {
-                    sendPlanFeedback(String(localized: "Schedule this for tomorrow", comment: "Coach plan feedback prompt"))
+                VAButton(
+                    String(localized: "Schedule", comment: "Co-design schedule action"),
+                    icon: "calendar",
+                    style: .secondary,
+                    accessibilityIdentifier: "coach.plan.schedule"
+                ) {
+                    schedulePlan()
                 }
             }
-            VAButton(String(localized: "Start now", comment: "Co-design start now action"), icon: "arrow.right", style: .primary) {
+            VAButton(
+                String(localized: "Start now", comment: "Co-design start now action"),
+                icon: "arrow.right",
+                style: .primary,
+                accessibilityIdentifier: "coach.plan.startNow"
+            ) {
                 startNow()
             }
         }
@@ -257,6 +271,7 @@ private struct CoachPlanStat: View {
 }
 
 private struct CoachPlanExerciseRow: View {
+    let exerciseIndex: Int
     let exercise: CoachPlanExercise
     let isExpanded: Bool
     let canMoveUp: Bool
@@ -289,6 +304,7 @@ private struct CoachPlanExerciseRow: View {
                 .padding(VA.Space.md)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("coach.plan.exercise.\(exerciseIndex).toggle")
 
             if isExpanded {
                 expandedEditor
@@ -298,6 +314,8 @@ private struct CoachPlanExerciseRow: View {
             }
         }
         .background(VA.Colors.surfacePrimary, in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("coach.plan.exercise.\(exerciseIndex)")
     }
 
     private var expandedEditor: some View {
@@ -310,11 +328,13 @@ private struct CoachPlanExerciseRow: View {
                 CoachPlanRowAction(
                     title: String(localized: "Swap", comment: "Co-design exercise row action"),
                     icon: "arrow.triangle.2.circlepath",
+                    accessibilityIdentifier: "coach.plan.exercise.\(exerciseIndex).swap",
                     action: swap
                 )
                 CoachPlanRowAction(
                     title: String(localized: "Move up", comment: "Co-design exercise row action"),
                     icon: "arrow.up",
+                    accessibilityIdentifier: "coach.plan.exercise.\(exerciseIndex).moveUp",
                     isDisabled: !canMoveUp
                 ) {
                     move(-1)
@@ -322,6 +342,7 @@ private struct CoachPlanExerciseRow: View {
                 CoachPlanRowAction(
                     title: String(localized: "Move down", comment: "Co-design exercise row action"),
                     icon: "arrow.down",
+                    accessibilityIdentifier: "coach.plan.exercise.\(exerciseIndex).moveDown",
                     isDisabled: !canMoveDown
                 ) {
                     move(1)
@@ -329,6 +350,7 @@ private struct CoachPlanExerciseRow: View {
                 CoachPlanRowAction(
                     title: String(localized: "Remove", comment: "Co-design exercise row action"),
                     icon: "trash",
+                    accessibilityIdentifier: "coach.plan.exercise.\(exerciseIndex).remove",
                     isDestructive: true,
                     action: remove
                 )
@@ -341,14 +363,16 @@ private struct CoachPlanExerciseRow: View {
         CoachStepperControl(
             label: String(localized: "Sets", comment: "Co-design stepper label"),
             value: exercise.sets,
-            range: 1...10
+            range: 1...10,
+            accessibilityPrefix: "coach.plan.exercise.\(exerciseIndex).sets"
         ) { newValue in
             update { $0.sets = newValue }
         }
         CoachStepperControl(
             label: String(localized: "Reps", comment: "Co-design stepper label"),
             value: exercise.reps,
-            range: 1...30
+            range: 1...30,
+            accessibilityPrefix: "coach.plan.exercise.\(exerciseIndex).reps"
         ) { newValue in
             update { $0.reps = newValue }
         }
@@ -356,7 +380,8 @@ private struct CoachPlanExerciseRow: View {
             label: String(localized: "lb", comment: "Co-design stepper label"),
             value: exercise.weight,
             range: 0...500,
-            step: 5
+            step: 5,
+            accessibilityPrefix: "coach.plan.exercise.\(exerciseIndex).weight"
         ) { newValue in
             update { $0.weight = newValue }
         }
@@ -368,6 +393,7 @@ private struct CoachStepperControl: View {
     let value: Int
     let range: ClosedRange<Int>
     var step: Int = 1
+    var accessibilityPrefix: String
     let onChange: (Int) -> Void
 
     var body: some View {
@@ -383,16 +409,19 @@ private struct CoachStepperControl: View {
                         .frame(width: 28, height: 28)
                 }
                 .accessibilityLabel(String(localized: "Decrease \(label)", comment: "Plan stepper decrement button"))
+                .accessibilityIdentifier("\(accessibilityPrefix).decrement")
                 Text("\(value)")
                     .font(VA.Typography.monoDigit)
                     .foregroundStyle(VA.Colors.textPrimary)
                     .frame(minWidth: 34)
+                    .accessibilityIdentifier("\(accessibilityPrefix).value")
                 Button { onChange(min(range.upperBound, value + step)) } label: {
                     Image(systemName: "plus")
                         .font(VA.Typography.caption)
                         .frame(width: 28, height: 28)
                 }
                 .accessibilityLabel(String(localized: "Increase \(label)", comment: "Plan stepper increment button"))
+                .accessibilityIdentifier("\(accessibilityPrefix).increment")
             }
             .foregroundStyle(VA.Colors.textPrimary)
             .background(VA.Colors.textTertiary.opacity(0.10), in: RoundedRectangle(cornerRadius: VA.Radius.sm, style: .continuous))
@@ -404,6 +433,7 @@ private struct CoachStepperControl: View {
 private struct CoachPlanRowAction: View {
     let title: String
     let icon: String
+    let accessibilityIdentifier: String
     var isDestructive: Bool = false
     var isDisabled: Bool = false
     let action: () -> Void
@@ -420,6 +450,7 @@ private struct CoachPlanRowAction: View {
         .disabled(isDisabled)
         .opacity(isDisabled ? 0.42 : 1)
         .buttonStyle(.plain)
+        .accessibilityIdentifier(accessibilityIdentifier)
     }
 
     private var background: Color {
@@ -427,7 +458,7 @@ private struct CoachPlanRowAction: View {
     }
 }
 
-private struct FlowLayout<Content: View>: View {
+struct FlowLayout<Content: View>: View {
     let spacing: CGFloat
     let content: () -> Content
 

@@ -115,9 +115,24 @@ public extension PrivacyMode {
             )
         case .strict:
             return String(
-                localized: "Strict mode strips your name and anonymizes history before sending to the AI coach.",
+                localized: "Strict mode strips your name and anonymizes history before cloud coach requests.",
                 comment: "Privacy mode footer — strict"
             )
+        }
+    }
+}
+
+public extension WorkoutSessionProfile {
+    var displayName: String {
+        switch self {
+        case .defaultProfile:
+            return String(localized: "Default", comment: "Session profile name")
+        case .legDay:
+            return String(localized: "Leg Day", comment: "Session profile name")
+        case .upperStrength:
+            return String(localized: "Upper Strength", comment: "Session profile name")
+        case .shortSession:
+            return String(localized: "Short Session", comment: "Session profile name")
         }
     }
 }
@@ -127,6 +142,19 @@ public extension PrivacyMode {
 /// localization APIs by design); the UI maps each case to a `String(localized:)`
 /// here so translators see every enum-derived label in one file.
 public enum LocalizedLabels {
+    public static func appearancePreferenceDisplayName(_ preference: VolumeArcAppearancePreference) -> String {
+        switch preference {
+        case .system:
+            return String(localized: "System", comment: "Appearance preference option")
+        case .light:
+            return String(localized: "Light", comment: "Appearance preference option")
+        case .dark:
+            return String(localized: "Dark", comment: "Appearance preference option")
+        case .warm:
+            return String(localized: "Warm", comment: "Appearance preference option")
+        }
+    }
+
     public static func formCheckExerciseDisplayName(_ exercise: FormCheckExercise) -> String {
         exercise.displayName
     }
@@ -138,7 +166,7 @@ public enum LocalizedLabels {
         case .idea:
             return String(localized: "Idea", comment: "Feedback category — feature request or suggestion")
         case .coachQuality:
-            return String(localized: "Coach quality", comment: "Feedback category — AI coach response quality")
+            return String(localized: "Coach quality", comment: "Feedback category — coach response quality")
         case .other:
             return String(localized: "Other", comment: "Feedback category — anything that doesn't fit the named buckets")
         }

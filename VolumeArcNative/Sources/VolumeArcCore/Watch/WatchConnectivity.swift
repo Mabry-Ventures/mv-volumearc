@@ -347,6 +347,7 @@ public struct UnavailableWatchSessionTransport: WatchSessionTransport {
 
 public protocol WatchPendingPayloadStore: Sendable {
     func enqueue(_ payload: WatchPayload) async
+    func enqueueFront(_ payload: WatchPayload) async
     func dequeueAll() async -> [WatchPayload]
     func count() async -> Int
 }
@@ -370,6 +371,12 @@ public actor UserDefaultsWatchPendingPayloadStore: WatchPendingPayloadStore {
     public func enqueue(_ payload: WatchPayload) async {
         var current = loadUnsafe()
         current.append(payload)
+        save(current)
+    }
+
+    public func enqueueFront(_ payload: WatchPayload) async {
+        var current = loadUnsafe()
+        current.insert(payload, at: 0)
         save(current)
     }
 
@@ -436,10 +443,16 @@ public final class UserDefaultsWatchSessionStateStore: WatchSessionStateStore, @
 public actor WatchConnectivityCoordinator {
     private let transport: WatchSessionTransport
     private let payloadStore: WatchPendingPayloadStore
+    private let telemetrySink: (any TelemetrySink)?
 
-    public init(transport: WatchSessionTransport, payloadStore: WatchPendingPayloadStore) {
+    public init(
+        transport: WatchSessionTransport,
+        payloadStore: WatchPendingPayloadStore,
+        telemetrySink: (any TelemetrySink)? = nil
+    ) {
         self.transport = transport
         self.payloadStore = payloadStore
+        self.telemetrySink = telemetrySink
         Task { await transport.activate() }
     }
 
@@ -458,6 +471,7 @@ public actor WatchConnectivityCoordinator {
             try await transport.send(payload)
         } catch {
             await payloadStore.enqueue(payload)
+            recordPayloadQueued(payload, reason: "send_failed")
             throw error
         }
     }
@@ -466,14 +480,44 @@ public actor WatchConnectivityCoordinator {
     public func flushPendingIfReachable() async throws {
         guard await transport.isReachable() else { return }
         let pending = await payloadStore.dequeueAll()
-        for payload in pending {
+        for (index, payload) in pending.enumerated() {
             do {
                 try await transport.send(payload)
+                recordPayloadReplayed(payload)
             } catch {
-                // Put it back in the queue if sending still fails.
-                await payloadStore.enqueue(payload)
+                // Put the failed payload and every untouched payload back in
+                // original order so a partial replay cannot drop work.
+                for payloadToRequeue in pending[index...].reversed() {
+                    await payloadStore.enqueueFront(payloadToRequeue)
+                    recordPayloadQueued(payloadToRequeue, reason: "replay_failed")
+                }
                 throw error
             }
         }
+    }
+
+    private func recordPayloadQueued(_ payload: WatchPayload, reason: String) {
+        telemetrySink?.record(TelemetryEvent(
+            category: "watch",
+            name: "payload.queued",
+            severity: .info,
+            message: "Watch payload queued for replay.",
+            metadata: [
+                "kind": payload.kind.rawValue,
+                "reason": reason,
+            ]
+        ))
+    }
+
+    private func recordPayloadReplayed(_ payload: WatchPayload) {
+        telemetrySink?.record(TelemetryEvent(
+            category: "watch",
+            name: "payload.replayed",
+            severity: .info,
+            message: "Watch payload replayed after reconnect.",
+            metadata: [
+                "kind": payload.kind.rawValue,
+            ]
+        ))
     }
 }

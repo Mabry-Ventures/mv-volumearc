@@ -1,8 +1,9 @@
+import Foundation
+import VolumeArcCore
+
 #if canImport(AVFoundation) && canImport(Speech)
 import AVFoundation
-import Foundation
 import Speech
-import VolumeArcCore
 
 actor VolumeArcVoicePermissionStore: VoicePermissionStore {
     func currentStatus() async -> VoicePermissionStatus {
@@ -68,6 +69,18 @@ actor VolumeArcVoicePermissionStore: VoicePermissionStore {
         @unknown default:
             return .unavailable
         }
+    }
+}
+#endif
+
+#if DEBUG
+struct AuthorizedVoicePermissionFixtureStore: VoicePermissionStore {
+    func currentStatus() async -> VoicePermissionStatus {
+        VoicePermissionStatus(microphone: .authorized, speechRecognition: .authorized)
+    }
+
+    func requestPermissions() async throws -> VoicePermissionStatus {
+        VoicePermissionStatus(microphone: .authorized, speechRecognition: .authorized)
     }
 }
 #endif

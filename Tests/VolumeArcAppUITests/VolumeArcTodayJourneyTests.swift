@@ -15,6 +15,9 @@
 // All four tests rely on the seeded Today fixture (the dashboard
 // model loads recent sessions + a next-workout recommendation on
 // launch in `-UITestMode` thanks to `VolumeArcAppUITestSupport.makeSeededApp`).
+// The co-design schedule proof also starts from Today because the
+// product journey begins at the "Plan tomorrow" card, then moves through
+// Coach into the scheduled Workouts surface.
 //
 // Telemetry assertions use `VolumeArcAppUITestSupport.assertTelemetryFired`
 // against the journey-catalog event names (`workout.detail.opened`,
@@ -37,7 +40,9 @@ final class VolumeArcTodayJourneyTests: XCTestCase {
     /// Tap the Today readiness tile → assert the Signals tab opens and
     /// the readiness telemetry event fires from `SignalsView.task`.
     func testTodayReadinessTapOpensSignals() throws {
-        let app = VolumeArcAppUITestSupport.makeSeededApp()
+        let app = VolumeArcAppUITestSupport.makeSeededApp(
+            extra: ["-UseAuthorizedHealthFixture"]
+        )
         app.launch()
         XCTAssertTrue(
             app.wait(for: .runningForeground, timeout: 20),
@@ -67,6 +72,49 @@ final class VolumeArcTodayJourneyTests: XCTestCase {
             name: "readiness.opened",
             within: 10,
             test: self
+        )
+    }
+
+    // MARK: - fail.healthkit-not-granted
+
+    /// Apple Health not granted → Today tells the truth about readiness
+    /// quality, records the fallback telemetry event, and routes the
+    /// user to Profile where the Health connection control lives.
+    func testTodayHealthKitUnavailableShowsUnlockStateAndTelemetry() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp()
+        app.launch()
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: 20),
+            "App should reach foreground running state on cold launch"
+        )
+
+        let readiness = app.descendants(matching: .any)
+            .matching(identifier: "today.readinessTile")
+            .firstMatch
+        XCTAssertTrue(
+            readiness.waitForExistence(timeout: 15),
+            "Readiness tile should render on Today within 15s of cold launch"
+        )
+        XCTAssertTrue(
+            readiness.label.localizedCaseInsensitiveContains("Grant Health to unlock"),
+            "Readiness tile should expose the Apple Health unlock state when HealthKit is not authorized"
+        )
+
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "healthkit",
+            name: "unavailable",
+            within: 10,
+            test: self
+        )
+
+        readiness.tap()
+        let profileRoot = app.descendants(matching: .any)
+            .matching(identifier: "profile.root")
+            .firstMatch
+        XCTAssertTrue(
+            profileRoot.waitForExistence(timeout: 10),
+            "Tapping the not-connected readiness card should open Profile to connect Apple Health"
         )
     }
 
@@ -172,6 +220,179 @@ final class VolumeArcTodayJourneyTests: XCTestCase {
         XCTAssertTrue(
             composer.waitForExistence(timeout: 10),
             "Coach composer should appear within 10s of tapping the quick action"
+        )
+    }
+
+    // MARK: - co-design schedule proof
+
+    /// Start from the Today "Plan tomorrow" card, schedule the
+    /// co-designed draft, and assert Workouts reflects the persisted
+    /// plan. This is not counted as a separate `today.*` catalog row;
+    /// it is release evidence for VOL-275's co-design persistence gate.
+    func testTodayPlanTomorrowSchedulesCoDesignedDraftIntoWorkouts() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp()
+        app.launch()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
+
+        let planTomorrow = app.descendants(matching: .any)
+            .matching(identifier: "today.planTomorrow")
+            .firstMatch
+        XCTAssertTrue(
+            planTomorrow.waitForExistence(timeout: 15),
+            "Plan tomorrow card should render on Today within 15s of cold launch"
+        )
+        planTomorrow.tap()
+
+        let planDraft = app.descendants(matching: .any)
+            .matching(identifier: "coach.planDraft")
+            .firstMatch
+        XCTAssertTrue(
+            planDraft.waitForExistence(timeout: 10),
+            "Co-designed plan draft should appear after tapping Plan tomorrow"
+        )
+
+        let schedule = app.descendants(matching: .any)
+            .matching(identifier: "coach.plan.schedule")
+            .firstMatch
+        XCTAssertTrue(
+            VolumeArcAppUITestSupport.scrollIntoViewAndTap(schedule, in: app, timeout: 10, maxScrolls: 4),
+            "Co-designed plan Schedule action should be reachable"
+        )
+
+        let workoutsRoot = app.descendants(matching: .any)
+            .matching(identifier: "workouts.root")
+            .firstMatch
+        XCTAssertTrue(
+            workoutsRoot.waitForExistence(timeout: 10),
+            "Workouts should appear after scheduling the co-designed plan"
+        )
+        XCTAssertTrue(
+            app.staticTexts["Lower-body hypertrophy"].waitForExistence(timeout: 10),
+            "Scheduled co-designed plan title should appear in Workouts"
+        )
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "coach",
+            name: "plan_scheduled",
+            within: 10,
+            test: self
+        )
+    }
+
+    func testTodayPlanTomorrowEditsExerciseRowsBeforeScheduling() throws {
+        let app = VolumeArcAppUITestSupport.makeSeededApp()
+        app.launch()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
+
+        let planTomorrow = app.descendants(matching: .any)
+            .matching(identifier: "today.planTomorrow")
+            .firstMatch
+        XCTAssertTrue(planTomorrow.waitForExistence(timeout: 15))
+        planTomorrow.tap()
+
+        let planDraft = app.descendants(matching: .any)
+            .matching(identifier: "coach.planDraft")
+            .firstMatch
+        XCTAssertTrue(planDraft.waitForExistence(timeout: 10))
+        let dismissKeyboard = app.buttons["coach.keyboardDismiss"].firstMatch
+        if dismissKeyboard.waitForExistence(timeout: 2), dismissKeyboard.isHittable {
+            dismissKeyboard.tap()
+        }
+
+        XCTAssertTrue(
+            VolumeArcAppUITestSupport.scrollIntoViewAndTap(
+                app.descendants(matching: .any).matching(identifier: "coach.plan.exercise.0.toggle").firstMatch,
+                in: app,
+                timeout: 10,
+                maxScrolls: 4
+            ),
+            "First co-design exercise row should expand"
+        )
+        XCTAssertTrue(
+            VolumeArcAppUITestSupport.scrollIntoViewAndTap(
+                app.descendants(matching: .any).matching(identifier: "coach.plan.exercise.0.swap").firstMatch,
+                in: app,
+                timeout: 5,
+                maxScrolls: 2
+            ),
+            "First co-design exercise should expose a Swap action"
+        )
+        let frontSquat = app.staticTexts["Front Squat"].firstMatch
+        XCTAssertTrue(frontSquat.waitForExistence(timeout: 5), "Swap should replace Back Squat with Front Squat")
+
+        XCTAssertTrue(
+            VolumeArcAppUITestSupport.scrollIntoViewAndTap(
+                app.descendants(matching: .any).matching(identifier: "coach.plan.exercise.0.moveDown").firstMatch,
+                in: app,
+                timeout: 5,
+                maxScrolls: 2
+            ),
+            "Moved co-design exercise should expose a Move down action"
+        )
+        let romanianDeadlift = app.staticTexts["Romanian Deadlift"].firstMatch
+        XCTAssertTrue(romanianDeadlift.waitForExistence(timeout: 5))
+        XCTAssertTrue(frontSquat.waitForExistence(timeout: 5))
+        XCTAssertLessThan(
+            romanianDeadlift.frame.minY,
+            frontSquat.frame.minY,
+            "Move down should put Romanian Deadlift above the swapped Front Squat row"
+        )
+
+        XCTAssertTrue(
+            VolumeArcAppUITestSupport.scrollIntoViewAndTap(
+                app.descendants(matching: .any).matching(identifier: "coach.plan.exercise.1.sets.increment").firstMatch,
+                in: app,
+                timeout: 5,
+                maxScrolls: 2
+            ),
+            "Moved co-design exercise should keep stepper controls reachable"
+        )
+        let editedSets = app.descendants(matching: .any)
+            .matching(identifier: "coach.plan.exercise.1.sets.value")
+            .firstMatch
+        XCTAssertTrue(editedSets.waitForExistence(timeout: 5))
+        XCTAssertEqual(editedSets.label, "5")
+
+        XCTAssertTrue(
+            VolumeArcAppUITestSupport.scrollIntoViewAndTap(
+                app.descendants(matching: .any).matching(identifier: "coach.plan.exercise.1.remove").firstMatch,
+                in: app,
+                timeout: 5,
+                maxScrolls: 2
+            ),
+            "Edited co-design exercise should expose a Remove action"
+        )
+        XCTAssertFalse(
+            app.staticTexts["Front Squat"].waitForExistence(timeout: 2),
+            "Remove should delete the edited Front Squat row"
+        )
+
+        let schedule = app.descendants(matching: .any)
+            .matching(identifier: "coach.plan.schedule")
+            .firstMatch
+        XCTAssertTrue(
+            VolumeArcAppUITestSupport.scrollIntoViewAndTap(
+                schedule,
+                in: app,
+                timeout: 10,
+                maxScrolls: 6
+            ),
+            "Edited co-designed plan should remain schedulable"
+        )
+        let workoutsRoot = app.descendants(matching: .any)
+            .matching(identifier: "workouts.root")
+            .firstMatch
+        XCTAssertTrue(workoutsRoot.waitForExistence(timeout: 10))
+        XCTAssertTrue(
+            app.staticTexts["3 moves - Romanian Deadlift first"].waitForExistence(timeout: 10),
+            "Scheduled Workouts card should reflect the edited co-designed exercise list"
+        )
+        VolumeArcAppUITestSupport.assertTelemetryFired(
+            in: app,
+            category: "coach",
+            name: "plan_scheduled",
+            within: 10,
+            test: self
         )
     }
 }
