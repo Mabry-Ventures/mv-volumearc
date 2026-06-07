@@ -797,7 +797,7 @@ jobs:
   perf-regression:
     # VOL-99: performance regression suite. Tag-gated because each
     # measured test runs multiple iterations. Tag builds remain the
-    # hard gate (preventing TestFlight deploy) when any metric exceeds
+    # hard gate (preventing release promotion) when any metric exceeds
     # its fail threshold declared in `docs/performance-budgets.json`.
     # Same-repo PRs now run the same suite warning-only so perf drift is
     # visible before merge without blocking release work on simulator
