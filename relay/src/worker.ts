@@ -161,17 +161,17 @@ async function handleCoach(request: Request, env: Env): Promise<Response> {
     return json({ error: auth.error, reason: auth.reason }, auth.status);
   }
 
+  const rateOk = await checkRateLimit(auth.deviceId, env);
+  if (!rateOk) {
+    return json({ error: "rate_limited" }, 429);
+  }
+
   const deterministicSafetyResponse = coachSafetyResponse(body);
   if (deterministicSafetyResponse) {
     return sseText(deterministicSafetyResponse, {
       "x-coach-model": "deterministic-safety",
       "x-coach-safety": "red-flag",
     });
-  }
-
-  const rateOk = await checkRateLimit(auth.deviceId, env);
-  if (!rateOk) {
-    return json({ error: "rate_limited" }, 429);
   }
 
   const tier = request.headers.get("X-Coach-Tier")?.toLowerCase();
@@ -512,7 +512,7 @@ function hasMedicalRedFlag(text: string): boolean {
 function hasCurrentMedicalRedFlag(text: string): boolean {
   const patterns = [
     "\\bchest\\s+pain\\b",
-    "\\bpain\\s+in\\s+(?:the\\s+)?chest\\b",
+    "\\bpain\\s+in\\s+(?:(?:the|my|your|his|her|their|its)\\s+)?chest\\b",
     "\\bdizz(?:y|iness)\\b",
     "\\blightheaded\\b",
     "\\bfaint(?:ed|ing)?\\b",
@@ -688,7 +688,7 @@ function isBareSharedNegationContinuation(line: string): boolean {
     "^fainting$",
     "^syncope$",
     "^chest\\s+pain$",
-    "^pain\\s+in\\s+(?:the\\s+)?chest$",
+    "^pain\\s+in\\s+(?:(?:the|my|your|his|her|their|its)\\s+)?chest$",
     "^pregnan(?:t|cy)$",
     "^eating\\s+disorder$",
     "^(?:cardiac\\s+event|heart\\s+attack|palpitations|arrhythmia)$",

@@ -871,25 +871,63 @@ describe("volumearc-ai-relay App Attest auth", () => {
 
   it("short-circuits pain-in-chest red flags from current context", async () => {
     const env = makeEnv();
+    const contextVariants = [
+      "athlete reported pain in the chest during squats today.",
+      "athlete reported pain in my chest during squats today.",
+    ];
+
+    for (const [index, contextLine] of contextVariants.entries()) {
+      vi.mocked(fetch).mockClear();
+      const body = JSON.stringify({
+        intent: "progression",
+        question: "Should I train today?",
+        contextBlock: [
+          "## Training context",
+          "- Readiness: 86/100 - Strong recovery.",
+          `- Recent coaching notes: ${contextLine}`,
+        ].join("\n"),
+        style: "minimal",
+        prompt: "",
+        system: "",
+      });
+
+      const response = await worker.fetch(
+        coachRequest(await appAttestAuthHeaders(env, body, index + 1), body),
+        env,
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+      expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+      await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+      expect(fetch).not.toHaveBeenCalled();
+    }
+  });
+
+  it("rate-limits deterministic safety coach responses after authentication", async () => {
+    const env = makeEnv({
+      RATE_LIMIT_MAX_REQUESTS: "1",
+      RATE_LIMIT_WINDOW_SECONDS: "600",
+    });
     const body = JSON.stringify({
-      intent: "progression",
-      question: "Should I train today?",
-      contextBlock: [
-        "## Training context",
-        "- Readiness: 86/100 - Strong recovery.",
-        "- Recent coaching notes: athlete reported pain in the chest during squats today.",
-      ].join("\n"),
+      intent: "free",
+      question: "I have chest pain during my top set but want to finish the workout. What should I do?",
+      contextBlock: "## Training context\n- Readiness: 72/100",
       style: "minimal",
       prompt: "",
       system: "",
     });
+    const headers = await appAttestAuthHeaders(env, body);
+    const keyId = (headers as Record<string, string>)["X-VA-Attest-Key-ID"];
+    await env.RATE_LIMIT.put(`rl:${keyId}`, JSON.stringify([Math.floor(Date.now() / 1000)]), {
+      expirationTtl: 1200,
+    });
 
-    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+    const response = await worker.fetch(coachRequest(headers, body), env);
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
-    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
-    await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+    expect(response.status).toBe(429);
+    await expect(json(response)).resolves.toMatchObject({ error: "rate_limited" });
+    expect(response.headers.get("x-coach-model")).toBeNull();
     expect(fetch).not.toHaveBeenCalled();
   });
 

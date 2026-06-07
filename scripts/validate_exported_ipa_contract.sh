@@ -152,7 +152,18 @@ path, key, expected, label = sys.argv[1:5]
 with open(path, "rb") as handle:
     entitlements = plistlib.load(handle)
 actual = entitlements.get(key)
-if expected not in (actual or []):
+
+if isinstance(actual, str):
+    matches = actual == expected
+elif actual is None:
+    matches = False
+else:
+    try:
+        matches = expected in actual
+    except TypeError:
+        matches = False
+
+if not matches:
     print(f"FAIL: {label} signed entitlement {key} missing {expected!r}; got {actual!r}", file=sys.stderr)
     sys.exit(1)
 PY

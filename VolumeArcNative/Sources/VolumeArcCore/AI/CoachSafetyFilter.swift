@@ -333,7 +333,7 @@ public enum CoachSafetyFilter {
             #"^fainting$"#,
             #"^syncope$"#,
             #"^chest\s+pain$"#,
-            #"^pain\s+in\s+(?:the\s+)?chest$"#,
+            #"^pain\s+in\s+(?:(?:the|my|your|his|her|their|its)\s+)?chest$"#,
             #"^pregnan(?:t|cy)$"#,
             #"^eating\s+disorder$"#,
             #"^(?:cardiac\s+event|heart\s+attack|palpitations|arrhythmia)$"#,
@@ -373,7 +373,7 @@ public enum CoachSafetyFilter {
 
     private static let contextMedicalRedFlagPatterns = [
         #"\bchest\s+pain\b"#,
-        #"\bpain\s+in\s+(?:the\s+)?chest\b"#,
+        #"\bpain\s+in\s+(?:(?:the|my|your|his|her|their|its)\s+)?chest\b"#,
         #"\bdizz(?:y|iness)\b"#,
         #"\blightheaded\b"#,
         #"\bfaint(?:ed|ing)?\b"#,

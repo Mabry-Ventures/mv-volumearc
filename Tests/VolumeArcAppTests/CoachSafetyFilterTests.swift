@@ -206,6 +206,19 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertTrue(response?.lowercased().contains("medical care") == true)
     }
 
+    func testPainInMyChestContextMedicalRedFlagStillEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I keep training?",
+            context: """
+            Readiness: 88/100 - strong recovery
+            - Recent coaching notes: athlete reported pain in my chest during squats today.
+            """
+        )
+
+        XCTAssertNotNil(response)
+        XCTAssertTrue(response?.lowercased().contains("medical care") == true)
+    }
+
     func testStaleContextMedicalRedFlagDoesNotEscalate() {
         let response = CoachSafetyFilter.medicalRedFlagResponse(
             prompt: "Should I train today?",
