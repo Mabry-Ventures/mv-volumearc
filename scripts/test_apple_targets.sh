@@ -367,11 +367,7 @@ xcrun simctl bootstatus "$WATCHOS_TEST_DEVICE_NAME" -b
 sleep 5
 
 run_watch_tests() {
-  "$ROOT/scripts/run_with_timeout.py" \
-    --timeout "$WATCH_TEST_WALL_TIMEOUT" \
-    --label "Watch unit tests" \
-    -- \
-    xcodebuild \
+  xcodebuild \
     -project "VolumeArcApple.xcodeproj" \
     -scheme "VolumeArcWatchTests" \
     -destination "platform=watchOS Simulator,name=$WATCHOS_TEST_DEVICE_NAME" \
@@ -389,12 +385,11 @@ run_watch_tests() {
 # Codex review on PR #237: `if ! foo; then $? = $?` captures the
 # negation result (0), not the underlying failure exit code — so
 # watch-test failures would slip through as green CI. Run with `set
-# +e` and capture `$?` directly. The watch xcodebuild itself is
-# wrapped by `scripts/run_with_timeout.py`, which creates a separate
-# process group and kills the whole xcodebuild tree if the watch
-# simulator wedges before XCTest can apply per-test timeouts.
+# +e` and capture `$?` directly. Same pattern as the iOS unit-test
+# retry mitigation in `claude/unit-test-channel-disconnect-retry`
+# (PR #241).
 set +e
-run_watch_tests
+run_with_wallclock_timeout "$WATCH_TEST_WALL_TIMEOUT" "Watch unit tests" run_watch_tests
 watch_test_status=$?
 set -e
 
