@@ -41,13 +41,17 @@ There is **no live tag-triggered TestFlight workflow** in App Store Connect toda
 1. Merge all changes to `main` after required GitHub and Xcode Cloud PR gates pass.
 2. Bump `VERSION` if needed.
 3. Run the live staging response eval suite against the selected relay/model routing, publish the resulting green trend to `docs/coach-eval-trend.json`, mirror it to `marketing/src/data/coach-eval-trend.json`, and verify:
+
    ```bash
    ./scripts/check_coach_eval_trend.sh
    ```
+
 4. Run the release-ready local/static gate:
+
    ```bash
    VOLUMEARC_RELEASE_READY=1 ./scripts/validate_release_config.sh
    ```
+
 5. In App Store Connect, open Apps → VolumeArc → Xcode Cloud → `Internal Testing`.
 6. Start a manual run from branch `main`.
 7. Xcode Cloud archives the app with Apple-managed signing and uploads to internal TestFlight.

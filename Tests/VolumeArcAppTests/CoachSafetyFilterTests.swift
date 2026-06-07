@@ -105,6 +105,31 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertNil(response)
     }
 
+    func testExpandedNegatedContextMedicalRedFlagsDoNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I train today?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Check-in: not pregnant now; denies syncope; no fainting; not having chest pain or palpitations; not restricting; not purging.
+            """
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testMixedNegatedAndCurrentContextMedicalRedFlagsStillEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I train today?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Check-in: no chest pain, but passed out after squats today.
+            """
+        )
+
+        XCTAssertNotNil(response)
+        XCTAssertTrue(response?.lowercased().contains("medical care") == true)
+    }
+
     func testStaleContextMedicalRedFlagDoesNotEscalate() {
         let response = CoachSafetyFilter.medicalRedFlagResponse(
             prompt: "Should I train today?",

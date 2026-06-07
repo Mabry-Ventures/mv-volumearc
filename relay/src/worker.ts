@@ -503,7 +503,7 @@ function hasMedicalRedFlag(text: string): boolean {
     containsPattern("\\bunder\\s+18\\b", text) ||
     containsPattern("\\b(?:i\\s*(?:am|\\W?m)\\s+a|as\\s+a)\\s+minor\\b", text);
   const strengthRisk = containsPattern(
-    "\\b(max|1\\s*rm|one[- ]rep|max|pr|personal\\s+record|heavy|heavier|attempt)\\b",
+    "\\b(max|1\\s*rm|one[- ]rep|pr|personal\\s+record|heavy|heavier|attempt)\\b",
     text,
   );
   return minorSafetyConcern && strengthRisk;
@@ -528,12 +528,21 @@ function hasCurrentMedicalRedFlag(text: string): boolean {
   ];
   return text
     .split(/\r?\n/)
-    .some(
-      (line) =>
-        !isStaleMedicalRedFlagLine(line) &&
-        !isNegatedMedicalRedFlagLine(line) &&
-        patterns.some((pattern) => containsPattern(pattern, line)),
+    .some((line) =>
+      medicalRedFlagClauses(line).some(
+        (clause) =>
+          !isStaleMedicalRedFlagLine(clause) &&
+          !isNegatedMedicalRedFlagLine(clause) &&
+          patterns.some((pattern) => containsPattern(pattern, clause)),
+      ),
     );
+}
+
+function medicalRedFlagClauses(line: string): string[] {
+  return line
+    .split(/\b(?:but|however)\b|[.;]/i)
+    .map((clause) => clause.trim())
+    .filter((clause) => clause.length > 0);
 }
 
 function isStaleMedicalRedFlagLine(line: string): boolean {
@@ -550,11 +559,56 @@ function isNegatedMedicalRedFlagLine(line: string): boolean {
     "denies chest pain",
     "without chest pain",
     "not experiencing chest pain",
+    "not having chest pain",
     "no dizziness",
     "denies dizziness",
+    "without dizziness",
+    "not dizzy",
+    "not experiencing dizziness",
+    "no lightheadedness",
+    "denies lightheadedness",
+    "not lightheaded",
+    "no fainting",
+    "denies fainting",
+    "not fainting",
+    "no syncope",
+    "denies syncope",
+    "without syncope",
+    "not experiencing syncope",
+    "did not pass out",
+    "didn't pass out",
+    "hasn't passed out",
     "no shortness of breath",
     "denies shortness of breath",
     "no trouble breathing",
+    "not short of breath",
+    "can breathe normally",
+    "without breathing trouble",
+    "not pregnant",
+    "not pregnant now",
+    "no pregnancy",
+    "denies pregnancy",
+    "no cardiac symptoms",
+    "denies cardiac symptoms",
+    "not experiencing cardiac symptoms",
+    "no cardiac event",
+    "denies cardiac event",
+    "no heart attack",
+    "denies heart attack",
+    "no palpitations",
+    "denies palpitations",
+    "no arrhythmia",
+    "denies arrhythmia",
+    "not having chest pain or palpitations",
+    "no eating disorder",
+    "denies eating disorder",
+    "not an eating disorder",
+    "not restricting",
+    "not purging",
+    "denies purging",
+    "no purging",
+    "not starving",
+    "eating normally",
     "symptoms resolved",
     "resolved symptoms",
   ].some((phrase) => lowered.includes(phrase));

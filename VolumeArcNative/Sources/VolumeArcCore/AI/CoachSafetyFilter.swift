@@ -108,7 +108,7 @@ public enum CoachSafetyFilter {
             containsPattern("\\bunder\\s+18\\b", in: text) ||
             containsPattern("\\b(?:i\\s*(?:am|\\W?m)\\s+a|as\\s+a)\\s+minor\\b", in: text)
         let strengthRisk =
-            containsPattern("\\b(max|1\\s*rm|one[- ]rep|max|pr|personal\\s+record|heavy|heavier|attempt)\\b", in: text)
+            containsPattern("\\b(max|1\\s*rm|one[- ]rep|pr|personal\\s+record|heavy|heavier|attempt)\\b", in: text)
 
         guard redFlagPatterns.contains(where: { containsPattern($0, in: text) }) ||
             (minorSafetyConcern && strengthRisk) else {
@@ -150,11 +150,25 @@ public enum CoachSafetyFilter {
         context
             .components(separatedBy: .newlines)
             .contains { line in
-                let lowered = line.lowercased()
-                guard !isStaleMedicalRedFlagLine(lowered),
-                      !isNegatedMedicalRedFlagLine(lowered) else { return false }
-                return contextMedicalRedFlagPatterns.contains { containsPattern($0, in: line) }
+                medicalRedFlagClauses(in: line).contains { clause in
+                    let lowered = clause.lowercased()
+                    guard !isStaleMedicalRedFlagLine(lowered),
+                          !isNegatedMedicalRedFlagLine(lowered) else { return false }
+                    return contextMedicalRedFlagPatterns.contains { containsPattern($0, in: clause) }
+                }
             }
+    }
+
+    private static func medicalRedFlagClauses(in line: String) -> [String] {
+        line
+            .replacingOccurrences(
+                of: #"(?i)\b(?:but|however)\b"#,
+                with: ";",
+                options: .regularExpression
+            )
+            .components(separatedBy: CharacterSet(charactersIn: ".;"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     private static func isStaleMedicalRedFlagLine(_ loweredLine: String) -> Bool {
@@ -173,11 +187,56 @@ public enum CoachSafetyFilter {
             "denies chest pain",
             "without chest pain",
             "not experiencing chest pain",
+            "not having chest pain",
             "no dizziness",
             "denies dizziness",
+            "without dizziness",
+            "not dizzy",
+            "not experiencing dizziness",
+            "no lightheadedness",
+            "denies lightheadedness",
+            "not lightheaded",
+            "no fainting",
+            "denies fainting",
+            "not fainting",
+            "no syncope",
+            "denies syncope",
+            "without syncope",
+            "not experiencing syncope",
+            "did not pass out",
+            "didn't pass out",
+            "hasn't passed out",
             "no shortness of breath",
             "denies shortness of breath",
             "no trouble breathing",
+            "not short of breath",
+            "can breathe normally",
+            "without breathing trouble",
+            "not pregnant",
+            "not pregnant now",
+            "no pregnancy",
+            "denies pregnancy",
+            "no cardiac symptoms",
+            "denies cardiac symptoms",
+            "not experiencing cardiac symptoms",
+            "no cardiac event",
+            "denies cardiac event",
+            "no heart attack",
+            "denies heart attack",
+            "no palpitations",
+            "denies palpitations",
+            "no arrhythmia",
+            "denies arrhythmia",
+            "not having chest pain or palpitations",
+            "no eating disorder",
+            "denies eating disorder",
+            "not an eating disorder",
+            "not restricting",
+            "not purging",
+            "denies purging",
+            "no purging",
+            "not starving",
+            "eating normally",
             "symptoms resolved",
             "resolved symptoms",
         ].contains { loweredLine.contains($0) }

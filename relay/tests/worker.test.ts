@@ -936,6 +936,52 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("does not short-circuit expanded negated current context red flags", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Should I train today?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 86/100 - Strong recovery.",
+        "- Check-in: not pregnant now; denies syncope; no fainting; not having chest pain or palpitations; not restricting; not purging.",
+      ].join("\n"),
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("still short-circuits mixed negated and current context red flags", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Should I train today?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 86/100 - Strong recovery.",
+        "- Check-in: no chest pain, but passed out after squats today.",
+      ].join("\n"),
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("does not short-circuit stale medical history in context", async () => {
     const env = makeEnv();
     const body = JSON.stringify({
