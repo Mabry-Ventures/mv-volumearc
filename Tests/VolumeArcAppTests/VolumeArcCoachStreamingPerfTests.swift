@@ -36,6 +36,7 @@
 // AICoachProvider; deferred until needed.
 
 #if canImport(SwiftData)
+import Combine
 import SwiftData
 import XCTest
 import VolumeArcCore
@@ -51,13 +52,69 @@ final class VolumeArcCoachStreamingPerfTests: XCTestCase {
     /// Gemini's SSE pacing) — exercising a 2.5× headroom ensures the
     /// contract holds for longer responses or larger context windows.
     ///
-    /// Asserts: 1000 chunk appends complete in under 250ms on the
-    /// test runner. The model publishes the first visible token, then
-    /// micro-batches transcript updates so hosted CI variance does not
-    /// turn a long SSE response into 1000 main-actor publishes.
+    /// Asserts: 1000 chunk appends stay under a broad wall-clock guard
+    /// and produce only a handful of `coachMessages` publishes. The
+    /// bounded publish count is the important contract: the model
+    /// publishes the first visible token, then micro-batches transcript
+    /// updates so hosted CI variance does not turn a long SSE response
+    /// into 1000 main-actor publishes.
     func testStreamingAppendIsLinearInResponseLength() throws {
-        let provider = StubStreamingCoachProvider(chunkCount: 1000)
+        let result = try measureStreamingAppend(chunkCount: 1000)
+
+        XCTAssertEqual(
+            result.model.coachMessages.last?.sender,
+            .coach,
+            "Stream should end with one coach-authored message"
+        )
+        XCTAssertGreaterThanOrEqual(
+            result.model.coachMessages.last?.content.count ?? 0,
+            1000,
+            "1000-chunk synthetic stream should produce at least 1000 chars of content"
+        )
+        XCTAssertLessThanOrEqual(
+            result.coachMessagePublishCount,
+            6,
+            """
+            VOL-257 contract regression: 1000 streamed chunks produced \
+            \(result.coachMessagePublishCount) coachMessages publishes. \
+            Expected user bubble, empty coach bubble, first-token publish, \
+            and final publish with small headroom; a publish per token \
+            would reintroduce UI churn.
+            """
+        )
+        XCTAssertLessThan(
+            result.millis,
+            750.0,
+            """
+            VOL-257 contract regression: streaming 1000 tokens through \
+            WorkoutDashboardModel.streamCoachResponse took \(result.millis)ms \
+            (budget 750ms). The current implementation is O(n) — if \
+            this test fails, check whether bubble identity is still \
+            stable (ForEach keyed on \\.element.id) and whether \
+            replaceCoachMessage(id:content:) still updates in-place.
+            """
+        )
+    }
+
+    // MARK: - Helpers
+
+    private struct StreamingMeasurement {
+        let model: WorkoutDashboardModel
+        let millis: Double
+        let coachMessagePublishCount: Int
+    }
+
+    private func measureStreamingAppend(
+        chunkCount: Int
+    ) throws -> StreamingMeasurement {
+        let provider = StubStreamingCoachProvider(chunkCount: chunkCount)
         let model = try makeModel(aiProvider: provider)
+        var coachMessagePublishCount = 0
+        let cancellable = model.$coachMessages
+            .dropFirst()
+            .sink { _ in
+                coachMessagePublishCount += 1
+            }
 
         let clock = ContinuousClock()
         let elapsed = clock.measure {
@@ -67,40 +124,21 @@ final class VolumeArcCoachStreamingPerfTests: XCTestCase {
             // append work, not async overhead.
             let waiter = expectation(description: "stream completes")
             Task {
-                await model.askCoach("synthetic 1000-token perf probe")
+                await model.askCoach("synthetic \(chunkCount)-token perf probe")
                 waiter.fulfill()
             }
             wait(for: [waiter], timeout: 30)
         }
 
+        withExtendedLifetime(cancellable) {}
         let millis = Double(elapsed.components.seconds) * 1000.0
             + Double(elapsed.components.attoseconds) / 1e15
-
-        XCTAssertEqual(
-            model.coachMessages.last?.sender,
-            .coach,
-            "Stream should end with one coach-authored message"
-        )
-        XCTAssertGreaterThanOrEqual(
-            model.coachMessages.last?.content.count ?? 0,
-            1000,
-            "1000-chunk synthetic stream should produce at least 1000 chars of content"
-        )
-        XCTAssertLessThan(
-            millis,
-            250.0,
-            """
-            VOL-257 contract regression: streaming 1000 tokens through \
-            WorkoutDashboardModel.streamCoachResponse took \(millis)ms \
-            (budget 250ms). The current implementation is O(n) — if \
-            this test fails, check whether bubble identity is still \
-            stable (ForEach keyed on \\.element.id) and whether \
-            replaceCoachMessage(id:content:) still updates in-place.
-            """
+        return StreamingMeasurement(
+            model: model,
+            millis: millis,
+            coachMessagePublishCount: coachMessagePublishCount
         )
     }
-
-    // MARK: - Helpers
 
     private func makeModel(aiProvider: any AICoachProvider) throws -> WorkoutDashboardModel {
         let schema = Schema(VolumeArcSchemaV5.models)

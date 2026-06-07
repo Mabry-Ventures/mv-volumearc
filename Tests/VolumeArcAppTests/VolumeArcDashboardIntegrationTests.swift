@@ -291,8 +291,10 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
             $0.category == "liveactivity" && $0.name == "started"
         })
         XCTAssertEqual(startedEvent.severity, .info)
-        XCTAssertEqual(startedEvent.metadata["workout"], liveState.workoutTitle)
-        XCTAssertEqual(startedEvent.metadata["exercise"], liveState.activeExerciseName)
+        XCTAssertEqual(startedEvent.metadata["workout_title_present"], "true")
+        XCTAssertEqual(startedEvent.metadata["exercise_present"], "true")
+        XCTAssertNil(startedEvent.metadata["workout"])
+        XCTAssertNil(startedEvent.metadata["exercise"])
 
         _ = await model.completeWorkoutSession()
 
