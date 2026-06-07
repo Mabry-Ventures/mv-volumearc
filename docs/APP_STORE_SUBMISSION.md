@@ -116,7 +116,7 @@ Use this as the App Store Connect privacy questionnaire source. It is derived fr
 | Crash Data | Yes | No | No | App Functionality | Sentry crash diagnostics, scrubbed before send. |
 | Performance Data | Yes | No | No | App Functionality | Sentry performance diagnostics. |
 | Other Diagnostic Data | Yes | No | No | App Functionality | Scrubbed operational breadcrumbs and feedback diagnostic context. |
-| Contact Info | No | No | No | N/A | No account system; support contact is outside the app or user-entered feedback text that is scrubbed. |
+| Contact Info | No | No | No | N/A | No VolumeArc-owned account database; support contact is outside the app or user-entered feedback text that is scrubbed. |
 | Identifiers for tracking | No | No | No | N/A | No ad SDK, no tracking domains, no ATT tracking. App Attest is operational auth for the relay. |
 | Location | No | No | No | N/A | Not requested or collected. |
 | Financial Info | No | No | No | N/A | StoreKit handles subscription purchase and receipt state. |

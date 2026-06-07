@@ -23,7 +23,7 @@ The release bar is now higher than the original positioning decision. VolumeArc 
 **What we ship that most competitors don't:**
 - Native Apple watch + phone with **parity**, not a shrunken companion
 - Live Activities + Dynamic Island for active workouts
-- CloudKit cross-device sync without user-visible account setup
+- CloudKit continuity across iPhone and Apple Watch, with optional Sign in with Apple profile identity
 - Readiness derived from actual HealthKit (HRV, sleep, recovery) feeding a real progression engine
 - Liquid Glass (iOS 26) design language adoption on day one
 - Private-by-default data (SwiftData + CloudKit, no third-party telemetry of training data)
@@ -33,7 +33,7 @@ The release bar is now higher than the original positioning decision. VolumeArc 
 
 ### Option A — "Deepest Apple-ecosystem strength coach" (recommended)
 
-The pitch: *"If you live inside the Apple ecosystem, VolumeArc is the only strength coach that actually uses it. Your watch leads the session. Your readiness comes from your real recovery data. Your history follows you across every Apple device."*
+The pitch: *"If you live inside the Apple ecosystem, VolumeArc is the only strength coach that actually uses it. Your watch leads the session. Your readiness comes from your real recovery data. Your history follows you across iPhone and Apple Watch."*
 
 **Why it wins:**
 - The architecture matches the promise. HealthKit, WatchConnectivity, CloudKit, widgets, Live Activities, Watch-as-primary-surface, curated programs, and readiness-aware coaching are all in the product.
