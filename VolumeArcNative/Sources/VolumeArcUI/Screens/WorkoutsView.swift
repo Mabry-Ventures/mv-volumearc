@@ -284,7 +284,8 @@ public struct WorkoutsView: View {
                                 ? "figure.strengthtraining.traditional"
                                 : "arrow.triangle.2.circlepath",
                             size: 88,
-                            accent: replacementExercise == nil ? VA.Colors.primary : VA.Colors.secondary
+                            accent: replacementExercise == nil ? VA.Colors.primary : VA.Colors.secondary,
+                            illustrationAssetName: currentExerciseDefinition?.illustrationAssetName
                         )
                         VStack(alignment: .leading, spacing: VA.Space.xs) {
                             Text(String(

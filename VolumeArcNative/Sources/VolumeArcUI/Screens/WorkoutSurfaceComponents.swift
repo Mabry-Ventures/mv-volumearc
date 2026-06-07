@@ -1,5 +1,8 @@
 #if canImport(SwiftUI)
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 import VolumeArcCore
 
 struct WorkoutIdleLibrary: View {
@@ -473,14 +476,50 @@ struct WorkoutIllustrationTile: View {
     let systemImage: String
     let size: CGFloat
     let accent: Color
+    var illustrationAssetName: String?
 
     var body: some View {
+        ZStack {
+            tileContent
+        }
+        .frame(width: size, height: size)
+        .background(VA.Colors.textTertiary.opacity(0.10), in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private var tileContent: some View {
+        #if canImport(UIKit)
+        if let illustrationAssetName,
+           let image = UIImage(named: illustrationAssetName, in: .main, compatibleWith: nil) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+        } else {
+            fallbackIcon
+        }
+        #else
+        // On the shipping Apple app target these assets live in the main app
+        // bundle. Non-UIKit preview/test hosts fall back if the bundle does not
+        // expose asset lookup.
+        if let illustrationAssetName {
+            Image(illustrationAssetName, bundle: .main)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+        } else {
+            fallbackIcon
+        }
+        #endif
+    }
+
+    private var fallbackIcon: some View {
         Image(systemName: systemImage)
             .font(size >= 80 ? VA.Typography.title : VA.Typography.headline)
             .foregroundStyle(accent)
-            .frame(width: size, height: size)
-            .background(VA.Colors.textTertiary.opacity(0.10), in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
-            .accessibilityHidden(true)
     }
 }
 

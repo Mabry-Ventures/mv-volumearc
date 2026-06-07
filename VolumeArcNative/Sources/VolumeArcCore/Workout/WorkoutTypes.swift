@@ -84,21 +84,27 @@ public enum CoachWorkoutPlanExtractor {
         let trimmed = line
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "-* "))
-        let seconds = firstInt(matching: #"(\d+)\s*seconds?"#, in: trimmed)
+        let normalizedLine = lineWithoutListMarker(trimmed)
+        let seconds = firstInt(matching: #"(\d+)\s*seconds?"#, in: normalizedLine)
+        let setRep = setRepPair(in: normalizedLine)
         guard trimmed.range(of: "rep", options: .caseInsensitive) != nil
                 || seconds != nil
+                || setRep != nil
         else { return nil }
 
-        guard let name = exerciseName(from: trimmed),
+        guard let name = exerciseName(from: normalizedLine),
               !name.isEmpty,
-              let sets = firstInt(matching: #"(\d+)\s*sets?"#, in: trimmed) ?? (seconds == nil ? nil : 1)
+              let sets = firstInt(matching: #"(\d+)\s*sets?"#, in: normalizedLine)
+                ?? setRep?.sets
+                ?? (seconds == nil ? nil : 1)
         else { return nil }
 
-        let reps = firstInt(matching: #"(\d+)\s*reps?"#, in: trimmed)
+        let reps = firstInt(matching: #"(\d+)\s*reps?"#, in: normalizedLine)
+            ?? setRep?.reps
             ?? seconds
             ?? 1
         let targetRPE = conservativeResponse(response) ? 6 : 7
-        let weight = firstInt(matching: #"(\d+)\s*(?:lb|lbs|pounds?)"#, in: trimmed)
+        let weight = firstInt(matching: #"(\d+)\s*(?:lb|lbs|pounds?)"#, in: normalizedLine)
             ?? defaultWeight(for: name, response: response)
         return WeeklyWorkoutExercise(
             name: name,
@@ -108,6 +114,17 @@ public enum CoachWorkoutPlanExtractor {
             targetRPE: targetRPE,
             restSeconds: targetRPE <= 6 ? 75 : 120
         )
+    }
+
+    private static func lineWithoutListMarker(_ line: String) -> String {
+        guard let regex = try? NSRegularExpression(
+            pattern: #"^\s*(?:\d+[\.)]|[A-Za-z][\.)])\s+"#,
+            options: []
+        ) else { return line }
+        let range = NSRange(line.startIndex..<line.endIndex, in: line)
+        return regex
+            .stringByReplacingMatches(in: line, range: range, withTemplate: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func exerciseName(from line: String) -> String? {
@@ -136,9 +153,31 @@ public enum CoachWorkoutPlanExtractor {
         return Int(text[matchRange])
     }
 
+    private static func setRepPair(in text: String) -> (sets: Int, reps: Int)? {
+        let patterns = [
+            #"(\d+)\s*(?:x|×)\s*(\d+)"#,
+            #"(\d+)\s*sets?\s*(?:of|x|×)?\s*(\d+)"#,
+        ]
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+                  let match = regex.firstMatch(in: text, range: range)
+            else { continue }
+            guard match.numberOfRanges > 2,
+                  let setsRange = Range(match.range(at: 1), in: text),
+                  let repsRange = Range(match.range(at: 2), in: text),
+                  let sets = Int(text[setsRange]),
+                  let reps = Int(text[repsRange])
+            else { continue }
+            return (sets, reps)
+        }
+        return nil
+    }
+
     private static func conservativeResponse(_ response: String) -> Bool {
         let lowered = response.lowercased()
         return lowered.contains("light")
+            || lowered.contains("easy")
             || lowered.contains("take it easy")
             || lowered.contains("sick")
             || lowered.contains("sore")

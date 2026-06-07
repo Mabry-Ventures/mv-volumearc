@@ -136,6 +136,34 @@ final class VolumeArcCoachPromptTemplateTests: XCTestCase {
         XCTAssertEqual(extractedPlan.exercises[3].reps, 30)
     }
 
+    func testCoachWorkoutPlanExtractorBuildsStartablePlanFromNumberedSetRepLines() {
+        let response = """
+        Keep the effort easy today.
+
+        1. Goblet Squat - 3x8
+        2. Dumbbell Row - 3 x 10
+        3. Side Plank - 2 x 30 seconds
+        """
+
+        guard let extractedPlan = CoachWorkoutPlanExtractor.plan(from: response, title: "Coach Workout") else {
+            XCTFail("Expected numbered set/rep lines to produce a startable workout plan")
+            return
+        }
+
+        XCTAssertEqual(extractedPlan.targetRPE, 6)
+        XCTAssertEqual(extractedPlan.exercises.map(\.name), [
+            "Goblet Squat",
+            "Dumbbell Row",
+            "Side Plank",
+        ])
+        XCTAssertEqual(extractedPlan.exercises[0].sets, 3)
+        XCTAssertEqual(extractedPlan.exercises[0].reps, 8)
+        XCTAssertEqual(extractedPlan.exercises[1].sets, 3)
+        XCTAssertEqual(extractedPlan.exercises[1].reps, 10)
+        XCTAssertEqual(extractedPlan.exercises[2].sets, 2)
+        XCTAssertEqual(extractedPlan.exercises[2].reps, 30)
+    }
+
     func testCoachWorkoutPlanExtractorIgnoresVagueAdviceWithoutSetsAndReps() {
         let plan = CoachWorkoutPlanExtractor.plan(
             from: "Take it easy today. Walk, hydrate, and resume lifting when symptoms improve.",
