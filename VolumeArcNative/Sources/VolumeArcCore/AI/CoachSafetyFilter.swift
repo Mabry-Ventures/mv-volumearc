@@ -85,6 +85,8 @@ public enum CoachSafetyFilter {
             "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
                 nearby + "\\bchest\\s+pain\\b",
             "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+                nearby + "\\bpain\\s+in\\s+(?:(?:my|the)\\s+)?chest\\b",
+            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
                 nearby + "\\bdizz(?:y|iness)\\b",
             "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
                 nearby + "\\blightheaded\\b",
@@ -162,7 +164,7 @@ public enum CoachSafetyFilter {
     private static func medicalRedFlagClauses(in line: String) -> [String] {
         line
             .replacingOccurrences(
-                of: #"(?i)\b(?:but|however)\b"#,
+                of: #"(?i)\b(?:but|however|and)\b"#,
                 with: ";",
                 options: .regularExpression
             )

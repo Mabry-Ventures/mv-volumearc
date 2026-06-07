@@ -258,7 +258,7 @@ enum VolumeArcSentryConfiguration {
             return """
             Sentry DSN is not configured for this local Debug build, so crash \
             reporting is unavailable here. TestFlight and App Store builds \
-            must provide SENTRY_DSN.
+            must provide VOLUMEARC_SENTRY_DSN.
             """
         }
         return "Sentry DSN is not configured, so crash reporting is unavailable on this Release build."

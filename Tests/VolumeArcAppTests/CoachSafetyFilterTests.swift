@@ -76,6 +76,19 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertFalse(lowered.contains("finish the workout"))
     }
 
+    func testPainInChestPromptMedicalRedFlagOverridesGeneratedAdvice() {
+        let response = CoachSafetyFilter.filteredResponse(
+            prompt: "I have pain in my chest after deadlifts. Should I finish?",
+            context: "Readiness: 90/100 - peak recovery",
+            response: "Finish the workout with lighter sets."
+        )
+        let lowered = response.lowercased()
+
+        XCTAssertTrue(lowered.contains("stop the session"))
+        XCTAssertTrue(lowered.contains("medical care"))
+        XCTAssertFalse(lowered.contains("finish the workout"))
+    }
+
     func testMedicalRedFlagFromCurrentContextOverridesGeneratedAdvice() {
         let response = CoachSafetyFilter.filteredResponse(
             prompt: "Should I push today?",
@@ -136,6 +149,19 @@ final class CoachSafetyFilterTests: XCTestCase {
             context: """
             Readiness: 86/100 - strong recovery
             - Check-in: no chest pain, passed out after squats today.
+            """
+        )
+
+        XCTAssertNotNil(response)
+        XCTAssertTrue(response?.lowercased().contains("medical care") == true)
+    }
+
+    func testAndMixedNegatedAndCurrentContextMedicalRedFlagsStillEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I train today?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Check-in: no chest pain and passed out after squats today.
             """
         )
 

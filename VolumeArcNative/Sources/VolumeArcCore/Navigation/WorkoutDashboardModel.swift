@@ -2049,32 +2049,27 @@ public struct CoachMessage: Sendable, Identifiable, Equatable {
 }
 
 private func dashboardLocalizedUpdateCount(_ count: Int) -> String {
-    if count == 1 {
-        return String(localized: "1 update", comment: "Singular WatchConnectivity pending update count")
-    }
-    return String(
-        localized: "\(count) updates",
-        comment: "Plural WatchConnectivity pending update count; placeholder is the number of updates"
+    dashboardInflectedString(
+        "^[\(count) update](inflect: true)",
+        comment: "WatchConnectivity pending update count"
     )
 }
 
 private func dashboardLocalizedQueuedUpdateCount(_ count: Int) -> String {
-    if count == 1 {
-        return String(localized: "1 queued update", comment: "Singular WatchConnectivity replayed update count")
-    }
-    return String(
-        localized: "\(count) queued updates",
-        comment: "Plural WatchConnectivity replayed update count; placeholder is the number of queued updates"
+    dashboardInflectedString(
+        "^[\(count) queued update](inflect: true)",
+        comment: "WatchConnectivity replayed queued update count"
     )
 }
 
 private func dashboardLocalizedSessionCount(_ count: Int) -> String {
-    if count == 1 {
-        return String(localized: "1 session", comment: "Singular widget weekly session count")
-    }
-    return String(
-        localized: "\(count) sessions",
-        comment: "Plural widget weekly session count; placeholder is the number of sessions"
+    dashboardInflectedString(
+        "^[\(count) session](inflect: true)",
+        comment: "Widget weekly session count"
     )
+}
+
+private func dashboardInflectedString(_ value: String.LocalizationValue, comment: StaticString) -> String {
+    String(AttributedString(localized: value, comment: comment).characters)
 }
 #endif

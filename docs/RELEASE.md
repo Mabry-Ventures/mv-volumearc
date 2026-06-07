@@ -46,10 +46,10 @@ There is **no live tag-triggered TestFlight workflow** in App Store Connect toda
    ./scripts/check_coach_eval_trend.sh
    ```
 
-4. Run the release-ready local/static gate:
+4. Run the local/static release config preflight:
 
    ```bash
-   VOLUMEARC_RELEASE_READY=1 ./scripts/validate_release_config.sh
+   ./scripts/validate_release_config.sh --no-build
    ```
 
 5. In App Store Connect, open Apps → VolumeArc → Xcode Cloud → `Internal Testing`.
@@ -59,6 +59,11 @@ There is **no live tag-triggered TestFlight workflow** in App Store Connect toda
 9. **TestFlight processing** usually takes 5-15 minutes. Watch in App Store Connect.
 10. dSYMs must be visible in Sentry under https://mabry-ventures-llc.sentry.io/settings/projects/volumearc-ios/debug-symbols/ tagged with release `com.mabryventures.VolumeArc@<version>+<build>`.
 11. Fill out `docs/RELEASE_UAT_EVIDENCE.md` for the exact TestFlight build and run `./scripts/check_release_uat_evidence.sh`.
+12. Run the release-ready gate after TestFlight processing and physical UAT evidence exist:
+
+   ```bash
+   VOLUMEARC_RELEASE_READY=1 ./scripts/validate_release_config.sh --no-build
+   ```
 
 ### Xcode Cloud setup target state
 

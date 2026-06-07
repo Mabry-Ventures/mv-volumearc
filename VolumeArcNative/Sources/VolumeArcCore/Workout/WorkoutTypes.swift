@@ -178,7 +178,6 @@ public enum CoachWorkoutPlanExtractor {
         let lowered = response.lowercased()
         return lowered.contains("light")
             || lowered.contains("easy")
-            || lowered.contains("take it easy")
             || lowered.contains("sick")
             || lowered.contains("sore")
             || lowered.contains("pain")

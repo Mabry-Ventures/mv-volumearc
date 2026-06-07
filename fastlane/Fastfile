@@ -632,6 +632,17 @@ platform :ios do
   # screenshots up automatically from fastlane/screenshots/.
   lane :release do
     beta
+    begin
+      previous_release_ready = ENV["VOLUMEARC_RELEASE_READY"]
+      ENV["VOLUMEARC_RELEASE_READY"] = "1"
+      sh("../scripts/validate_release_config.sh", "--no-build")
+    ensure
+      if previous_release_ready.nil?
+        ENV.delete("VOLUMEARC_RELEASE_READY")
+      else
+        ENV["VOLUMEARC_RELEASE_READY"] = previous_release_ready
+      end
+    end
     screenshots
 
     deliver(

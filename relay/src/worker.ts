@@ -475,7 +475,7 @@ function hasMedicalRedFlag(text: string): boolean {
     "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
       nearby + "\\bchest\\s+pain\\b",
     "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
-      nearby + "\\bpain\\s+in\\s+(?:my\\s+)?chest\\b",
+      nearby + "\\bpain\\s+in\\s+(?:(?:my|the)\\s+)?chest\\b",
     "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
       nearby + "\\bdizz(?:y|iness)\\b",
     "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
@@ -512,6 +512,7 @@ function hasMedicalRedFlag(text: string): boolean {
 function hasCurrentMedicalRedFlag(text: string): boolean {
   const patterns = [
     "\\bchest\\s+pain\\b",
+    "\\bpain\\s+in\\s+(?:the\\s+)?chest\\b",
     "\\bdizz(?:y|iness)\\b",
     "\\blightheaded\\b",
     "\\bfaint(?:ed|ing)?\\b",
@@ -540,7 +541,7 @@ function hasCurrentMedicalRedFlag(text: string): boolean {
 
 function medicalRedFlagClauses(line: string): string[] {
   return line
-    .split(/\b(?:but|however)\b|[.,;]/i)
+    .split(/\b(?:but|however|and)\b|[.,;]/i)
     .map((clause) => clause.trim())
     .filter((clause) => clause.length > 0);
 }

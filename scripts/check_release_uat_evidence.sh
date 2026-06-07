@@ -13,6 +13,8 @@ python3 - "$EVIDENCE_PATH" <<'PY'
 from __future__ import annotations
 
 import re
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -22,6 +24,25 @@ failures: list[str] = []
 
 placeholder_re = re.compile(
     r"\b(Not run|Pending|Unverified|Action required|TBD|TODO|FIXME)\b|<[^>]+>",
+    re.IGNORECASE,
+)
+template_evidence_re = re.compile(
+    r"^(Install or update from TestFlight|Fresh install,|Premium account,|"
+    r"Notification prompt appears|Sign in with Apple succeeds|System, light, and dark modes|"
+    r"Diagnostics opens|Purchase, cancel,|Build a workout manually,|Coach-recommended workout|"
+    r"During a session,|Equipment Busy suggests|Skip and replace an exercise|"
+    r"Exercise diagrams or cues|Force-quit|Watch app installs|Start workout on Watch|"
+    r"Log sets on Watch|Watch renders|Increase/Hold/Decrease|Disconnect iPhone|"
+    r"Reconnect iPhone|APNs/TestFlight notification|Add small widget|Add medium widget|"
+    r"Start workout; Live Activity|Dynamic Island|Complete workout; Live Activity|"
+    r"Live coach path|Signals explains|Required journeys pass|Light, dark, warm|"
+    r"No crash, data-loss|Live eval trend|Sentry, App Attest)",
+    re.IGNORECASE,
+)
+concrete_evidence_re = re.compile(
+    r"(https?://|screenshot|screen recording|\blogs?\b|App Store Connect|ASC|"
+    r"TestFlight build\s+\S+|build\s+\d+|run\s+[0-9a-f-]{8,}|"
+    r"\b20\d{2}-\d{2}-\d{2}\b)",
     re.IGNORECASE,
 )
 
@@ -101,6 +122,26 @@ build_values: dict[str, str] = {}
 journey_rows: dict[str, tuple[str, str]] = {}
 signoff_rows: dict[str, tuple[str, str, str]] = {}
 
+
+def evidence_is_incomplete(value: str) -> bool:
+    if not value or placeholder_re.search(value) is not None:
+        return True
+    return template_evidence_re.search(value) is not None and concrete_evidence_re.search(value) is None
+
+
+def expected_commit_sha() -> str | None:
+    explicit = os.environ.get("VOLUMEARC_RELEASE_CANDIDATE_SHA", "").strip()
+    if explicit:
+        return explicit
+    try:
+        return subprocess.check_output(
+            ["git", "-C", str(path.parent.parent), "rev-parse", "HEAD"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
 for line_number, raw_line in enumerate(text.splitlines(), start=1):
     line = raw_line.strip()
     if not line.startswith("|"):
@@ -132,6 +173,15 @@ for field in required_build_fields:
     elif not value or placeholder_re.search(value):
         failures.append(f"build evidence field '{field}' is incomplete: {value!r}")
 
+commit_value = build_values.get("Commit SHA", "").strip()
+expected_commit = expected_commit_sha()
+if commit_value and expected_commit and not placeholder_re.search(commit_value):
+    if commit_value != expected_commit and not expected_commit.startswith(commit_value):
+        failures.append(
+            "build evidence field 'Commit SHA' does not match this release candidate: "
+            f"{commit_value!r} != {expected_commit!r}"
+        )
+
 for journey_id in required_journeys:
     row = journey_rows.get(journey_id)
     if row is None:
@@ -140,7 +190,7 @@ for journey_id in required_journeys:
     status, evidence = row
     if status != "Pass":
         failures.append(f"journey '{journey_id}' status must be Pass, got {status!r}")
-    if not evidence or placeholder_re.search(evidence):
+    if evidence_is_incomplete(evidence):
         failures.append(f"journey '{journey_id}' evidence is incomplete: {evidence!r}")
 
 for area in required_signoffs:
@@ -153,7 +203,7 @@ for area in required_signoffs:
         failures.append(f"signoff '{area}' status must be Approved, got {status!r}")
     if not owner or placeholder_re.search(owner):
         failures.append(f"signoff '{area}' owner is incomplete: {owner!r}")
-    if not evidence or placeholder_re.search(evidence):
+    if evidence_is_incomplete(evidence):
         failures.append(f"signoff '{area}' evidence is incomplete: {evidence!r}")
 
 if failures:

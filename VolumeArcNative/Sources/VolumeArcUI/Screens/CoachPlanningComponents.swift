@@ -192,33 +192,13 @@ struct CoachPlanningCard: View {
     }
 
     private var actionGrid: some View {
-        VStack(spacing: VA.Space.sm) {
-            HStack(spacing: VA.Space.sm) {
-                VAButton(
-                    String(localized: "Refine plan", comment: "Co-design refine plan action"),
-                    icon: "slider.horizontal.3",
-                    style: .secondary,
-                    accessibilityIdentifier: "coach.plan.refine"
-                ) {
-                    sendPlanFeedback(String(localized: "Refine this plan around my recovery and equipment", comment: "Coach plan feedback prompt"))
-                }
-                VAButton(
-                    String(localized: "Schedule", comment: "Co-design schedule action"),
-                    icon: "calendar",
-                    style: .secondary,
-                    accessibilityIdentifier: "coach.plan.schedule"
-                ) {
-                    schedulePlan()
-                }
-            }
-            VAButton(
-                String(localized: "Start now", comment: "Co-design start now action"),
-                icon: "arrow.right",
-                style: .primary,
-                accessibilityIdentifier: "coach.plan.startNow"
-            ) {
-                startNow()
-            }
+        VAButton(
+            String(localized: "Refine plan", comment: "Co-design refine plan action"),
+            icon: "slider.horizontal.3",
+            style: .secondary,
+            accessibilityIdentifier: "coach.plan.refine"
+        ) {
+            sendPlanFeedback(String(localized: "Refine this plan around my recovery and equipment", comment: "Coach plan feedback prompt"))
         }
     }
 
