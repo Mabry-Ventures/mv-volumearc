@@ -231,6 +231,18 @@ if [[ -d "$metadata_dir" ]]; then
   fi
 fi
 
+# Physical-device and TestFlight-only evidence is intentionally separate
+# from simulator journey coverage. In everyday development this remains
+# informational; in release-ready mode it becomes a hard stop so a GA
+# candidate cannot be called ready without paired iPhone/Watch UAT,
+# TestFlight, purchase, notification, widget, Live Activity, and live coach
+# safety proof on the exact build under review.
+if [[ "${VOLUMEARC_RELEASE_READY:-0}" == "1" ]]; then
+  "$ROOT/scripts/check_release_uat_evidence.sh"
+else
+  echo "INFO: release UAT evidence not enforced. Set VOLUMEARC_RELEASE_READY=1 to require docs/RELEASE_UAT_EVIDENCE.md."
+fi
+
 # VOL-177: --no-build exits here. Everything above is static file/text
 # assertions that match what pre-commit can afford to run. Everything
 # below shells to xcodebuild (5-10s per call) and is CI-only.

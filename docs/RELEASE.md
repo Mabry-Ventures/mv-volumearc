@@ -8,7 +8,8 @@
 - [ ] Local build passes: `./scripts/build_release_targets.sh`
 - [ ] Tests pass: `./scripts/test_apple_targets.sh`
 - [ ] Release config validates: `./scripts/validate_release_config.sh`
-- [ ] Smoke test on physical device (iOS + watchOS)
+- [ ] Release-ready validation passes: `VOLUMEARC_RELEASE_READY=1 ./scripts/validate_release_config.sh`
+- [ ] Physical/TestFlight UAT evidence in `docs/RELEASE_UAT_EVIDENCE.md` is complete and passes `./scripts/check_release_uat_evidence.sh`
 - [ ] Review `docs/FEATURES.md` for honest feature status
 - [ ] Marketing site (`marketing/`) builds clean and the live `volumearc.app/terms` + `/privacy` URLs that `App/LegalLinks.swift` references resolve to non-placeholder content (VOL-124)
 
