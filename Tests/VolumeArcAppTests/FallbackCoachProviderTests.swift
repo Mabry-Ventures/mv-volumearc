@@ -188,6 +188,27 @@ final class FallbackCoachProviderTests: XCTestCase {
         await fulfillment(of: [notificationExpectation], timeout: 1)
     }
 
+    func testStreamingCancellationCancelsPrimaryStreamWork() async {
+        let primaryStarted = expectation(description: "primary stream started")
+        let primaryCancelled = expectation(description: "primary stream cancelled")
+        let primary = CancellableStreamingProvider(
+            started: primaryStarted,
+            cancelled: primaryCancelled
+        )
+        let fallback = StubProvider(response: "unused fallback")
+        let wrapper = FallbackCoachProvider(primary: primary, fallback: fallback)
+
+        let streamTask = Task {
+            var iterator = wrapper.streamCoachResponse(for: "q", context: "ctx").makeAsyncIterator()
+            _ = try await iterator.next()
+        }
+
+        await fulfillment(of: [primaryStarted], timeout: 1)
+        streamTask.cancel()
+        _ = try? await streamTask.value
+        await fulfillment(of: [primaryCancelled], timeout: 1)
+    }
+
     func testNonFallbackEligibleErrorPropagates() async {
         let primary = StubProvider(throwing: AIRuntimeIntegrationError.relayRequestFailed(statusCode: 400, message: "bad"))
         let fallback = StubProvider(response: "should-not-be-used")
@@ -226,5 +247,35 @@ private struct StubProvider: AICoachProvider {
     func coachResponse(for prompt: String, context: String) async throws -> String {
         if let error { throw error }
         return response ?? ""
+    }
+}
+
+private final class CancellableStreamingProvider: AICoachProvider, @unchecked Sendable {
+    private let started: XCTestExpectation
+    private let cancelled: XCTestExpectation
+
+    init(started: XCTestExpectation, cancelled: XCTestExpectation) {
+        self.started = started
+        self.cancelled = cancelled
+    }
+
+    func coachResponse(for prompt: String, context: String) async throws -> String {
+        _ = prompt
+        _ = context
+        return ""
+    }
+
+    func streamCoachResponse(
+        for prompt: String,
+        context: String
+    ) -> AsyncThrowingStream<String, Error> {
+        _ = prompt
+        _ = context
+        return AsyncThrowingStream { continuation in
+            started.fulfill()
+            continuation.onTermination = { [cancelled] _ in
+                cancelled.fulfill()
+            }
+        }
     }
 }

@@ -145,7 +145,7 @@ public struct FallbackCoachProvider: AICoachProvider {
         context: String
     ) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
-            Task {
+            let task = Task {
                 // Try the primary stream first. If it throws before
                 // yielding ANY chunk and the error is fallback-
                 // eligible, transparently switch to the fallback's
@@ -176,6 +176,7 @@ public struct FallbackCoachProvider: AICoachProvider {
                     }
                 }
             }
+            continuation.onTermination = { _ in task.cancel() }
         }
     }
 
