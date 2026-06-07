@@ -691,12 +691,6 @@ private struct SuggestedCoachPrompt: Identifiable {
 }
 
 private func coachLocalizedMoveCount(_ count: Int) -> String {
-    if count == 1 {
-        return String(localized: "1 move", comment: "Singular coach workout move count")
-    }
-    return String(
-        localized: "\(count) moves",
-        comment: "Plural coach workout move count; placeholder is the number of moves"
-    )
+    vaInflectedString("^[\(count) move](inflect: true)", comment: "Coach workout move count")
 }
 #endif

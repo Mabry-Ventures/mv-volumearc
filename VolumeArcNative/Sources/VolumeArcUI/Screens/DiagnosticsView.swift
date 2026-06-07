@@ -324,32 +324,14 @@ public struct DiagnosticsView: View {
 }
 
 private func diagnosticsLocalizedEventCount(_ count: Int) -> String {
-    if count == 1 {
-        return String(localized: "1 event", comment: "Singular diagnostics event count")
-    }
-    return String(
-        localized: "\(count) events",
-        comment: "Plural diagnostics event count; placeholder is the number of events"
-    )
+    vaInflectedString("^[\(count) event](inflect: true)", comment: "Diagnostics event count")
 }
 
 private func diagnosticsLocalizedErrorCount(_ count: Int) -> String {
-    if count == 1 {
-        return String(localized: "1 error", comment: "Singular diagnostics error count")
-    }
-    return String(
-        localized: "\(count) errors",
-        comment: "Plural diagnostics error count; placeholder is the number of errors"
-    )
+    vaInflectedString("^[\(count) error](inflect: true)", comment: "Diagnostics error count")
 }
 
 private func diagnosticsLocalizedWarningCount(_ count: Int) -> String {
-    if count == 1 {
-        return String(localized: "1 warning", comment: "Singular diagnostics warning count")
-    }
-    return String(
-        localized: "\(count) warnings",
-        comment: "Plural diagnostics warning count; placeholder is the number of warnings"
-    )
+    vaInflectedString("^[\(count) warning](inflect: true)", comment: "Diagnostics warning count")
 }
 #endif

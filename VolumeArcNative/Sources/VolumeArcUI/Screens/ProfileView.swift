@@ -391,12 +391,10 @@ public struct ProfileView: View { // swiftlint:disable:this type_body_length
                 } label: {
                     profileRowLabel(
                         label: String(localized: "Watch Faces", comment: "Profile watch faces row label"),
-                        value: bundledWatchFaces.count == 1
-                            ? String(localized: "1 preset", comment: "Profile watch faces singular row value")
-                            : String(
-                                localized: "\(bundledWatchFaces.count) presets",
-                                comment: "Profile watch faces plural row value"
-                            ),
+                        value: vaInflectedString(
+                            "^[\(bundledWatchFaces.count) preset](inflect: true)",
+                            comment: "Profile watch faces preset count row value"
+                        ),
                         icon: "applewatch"
                     )
                 }
@@ -1901,22 +1899,10 @@ private struct ProfileStat: View {
 }
 
 private func profileLocalizedTypeCount(_ count: Int) -> String {
-    if count == 1 {
-        return String(localized: "1 type", comment: "Singular equipment type count on Profile row")
-    }
-    return String(
-        localized: "\(count) types",
-        comment: "Plural equipment type count on Profile row; placeholder is the number of equipment types"
-    )
+    vaInflectedString("^[\(count) type](inflect: true)", comment: "Profile equipment type count")
 }
 
 private func profileLocalizedNoteCount(_ count: Int) -> String {
-    if count == 1 {
-        return String(localized: "1 note", comment: "Singular coach memory count value")
-    }
-    return String(
-        localized: "\(count) notes",
-        comment: "Plural coach memory count value; placeholder is the number of notes"
-    )
+    vaInflectedString("^[\(count) note](inflect: true)", comment: "Profile coach memory note count")
 }
 #endif

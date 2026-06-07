@@ -2,6 +2,10 @@
 import Foundation
 import VolumeArcCore
 
+func vaInflectedString(_ value: String.LocalizationValue, comment: StaticString) -> String {
+    String(AttributedString(localized: value, comment: comment).characters)
+}
+
 /// Localized display labels for `VolumeArcCore` enums that the UI renders.
 ///
 /// These live in `VolumeArcUI` rather than `VolumeArcCore` so that the core

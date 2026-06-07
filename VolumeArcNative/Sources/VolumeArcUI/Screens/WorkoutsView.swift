@@ -2145,7 +2145,10 @@ private struct LiveWorkoutStepper: View {
                 } label: {
                     Image(systemName: "minus")
                         .font(VA.Typography.caption)
-                        .frame(width: 28, height: 30)
+                        .frame(
+                            width: VA.Space.xxl,
+                            height: VA.Space.xxl + VA.Space.sm
+                        )
                 }
                 .accessibilityLabel(String(localized: "Decrease \(label)", comment: "Live workout stepper decrement"))
                 .accessibilityIdentifier("\(accessibilityPrefix).decrement")
@@ -2153,7 +2156,7 @@ private struct LiveWorkoutStepper: View {
                 Text("\(value)")
                     .font(VA.Typography.monoDigit)
                     .foregroundStyle(VA.Colors.textPrimary)
-                    .frame(minWidth: 30)
+                    .frame(minWidth: VA.Space.xl)
                     .accessibilityIdentifier("\(accessibilityPrefix).value")
 
                 Button {
@@ -2161,7 +2164,10 @@ private struct LiveWorkoutStepper: View {
                 } label: {
                     Image(systemName: "plus")
                         .font(VA.Typography.caption)
-                        .frame(width: 28, height: 30)
+                        .frame(
+                            width: VA.Space.xxl,
+                            height: VA.Space.xxl + VA.Space.sm
+                        )
                 }
                 .accessibilityLabel(String(localized: "Increase \(label)", comment: "Live workout stepper increment"))
                 .accessibilityIdentifier("\(accessibilityPrefix).increment")
@@ -2349,32 +2355,14 @@ private struct ActiveExerciseGuideView: View {
 }
 
 private func workoutsLocalizedMoveCount(_ count: Int) -> String {
-    if count == 1 {
-        return String(localized: "1 move", comment: "Singular workout move count")
-    }
-    return String(
-        localized: "\(count) moves",
-        comment: "Plural workout move count; placeholder is the number of moves"
-    )
+    vaInflectedString("^[\(count) move](inflect: true)", comment: "Workout move count")
 }
 
 private func workoutsLocalizedSetCount(_ count: Int) -> String {
-    if count == 1 {
-        return String(localized: "1 set", comment: "Singular workout set count")
-    }
-    return String(
-        localized: "\(count) sets",
-        comment: "Plural workout set count; placeholder is the number of sets"
-    )
+    vaInflectedString("^[\(count) set](inflect: true)", comment: "Workout set count")
 }
 
 private func workoutsLocalizedSecondCount(_ count: Int) -> String {
-    if count == 1 {
-        return String(localized: "1 second", comment: "Singular workout duration in seconds")
-    }
-    return String(
-        localized: "\(count) seconds",
-        comment: "Plural workout duration in seconds; placeholder is the number of seconds"
-    )
+    vaInflectedString("^[\(count) second](inflect: true)", comment: "Workout duration in seconds")
 }
 #endif

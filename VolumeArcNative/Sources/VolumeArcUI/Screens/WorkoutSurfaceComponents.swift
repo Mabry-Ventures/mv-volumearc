@@ -159,8 +159,8 @@ struct WorkoutIdleLibrary: View {
                         Text(focus)
                             .font(VA.Typography.footnote)
                             .foregroundStyle(VA.Colors.textSecondary)
-                        Text(String(
-                            localized: "\(duration) min · \(workoutSurfaceLocalizedExerciseCount(exercises))",
+                        Text(vaInflectedString(
+                            "\(duration) min · ^[\(exercises) exercise](inflect: true)",
                             comment: "Workout library row duration and exercise count"
                         ))
                         .font(VA.Typography.footnote)
@@ -321,9 +321,10 @@ struct WorkoutHistorySection: View {
     }
 
     private var subtitle: String {
-        sessions.count == 1
-            ? String(localized: "1 completed session", comment: "Workouts history subtitle, singular")
-            : String(localized: "\(sessions.count) completed sessions", comment: "Workouts history subtitle, plural")
+        vaInflectedString(
+            "^[\(sessions.count) completed session](inflect: true)",
+            comment: "Workouts history subtitle with completed session count"
+        )
     }
 
     private func historyRow(_ session: RecentSession) -> some View {
@@ -414,8 +415,10 @@ struct WorkoutHistorySection: View {
             return "\(source) - \(session.durationMinutes)min"
         }
         let rpeText = String(format: "%.1f", session.averageRPE)
-        let setsText = workoutSurfaceLocalizedSetCount(session.completedSetCount)
-        return "\(setsText) - \(session.durationMinutes)min - RPE \(rpeText)"
+        return vaInflectedString(
+            "^[\(session.completedSetCount) set](inflect: true) - \(session.durationMinutes)min - RPE \(rpeText)",
+            comment: "Workout session summary with set count, duration, and average RPE"
+        )
     }
 
     private func metricLabel(for session: RecentSession) -> String {
@@ -588,8 +591,8 @@ struct RestTimerDisplay: View {
                 .accessibilityValue(
                     remaining == 0
                         ? String(localized: "Go time", comment: "Rest timer complete accessibility value")
-                        : String(
-                            localized: "\(workoutSurfaceLocalizedSecondCount(remaining)) remaining",
+                        : vaInflectedString(
+                            "^[\(remaining) second](inflect: true) remaining",
                             comment: "Rest timer countdown accessibility value"
                         )
                 )
@@ -643,33 +646,4 @@ struct RestTimerDisplay: View {
     }
 }
 
-private func workoutSurfaceLocalizedExerciseCount(_ count: Int) -> String {
-    if count == 1 {
-        return String(localized: "1 exercise", comment: "Singular workout exercise count")
-    }
-    return String(
-        localized: "\(count) exercises",
-        comment: "Plural workout exercise count; placeholder is the number of exercises"
-    )
-}
-
-private func workoutSurfaceLocalizedSetCount(_ count: Int) -> String {
-    if count == 1 {
-        return String(localized: "1 set", comment: "Singular session summary set count")
-    }
-    return String(
-        localized: "\(count) sets",
-        comment: "Plural session summary set count; placeholder is the number of sets"
-    )
-}
-
-private func workoutSurfaceLocalizedSecondCount(_ count: Int) -> String {
-    if count == 1 {
-        return String(localized: "1 second", comment: "Singular rest timer duration in seconds")
-    }
-    return String(
-        localized: "\(count) seconds",
-        comment: "Plural rest timer duration in seconds; placeholder is the number of seconds"
-    )
-}
 #endif

@@ -166,7 +166,7 @@ public enum CoachSafetyFilter {
                 with: ";",
                 options: .regularExpression
             )
-            .components(separatedBy: CharacterSet(charactersIn: ".;"))
+            .components(separatedBy: CharacterSet(charactersIn: ".;,"))
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
     }
@@ -275,6 +275,7 @@ public enum CoachSafetyFilter {
 
     private static let contextMedicalRedFlagPatterns = [
         #"\bchest\s+pain\b"#,
+        #"\bpain\s+in\s+(?:the\s+)?chest\b"#,
         #"\bdizz(?:y|iness)\b"#,
         #"\blightheaded\b"#,
         #"\bfaint(?:ed|ing)?\b"#,

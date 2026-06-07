@@ -285,12 +285,6 @@ public struct EditProfileView: View {
 }
 
 private func editProfileLocalizedDayCount(_ count: Int) -> String {
-    if count == 1 {
-        return String(localized: "1 day", comment: "Singular edit profile training day count")
-    }
-    return String(
-        localized: "\(count) days",
-        comment: "Plural edit profile training day count; placeholder is the number of days"
-    )
+    vaInflectedString("^[\(count) day](inflect: true)", comment: "Edit profile training day count")
 }
 #endif

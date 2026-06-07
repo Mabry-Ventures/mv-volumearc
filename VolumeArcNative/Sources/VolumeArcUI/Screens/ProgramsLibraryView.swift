@@ -158,22 +158,13 @@ public struct ProgramsLibraryView: View {
 }
 
 private func programsLocalizedWeekCount(_ count: Int) -> String {
-    if count == 1 {
-        return String(localized: "1 week", comment: "Singular program duration chip")
-    }
-    return String(
-        localized: "\(count) weeks",
-        comment: "Plural program duration chip; placeholder is the number of weeks"
-    )
+    vaInflectedString("^[\(count) week](inflect: true)", comment: "Program duration chip")
 }
 
 private func programsLocalizedWeeklySessionCount(_ count: Int) -> String {
-    if count == 1 {
-        return String(localized: "1 session/week", comment: "Singular program weekly frequency chip")
-    }
-    return String(
-        localized: "\(count) sessions/week",
-        comment: "Plural program weekly frequency chip; placeholder is the number of sessions per week"
+    vaInflectedString(
+        "^[\(count) session](inflect: true)/week",
+        comment: "Program weekly frequency chip"
     )
 }
 #endif
