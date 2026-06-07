@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import re
 import os
-import subprocess
 import sys
 from pathlib import Path
 
@@ -133,14 +132,7 @@ def expected_commit_sha() -> str | None:
     explicit = os.environ.get("VOLUMEARC_RELEASE_CANDIDATE_SHA", "").strip()
     if explicit:
         return explicit
-    try:
-        return subprocess.check_output(
-            ["git", "-C", str(path.parent.parent), "rev-parse", "HEAD"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-        ).strip()
-    except (OSError, subprocess.CalledProcessError):
-        return None
+    return None
 
 for line_number, raw_line in enumerate(text.splitlines(), start=1):
     line = raw_line.strip()

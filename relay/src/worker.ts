@@ -161,17 +161,18 @@ async function handleCoach(request: Request, env: Env): Promise<Response> {
     return json({ error: auth.error, reason: auth.reason }, auth.status);
   }
 
-  const rateOk = await checkRateLimit(auth.deviceId, env);
-  if (!rateOk) {
-    return json({ error: "rate_limited" }, 429);
-  }
-
   const deterministicSafetyResponse = coachSafetyResponse(body);
   if (deterministicSafetyResponse) {
+    await checkRateLimit(auth.deviceId, env);
     return sseText(deterministicSafetyResponse, {
       "x-coach-model": "deterministic-safety",
       "x-coach-safety": "red-flag",
     });
+  }
+
+  const rateOk = await checkRateLimit(auth.deviceId, env);
+  if (!rateOk) {
+    return json({ error: "rate_limited" }, 429);
   }
 
   const tier = request.headers.get("X-Coach-Tier")?.toLowerCase();
@@ -475,7 +476,7 @@ function hasMedicalRedFlag(text: string): boolean {
     "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
       nearby + "\\bchest\\s+pain\\b",
     "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
-      nearby + "\\bpain\\s+in\\s+(?:(?:my|the)\\s+)?chest\\b",
+      nearby + "\\bpain\\s+in\\s+(?:(?:the|my|your|his|her|their|its)\\s+)?chest\\b",
     "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
       nearby + "\\bdizz(?:y|iness)\\b",
     "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
@@ -495,7 +496,7 @@ function hasMedicalRedFlag(text: string): boolean {
     "\\b(i\\s*(?:have|had|experienced|experience)|my)\\b" +
       nearby + "\\b(?:cardiac\\s+event|heart\\s+attack)\\b",
   ];
-  if (patterns.some((pattern) => containsPattern(pattern, text))) {
+  if (hasMedicalRedFlagInClauses(text, patterns)) {
     return true;
   }
   const minorSafetyConcern =
@@ -507,6 +508,39 @@ function hasMedicalRedFlag(text: string): boolean {
     text,
   );
   return minorSafetyConcern && strengthRisk;
+}
+
+function hasMedicalRedFlagInClauses(text: string, patterns: string[]): boolean {
+  return text.split(/\r?\n/).some((line) => {
+    let sharedNegationCarries = false;
+    for (const clause of medicalRedFlagClauses(line)) {
+      if (!clause.separatorAllowsSharedNegation) {
+        sharedNegationCarries = false;
+      }
+
+      const lowered = clause.text.toLowerCase();
+      if (isStaleMedicalRedFlagLine(lowered)) {
+        sharedNegationCarries = false;
+        continue;
+      }
+      if (isNegatedMedicalRedFlagLine(lowered)) {
+        sharedNegationCarries = isSharedNegationCarrier(lowered);
+        continue;
+      }
+      if (
+        sharedNegationCarries &&
+        clause.separatorAllowsSharedNegation &&
+        isBareSharedNegationContinuation(lowered)
+      ) {
+        continue;
+      }
+      sharedNegationCarries = false;
+      if (patterns.some((pattern) => containsPattern(pattern, clause.text))) {
+        return true;
+      }
+    }
+    return false;
+  });
 }
 
 function hasCurrentMedicalRedFlag(text: string): boolean {
@@ -566,7 +600,7 @@ type MedicalRedFlagClause = {
 
 function medicalRedFlagClauses(line: string): MedicalRedFlagClause[] {
   const clauses: MedicalRedFlagClause[] = [];
-  const delimiter = /\b(?:but|however|and)\b|[.,;]/gi;
+  const delimiter = /\b(?:but|however|and|or)\b|[.,;]/gi;
   let start = 0;
   let nextSeparatorAllowsSharedNegation = false;
   let match: RegExpExecArray | null;
@@ -576,7 +610,7 @@ function medicalRedFlagClauses(line: string): MedicalRedFlagClause[] {
       clauses.push({ text, separatorAllowsSharedNegation: nextSeparatorAllowsSharedNegation });
     }
     const separator = match[0].toLowerCase();
-    nextSeparatorAllowsSharedNegation = separator === "," || separator === "and";
+    nextSeparatorAllowsSharedNegation = separator === "," || separator === "and" || separator === "or";
     start = match.index + match[0].length;
   }
 

@@ -89,6 +89,15 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertFalse(lowered.contains("finish the workout"))
     }
 
+    func testNegatedPromptMedicalRedFlagsDoNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I have no chest pain or dizziness. Can I train today?",
+            context: "Readiness: 86/100 - strong recovery"
+        )
+
+        XCTAssertNil(response)
+    }
+
     func testMedicalRedFlagFromCurrentContextOverridesGeneratedAdvice() {
         let response = CoachSafetyFilter.filteredResponse(
             prompt: "Should I push today?",
@@ -142,6 +151,18 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertNil(response)
     }
 
+    func testSharedOrNegatedContextMedicalRedFlagsDoNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I add five pounds next week?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Check-in: denies chest pain, dizziness, or shortness of breath.
+            """
+        )
+
+        XCTAssertNil(response)
+    }
+
     func testExpandedNegatedContextMedicalRedFlagsDoNotEscalate() {
         let response = CoachSafetyFilter.medicalRedFlagResponse(
             prompt: "Should I train today?",
@@ -186,6 +207,19 @@ final class CoachSafetyFilterTests: XCTestCase {
             context: """
             Readiness: 86/100 - strong recovery
             - Check-in: no chest pain and passed out after squats today.
+            """
+        )
+
+        XCTAssertNotNil(response)
+        XCTAssertTrue(response?.lowercased().contains("medical care") == true)
+    }
+
+    func testOrMixedNegatedAndCurrentContextMedicalRedFlagsStillEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I train today?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Check-in: no chest pain or passed out after squats today.
             """
         )
 

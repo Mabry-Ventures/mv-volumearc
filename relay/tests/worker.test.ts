@@ -904,7 +904,7 @@ describe("volumearc-ai-relay App Attest auth", () => {
     }
   });
 
-  it("rate-limits deterministic safety coach responses after authentication", async () => {
+  it("returns deterministic safety escalation even when the model-path rate limit is exhausted", async () => {
     const env = makeEnv({
       RATE_LIMIT_MAX_REQUESTS: "1",
       RATE_LIMIT_WINDOW_SECONDS: "600",
@@ -925,9 +925,36 @@ describe("volumearc-ai-relay App Attest auth", () => {
 
     const response = await worker.fetch(coachRequest(headers, body), env);
 
-    expect(response.status).toBe(429);
-    await expect(json(response)).resolves.toMatchObject({ error: "rate_limited" });
-    expect(response.headers.get("x-coach-model")).toBeNull();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("records deterministic safety coach responses in the authenticated rate-limit bucket", async () => {
+    const env = makeEnv({
+      RATE_LIMIT_MAX_REQUESTS: "5",
+      RATE_LIMIT_WINDOW_SECONDS: "600",
+    });
+    const body = JSON.stringify({
+      intent: "free",
+      question: "I have chest pain during my top set. What should I do?",
+      contextBlock: "## Training context\n- Readiness: 72/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+    const headers = await appAttestAuthHeaders(env, body);
+    const keyId = (headers as Record<string, string>)["X-VA-Attest-Key-ID"];
+
+    const response = await worker.fetch(coachRequest(headers, body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    const stored = await env.RATE_LIMIT.get(`rl:${keyId}`);
+    expect(stored).not.toBeNull();
+    expect(JSON.parse(stored ?? "[]")).toHaveLength(1);
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -998,6 +1025,27 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("does not short-circuit negated prompt red flags", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "I have no chest pain or dizziness. Can I train today?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 86/100 - Strong recovery.",
+      ].join("\n"),
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("does not short-circuit shared-negated current context red flags", async () => {
     const env = makeEnv();
     const body = JSON.stringify({
@@ -1007,6 +1055,28 @@ describe("volumearc-ai-relay App Attest auth", () => {
         "## Training context",
         "- Readiness: 86/100 - Strong recovery.",
         "- Check-in: denies chest pain and shortness of breath.",
+      ].join("\n"),
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not short-circuit shared-or-negated current context red flags", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Should I add five pounds next week?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 86/100 - Strong recovery.",
+        "- Check-in: denies chest pain, dizziness, or shortness of breath.",
       ].join("\n"),
       style: "minimal",
       prompt: "",
@@ -1121,6 +1191,30 @@ describe("volumearc-ai-relay App Attest auth", () => {
         "## Training context",
         "- Readiness: 86/100 - Strong recovery.",
         "- Check-in: no chest pain and passed out after squats today.",
+      ].join("\n"),
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("still short-circuits or-mixed negated and current context red flags", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Should I train today?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 86/100 - Strong recovery.",
+        "- Check-in: no chest pain or passed out after squats today.",
       ].join("\n"),
       style: "minimal",
       prompt: "",
