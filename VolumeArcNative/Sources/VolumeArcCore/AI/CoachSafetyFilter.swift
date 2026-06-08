@@ -101,7 +101,7 @@ public enum CoachSafetyFilter {
             "\\b(?:during|while)\\s+(?:my\\s+)?pregnancy\\b",
             "\\b(i\\s*(?:have|had|am\\s+dealing\\s+with)|i\\W?m\\s+dealing\\s+with)\\b" +
                 nearby + "\\b(?:eating\\s+disorder|restrict\\w*|starv\\w*|purg\\w*|not\\s+eating)\\b",
-            "\\bi\\s*(?:haven'?t|have\\s+not|hadn'?t|didn'?t|did\\s+not)\\s+eaten\\b",
+            "\\bi\\s*(?:haven'?t|have\\s+not|hadn'?t|(?:didn'?t|did\\s+not)\\s+eat(?:en)?)\\b",
             "\\b(?:restrict\\w*|skip(?:ping)?\\s+(?:meals?|food)|fast(?:ing|ed)?)\\b" +
                 nearby + "\\b(?:cut|weight|fat|cardio|train|training|squat|lift|workout)\\b",
             "\\b(i\\s*(?:have|had|experienced|experience)|my)\\b" +
@@ -122,36 +122,51 @@ public enum CoachSafetyFilter {
     }
 
     private static func hasMedicalRedFlag(in text: String, matching patterns: [String]) -> Bool {
-        text
+        let lines = text
             .components(separatedBy: .newlines)
-            .contains { line in
-                var sharedNegationCarries = false
-                for clause in medicalRedFlagClauses(in: line) {
-                    if !clause.separatorAllowsSharedNegation {
-                        sharedNegationCarries = false
-                    }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        if lines.contains(where: { hasMedicalRedFlagInLine($0, matching: patterns) }) {
+            return true
+        }
 
-                    let lowered = clause.text.lowercased()
-                    if isStaleMedicalRedFlagLine(lowered) {
-                        sharedNegationCarries = false
-                        continue
-                    }
-                    if isNegatedMedicalRedFlagLine(lowered) {
-                        sharedNegationCarries = isSharedNegationCarrier(lowered)
-                        continue
-                    }
-                    if sharedNegationCarries,
-                       clause.separatorAllowsSharedNegation,
-                       isBareSharedNegationContinuation(lowered) {
-                        continue
-                    }
-                    sharedNegationCarries = false
-                    if patterns.contains(where: { containsPattern($0, in: clause.text) }) {
-                        return true
-                    }
-                }
-                return false
+        for index in lines.indices.dropLast() {
+            let line = lines[index]
+            let nextLine = lines[index + 1]
+            guard !line.isEmpty, !nextLine.isEmpty else { continue }
+            if hasMedicalRedFlagInLine("\(line) \(nextLine)", matching: patterns) {
+                return true
             }
+        }
+        return false
+    }
+
+    private static func hasMedicalRedFlagInLine(_ line: String, matching patterns: [String]) -> Bool {
+        var sharedNegationCarries = false
+        for clause in medicalRedFlagClauses(in: line) {
+            if !clause.separatorAllowsSharedNegation {
+                sharedNegationCarries = false
+            }
+
+            let lowered = clause.text.lowercased()
+            if isStaleMedicalRedFlagLine(lowered) {
+                sharedNegationCarries = false
+                continue
+            }
+            if isNegatedMedicalRedFlagLine(lowered) {
+                sharedNegationCarries = isSharedNegationCarrier(lowered)
+                continue
+            }
+            if sharedNegationCarries,
+               clause.separatorAllowsSharedNegation,
+               isBareSharedNegationContinuation(lowered) {
+                continue
+            }
+            sharedNegationCarries = false
+            if patterns.contains(where: { containsPattern($0, in: clause.text) }) {
+                return true
+            }
+        }
+        return false
     }
 
     private static func medicalRedFlagResponseText() -> String {
@@ -422,7 +437,7 @@ public enum CoachSafetyFilter {
         #"\b(?:eating\s+disorder|restrict\w*|starv\w*|purg\w*|not\s+eating)\b"#,
         #"\bhaven'?t\s+eaten\b"#,
         #"\bhadn'?t\s+eaten\b"#,
-        #"\bdidn'?t\s+eaten\b"#,
+        #"\b(?:didn'?t|did\s+not)\s+eat(?:en)?\b"#,
         #"\b(?:cardiac\s+event|heart\s+attack)\b"#,
     ]
 

@@ -495,7 +495,7 @@ function hasMedicalRedFlag(text: string): boolean {
     "\\bpregnan(?:t|cy)\\b" + nearby + "\\b(?:train|training|lift|lifting|heavy|squat|deadlift|workout)\\b",
     "\\b(i\\s*(?:have|had|am\\s+dealing\\s+with)|i\\W?m\\s+dealing\\s+with)\\b" +
       nearby + "\\b(?:eating\\s+disorder|restrict\\w*|starv\\w*|purg\\w*|not\\s+eating)\\b",
-    "\\bi\\s*(?:haven'?t|have\\s+not|hadn'?t|didn'?t|did\\s+not)\\s+eaten\\b" +
+    "\\bi\\s*(?:haven'?t|have\\s+not|hadn'?t|(?:didn'?t|did\\s+not)\\s+eat(?:en)?)\\b" +
       nearby + "\\b(?:cut|cardio|train|training|squat|lift|workout)\\b",
     "\\b(?:restrict\\w*|skip(?:ping)?\\s+(?:meals?|food)|fast(?:ing|ed)?)\\b" +
       nearby + "\\b(?:cut|weight|fat|cardio|train|training|squat|lift|workout)\\b",
@@ -517,36 +517,53 @@ function hasMedicalRedFlag(text: string): boolean {
 }
 
 function hasMedicalRedFlagInClauses(text: string, patterns: string[]): boolean {
-  return text.split(/\r?\n/).some((line) => {
-    let sharedNegationCarries = false;
-    for (const clause of medicalRedFlagClauses(line)) {
-      if (!clause.separatorAllowsSharedNegation) {
-        sharedNegationCarries = false;
-      }
+  const lines = text.split(/\r?\n/).map((line) => line.trim());
+  if (lines.some((line) => hasMedicalRedFlagInLine(line, patterns))) {
+    return true;
+  }
 
-      const lowered = clause.text.toLowerCase();
-      if (isStaleMedicalRedFlagLine(lowered)) {
-        sharedNegationCarries = false;
-        continue;
-      }
-      if (isNegatedMedicalRedFlagLine(lowered)) {
-        sharedNegationCarries = isSharedNegationCarrier(lowered);
-        continue;
-      }
-      if (
-        sharedNegationCarries &&
-        clause.separatorAllowsSharedNegation &&
-        isBareSharedNegationContinuation(lowered)
-      ) {
-        continue;
-      }
-      sharedNegationCarries = false;
-      if (patterns.some((pattern) => containsPattern(pattern, clause.text))) {
-        return true;
-      }
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    const line = lines[index] ?? "";
+    const nextLine = lines[index + 1] ?? "";
+    if (line.length === 0 || nextLine.length === 0) {
+      continue;
     }
-    return false;
-  });
+    if (hasMedicalRedFlagInLine(`${line} ${nextLine}`, patterns)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function hasMedicalRedFlagInLine(line: string, patterns: string[]): boolean {
+  let sharedNegationCarries = false;
+  for (const clause of medicalRedFlagClauses(line)) {
+    if (!clause.separatorAllowsSharedNegation) {
+      sharedNegationCarries = false;
+    }
+
+    const lowered = clause.text.toLowerCase();
+    if (isStaleMedicalRedFlagLine(lowered)) {
+      sharedNegationCarries = false;
+      continue;
+    }
+    if (isNegatedMedicalRedFlagLine(lowered)) {
+      sharedNegationCarries = isSharedNegationCarrier(lowered);
+      continue;
+    }
+    if (
+      sharedNegationCarries &&
+      clause.separatorAllowsSharedNegation &&
+      isBareSharedNegationContinuation(lowered)
+    ) {
+      continue;
+    }
+    sharedNegationCarries = false;
+    if (patterns.some((pattern) => containsPattern(pattern, clause.text))) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function hasCurrentMedicalRedFlag(text: string): boolean {
@@ -566,7 +583,7 @@ function hasCurrentMedicalRedFlag(text: string): boolean {
     "\\b(?:eating\\s+disorder|restrict\\w*|starv\\w*|purg\\w*|not\\s+eating)\\b",
     "\\bhaven'?t\\s+eaten\\b",
     "\\bhadn'?t\\s+eaten\\b",
-    "\\bdidn'?t\\s+eaten\\b",
+    "\\b(?:didn'?t|did\\s+not)\\s+eat(?:en)?\\b",
     "\\b(?:cardiac\\s+event|heart\\s+attack)\\b",
   ];
   return text.split(/\r?\n/).some((line) => {

@@ -806,6 +806,26 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("short-circuits medical red flags split across prompt lines", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "free",
+      question: "I feel\nchest pain during squats. Should I finish the session?",
+      contextBlock: "## Training context\n- Readiness: 88/100\n- Next up: Back Squat at 225lb x 5",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("short-circuits eating-disorder language before model routing", async () => {
     const env = makeEnv();
     const body = JSON.stringify({
