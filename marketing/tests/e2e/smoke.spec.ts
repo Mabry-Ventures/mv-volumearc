@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 const routes = [
   {
     path: '/',
-    h1: 'Your strength coach, built into your Apple Watch.',
+    h1: 'Strength programming, built into your Apple Watch.',
   },
   {
     path: '/privacy',

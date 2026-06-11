@@ -12,7 +12,6 @@ export function NavLinks() {
     ['Features', '/#features'],
     ['Pricing', '/#pricing'],
     ['FAQs', '/#faqs'],
-    ['Watch Faces', '/watch-faces'],
     ['Quality', '/quality'],
     ['Support', '/support'],
   ].map(([label, href], index) => (

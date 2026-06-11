@@ -34,7 +34,7 @@ const features = [
   {
     name: 'A coach that works everywhere',
     description:
-      'Asks better questions when you upgrade. Falls back gracefully when the network drops — on-device coaching keeps the session going even with no signal.',
+      'Prescribes from your demonstrated history and answers between sets. Falls back gracefully when the network drops — on-device coaching keeps the session going even with no signal. Guidance, not medical advice.',
     icon: CoachIcon,
     screen: CoachScreen,
   },

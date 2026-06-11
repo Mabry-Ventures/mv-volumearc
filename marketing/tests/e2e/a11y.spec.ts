@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 
 const routes = [
-  { path: '/', h1: 'Your strength coach, built into your Apple Watch.' },
+  { path: '/', h1: 'Strength programming, built into your Apple Watch.' },
   { path: '/privacy', h1: 'Privacy Policy' },
   { path: '/terms', h1: 'Terms of Service' },
   { path: '/support', h1: 'Get help with VolumeArc' },
