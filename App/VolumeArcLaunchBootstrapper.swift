@@ -48,10 +48,15 @@ enum VolumeArcLaunchBootstrapper {
         if (resolvedUITestMode || resolvedSeedFixtures) && !shouldPreservePersistence {
             try resetState(in: container)
             OnboardingProgressStore.clear()
+            // VOL-287: deterministic launches start with the safety
+            // disclaimer unacknowledged so onboarding tests exercise the
+            // real consent gate.
+            SafetyDisclaimerAcknowledgmentStore.reset()
         }
 
         if resolvedSkipOnboarding || resolvedSeedFixtures {
             OnboardingProgressStore.clear()
+            SafetyDisclaimerAcknowledgmentStore.reset()
             let deterministicProfile = deterministicUserProfile(
                 privacyMode: resolvedStrictPrivacyMode ? .strict : .standard
             )

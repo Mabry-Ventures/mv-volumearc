@@ -191,15 +191,25 @@ final class VolumeArcAccessibilityJourneyTests: XCTestCase {
             "[\(contextLabel)] Onboarding cover should be visible"
         )
 
-        // Same 5-Continue + 1-Finish loop as the parent journey (welcome,
-        // profile, preferences, coachingStyle, permissions). Larger type
-        // / longer strings only stress the layout — the step count is
-        // unchanged from the parent journey. VOL-164: scrollIntoViewAndTap
-        // handles the case where the CTA row falls below the keyboard or
-        // off-screen at .accessibility5, which was the canonical failure
-        // shape for `testOnboardingJourneyAtAccessibility5`.
-        for stepIndex in 0..<5 {
+        // Same 6-Continue + 1-Finish loop as the parent journey (welcome,
+        // profile, preferences, coachingStyle, permissions, safety).
+        // Larger type / longer strings only stress the layout — the step
+        // count matches the parent journey. The safety step (VOL-287)
+        // requires the acknowledgment toggle before Continue enables.
+        // VOL-164: scrollIntoViewAndTap handles the case where the CTA
+        // row falls below the keyboard or off-screen at .accessibility5,
+        // which was the canonical failure shape for
+        // `testOnboardingJourneyAtAccessibility5`.
+        for stepIndex in 0..<6 {
             dismissKeyboardIfPresent(in: app)
+            if stepIndex == 5 {
+                let acknowledge = app.descendants(matching: .any)
+                    .matching(identifier: "onboarding.safety.acknowledge").firstMatch
+                XCTAssertTrue(
+                    VolumeArcAppUITestSupport.scrollIntoViewAndTap(acknowledge, in: app),
+                    "[\(contextLabel)] Safety acknowledgment toggle should be reachable (VOL-287)"
+                )
+            }
             let continueButton = app.descendants(matching: .any)
                 .matching(identifier: "onboarding.continue").firstMatch
             XCTAssertTrue(

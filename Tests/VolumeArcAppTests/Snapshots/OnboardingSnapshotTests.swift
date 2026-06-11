@@ -63,6 +63,7 @@ final class OnboardingSnapshotTests: XCTestCase {
         case preferences
         case coachingStyle
         case permissions
+        case safety
         case done
 
         var onboardingStep: OnboardingSnapshotStep {
@@ -75,6 +76,8 @@ final class OnboardingSnapshotTests: XCTestCase {
                 return .coachingStyle
             case .permissions:
                 return .permissions
+            case .safety:
+                return .safety
             case .done:
                 return .done
             }
@@ -109,6 +112,8 @@ final class OnboardingSnapshotTests: XCTestCase {
                 )
             case .permissions:
                 return OnboardingResult(name: "Maya")
+            case .safety:
+                return OnboardingResult(name: "Maya")
             case .done:
                 return OnboardingResult(name: "Maya")
             }
@@ -118,7 +123,7 @@ final class OnboardingSnapshotTests: XCTestCase {
             switch self {
             case .permissions:
                 return { true }
-            case .profile, .preferences, .coachingStyle, .done:
+            case .profile, .preferences, .coachingStyle, .safety, .done:
                 return nil
             }
         }
@@ -127,7 +132,7 @@ final class OnboardingSnapshotTests: XCTestCase {
             switch self {
             case .profile:
                 return { _ in }
-            case .preferences, .coachingStyle, .permissions, .done:
+            case .preferences, .coachingStyle, .permissions, .safety, .done:
                 return nil
             }
         }
@@ -224,6 +229,10 @@ final class OnboardingSnapshotTests: XCTestCase {
 
     func testPermissionsStepSnapshots() {
         assertOnboardingStepSnapshots(.permissions)
+    }
+
+    func testSafetyStepSnapshots() {
+        assertOnboardingStepSnapshots(.safety)
     }
 
     func testDoneStepSnapshots() {

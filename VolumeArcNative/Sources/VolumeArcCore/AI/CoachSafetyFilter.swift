@@ -175,7 +175,7 @@ public enum CoachSafetyFilter {
             localized: """
             Stop the session now and seek medical care before training again. \
             If symptoms are severe or include chest pain, fainting, or severe \
-            shortness of breath, use emergency care.
+            shortness of breath, call 911 or your local emergency number.
             """,
             comment: "Safety response when medical red-flag terms are detected in coach input"
         )
