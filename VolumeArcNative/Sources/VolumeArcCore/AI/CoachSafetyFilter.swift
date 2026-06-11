@@ -116,6 +116,8 @@ public enum CoachSafetyFilter {
                 nearby + "\\b(?:cut|weight|fat|cardio|train|training|squat|lift|workout)\\b",
             "\\b(i\\s*(?:have|had|experienced|experience)|my)\\b" +
                 nearby + "\\b(?:cardiac\\s+event|heart\\s+attack)\\b",
+            "\\b(i\\s*(?:feel|felt|have|had|get|got|notice|noticed)|i\\W?m\\s+having|my)\\b" +
+                nearby + "\\b(?:palpitations?|arrhythmia)\\b",
         ]
         let minorSafetyConcern =
             containsPattern("\\b(i\\s*am|i\\W?m|age(?:d)?|as\\s+a)\\s+1[0-7]\\b", in: text) ||
@@ -472,6 +474,7 @@ public enum CoachSafetyFilter {
         #"\bhadn'?t\s+eaten\b"#,
         #"\b(?:didn'?t|did\s+not)\s+eat(?:en)?\b"#,
         #"\b(?:cardiac\s+event|heart\s+attack)\b"#,
+        #"\b(?:palpitations?|arrhythmia)\b"#,
     ]
 
     private static func extractReadinessScore(from context: String) -> Int? {

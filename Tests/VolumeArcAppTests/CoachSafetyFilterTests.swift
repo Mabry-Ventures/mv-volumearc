@@ -391,6 +391,27 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertNil(response)
     }
 
+    /// PR #363 review (CodeRabbit): palpitations/arrhythmia need positive
+    /// matchers, not just negation entries.
+    func testPalpitationsPromptEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I have palpitations during squats. Should I keep going?",
+            context: ""
+        )
+
+        XCTAssertNotNil(response)
+        XCTAssertTrue(response?.lowercased().contains("medical care") == true)
+    }
+
+    func testNegatedPalpitationsDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "No palpitations, cleared by my cardiologist. Plan for today?",
+            context: ""
+        )
+
+        XCTAssertNil(response)
+    }
+
     func testHaventEatenPromptStillEscalates() {
         let response = CoachSafetyFilter.medicalRedFlagResponse(
             prompt: "I haven't eaten since yesterday but want to hit a heavy single.",

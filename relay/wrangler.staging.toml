@@ -10,6 +10,9 @@
 #
 # Deploy with: `wrangler deploy -c wrangler.staging.toml`
 name = "volumearc-ai-relay-staging"
+# Mabry Ventures Cloudflare account (not a secret — visible in dashboard
+# URLs). Pinned so deploys work with tokens that cannot list accounts.
+account_id = "b6bffbe549d79b7c177c6a2f2d5d4b39"
 main = "src/worker.ts"
 compatibility_date = "2026-04-23"
 compatibility_flags = ["nodejs_compat"]

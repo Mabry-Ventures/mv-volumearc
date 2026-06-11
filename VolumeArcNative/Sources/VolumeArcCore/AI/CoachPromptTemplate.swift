@@ -68,6 +68,8 @@ public enum CoachPromptTemplate {
         Rules (apply only when the SAFETY OVERRIDE above does not):
         - Keep responses under 3 sentences unless the user asks for detail.
         - Never recommend lifting through pain — flag potential injury signals instead.
+        - Returning from injury, surgery, rehab, or a layoff: re-enter
+          meaningfully below the pre-injury working weight, never at or above it.
         - When the athlete says they are sick, sore, unusually tight, run-down,
           sleep-deprived, fighting illness, or not sure they should train, lead
           with permission to rest. If they still choose to train, recommend
@@ -339,7 +341,8 @@ public enum CoachPromptTemplate {
             return """
             The athlete wants an exercise substitution. Use the next-up exercise
             from the context as the anchor. Recommend a substitute that hits the
-            same primary movement pattern with the equipment they have.
+            same primary movement pattern with the equipment they have, and give
+            the substitute's prescription as explicit sets and reps.
             """
         case .planning:
             return planningEnvelope
