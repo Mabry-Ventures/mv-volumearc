@@ -972,7 +972,11 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
                     icon: "stethoscope",
                     title: String(localized: "Not medical advice", comment: "Onboarding safety row title — medical boundary"),
                     detail: String(
-                        localized: "The coach gives strength guidance from your training data. It never replaces a clinician, and it tells you to stop and seek care when symptoms show up.",
+                        localized: """
+                        The coach gives strength guidance from your training data. It never \
+                        replaces a clinician, and it tells you to stop and seek care when \
+                        symptoms show up.
+                        """,
                         comment: "Onboarding safety row detail — medical boundary"
                     )
                 )
@@ -980,7 +984,10 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
                     icon: "hand.raised.fill",
                     title: String(localized: "Pain ends the set", comment: "Onboarding safety row title — pain rule"),
                     detail: String(
-                        localized: "Prescriptions stay inside your demonstrated history. Stop any set that causes pain, dizziness, or trouble breathing.",
+                        localized: """
+                        Prescriptions stay inside your demonstrated history. Stop any set \
+                        that causes pain, dizziness, or trouble breathing.
+                        """,
                         comment: "Onboarding safety row detail — pain rule"
                     )
                 )
@@ -988,7 +995,10 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
                     icon: "cross.case.fill",
                     title: String(localized: "Emergencies come first", comment: "Onboarding safety row title — emergency"),
                     detail: String(
-                        localized: "For chest pain, fainting, or severe shortness of breath, call 911 or your local emergency number before anything else.",
+                        localized: """
+                        For chest pain, fainting, or severe shortness of breath, call 911 \
+                        or your local emergency number before anything else.
+                        """,
                         comment: "Onboarding safety row detail — emergency"
                     )
                 )
@@ -996,7 +1006,11 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
 
             Toggle(isOn: $safetyAcknowledged) {
                 Text(String(
-                    localized: "I'm \(SafetyDisclaimerAcknowledgmentStore.minimumAgeYears) or older (or training with my guardian's approval), and I understand VolumeArc provides training guidance, not medical advice.",
+                    localized: """
+                    I'm \(SafetyDisclaimerAcknowledgmentStore.minimumAgeYears) or older \
+                    (or training with my guardian's approval), and I understand VolumeArc \
+                    provides training guidance, not medical advice.
+                    """,
                     comment: "Onboarding safety acknowledgment toggle label; the number is the minimum age"
                 ))
                 .font(VA.Typography.footnote)
