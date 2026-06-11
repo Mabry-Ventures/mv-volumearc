@@ -2,6 +2,65 @@
 import Foundation
 
 extension WorkoutDashboardModel {
+    /// VOL-284: extract a coach-proposed plan AND clamp it against the
+    /// athlete's demonstrated history before anything previews or
+    /// persists it. CoachView routes through this instead of calling
+    /// `CoachWorkoutPlanExtractor` directly so the numbers the athlete
+    /// sees are the numbers that get scheduled.
+    public func clampedCoachWorkoutPlan(from response: String, title: String) -> WorkoutSessionPlan? {
+        guard let extracted = CoachWorkoutPlanExtractor.plan(from: response, title: title) else {
+            return nil
+        }
+        let (clamped, events) = CoachPrescriptionClamp.clamp(extracted, input: coachPrescriptionClampInput())
+        recordPrescriptionClampEvents(events, source: "coach_extraction")
+        return clamped
+    }
+
+    /// Build the clamp context from live dashboard state: demonstrated
+    /// top weights from logged history, the largest recent session
+    /// volume, and whether the active conversation carries current
+    /// symptom or red-flag context.
+    func coachPrescriptionClampInput() -> CoachPrescriptionClamp.Input {
+        var topWeights: [String: Double] = [:]
+        #if canImport(SwiftData)
+        if let workoutRepository {
+            let loggedIDs = recentSessions
+                .flatMap(\.exerciseIDs)
+                .filter { !$0.hasPrefix("healthkit-") }
+            for exerciseID in Set(loggedIDs).prefix(40) {
+                guard let history = try? workoutRepository.history(forExercise: exerciseID),
+                      history.topWeight > 0 else { continue }
+                topWeights[CoachPrescriptionClamp.normalizedExerciseKey(exerciseID)] = history.topWeight
+            }
+        }
+        #endif
+        let lastUserPrompt = coachMessages.last(where: { $0.sender == .user })?.content ?? ""
+        return CoachPrescriptionClamp.Input(
+            topWeightByExerciseKey: topWeights,
+            maxRecentSessionVolume: recentSessions.map(\.totalVolumeLoad).max(),
+            hasSymptomContext: CoachSafetyFilter.shouldBufferResponse(
+                prompt: lastUserPrompt,
+                context: buildCoachContext()
+            )
+        )
+    }
+
+    private func recordPrescriptionClampEvents(_ events: [CoachPrescriptionClamp.Event], source: String) {
+        guard !events.isEmpty else { return }
+        var metadata: [String: String] = ["source": source, "total": "\(events.count)"]
+        for event in events {
+            let key = "kind_\(event.kind.rawValue)"
+            metadata[key] = "\((Int(metadata[key] ?? "0") ?? 0) + 1)"
+        }
+        telemetrySink.record(TelemetryEvent(
+            category: "coach.safety",
+            name: "clamp",
+            severity: .warning,
+            message: "Coach prescription clamped to safety bounds.",
+            metadata: metadata
+        ))
+    }
+
     /// Persist a co-designed workout draft into the weekly plan for tomorrow.
     /// Replaces any existing workout on that weekday and refreshes the
     /// dashboard so Today/Workouts pick up the change immediately.
@@ -47,14 +106,25 @@ extension WorkoutDashboardModel {
         let title = normalizedCoDesignedWorkoutTitle(plan.title)
         let dayOfWeek = WeeklyWorkout.trainingWeekday(for: date, calendar: calendar)
 
+        // VOL-284 backstop: coach-sourced plans are re-clamped at the
+        // persistence chokepoint, so no caller can route a model-derived
+        // prescription around the safety bounds. Clamping is idempotent;
+        // plans already clamped at extraction pass through unchanged.
+        var persistedPlan = plan
+        if source == "coach" {
+            let (clamped, events) = CoachPrescriptionClamp.clamp(plan, input: coachPrescriptionClampInput())
+            recordPrescriptionClampEvents(events, source: "coach_schedule")
+            persistedPlan = clamped
+        }
+
         do {
             var workouts = try trainingPlanRepository.weeklyWorkouts()
             let scheduledWorkout = WeeklyWorkout(
                 dayOfWeek: dayOfWeek,
                 title: title,
-                durationMinutes: plan.durationMinutes,
-                targetRPE: plan.targetRPE,
-                exercises: plan.exercises
+                durationMinutes: persistedPlan.durationMinutes,
+                targetRPE: persistedPlan.targetRPE,
+                exercises: persistedPlan.exercises
             )
             if let index = workouts.firstIndex(where: { $0.dayOfWeek == dayOfWeek }) {
                 workouts[index] = scheduledWorkout
@@ -71,7 +141,7 @@ extension WorkoutDashboardModel {
                     "dayOfWeek": "\(dayOfWeek)",
                     "title_present": trimmedRawTitle.isEmpty ? "false" : "true",
                     "title_length_bucket": coDesignedTitleLengthBucket(trimmedRawTitle),
-                    "exerciseCount": "\(plan.exercises.count)",
+                    "exerciseCount": "\(persistedPlan.exercises.count)",
                     "source": source,
                 ]
             ))

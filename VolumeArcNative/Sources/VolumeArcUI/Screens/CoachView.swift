@@ -542,7 +542,9 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
     }
 
     private func coachWorkoutPlan(from response: String) -> WorkoutSessionPlan? {
-        CoachWorkoutPlanExtractor.plan(
+        // VOL-284: extraction routes through the model so prescription
+        // clamps apply before the plan is previewed or scheduled.
+        model.clampedCoachWorkoutPlan(
             from: response,
             title: String(localized: "Coach Workout", comment: "Title for a coach response converted into a workout")
         )

@@ -131,7 +131,9 @@ public final class WorkoutDashboardModel: ObservableObject {
     private let accountSessionStore: AccountSessionStore
 
     #if canImport(SwiftData)
-    private let workoutRepository: SwiftDataWorkoutRepository?
+    // Internal (not private) so WorkoutDashboardModel+TrainingPrograms
+    // can build the VOL-284 prescription clamp context from history.
+    let workoutRepository: SwiftDataWorkoutRepository?
     // VOL-181: relaxed to internal so the extracted coach-context
     // extension can pull memory.mostRecent into the prompt block.
     let coachMemoryRepository: SwiftDataCoachMemoryRepository?

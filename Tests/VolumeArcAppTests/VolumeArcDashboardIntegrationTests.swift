@@ -1149,6 +1149,47 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertEqual(invocations, 0, "A red-flag prompt must never reach a coach provider")
     }
 
+    // MARK: - VOL-284 — prescription clamps end to end
+
+    /// A coach response prescribing an absurd load must be clamped both
+    /// at extraction (what the athlete previews) and at the coach-source
+    /// scheduling backstop (what persists), with `coach.safety.clamp`
+    /// telemetry recording the intervention.
+    func testCoachExtractedPlanClampsInsaneLoadBeforePersisting() async throws {
+        let telemetry = InMemoryTelemetrySink()
+        let model = makeDashboardModel(telemetrySink: telemetry)
+
+        let preview = model.clampedCoachWorkoutPlan(
+            from: "Squat: 3x5 at 855 lb\nBench Press: 3x8 at 600 lbs",
+            title: "Coach Workout"
+        )
+        XCTAssertEqual(preview?.exercises.map(\.weight), [135, 135],
+                       "No logged history -> barbell first-exposure cap")
+
+        // Route the RAW extracted numbers at the persistence backstop to
+        // prove no caller can bypass the clamp for coach-sourced plans.
+        let scheduled = await model.scheduleWorkoutPlan(
+            WorkoutSessionPlan(
+                title: "Backstop Probe",
+                targetRPE: 9,
+                exercises: [WeeklyWorkoutExercise(
+                    name: "Barbell Back Squat", sets: 3, reps: 5,
+                    weight: 855, targetRPE: 9, restSeconds: 120
+                )]
+            ),
+            on: .now,
+            source: "coach"
+        )
+        XCTAssertTrue(scheduled)
+
+        let persisted = try trainingPlanRepository.weeklyWorkouts()
+            .first { $0.title == "Backstop Probe" }
+        XCTAssertEqual(persisted?.exercises.first?.weight, 135)
+        XCTAssertTrue(telemetry.currentEvents.contains {
+            $0.category == "coach.safety" && $0.name == "clamp"
+        })
+    }
+
     private func makeDashboardModel(
         aiProvider: any AICoachProvider = LocalHeuristicAICoachProvider(),
         recoveryReader: any RecoveryReader = UnavailableRecoveryReader(),
