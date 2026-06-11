@@ -1190,6 +1190,55 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         })
     }
 
+    /// PR #363 review (Codex P1): the coach handoff's Start button begins
+    /// an active session without scheduling, so the start path needs the
+    /// same coach-source backstop — a raw extracted 855 lb prescription
+    /// must go live clamped.
+    func testCoachSourcedStartClampsInsaneLoadBeforeGoingLive() async throws {
+        let telemetry = InMemoryTelemetrySink()
+        let model = makeDashboardModel(telemetrySink: telemetry)
+
+        await model.startWorkoutSession(
+            title: "Handoff Probe",
+            plan: WorkoutSessionPlan(
+                title: "Handoff Probe",
+                targetRPE: 9,
+                exercises: [WeeklyWorkoutExercise(
+                    name: "Barbell Back Squat", sets: 3, reps: 5,
+                    weight: 855, targetRPE: 9, restSeconds: 120
+                )]
+            ),
+            source: "coach"
+        )
+
+        XCTAssertTrue(model.isSessionActive)
+        XCTAssertEqual(model.activeSessionExercise?.weight, 135,
+                       "No logged history -> barbell first-exposure cap on the live session target")
+        XCTAssertTrue(telemetry.currentEvents.contains {
+            $0.category == "coach.safety" && $0.name == "clamp"
+                && $0.metadata["source"] == "coach_start"
+        })
+    }
+
+    func testManualStartStaysUserSovereignAndUnclamped() async throws {
+        let model = makeDashboardModel()
+
+        await model.startWorkoutSession(
+            title: "Manual Probe",
+            plan: WorkoutSessionPlan(
+                title: "Manual Probe",
+                targetRPE: 9,
+                exercises: [WeeklyWorkoutExercise(
+                    name: "Barbell Back Squat", sets: 3, reps: 5,
+                    weight: 405, targetRPE: 9, restSeconds: 120
+                )]
+            )
+        )
+
+        XCTAssertEqual(model.activeSessionExercise?.weight, 405,
+                       "Manual builder loads are user-sovereign by signed policy")
+    }
+
     private func makeDashboardModel(
         aiProvider: any AICoachProvider = LocalHeuristicAICoachProvider(),
         recoveryReader: any RecoveryReader = UnavailableRecoveryReader(),

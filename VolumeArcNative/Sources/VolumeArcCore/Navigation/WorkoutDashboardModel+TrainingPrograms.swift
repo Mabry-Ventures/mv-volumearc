@@ -66,6 +66,18 @@ extension WorkoutDashboardModel {
         )
     }
 
+    /// VOL-284 backstop for the workout-START path (PR #363 review,
+    /// Codex P1): the coach handoff's Start button begins an active
+    /// session directly instead of scheduling, so it must re-clamp the
+    /// same way `scheduleWorkoutPlan(source: "coach")` does — otherwise a
+    /// raw extracted prescription could go live unclamped. Idempotent for
+    /// plans already clamped upstream.
+    func clampedForCoachStart(_ plan: WorkoutSessionPlan) -> WorkoutSessionPlan {
+        let (clamped, events) = CoachPrescriptionClamp.clamp(plan, input: coachPrescriptionClampInput())
+        recordPrescriptionClampEvents(events, source: "coach_start")
+        return clamped
+    }
+
     private func recordPrescriptionClampEvents(_ events: [CoachPrescriptionClamp.Event], source: String) {
         guard !events.isEmpty else { return }
         var metadata: [String: String] = ["source": source, "total": "\(events.count)"]

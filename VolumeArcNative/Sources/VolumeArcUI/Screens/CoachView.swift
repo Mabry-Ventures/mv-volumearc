@@ -620,7 +620,7 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
                 navigation.selectedTab = .workouts
                 return
             }
-            await model.startWorkoutSession(title: plan.title, plan: plan)
+            await model.startWorkoutSession(title: plan.title, plan: plan, source: "coach")
             navigation.selectedTab = .workouts
         }
     }
@@ -655,6 +655,8 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
         Task {
             VAHaptics.sessionStart()
             dismissKeyboard()
+            // The co-design draft can carry coach-refined numbers, so the
+            // start path re-clamps like the schedule path (VOL-284).
             await model.startWorkoutSession(
                 title: planDraft.name,
                 plan: WorkoutSessionPlan(
@@ -662,7 +664,8 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
                     durationMinutes: planDraft.durationMinutes,
                     targetRPE: planDraft.targetRPE,
                     exercises: planDraftWorkoutExercises
-                )
+                ),
+                source: "coach"
             )
             navigation.selectedTab = .workouts
         }

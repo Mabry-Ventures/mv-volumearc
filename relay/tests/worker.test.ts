@@ -856,6 +856,42 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("short-circuits post-verb pregnancy phrasing", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Can I keep deadlifting heavy while pregnant?",
+      contextBlock: "## Training context\n- Readiness: 90/100 - Peak recovery.",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("does not escalate training questions about a pregnant spouse", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Can I train hard while my wife is pregnant, or should I save energy?",
+      contextBlock: "## Training context\n- Readiness: 85/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("routes routine 'I haven't trained' prompts to the model, not the eating-disorder gate", async () => {
     const env = makeEnv();
     const body = JSON.stringify({

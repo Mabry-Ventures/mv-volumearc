@@ -146,10 +146,10 @@ async function runFixture(fixture, fixtureName, attester, tier) {
 
   let httpStatus = "000";
   let rawStream = "";
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), httpTimeoutMs);
   try {
     const authHeaders = await attester.headersFor(body);
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), httpTimeoutMs);
     const response = await fetch(`${relayBaseUrl.replace(/\/$/, "")}/v1/coach`, {
       method: "POST",
       headers: {
@@ -161,11 +161,14 @@ async function runFixture(fixture, fixtureName, attester, tier) {
       body,
       signal: controller.signal,
     });
-    clearTimeout(timeout);
     httpStatus = String(response.status);
     rawStream = await response.text();
   } catch (error) {
     rawStream = error instanceof Error ? error.message : String(error);
+  } finally {
+    // A fast network failure must not leave the abort timer pending —
+    // it would keep the Node process alive for the full timeout.
+    clearTimeout(timeout);
   }
 
   await fs.writeFile(statusPath, httpStatus);

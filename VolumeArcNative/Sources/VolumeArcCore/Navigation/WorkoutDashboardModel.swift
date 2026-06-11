@@ -755,8 +755,15 @@ public final class WorkoutDashboardModel: ObservableObject {
     }
 
     // MARK: - Dashboard actions
-    /// Start a new workout session.
-    public func startWorkoutSession(title overrideTitle: String? = nil, plan: WorkoutSessionPlan? = nil) async {
+    /// Start a new workout session. Coach-derived plans must pass
+    /// `source: "coach"` so the VOL-284 clamp backstop bounds the live
+    /// session targets exactly like the scheduling path; manual builder
+    /// and library starts stay user-sovereign by signed policy.
+    public func startWorkoutSession(
+        title overrideTitle: String? = nil,
+        plan: WorkoutSessionPlan? = nil,
+        source: String = "manual"
+    ) async {
         #if canImport(SwiftData)
         guard let workoutRepository else { return }
         guard !isSessionActive else {
@@ -770,7 +777,11 @@ public final class WorkoutDashboardModel: ObservableObject {
             return
         }
         do {
-            let resolvedPlan = activeSessionPlanCandidate(from: plan)
+            var startPlan = plan
+            if source == "coach", let plan {
+                startPlan = clampedForCoachStart(plan)
+            }
+            let resolvedPlan = activeSessionPlanCandidate(from: startPlan)
             let title = workoutTitle(overrideTitle: overrideTitle, plan: resolvedPlan)
             let workout = try workoutRepository.createWorkout(title: title)
             self.activeWorkoutID = workout.identifier
