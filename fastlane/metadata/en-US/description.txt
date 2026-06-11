@@ -1,8 +1,8 @@
-VolumeArc is a strength-training coach for lifters who want more than a generic template.
+VolumeArc is an AI strength programming coach for lifters who want more than a generic template.
 
-The app combines workout tracking, readiness signals, Apple Watch support, and coach-guided prescriptions so each session starts with a clear next step: what to train, how hard to push, and when to back off.
+The app combines workout tracking, readiness signals, Apple Watch support, and prescriptive programming (progressive overload, autoregulated loads, and deloads timed to your recovery) so each session starts with a clear next step: what to train, how hard to push, and when to back off.
 
-Strength coaching that follows your training
+Programming that follows your training
 - See today's recommended workout, next lift, target reps, and readiness.
 - Log sets, RPE, rest, and completed sessions from iPhone or Apple Watch.
 - Ask the coach about load selection, recovery, form cues, substitutions, and weekly planning.

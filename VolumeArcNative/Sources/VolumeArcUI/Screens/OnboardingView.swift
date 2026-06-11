@@ -204,10 +204,11 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
                     .font(VA.Typography.title)
                     .foregroundStyle(VA.Colors.textPrimary)
                     .multilineTextAlignment(.center)
-                // VOL-247 (copy pass): tightened the prior 19-word verbose
-                // copy to 11-word coach-voice — same promise, less padding.
+                // VOL-279 (repositioning): the first-run promise is a
+                // strength program that adapts to readiness — prescriptive
+                // programming language, not generic coach framing.
                 Text(String(
-                    localized: "A strength coach that adapts to your recovery and guides every set.",
+                    localized: "A strength program that adapts to your readiness and prescribes every set, rep, and load.",
                     comment: "Onboarding welcome step description"
                 ))
                     .font(VA.Typography.body)
@@ -230,8 +231,8 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
                 )
                 OnboardingProofRow(
                     icon: "chart.line.uptrend.xyaxis",
-                    title: String(localized: "Readiness-aware training", comment: "Onboarding proof row title"),
-                    detail: String(localized: "Your plan adapts when recovery says to back off.", comment: "Onboarding proof row detail")
+                    title: String(localized: "Readiness-driven programming", comment: "Onboarding proof row title"),
+                    detail: String(localized: "Loads and volume autoregulate when recovery says to back off.", comment: "Onboarding proof row detail")
                 )
                 OnboardingProofRow(
                     icon: "lock.shield.fill",

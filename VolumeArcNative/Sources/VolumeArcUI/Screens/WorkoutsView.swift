@@ -38,7 +38,17 @@ public struct WorkoutsView: View {
 
     public var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: VA.Space.xl) {
+            // Eager VStack on purpose. This surface hosts the 1Hz rest-timer
+            // TimelineView, and a lazy container re-runs its whole placement
+            // pass (LazySubviewPlacements → lengthThatFits over every resident
+            // card) each time any child's display list changes. At 1Hz that
+            // pegged the main thread for the full rest countdown and starved
+            // XCUITest accessibility snapshots ("Timed out while evaluating UI
+            // query" in the workout journeys). A plain VStack caches child
+            // geometry in the attribute graph, so a tick re-renders only the
+            // fixed-height timer subtree. Content here is bounded (~8 cards
+            // active, capped idle sections), so laziness buys nothing.
+            VStack(alignment: .leading, spacing: VA.Space.xl) {
                 workoutsHeader
                 if model.isSessionActive {
                     activeSessionHeader

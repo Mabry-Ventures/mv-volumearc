@@ -112,8 +112,14 @@ public struct PaywallView: View {
                 // Models, and Live Activities are free per
                 // `docs/PLATFORM.md` (VOL-91); promising them as Premium
                 // value is paid-subscription misrepresentation.
+                // VOL-279 (repositioning): premium is programming depth,
+                // never generic AI access.
                 Text(String(
-                    localized: "Upgrade the coaching layer: deeper session context, better between-set calls, and voice when typing breaks focus.",
+                    localized: """
+                        Upgrade the programming depth: progression read from your full \
+                        lift history, sharper between-set calls, and voice when typing \
+                        breaks focus.
+                        """,
                     comment: "Paywall hero description — Premium unlocks (Pro coach + live voice)"
                 ))
                     .font(VA.Typography.body)
@@ -270,7 +276,7 @@ public struct PaywallView: View {
                     PaywallProofRow(
                         icon: "list.bullet.clipboard.fill",
                         title: String(localized: "Remembers your training", comment: "Paywall proof row title"),
-                        detail: String(localized: "Coach Pro reviews saved sessions before it answers.", comment: "Paywall proof row detail")
+                        detail: String(localized: "Coach Pro reads your full lift history before it prescribes.", comment: "Paywall proof row detail")
                     )
                     PaywallProofRow(
                         icon: "waveform.and.mic",
@@ -350,7 +356,11 @@ public struct PaywallView: View {
                     comment: "Premium feature name — pro coach tier"
                 ),
                 description: String(
-                    localized: "Looks at your full training history before answering, so advice fits your patterns, not just your last set.",
+                    localized: """
+                        Reads your full training history before prescribing, so \
+                        progression builds on what you've actually lifted — not just \
+                        your last set.
+                        """,
                     comment: "Premium feature description — pro coach tier"
                 )
             ),
