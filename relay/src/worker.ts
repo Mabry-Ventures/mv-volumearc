@@ -163,7 +163,9 @@ async function handleCoach(request: Request, env: Env): Promise<Response> {
 
   const deterministicSafetyResponse = coachSafetyResponse(body);
   if (deterministicSafetyResponse) {
-    await checkRateLimit(auth.deviceId, env);
+    // Mandatory safety replies are quota-free: they cost no Gemini call,
+    // and an athlete repeatedly asking about symptoms must never burn
+    // their rate budget (or hit a 429 instead of escalation copy) for it.
     return sseText(deterministicSafetyResponse, {
       "x-coach-model": "deterministic-safety",
       "x-coach-safety": "red-flag",

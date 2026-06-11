@@ -32,8 +32,8 @@ This is the binding contract for how the AI coach is prevented from harming an a
 
 | Child | Adds | Status |
 |---|---|---|
-| VOL-283 | Pre-gate composition proofs + this contract | Landed on `fix/volumearc-ga-readiness` |
-| VOL-284 | Deterministic prescription clamps (progression caps, symptom-context load freeze, rest/deload floors) | Landed on branch — clamp constants pending Jared sign-off; manual builder edits and watch set-decisions are deliberately NOT clamped (user-sovereign, deterministic app logic) |
-| VOL-285 | Injury/symptom eval taxonomy + per-provider response axis + per-provider trend gate | Landed on branch — 55 fixtures, flash-lite + pro axis, per-provider gate; first live staging run publishes via VOL-269. On-device FM response evals deferred (FM sits behind the Tier 0 gate + VOL-284 clamps; revisit post-launch) |
+| VOL-283 | Pre-gate composition proofs + this contract | Landed on `fix/volumearc-ga-readiness`; PR #363 review hardened the pregnancy red-flag pattern (gestational-age phrasing now matches on every provider path) |
+| VOL-284 | Deterministic prescription clamps (progression caps, symptom-context load freeze, rest/deload floors) | Landed on `fix/volumearc-ga-readiness` — clamp constants signed off by Jared 2026-06-11; manual builder edits and watch set-decisions are deliberately NOT clamped (user-sovereign, deterministic app logic) |
+| VOL-285 | Injury/symptom eval taxonomy + per-provider response axis + per-provider trend gate | Landed on `fix/volumearc-ga-readiness` — 55 fixtures, flash-lite + pro axis, per-provider gate; first live staging run publishes via VOL-269. On-device FM response evals deferred (FM sits behind the Tier 0 gate + VOL-284 clamps; revisit post-launch) |
 | VOL-286 | Kill switch (relay model disable, remote FM flag override) + `coach.safety.*` telemetry | Open |
 | VOL-287 | Onboarding medical disclaimer, age gating, emergency-resources copy, App Store rating answers | Open |

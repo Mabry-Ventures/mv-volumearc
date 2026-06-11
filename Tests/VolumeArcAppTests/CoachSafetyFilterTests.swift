@@ -280,6 +280,47 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertNil(response)
     }
 
+    /// PR #363 review (Codex P1): "I'm 12 weeks pregnant" must match even
+    /// with words between the first-person marker and "pregnant" — the
+    /// app-side gate is the provider-agnostic boundary, so it cannot rely
+    /// on the relay's broader pattern.
+    func testGestationalAgePhrasingEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I'm 12 weeks pregnant; can I keep deadlifting heavy?",
+            context: "Readiness: 90/100 - peak recovery"
+        )
+
+        XCTAssertNotNil(response)
+        XCTAssertTrue(response?.lowercased().contains("medical care") == true)
+    }
+
+    func testWeeksPregnantWithoutFirstPersonMarkerEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "20 weeks pregnant and still squatting. Thoughts on loading?",
+            context: ""
+        )
+
+        XCTAssertNotNil(response)
+    }
+
+    func testThirdPartyPregnancyMentionDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "My wife is pregnant. Can I still train legs today?",
+            context: ""
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testNegatedPregnancyStillDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I'm not pregnant, cleared to train. Should I push the top set?",
+            context: ""
+        )
+
+        XCTAssertNil(response)
+    }
+
     func testMedicalRedFlagsShortCircuitNonStreamingProvider() async throws {
         let provider = SafetyFilteredCoachProvider(base: FailingIfCalledProvider())
 

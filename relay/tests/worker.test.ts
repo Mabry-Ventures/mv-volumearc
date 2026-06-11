@@ -982,7 +982,11 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("records deterministic safety coach responses in the authenticated rate-limit bucket", async () => {
+  it("keeps deterministic safety replies out of the authenticated rate-limit bucket", async () => {
+    // PR #363 review (Codex P2): safety replies are quota-free. An athlete
+    // repeatedly asking about symptoms must never exhaust their budget —
+    // the prior contract (debit on safety) meant red-flag follow-ups could
+    // 429 the next normal coach request.
     const env = makeEnv({
       RATE_LIMIT_MAX_REQUESTS: "5",
       RATE_LIMIT_WINDOW_SECONDS: "600",
@@ -1003,8 +1007,7 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
     const stored = await env.RATE_LIMIT.get(`rl:${keyId}`);
-    expect(stored).not.toBeNull();
-    expect(JSON.parse(stored ?? "[]")).toHaveLength(1);
+    expect(stored).toBeNull();
     expect(fetch).not.toHaveBeenCalled();
   });
 

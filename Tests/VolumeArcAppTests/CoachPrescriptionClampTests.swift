@@ -154,7 +154,57 @@ final class CoachPrescriptionClampTests: XCTestCase {
         XCTAssertEqual(
             CoachPrescriptionClamp.topWeight(for: "Back Squat", in: ["barbell-back-squat": 200]),
             200,
-            "Containment matching connects coach phrasing to logged exercise IDs"
+            "Token matching connects coach phrasing to logged exercise IDs"
+        )
+    }
+
+    // PR #363 review (Codex P2 + CodeRabbit Major): history must not
+    // transfer across implements or lift variants.
+
+    func testDumbbellVariantDoesNotInheritHeavierHistory() {
+        let table = ["bench-press": 200.0, "barbell-bench-press": 225.0]
+
+        XCTAssertNil(
+            CoachPrescriptionClamp.topWeight(for: "Dumbbell Bench Press", in: table),
+            "A dumbbell plan must never inherit barbell/unqualified history"
+        )
+
+        let (plan, events) = CoachPrescriptionClamp.clamp(
+            makePlan([makeExercise(name: "Dumbbell Bench Press", weight: 200)]),
+            input: CoachPrescriptionClamp.Input(topWeightByExerciseKey: table)
+        )
+        XCTAssertEqual(plan.exercises.first?.weight, CoachPrescriptionClamp.noHistoryDumbbellCap)
+        XCTAssertEqual(events.map(\.kind), [.noHistoryCap])
+    }
+
+    func testVariantQualifierBlocksHistoryTransfer() {
+        XCTAssertNil(
+            CoachPrescriptionClamp.topWeight(for: "Deadlift", in: ["romanian-deadlift": 245]),
+            "Conventional deadlift must not inherit romanian-deadlift history"
+        )
+        XCTAssertNil(
+            CoachPrescriptionClamp.topWeight(for: "Romanian Deadlift", in: ["deadlift": 405]),
+            "Romanian deadlift must not inherit conventional history either"
+        )
+    }
+
+    func testUnqualifiedNamePrefersHeavyClassAndClampsConservatively() {
+        let table = [
+            "barbell-bench-press": 225.0,
+            "dumbbell-bench-press": 70.0,
+        ]
+
+        XCTAssertEqual(
+            CoachPrescriptionClamp.topWeight(for: "Bench Press", in: table),
+            225,
+            "A plain compound name means the heavy-class lift; dumbbell history is ignored"
+        )
+
+        let ambiguous = ["barbell-bench-press": 225.0, "bench-press": 205.0]
+        XCTAssertEqual(
+            CoachPrescriptionClamp.topWeight(for: "Bench Press", in: ambiguous),
+            205,
+            "Within a class, ambiguity resolves to the LOWEST top so clamps stay conservative"
         )
     }
 

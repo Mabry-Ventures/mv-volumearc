@@ -97,7 +97,8 @@ public enum CoachSafetyFilter {
                 nearby +
                 "\\b(?:severe\\s+)?short(?:ness)?\\s+of\\s+breath\\b",
             "\\b(i\\s*(?:can'?t|cannot)\\s+breathe|hard\\s+to\\s+breathe)\\b",
-            "\\b(i\\s*(?:am|might\\s+be|may\\s+be)|i\\W?m)\\s+pregnant\\b",
+            "\\b(i\\s*(?:am|might\\s+be|may\\s+be)|i\\W?m)\\b" + nearby + "\\bpregnant\\b",
+            "\\b\\d+\\s+weeks?\\s+pregnant\\b",
             "\\b(?:during|while)\\s+(?:my\\s+)?pregnancy\\b",
             "\\b(i\\s*(?:have|had|am\\s+dealing\\s+with)|i\\W?m\\s+dealing\\s+with)\\b" +
                 nearby + "\\b(?:eating\\s+disorder|restrict\\w*|starv\\w*|purg\\w*|not\\s+eating)\\b",

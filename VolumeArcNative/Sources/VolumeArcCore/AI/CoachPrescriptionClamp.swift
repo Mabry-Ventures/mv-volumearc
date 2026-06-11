@@ -138,14 +138,66 @@ public enum CoachPrescriptionClamp {
 
     // MARK: - Internals
 
+    /// Implement tokens that distinguish load classes. A plan that names
+    /// one matches only history carrying the same implement; an
+    /// unqualified plan name may inherit heavy-class history but never
+    /// light-implement history (PR #363 review: a dumbbell variant must
+    /// not inherit a barbell top weight).
+    static let implementTokens: Set<String> = [
+        "barbell", "dumbbell", "kettlebell", "machine", "cable", "smith",
+        "band", "bodyweight", "trap", "hex",
+    ]
+    static let lightImplementTokens: Set<String> = [
+        "dumbbell", "kettlebell", "band", "bodyweight",
+    ]
+    /// Variant qualifiers that change the lift enough that history must
+    /// not transfer (a conventional deadlift is not a romanian deadlift).
+    static let variantTokens: Set<String> = [
+        "romanian", "sumo", "deficit", "paused", "pause", "incline",
+        "decline", "close", "wide", "front", "overhead", "bulgarian",
+        "split", "single", "tempo", "pin", "box", "safety", "zercher",
+        "snatch", "behind",
+    ]
+
     public static func topWeight(for name: String, in table: [String: Double]) -> Double? {
         let key = normalizedExerciseKey(name)
         guard !key.isEmpty else { return nil }
         if let exact = table[key] { return exact }
-        let matches = table.filter { stored, _ in
-            stored.contains(key) || key.contains(stored)
+
+        let planTokens = Set(key.split(separator: "-").map(String.init))
+        let planImplements = planTokens.intersection(implementTokens)
+        var heavyClass: [Double] = []
+        var lightClass: [Double] = []
+
+        for (stored, weight) in table {
+            let storedTokens = Set(stored.split(separator: "-").map(String.init))
+            guard planTokens.isSubset(of: storedTokens) || storedTokens.isSubset(of: planTokens) else {
+                continue
+            }
+            // A variant qualifier on either side means a different lift.
+            guard planTokens.symmetricDifference(storedTokens).isDisjoint(with: variantTokens) else {
+                continue
+            }
+            let storedImplements = storedTokens.intersection(implementTokens)
+            if planImplements.isEmpty {
+                if storedImplements.isDisjoint(with: lightImplementTokens) {
+                    heavyClass.append(weight)
+                } else {
+                    lightClass.append(weight)
+                }
+            } else if planImplements == storedImplements {
+                heavyClass.append(weight)
+            }
+            // Mismatched implements (e.g. dumbbell plan vs barbell or
+            // unqualified history) never transfer.
         }
-        return matches.max { $0.key.count < $1.key.count }?.value
+
+        // Prefer heavy-class candidates for unqualified names (a plain
+        // "Bench Press" means the barbell lift, not the dumbbell one);
+        // within the chosen class take the LOWEST top so ambiguity always
+        // clamps conservatively.
+        let pool = heavyClass.isEmpty ? lightClass : heavyClass
+        return pool.min()
     }
 
     private static func clampExercise(
@@ -230,6 +282,11 @@ public enum CoachPrescriptionClamp {
         return symptomContext ? symptomNoHistoryOtherCap : noHistoryOtherCap
     }
 
+    /// Reduces sets until the planned session volume fits the cap. The
+    /// one-set-per-exercise floor is signed policy (VOL-284): an exercise
+    /// is never deleted from the athlete's plan, so a plan whose
+    /// single-set volume still exceeds the cap retains that residual —
+    /// the per-exercise weight caps above bound the worst case.
     private static func applySessionVolumeCap(
         _ exercises: inout [WeeklyWorkoutExercise],
         input: Input,
