@@ -492,45 +492,58 @@ struct WorkoutIllustrationTile: View {
         .accessibilityHidden(true)
     }
 
+    // The illustration must stay out of the layout conversation: a
+    // `scaledToFill` image whose ideal size disagrees with the fixed tile
+    // frame re-invalidates lazy containers on every UpdateCycle pass,
+    // which pegs the main thread and starves XCUITest's accessibility
+    // snapshots (the workout-journey "Timed out while evaluating UI
+    // query" hang). `Color.clear.overlay` reports exactly the tile frame
+    // and clips the fill overflow.
     @ViewBuilder
     private var tileContent: some View {
+        if let illustration = Self.cachedIllustration(named: illustrationAssetName, pointSize: size) {
+            Color.clear
+                .overlay(illustration.resizable().scaledToFill())
+                .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+        } else {
+            fallbackIcon
+        }
+    }
+
+    // Bundle/catalog lookups run per body evaluation on this always-live
+    // surface, and a missing asset re-probes the catalog every time, so
+    // both hits and misses are memoized. The hit path also pre-decodes a
+    // tile-sized thumbnail once — the source illustrations are 1024² PNGs
+    // and redrawing the full bitmap on every invalidation of a frequently
+    // re-rendered surface is wasted main-thread time. Body always runs on
+    // the main actor, which makes the unsynchronized static safe.
+    @MainActor private static var illustrationLookupCache: [String: Image?] = [:]
+
+    @MainActor
+    private static func cachedIllustration(named assetName: String?, pointSize: CGFloat) -> Image? {
+        guard let assetName else { return nil }
+        let cacheKey = "\(assetName)@\(Int(pointSize.rounded()))"
+        if let cached = illustrationLookupCache[cacheKey] {
+            return cached
+        }
+        let resolved: Image?
         #if canImport(UIKit)
-        if let illustrationAssetName,
-           let image = UIImage(named: illustrationAssetName, in: .main, compatibleWith: nil) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-                .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
-        } else {
-            fallbackIcon
-        }
+        let pixelEdge = pointSize * 3 // decode once at max device scale
+        resolved = UIImage(named: assetName, in: .main, compatibleWith: nil)
+            .map { source in
+                source.preparingThumbnail(of: CGSize(width: pixelEdge, height: pixelEdge)) ?? source
+            }
+            .map(Image.init(uiImage:))
         #elseif canImport(AppKit)
-        if let illustrationAssetName,
-           let image = NSImage(named: NSImage.Name(illustrationAssetName)) {
-            Image(nsImage: image)
-                .resizable()
-                .scaledToFill()
-                .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
-        } else {
-            fallbackIcon
-        }
+        resolved = NSImage(named: NSImage.Name(assetName)).map(Image.init(nsImage:))
         #else
-        // On the shipping Apple app target these assets live in the main app
-        // bundle. Non-UIKit preview/test hosts fall back if the bundle does not
-        // expose asset lookup.
-        if let illustrationAssetName,
-           Bundle.main.url(forResource: illustrationAssetName, withExtension: nil) != nil {
-            Image(illustrationAssetName, bundle: .main)
-                .resizable()
-                .scaledToFill()
-                .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
-        } else {
-            fallbackIcon
-        }
+        // Non-UIKit/AppKit preview or test hosts cannot probe the asset
+        // catalog for existence; fall back to the icon rather than render
+        // an empty image.
+        resolved = nil
         #endif
+        illustrationLookupCache[cacheKey] = resolved
+        return resolved
     }
 
     private var fallbackIcon: some View {
@@ -602,14 +615,15 @@ struct RestTimerDisplay: View {
             restRing(remaining: remaining, progress: progress)
                 .accessibilityElement()
                 .accessibilityLabel(String(localized: "Rest timer", comment: "Rest timer accessibility label"))
-                .accessibilityValue(
-                    remaining == 0
-                        ? String(localized: "Go time", comment: "Rest timer complete accessibility value")
-                        : vaInflectedString(
-                            "^[\(remaining) second](inflect: true) remaining",
-                            comment: "Rest timer countdown accessibility value"
-                        )
-                )
+                // The value is coarsened to 5s buckets and the element is
+                // marked updates-frequently: a per-tick accessibility
+                // mutation forces XCUITest to restart any in-flight query
+                // snapshot, which starved every query on this surface for
+                // the full countdown ("Timed out while evaluating UI
+                // query" in the workout journeys). VoiceOver still gets a
+                // live countdown, just at 5s granularity.
+                .accessibilityValue(restAccessibilityValue(remaining: remaining))
+                .accessibilityAddTraits(.updatesFrequently)
                 .task(id: remaining) {
                     updateCompletionState(remaining: remaining)
                 }
@@ -622,12 +636,24 @@ struct RestTimerDisplay: View {
         .accessibilityIdentifier("workouts.restTimer")
     }
 
+    private func restAccessibilityValue(remaining: Int) -> String {
+        guard remaining > 0 else {
+            return String(localized: "Go time", comment: "Rest timer complete accessibility value")
+        }
+        let bucketed = Int((Double(remaining) / 5).rounded(.up)) * 5
+        return vaInflectedString(
+            "^[\(bucketed) second](inflect: true) remaining",
+            comment: "Rest timer countdown accessibility value"
+        )
+    }
+
     private func restRing(remaining: Int, progress: Double) -> some View {
         ZStack {
             VAProgressRing(
                 progress: progress,
                 lineWidth: 10,
-                color: remaining == 0 ? VA.Colors.success : VA.Colors.primary
+                color: remaining == 0 ? VA.Colors.success : VA.Colors.primary,
+                animated: false // 1Hz tick-driven; see VAProgressRing
             )
             .frame(width: 190, height: 190)
             VStack(spacing: VA.Space.xs) {

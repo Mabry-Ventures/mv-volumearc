@@ -409,6 +409,21 @@ final class VolumeArcHealthKitPermissionJourneyTests: XCTestCase {
         )
         continueButton.tap()
 
+        // VOL-287: the safety step sits between permissions and done —
+        // acknowledge, then continue once more before Finish appears.
+        let acknowledge = app.descendants(matching: .any)
+            .matching(identifier: "onboarding.safety.acknowledge").firstMatch
+        XCTAssertTrue(
+            acknowledge.waitForExistence(timeout: 15),
+            "Safety step should expose the acknowledgment toggle (VOL-287)"
+        )
+        acknowledge.tap()
+        XCTAssertTrue(
+            continueButton.waitForExistence(timeout: 15),
+            "Continue should be reachable on the safety step"
+        )
+        continueButton.tap()
+
         let finishButton = app.descendants(matching: .any)
             .matching(identifier: "onboarding.finish").firstMatch
         XCTAssertTrue(

@@ -251,8 +251,11 @@ final class VolumeArcTodayJourneyTests: XCTestCase {
             "Co-designed plan draft should appear after tapping Plan tomorrow"
         )
 
+        // PR #363: the co-design dedupe removed the actionGrid Schedule
+        // button that owned the unsuffixed identifier; the footer button
+        // is the single surviving Schedule action.
         let schedule = app.descendants(matching: .any)
-            .matching(identifier: "coach.plan.schedule")
+            .matching(identifier: "coach.plan.schedule.footer")
             .firstMatch
         XCTAssertTrue(
             VolumeArcAppUITestSupport.scrollIntoViewAndTap(schedule, in: app, timeout: 10, maxScrolls: 4),

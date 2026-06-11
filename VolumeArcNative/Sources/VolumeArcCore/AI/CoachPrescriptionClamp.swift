@@ -284,9 +284,11 @@ public enum CoachPrescriptionClamp {
 
     /// Reduces sets, then reps, until the planned session volume fits the
     /// cap. An exercise is never deleted (signed policy, VOL-284) and both
-    /// sets and reps floor at 1, so the terminal residual is one rep of an
-    /// already weight-clamped load per exercise — the cap is real, not
-    /// best-effort (PR #363 review).
+    /// sets and reps floor at 1, so the enforced lower bound per exercise
+    /// is one rep of the already weight-clamped load. A plan with many
+    /// exercises can therefore still exceed the cap at the 1x1 floor —
+    /// the cap is bounded best-effort by design, with the per-exercise
+    /// weight caps above bounding the worst case (PR #363 review).
     private static func applySessionVolumeCap(
         _ exercises: inout [WeeklyWorkoutExercise],
         input: Input,

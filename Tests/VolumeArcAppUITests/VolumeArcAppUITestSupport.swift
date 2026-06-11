@@ -20,6 +20,7 @@ enum VolumeArcAppUITestSupport {
             "-SeedFixtures", "1",
         ]
         app.launchArguments += extra
+        disableOSLogStreaming(of: app)
         return app
     }
 
@@ -32,7 +33,22 @@ enum VolumeArcAppUITestSupport {
             "-UITestMode", "1",
         ]
         app.launchArguments += extra
+        disableOSLogStreaming(of: app)
         return app
+    }
+
+    /// Under XCUITest, os_log lines from the app are streamed to the test
+    /// host, and every accessibility broadcast logs through that stream —
+    /// stack samples of the workout-journey hangs showed the main thread
+    /// dominated by `_UIAXBroadcastMainThread → _os_log_impl_stream` plus
+    /// dyld lock contention per log line. On surfaces with per-second
+    /// accessibility updates (rest timer) that overhead starved query
+    /// snapshot evaluation entirely ("Timed out while evaluating UI
+    /// query"). Disabling activity streaming for the app-under-test makes
+    /// AX broadcasts cheap again; telemetry assertions are unaffected
+    /// because they read the accessibility overlay, not the log stream.
+    private static func disableOSLogStreaming(of app: XCUIApplication) {
+        app.launchEnvironment["OS_ACTIVITY_MODE"] = "disable"
     }
 
     // MARK: - VOL-111: Dynamic Type + pseudo-locale launch helpers

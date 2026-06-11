@@ -280,6 +280,33 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertNil(response)
     }
 
+    /// PR #363 review (Codex P1, round 3): a negated clause must not
+    /// swallow a positive symptom that follows it — the clause splitter
+    /// strips the shared first-person subject, so the subject-free
+    /// fallback has to catch the surviving symptom.
+    func testNegatedClauseFollowedByPositiveSymptomEscalates() {
+        let butVariant = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I have no chest pain but dizziness when I stand up from the bench.",
+            context: ""
+        )
+        XCTAssertNotNil(butVariant)
+
+        let currentMarkerVariant = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I have no chest pain, lightheaded now though. Keep lifting?",
+            context: ""
+        )
+        XCTAssertNotNil(currentMarkerVariant)
+    }
+
+    func testFullyNegatedSymptomListStillDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I have no chest pain, no dizziness, and no shortness of breath. Cleared to train hard?",
+            context: ""
+        )
+
+        XCTAssertNil(response)
+    }
+
     /// PR #363 review (Codex P1): "I'm 12 weeks pregnant" must match even
     /// with words between the first-person marker and "pregnant" — the
     /// app-side gate is the provider-agnostic boundary, so it cannot rely
@@ -312,6 +339,28 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertNil(response)
     }
 
+    /// PR #363 review (Codex P1 parity): the adverbial "while pregnant"
+    /// phrasing must escalate on the app-side gate, not only on the
+    /// relay's broader pattern.
+    func testWhilePregnantPhrasingEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Can I keep deadlifting heavy while pregnant?",
+            context: ""
+        )
+
+        XCTAssertNotNil(response)
+        XCTAssertTrue(response?.lowercased().contains("medical care") == true)
+    }
+
+    func testTrainingWhileSpouseIsPregnantDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Can I train hard while my wife is pregnant, or should I save energy?",
+            context: ""
+        )
+
+        XCTAssertNil(response)
+    }
+
     func testNegatedPregnancyStillDoesNotEscalate() {
         let response = CoachSafetyFilter.medicalRedFlagResponse(
             prompt: "I'm not pregnant, cleared to train. Should I push the top set?",
@@ -319,6 +368,45 @@ final class CoachSafetyFilterTests: XCTestCase {
         )
 
         XCTAssertNil(response)
+    }
+
+    /// PR #363 review (CodeRabbit): the disordered-eating pattern must
+    /// require the eating verb on every branch — a bare "I haven't" is a
+    /// routine coaching opener, not a red flag.
+    func testRoutineIHaventTrainedPromptDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I haven't trained in a week. Where should I restart my squat?",
+            context: ""
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testIHaveNotSquattedLatelyDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I have not squatted lately, what loading makes sense?",
+            context: ""
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testHaventEatenPromptStillEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I haven't eaten since yesterday but want to hit a heavy single.",
+            context: ""
+        )
+
+        XCTAssertNotNil(response)
+    }
+
+    func testDidntEatToCutWeightStillEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I didn't eat all day to cut weight before training.",
+            context: ""
+        )
+
+        XCTAssertNotNil(response)
     }
 
     func testMedicalRedFlagsShortCircuitNonStreamingProvider() async throws {

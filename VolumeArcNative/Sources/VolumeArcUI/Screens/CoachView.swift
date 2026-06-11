@@ -542,9 +542,14 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
     }
 
     private func coachWorkoutPlan(from response: String) -> WorkoutSessionPlan? {
-        // VOL-284: extraction routes through the model so prescription
-        // clamps apply before the plan is previewed or scheduled.
-        model.clampedCoachWorkoutPlan(
+        // VOL-284: pure extraction only — this runs per message per render
+        // (transcript loop + pinned handoff), so it must stay cheap. The
+        // inline preview surfaces only the move count and first lift, never
+        // load figures, and every coach-sourced schedule re-clamps at the
+        // `scheduleWorkoutPlan` backstop, so deferring the clamp to
+        // scheduling loses nothing and keeps repository work off the
+        // render path (the round-3 UI hangs came from clamping here).
+        CoachWorkoutPlanExtractor.plan(
             from: response,
             title: String(localized: "Coach Workout", comment: "Title for a coach response converted into a workout")
         )

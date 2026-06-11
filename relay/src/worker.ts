@@ -480,7 +480,11 @@ function renderedTrainingContext(prompt: string | undefined): string | undefined
   }
   const focusMarker = "## Coaching focus";
   const athleteMarker = "## Athlete question";
-  const athleteIndex = prompt.indexOf(athleteMarker);
+  // lastIndexOf, like the focus marker below: the client template renders
+  // the real athlete question last, so a fake "## Athlete question" pasted
+  // into untrusted context text cannot truncate the searchable context and
+  // hide a later current-symptom line from the safety scan.
+  const athleteIndex = prompt.lastIndexOf(athleteMarker);
   const searchablePrompt = athleteIndex >= 0 ? prompt.slice(0, athleteIndex) : prompt;
   const focusIndex = searchablePrompt.lastIndexOf(focusMarker);
   if (focusIndex < 0) {
@@ -527,7 +531,12 @@ function hasMedicalRedFlag(text: string): boolean {
     "\\bpregnan(?:t|cy)\\b" + nearby + "\\b(?:train|training|lift|lifting|heavy|squat|deadlift|workout)\\b",
     "\\b(i\\s*(?:have|had|am\\s+dealing\\s+with)|i\\W?m\\s+dealing\\s+with)\\b" +
       nearby + "\\b(?:eating\\s+disorder|restrict\\w*|starv\\w*|purg\\w*|not\\s+eating)\\b",
-    "\\bi\\s*(?:haven'?t|have\\s+not|hadn'?t|(?:didn'?t|did\\s+not)\\s+eat(?:en)?)\\b" +
+    // Both branches require the eating verb — a bare "I haven't" near a
+    // training word ("I haven't trained this week") is a routine
+    // coaching prompt, not a disordered-eating signal.
+    "\\bi\\s*(?:haven'?t|have\\s+not|hadn'?t)\\s+eaten\\b" +
+      nearby + "\\b(?:cut|cardio|train|training|squat|lift|workout)\\b",
+    "\\bi\\s*(?:didn'?t|did\\s+not)\\s+eat(?:en)?\\b" +
       nearby + "\\b(?:cut|cardio|train|training|squat|lift|workout)\\b",
     "\\b(?:restrict\\w*|skip(?:ping)?\\s+(?:meals?|food)|fast(?:ing|ed)?)\\b" +
       nearby + "\\b(?:cut|weight|fat|cardio|train|training|squat|lift|workout)\\b",

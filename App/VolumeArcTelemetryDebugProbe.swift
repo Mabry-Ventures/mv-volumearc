@@ -111,7 +111,29 @@ final class VolumeArcTelemetryDebugProbe: ObservableObject {
         if buffer.count > maxEvents {
             buffer.removeFirst(buffer.count - maxEvents)
         }
-        rebuildJSON()
+        scheduleFlush()
+    }
+
+    /// Coalesce publishes instead of publishing per event. Every label
+    /// change mutates the accessibility tree, and an AX mutation forces
+    /// XCUITest to restart any in-flight query snapshot — during an
+    /// active workout telemetry fires about once a second, which starved
+    /// query evaluation on render-heavy surfaces ("Failed to get
+    /// matching snapshots: Timed out while evaluating UI query").
+    /// Events still reach the label within ~2.5s, far inside
+    /// `assertTelemetryFired`'s 10s poll window.
+    private var flushScheduled = false
+
+    private func scheduleFlush() {
+        guard !flushScheduled else { return }
+        flushScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.flushScheduled = false
+                self.rebuildJSON()
+            }
+        }
     }
 
     private func rebuildJSON() {

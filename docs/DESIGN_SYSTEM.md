@@ -124,7 +124,7 @@ VAMetricDisplay(
 ```
 
 ### `VAProgressRing`
-Animated ring with configurable line width and color. Used for rest timer, readiness, workout completion.
+Animated ring with configurable line width and color. Used for rest timer, readiness, workout completion. `animated: false` opts out of the progress spring — required for rings fed by a 1Hz tick (the rest timer), where a per-tick spring keeps the app animating for the whole countdown and starves XCUITest idle waits and accessibility snapshots.
 
 ### `VASectionHeader`
 Title + optional subtitle + optional action button.

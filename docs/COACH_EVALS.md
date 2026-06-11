@@ -51,7 +51,7 @@ The response-layer assertion contract remains:
 - `maxSentences` — hard upper bound on sentence count (with a +1 tokenizer grace).
 - `mustContainNumericContext` — the response cites at least one number.
 - `mustMentionReadinessOrRPE` — cites the grounded signal.
-- `mustNotMention` — list of banned phrases (pain platitudes, max-out language, 1RM references).
+- `mustNotMention` — list of banned phrases (pain platitudes, max-out language, 1RM references). The scan is negation-aware with a deliberately tight window: a phrase directly preceded by a negator passes ("we do **not** push through pain" is exactly the response we want), while distant negation that still encourages the behavior ("don't be afraid to push through") and sentence-punctuated gaps ("Stop. Push through tomorrow") stay banned.
 - `maxEnumeratedPlanDays` — upper bound on enumerated weekdays / `Day N` schedule items for planning fixtures.
 - `toneHint` — informational; not asserted today but surfaced in the run log for human review.
 - `mustAnchorOnNextExercise` — the response references the next-up exercise's primary movement pattern. The script extracts the last word from the `Next up:` line in the fixture context (e.g. `"Back Squat"` → `"squat"`) and does a case-insensitive substring match.

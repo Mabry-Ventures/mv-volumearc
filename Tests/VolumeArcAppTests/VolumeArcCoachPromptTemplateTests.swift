@@ -192,6 +192,27 @@ final class VolumeArcCoachPromptTemplateTests: XCTestCase {
         XCTAssertEqual(extractedPlan.exercises[2].reps, 30)
     }
 
+    /// PR #363 review: the prescription delimiters include the Unicode
+    /// en dash and em dash that model output frequently uses in place of
+    /// the ASCII hyphen.
+    func testCoachWorkoutPlanExtractorParsesEnDashAndEmDashDelimiters() {
+        let response = """
+        1. Goblet Squat \u{2013} 3x8
+        2. Dumbbell Row \u{2014} 3x10
+        """
+
+        guard let extractedPlan = CoachWorkoutPlanExtractor.plan(from: response, title: "Coach Workout") else {
+            XCTFail("Expected en-dash/em-dash prescriptions to produce a startable workout plan")
+            return
+        }
+
+        XCTAssertEqual(extractedPlan.exercises.map(\.name), ["Goblet Squat", "Dumbbell Row"])
+        XCTAssertEqual(extractedPlan.exercises[0].sets, 3)
+        XCTAssertEqual(extractedPlan.exercises[0].reps, 8)
+        XCTAssertEqual(extractedPlan.exercises[1].sets, 3)
+        XCTAssertEqual(extractedPlan.exercises[1].reps, 10)
+    }
+
     func testCoachWorkoutPlanExtractorDoesNotTreatLoadByRepNotationAsSetCount() {
         let response = """
         Keep this as clean top-set practice.

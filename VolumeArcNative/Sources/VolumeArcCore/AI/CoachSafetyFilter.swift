@@ -99,10 +99,19 @@ public enum CoachSafetyFilter {
             "\\b(i\\s*(?:can'?t|cannot)\\s+breathe|hard\\s+to\\s+breathe)\\b",
             "\\b(i\\s*(?:am|might\\s+be|may\\s+be)|i\\W?m)\\b" + nearby + "\\bpregnant\\b",
             "\\b\\d+\\s+weeks?\\s+pregnant\\b",
-            "\\b(?:during|while)\\s+(?:my\\s+)?pregnancy\\b",
+            // "while pregnant" / "during my pregnancy" — the adverbial
+            // phrasing always describes the asker, so it needs no
+            // first-person marker ("while my wife is pregnant" does not
+            // match: the possessive consumes the optional "my" and the
+            // next word must be the pregnancy term itself).
+            "\\b(?:during|while)\\s+(?:my\\s+)?pregnan(?:cy|t)\\b",
             "\\b(i\\s*(?:have|had|am\\s+dealing\\s+with)|i\\W?m\\s+dealing\\s+with)\\b" +
                 nearby + "\\b(?:eating\\s+disorder|restrict\\w*|starv\\w*|purg\\w*|not\\s+eating)\\b",
-            "\\bi\\s*(?:haven'?t|have\\s+not|hadn'?t|(?:didn'?t|did\\s+not)\\s+eat(?:en)?)\\b",
+            // Both branches require the eating verb — a bare "I haven't"
+            // must never escalate ("I haven't trained in a week" is a
+            // routine coaching prompt, not a disordered-eating signal).
+            "\\bi\\s*(?:haven'?t|have\\s+not|hadn'?t)\\s+eaten\\b",
+            "\\bi\\s*(?:didn'?t|did\\s+not)\\s+eat(?:en)?\\b",
             "\\b(?:restrict\\w*|skip(?:ping)?\\s+(?:meals?|food)|fast(?:ing|ed)?)\\b" +
                 nearby + "\\b(?:cut|weight|fat|cardio|train|training|squat|lift|workout)\\b",
             "\\b(i\\s*(?:have|had|experienced|experience)|my)\\b" +
@@ -142,7 +151,19 @@ public enum CoachSafetyFilter {
     }
 
     private static func hasMedicalRedFlagInLine(_ line: String, matching patterns: [String]) -> Bool {
+        // PR #363 review (Codex P1): the clause splitter strips the
+        // first-person subject from later clauses ("I have no chest pain
+        // but dizziness" splits to "dizziness"), so the subject-dependent
+        // prompt patterns can no longer match. Only clauses that FOLLOW a
+        // negation-suppressed clause in a strictly-first-person line (not
+        // "my", which also introduces third parties) fall back to the
+        // subject-free symptom patterns used for context lines — scoping
+        // the fallback this way keeps descriptive prose ("this tempo
+        // block feels dizzying on paper") from escalating. Clauses that
+        // name someone else's symptoms are excluded either way.
+        let lineIsFirstPerson = containsPattern(#"\bi\b|\bi'm\b|\bi've\b"#, in: line)
         var sharedNegationCarries = false
+        var followsNegatedClause = false
         for clause in medicalRedFlagClauses(in: line) {
             if !clause.separatorAllowsSharedNegation {
                 sharedNegationCarries = false
@@ -155,6 +176,7 @@ public enum CoachSafetyFilter {
             }
             if isNegatedMedicalRedFlagLine(lowered) {
                 sharedNegationCarries = isSharedNegationCarrier(lowered)
+                followsNegatedClause = true
                 continue
             }
             if sharedNegationCarries,
@@ -164,6 +186,16 @@ public enum CoachSafetyFilter {
             }
             sharedNegationCarries = false
             if patterns.contains(where: { containsPattern($0, in: clause.text) }) {
+                return true
+            }
+            guard followsNegatedClause, lineIsFirstPerson else { continue }
+            let mentionsThirdParty = containsPattern(
+                #"\b(?:my|his|her|their)\s+(?:wife|husband|partner|friend|buddy|client|coach|"#
+                    + #"brother|sister|mom|mother|dad|father|son|daughter|teammate)\b"#,
+                in: clause.text
+            )
+            if !mentionsThirdParty,
+               contextMedicalRedFlagPatterns.contains(where: { containsPattern($0, in: clause.text) }) {
                 return true
             }
         }

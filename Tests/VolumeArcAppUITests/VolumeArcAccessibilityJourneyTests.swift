@@ -205,8 +205,11 @@ final class VolumeArcAccessibilityJourneyTests: XCTestCase {
             if stepIndex == 5 {
                 let acknowledge = app.descendants(matching: .any)
                     .matching(identifier: "onboarding.safety.acknowledge").firstMatch
+                // The safety step's three proof rows span several screens
+                // at .accessibility5 and the toggle sits below them, so
+                // the default 3-swipe budget cannot reach it.
                 XCTAssertTrue(
-                    VolumeArcAppUITestSupport.scrollIntoViewAndTap(acknowledge, in: app),
+                    VolumeArcAppUITestSupport.scrollIntoViewAndTap(acknowledge, in: app, maxScrolls: 12),
                     "[\(contextLabel)] Safety acknowledgment toggle should be reachable (VOL-287)"
                 )
             }

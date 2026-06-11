@@ -3,10 +3,12 @@ import Foundation
 
 extension WorkoutDashboardModel {
     /// VOL-284: extract a coach-proposed plan AND clamp it against the
-    /// athlete's demonstrated history before anything previews or
-    /// persists it. CoachView routes through this instead of calling
-    /// `CoachWorkoutPlanExtractor` directly so the numbers the athlete
-    /// sees are the numbers that get scheduled.
+    /// athlete's demonstrated history in one step. Used by flows that
+    /// need clamped numbers up front (draft editors, tests). CoachView's
+    /// inline transcript preview deliberately does NOT route through this
+    /// — it runs per message per render and shows no load figures, so it
+    /// uses the cheap extractor and relies on the authoritative re-clamp
+    /// at the `scheduleWorkoutPlan` coach-source backstop below.
     public func clampedCoachWorkoutPlan(from response: String, title: String) -> WorkoutSessionPlan? {
         guard let extracted = CoachWorkoutPlanExtractor.plan(from: response, title: title) else {
             return nil

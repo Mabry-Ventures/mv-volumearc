@@ -141,9 +141,10 @@ final class CoachPrescriptionClampTests: XCTestCase {
             makePlan([makeExercise(sets: 5, reps: 10, weight: 200)]), input: input
         )
 
-        // PR #363 review: the cap is real — after the set floor, reps
-        // reduce too. The exercise itself is never deleted (signed
-        // policy), so the terminal residual is one rep of clamped load.
+        // PR #363 review: after the set floor, reps reduce too. The
+        // exercise itself is never deleted (signed policy), so the
+        // enforced floor is one rep of the weight-clamped load — residual
+        // volume above the cap at the 1x1 floor is accepted by design.
         XCTAssertEqual(plan.exercises.first?.sets, 1)
         XCTAssertEqual(plan.exercises.first?.reps, 1)
         XCTAssertEqual(plan.exercises.count, 1)

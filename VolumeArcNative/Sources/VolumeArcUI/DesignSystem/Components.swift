@@ -319,17 +319,20 @@ public struct VAProgressRing: View {
     private let lineWidth: CGFloat
     private let color: Color
     private let backgroundColor: Color
+    private let animated: Bool
 
     public init(
         progress: Double,
         lineWidth: CGFloat = 8,
         color: Color = VA.Colors.primary,
-        backgroundColor: Color? = nil
+        backgroundColor: Color? = nil,
+        animated: Bool = true
     ) {
         self.progress = max(0, min(1, progress))
         self.lineWidth = lineWidth
         self.color = color
         self.backgroundColor = backgroundColor ?? color.opacity(0.15)
+        self.animated = animated
     }
 
     public var body: some View {
@@ -340,7 +343,11 @@ public struct VAProgressRing: View {
                 .trim(from: 0, to: progress)
                 .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
-                .animation(.spring(response: 0.5, dampingFraction: 0.8), value: progress)
+                // Rings fed by a 1Hz tick (rest timer) pass animated: false:
+                // a 0.5s spring per tick means the app is animating for the
+                // entire countdown, so it never reaches quiescence — XCUITest
+                // idle waits and accessibility snapshots starve.
+                .animation(animated ? .spring(response: 0.5, dampingFraction: 0.8) : nil, value: progress)
         }
     }
 }
