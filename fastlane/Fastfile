@@ -688,13 +688,12 @@ platform :ios do
         ENV["VOLUMEARC_RELEASE_CANDIDATE_SHA"] = previous_candidate_sha
       end
     end
-    screenshots
-
     # PR #363 review (Codex P1): pin the review submission to the exact
     # build the UAT evidence covers. Without an explicit build_number,
     # deliver auto-selects the latest processed TestFlight build for the
     # version — a build uploaded after UAT evidence was recorded would be
-    # submitted unverified.
+    # submitted unverified. Parsed before the screenshot pass so a missing
+    # or malformed manifest fails fast instead of after a full snapshot run.
     evidence = File.read(File.expand_path("../docs/RELEASE_UAT_EVIDENCE.md", __dir__))
     uat_build_number = evidence[/^\|\s*TestFlight build\s*\|\s*(\d+)\s*\|/, 1]
     uat_app_version = evidence[/^\|\s*App version\s*\|\s*([0-9][0-9.]*)\s*\|/, 1]
@@ -704,6 +703,8 @@ platform :ios do
           "rows so the review submission is pinned to the UAT'd build."
       )
     end
+
+    screenshots
 
     deliver(
       submit_for_review: true,
