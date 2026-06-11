@@ -946,6 +946,43 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("does not escalate a spouse pregnancy duration mention", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "My wife is 4 months pregnant; should I train heavy this week?",
+      contextBlock: "## Training context\n- Readiness: 85/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("short-circuits first-person pregnancy duration without a training word", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "free",
+      question: "I'm 12 weeks pregnant - what should I do today?",
+      contextBlock: "## Training context\n- Readiness: 90/100 - Peak recovery.",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("short-circuits first-person pregnancy with words between subject and term", async () => {
     const env = makeEnv();
     const body = JSON.stringify({
