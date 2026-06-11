@@ -173,6 +173,22 @@ This was the root cause behind VOL-175's "probe flakes when chaos journey is in 
 
 **Phase 2 (follow-up):** wire every journey in the suite to the canonical events listed in the VOL-149 acceptance criteria — onboarding, workout start/log/complete, coach session, paywall, watch sync, HealthKit permission.
 
+### Accessibility-snapshot starvation hazard (2026-06 workout-journey hangs)
+
+`Failed to get matching snapshots: Timed out while evaluating UI query` from any XCUITest helper means the **app under test** couldn't service the accessibility snapshot — either its main thread is saturated or the AX tree mutates so often that every in-flight snapshot restarts. It is an app-behavior bug, not test flakiness; reproduce locally and `sample` the app process (`pgrep -f "Bundle/Application.*[V]olumeArc.app/VolumeArc"`, then `sample <pid> 3` — the bracket keeps pgrep from matching itself).
+
+The 2026-06 workout-journey hang cluster came from five compounding causes, each with a durable guard in code:
+
+| Cause | Guard |
+|---|---|
+| 1Hz rest-timer `TimelineView` inside the surface's `LazyVStack`: a lazy container re-runs its whole placement pass (re-measuring every resident card) whenever any child's display list changes, pegging the main thread for the full countdown | `WorkoutsView` scroll content is an eager `VStack` (see comment at the container); never host a frequently-updating view inside a Lazy container |
+| Per-tick accessibility value changes restart in-flight XCUITest snapshots | Rest timer exposes a 5s-bucketed `accessibilityValue` + `.updatesFrequently` trait (`RestTimerDisplay`) |
+| Per-event `@Published` updates on the telemetry debug probe mutate the AX overlay label continuously under bursty flows | Probe coalesces publishes every 2.5s (`App/VolumeArcTelemetryDebugProbe.swift`) |
+| `scaledToFill` asset image whose ideal size disagrees with its fixed tile frame re-invalidates lazy layout every UpdateCycle pass; 1024² source PNGs redraw per invalidation | `WorkoutIllustrationTile` memoizes a tile-sized thumbnail and isolates it via `Color.clear.overlay` |
+| `os_log` streaming makes every AX broadcast contend on dyld locks | App-under-test launches with `OS_ACTIVITY_MODE=disable` (`VolumeArcAppUITestSupport`) |
+
+Sampling gotcha: SwiftUI's internal view-list machinery (`_ViewList_Node`, `ModifiedViewList`, …) shows up as "List" symbols in samples — it does **not** mean a `List` view is involved. The signature of the lazy-placement storm specifically is `LazySubviewPlacements.placeSubviews` / `LazyHVStack.lengthAndSpacing` hot with zero app frames.
+
 ## Chaos / fault injection (VOL-168)
 
 [`docs/CHAOS.md`](CHAOS.md) is the source of truth. The short version: every chaos flag is a `-CHAOS_*` launch argument that the `ChaosController` (`App/Debug/`) reads, which causes app factories to wrap the matching subsystem in a fault-injecting decorator. Paired journeys in `VolumeArcChaosJourneyTests` and `VolumeArcCoachJourneyTests` exercise the fault and assert graceful degradation, including the diagnostic telemetry event via VOL-149's `assertTelemetryFired` helper. The wiring is `#if DEBUG`-gated everywhere so Release builds compile every chaos check down to `return false`. Current coverage ships HealthKit auth denial plus AIRelay 5xx/offline/401 safe fallback, 401 session-refresh retry proof, and deterministic slow-stream coach force-quit recovery; Phase 2 extends to WatchConnectivity, StoreKit, BGTaskScheduler, relay timeouts, malformed SSE, and rate limits.
