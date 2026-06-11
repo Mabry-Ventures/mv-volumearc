@@ -512,6 +512,16 @@ function renderedTrainingContext(prompt: string | undefined): string | undefined
 
 function hasMedicalRedFlag(text: string): boolean {
   const nearby = "[\\s\\S]{0,80}";
+  // An unowned pregnancy term describes the asker ("20 weeks pregnant
+  // and still squatting"), so pregnancy patterns exclude third-party
+  // owners instead of demanding an explicit first-person marker: a
+  // possessor immediately before the term ("my wife is pregnant",
+  // "she's pregnant") or right after it ("my pregnant wife") routes to
+  // normal coaching. Mirrored in CoachSafetyFilter.swift.
+  const thirdPartyPregnancyGuard =
+    "(?<!\\b(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate|she)\\s(?:is|was)\\s)(?<!she'?s\\s)";
+  const pregnancySubjectLookahead =
+    "(?!\\s+(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate)\\b)";
   const patterns = [
     "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
       nearby + "\\bchest\\s+pain\\b",
@@ -528,20 +538,16 @@ function hasMedicalRedFlag(text: string): boolean {
       nearby + "\\b(?:severe\\s+)?short(?:ness)?\\s+of\\s+breath\\b",
     "\\b(i\\s*(?:can'?t|cannot)\\s+breathe|hard\\s+to\\s+breathe)\\b",
     "\\b(i\\s*(?:am|might\\s+be|may\\s+be)|i\\W?m)\\s+pregnant\\b",
-    // Duration phrasing needs the same first-person ownership as the
-    // proximity fallback below — "my wife is 4 months pregnant" is the
-    // spouse's pregnancy, not the asker's.
-    "\\b(?:i\\s*(?:am|was|might\\s+be|may\\s+be)|i\\W?m)\\b[^.;!?\\n]{0,20}\\b\\d+\\s+(?:weeks?|months?)\\s+pregnant\\b",
+    thirdPartyPregnancyGuard + "\\b\\d+\\s+(?:weeks?|months?)\\s+pregnant\\b" + pregnancySubjectLookahead,
     // The adverbial phrasing always describes the asker ("while my wife
     // is pregnant" does not match: the possessive consumes the optional
     // "my" and the next word must be the pregnancy term itself).
     "\\b(?:during|while)\\s+(?:my\\s+)?pregnan(?:cy|t)\\b",
-    // PR #363 review (Codex P2): the bare pregnancy/training proximity
-    // fallback escalated third-party mentions ("my wife is pregnant;
-    // should I train heavy this week?"). The asker must own the
-    // pregnancy term: a first-person subject at most a short hop before
-    // it in the same clause ("I am three months pregnant").
-    "\\b(?:i\\s*(?:am|was|might\\s+be|may\\s+be)|i\\W?m)\\b[^.;!?\\n]{0,16}\\bpregnan(?:t|cy)\\b" +
+    // PR #363 review (Codex P2): the proximity fallback must not
+    // escalate third-party mentions ("my wife is pregnant; should I
+    // train heavy this week?") while bare phrasing stays escalation-
+    // worthy ("pregnant and still squatting heavy").
+    thirdPartyPregnancyGuard + "\\bpregnan(?:t|cy)\\b" + pregnancySubjectLookahead +
       nearby + "\\b(?:train|training|lift|lifting|heavy|squat|deadlift|workout)\\b",
     "\\b(i\\s*(?:have|had|am\\s+dealing\\s+with)|i\\W?m\\s+dealing\\s+with)\\b" +
       nearby + "\\b(?:eating\\s+disorder|restrict\\w*|starv\\w*|purg\\w*|not\\s+eating)\\b",

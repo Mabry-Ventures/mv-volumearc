@@ -964,6 +964,60 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("short-circuits bare gestational-age phrasing with no first-person marker", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "20 weeks pregnant and still squatting. Thoughts on loading?",
+      contextBlock: "## Training context\n- Readiness: 88/100 - Strong recovery.",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("short-circuits bare pregnancy with in-clause training proximity", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Pregnant with heavy squats programmed today - adjust my loading?",
+      contextBlock: "## Training context\n- Readiness: 88/100 - Strong recovery.",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("does not escalate a pregnant-spouse possessive before a training question", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "My pregnant wife trains with me; can I go heavy this week?",
+      contextBlock: "## Training context\n- Readiness: 85/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("short-circuits first-person pregnancy duration without a training word", async () => {
     const env = makeEnv();
     const body = JSON.stringify({

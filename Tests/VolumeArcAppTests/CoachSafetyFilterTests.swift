@@ -352,6 +352,58 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertTrue(response?.lowercased().contains("medical care") == true)
     }
 
+    /// PR #363 review (Codex P2 parity): a third-party owner on the
+    /// pregnancy term — possessor before ("my wife is 4 months
+    /// pregnant") or after ("my pregnant wife") — is the asker's
+    /// routine training question, not a pregnancy red flag.
+    func testSpousePregnancyDurationDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "My wife is 4 months pregnant; should I train heavy this week?",
+            context: ""
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testPregnantSpousePossessiveDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "My pregnant wife trains with me; can I go heavy this week?",
+            context: ""
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testFirstPersonMentionOfSpousePregnancyDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I am careful since my wife is pregnant - can I train heavy?",
+            context: ""
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testWordedGestationalAgeEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I am three months pregnant - is it safe to keep squatting heavy?",
+            context: ""
+        )
+
+        XCTAssertNotNil(response)
+        XCTAssertTrue(response?.lowercased().contains("medical care") == true)
+    }
+
+    /// Single clause on purpose: the clause splitter severs "and"-joined
+    /// fragments, so proximity patterns only see within-clause text.
+    func testBarePregnancyWithTrainingProximityEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Pregnant with heavy squats programmed today - adjust my loading?",
+            context: ""
+        )
+
+        XCTAssertNotNil(response)
+    }
+
     func testTrainingWhileSpouseIsPregnantDoesNotEscalate() {
         let response = CoachSafetyFilter.medicalRedFlagResponse(
             prompt: "Can I train hard while my wife is pregnant, or should I save energy?",

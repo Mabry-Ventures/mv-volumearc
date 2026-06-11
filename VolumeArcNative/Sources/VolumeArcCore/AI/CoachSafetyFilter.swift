@@ -81,6 +81,17 @@ public enum CoachSafetyFilter {
 
     public static func medicalRedFlagResponse(from text: String) -> String? {
         let nearby = "[\\s\\S]{0,80}"
+        // An unowned pregnancy term describes the asker ("20 weeks
+        // pregnant and still squatting"), so pregnancy patterns exclude
+        // third-party owners instead of demanding an explicit
+        // first-person marker: a possessor immediately before the term
+        // ("my wife is pregnant", "she's pregnant") or right after it
+        // ("my pregnant wife") routes to normal coaching. Mirrored in
+        // relay/src/worker.ts.
+        let thirdPartyPregnancyGuard =
+            "(?<!\\b(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate|she)\\s(?:is|was)\\s)(?<!she'?s\\s)"
+        let pregnancySubjectLookahead =
+            "(?!\\s+(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate)\\b)"
         let redFlagPatterns = [
             "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
                 nearby + "\\bchest\\s+pain\\b",
@@ -97,14 +108,23 @@ public enum CoachSafetyFilter {
                 nearby +
                 "\\b(?:severe\\s+)?short(?:ness)?\\s+of\\s+breath\\b",
             "\\b(i\\s*(?:can'?t|cannot)\\s+breathe|hard\\s+to\\s+breathe)\\b",
-            "\\b(i\\s*(?:am|might\\s+be|may\\s+be)|i\\W?m)\\b" + nearby + "\\bpregnant\\b",
-            "\\b\\d+\\s+weeks?\\s+pregnant\\b",
+            // The wide gap means the guard must sit on the term itself:
+            // "I am careful since my wife is pregnant" stays coaching.
+            "\\b(i\\s*(?:am|might\\s+be|may\\s+be)|i\\W?m)\\b" + nearby +
+                thirdPartyPregnancyGuard + "\\bpregnant\\b" + pregnancySubjectLookahead,
+            thirdPartyPregnancyGuard + "\\b\\d+\\s+(?:weeks?|months?)\\s+pregnant\\b" + pregnancySubjectLookahead,
             // "while pregnant" / "during my pregnancy" — the adverbial
             // phrasing always describes the asker, so it needs no
             // first-person marker ("while my wife is pregnant" does not
             // match: the possessive consumes the optional "my" and the
             // next word must be the pregnancy term itself).
             "\\b(?:during|while)\\s+(?:my\\s+)?pregnan(?:cy|t)\\b",
+            // PR #363 review (Codex P2 parity): proximity fallback for
+            // phrasings the explicit patterns miss ("pregnant and still
+            // chasing heavy squats"). Third-party ownership is excluded
+            // by the guard; bare phrasing escalates.
+            thirdPartyPregnancyGuard + "\\bpregnan(?:t|cy)\\b" + pregnancySubjectLookahead +
+                nearby + "\\b(?:train|training|lift|lifting|heavy|squat|deadlift|workout)\\b",
             "\\b(i\\s*(?:have|had|am\\s+dealing\\s+with)|i\\W?m\\s+dealing\\s+with)\\b" +
                 nearby + "\\b(?:eating\\s+disorder|restrict\\w*|starv\\w*|purg\\w*|not\\s+eating)\\b",
             // Both branches require the eating verb — a bare "I haven't"
