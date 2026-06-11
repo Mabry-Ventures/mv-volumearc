@@ -577,7 +577,17 @@ function hasMedicalRedFlagInClauses(text: string, patterns: string[]): boolean {
 }
 
 function hasMedicalRedFlagInLine(line: string, patterns: string[]): boolean {
+  // Mirror of the app filter's negated-clause fallback (PR #363 Codex
+  // P1): the clause splitter strips the first-person subject from later
+  // clauses ("I have no chest pain but dizziness" splits to
+  // "dizziness"), so the subject-dependent prompt patterns can no
+  // longer match. Only clauses that FOLLOW a negation-suppressed clause
+  // in a strictly first-person line fall back to the subject-free
+  // context patterns — scoping keeps descriptive prose from escalating
+  // — and clauses naming someone else's symptoms are excluded.
+  const lineIsFirstPerson = containsPattern("\\bi\\b|\\bi'm\\b|\\bi've\\b", line);
   let sharedNegationCarries = false;
+  let followsNegatedClause = false;
   for (const clause of medicalRedFlagClauses(line)) {
     if (!clause.separatorAllowsSharedNegation) {
       sharedNegationCarries = false;
@@ -590,6 +600,7 @@ function hasMedicalRedFlagInLine(line: string, patterns: string[]): boolean {
     }
     if (isNegatedMedicalRedFlagLine(lowered)) {
       sharedNegationCarries = isSharedNegationCarrier(lowered);
+      followsNegatedClause = true;
       continue;
     }
     if (
@@ -603,30 +614,46 @@ function hasMedicalRedFlagInLine(line: string, patterns: string[]): boolean {
     if (patterns.some((pattern) => containsPattern(pattern, clause.text))) {
       return true;
     }
+    if (!followsNegatedClause || !lineIsFirstPerson) {
+      continue;
+    }
+    const mentionsThirdParty = containsPattern(
+      "\\b(?:my|his|her|their)\\s+(?:wife|husband|partner|friend|buddy|client|coach|" +
+        "brother|sister|mom|mother|dad|father|son|daughter|teammate)\\b",
+      clause.text,
+    );
+    if (
+      !mentionsThirdParty &&
+      CONTEXT_MEDICAL_RED_FLAG_PATTERNS.some((pattern) => containsPattern(pattern, clause.text))
+    ) {
+      return true;
+    }
   }
   return false;
 }
 
+const CONTEXT_MEDICAL_RED_FLAG_PATTERNS = [
+  "\\bchest\\s+pain\\b",
+  "\\bpain\\s+in\\s+(?:(?:the|my|your|his|her|their|its)\\s+)?chest\\b",
+  "\\bdizz(?:y|iness)\\b",
+  "\\blightheaded\\b",
+  "\\bfaint(?:ed|ing)?\\b",
+  "\\bsyncope\\b",
+  "\\bpassed\\s+out\\b",
+  "\\bblacked\\s+out\\b",
+  "\\b(?:severe\\s+)?short(?:ness)?\\s+of\\s+breath\\b",
+  "\\b(can'?t|cannot)\\s+breathe\\b",
+  "\\bhard\\s+to\\s+breathe\\b",
+  "\\bpregnan(?:t|cy)\\b",
+  "\\b(?:eating\\s+disorder|restrict\\w*|starv\\w*|purg\\w*|not\\s+eating)\\b",
+  "\\bhaven'?t\\s+eaten\\b",
+  "\\bhadn'?t\\s+eaten\\b",
+  "\\b(?:didn'?t|did\\s+not)\\s+eat(?:en)?\\b",
+  "\\b(?:cardiac\\s+event|heart\\s+attack)\\b",
+];
+
 function hasCurrentMedicalRedFlag(text: string): boolean {
-  const patterns = [
-    "\\bchest\\s+pain\\b",
-    "\\bpain\\s+in\\s+(?:(?:the|my|your|his|her|their|its)\\s+)?chest\\b",
-    "\\bdizz(?:y|iness)\\b",
-    "\\blightheaded\\b",
-    "\\bfaint(?:ed|ing)?\\b",
-    "\\bsyncope\\b",
-    "\\bpassed\\s+out\\b",
-    "\\bblacked\\s+out\\b",
-    "\\b(?:severe\\s+)?short(?:ness)?\\s+of\\s+breath\\b",
-    "\\b(can'?t|cannot)\\s+breathe\\b",
-    "\\bhard\\s+to\\s+breathe\\b",
-    "\\bpregnan(?:t|cy)\\b",
-    "\\b(?:eating\\s+disorder|restrict\\w*|starv\\w*|purg\\w*|not\\s+eating)\\b",
-    "\\bhaven'?t\\s+eaten\\b",
-    "\\bhadn'?t\\s+eaten\\b",
-    "\\b(?:didn'?t|did\\s+not)\\s+eat(?:en)?\\b",
-    "\\b(?:cardiac\\s+event|heart\\s+attack)\\b",
-  ];
+  const patterns = CONTEXT_MEDICAL_RED_FLAG_PATTERNS;
   return text.split(/\r?\n/).some((line) => {
     let sharedNegationCarries = false;
     for (const clause of medicalRedFlagClauses(line)) {
