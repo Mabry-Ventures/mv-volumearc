@@ -856,6 +856,42 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("short-circuits palpitations during training", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "I have palpitations during squats. Should I keep going?",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("does not escalate negated palpitations", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "No palpitations, cleared by my cardiologist. Plan for today?",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("short-circuits post-verb pregnancy phrasing", async () => {
     const env = makeEnv();
     const body = JSON.stringify({
@@ -890,6 +926,43 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not escalate a spouse pregnancy mention followed by a training question", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "My wife is pregnant; should I train heavy this week?",
+      contextBlock: "## Training context\n- Readiness: 85/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("short-circuits first-person pregnancy with words between subject and term", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "I am three months pregnant - is it safe to keep squatting heavy?",
+      contextBlock: "## Training context\n- Readiness: 88/100 - Strong recovery.",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("routes routine 'I haven't trained' prompts to the model, not the eating-disorder gate", async () => {

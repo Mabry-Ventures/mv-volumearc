@@ -527,12 +527,18 @@ function hasMedicalRedFlag(text: string): boolean {
       nearby + "\\b(?:severe\\s+)?short(?:ness)?\\s+of\\s+breath\\b",
     "\\b(i\\s*(?:can'?t|cannot)\\s+breathe|hard\\s+to\\s+breathe)\\b",
     "\\b(i\\s*(?:am|might\\s+be|may\\s+be)|i\\W?m)\\s+pregnant\\b",
-    "\\b\\d+\\s+weeks?\\s+pregnant\\b",
+    "\\b\\d+\\s+(?:weeks?|months?)\\s+pregnant\\b",
     // The adverbial phrasing always describes the asker ("while my wife
     // is pregnant" does not match: the possessive consumes the optional
     // "my" and the next word must be the pregnancy term itself).
     "\\b(?:during|while)\\s+(?:my\\s+)?pregnan(?:cy|t)\\b",
-    "\\bpregnan(?:t|cy)\\b" + nearby + "\\b(?:train|training|lift|lifting|heavy|squat|deadlift|workout)\\b",
+    // PR #363 review (Codex P2): the bare pregnancy/training proximity
+    // fallback escalated third-party mentions ("my wife is pregnant;
+    // should I train heavy this week?"). The asker must own the
+    // pregnancy term: a first-person subject at most a short hop before
+    // it in the same clause ("I am three months pregnant").
+    "\\b(?:i\\s*(?:am|was|might\\s+be|may\\s+be)|i\\W?m)\\b[^.;!?\\n]{0,16}\\bpregnan(?:t|cy)\\b" +
+      nearby + "\\b(?:train|training|lift|lifting|heavy|squat|deadlift|workout)\\b",
     "\\b(i\\s*(?:have|had|am\\s+dealing\\s+with)|i\\W?m\\s+dealing\\s+with)\\b" +
       nearby + "\\b(?:eating\\s+disorder|restrict\\w*|starv\\w*|purg\\w*|not\\s+eating)\\b",
     // Both branches require the eating verb — a bare "I haven't" near a
@@ -546,6 +552,8 @@ function hasMedicalRedFlag(text: string): boolean {
       nearby + "\\b(?:cut|weight|fat|cardio|train|training|squat|lift|workout)\\b",
     "\\b(i\\s*(?:have|had|experienced|experience)|my)\\b" +
       nearby + "\\b(?:cardiac\\s+event|heart\\s+attack)\\b",
+    "\\b(i\\s*(?:feel|felt|have|had|get|got|notice|noticed)|i\\W?m\\s+having|my)\\b" +
+      nearby + "\\b(?:palpitations?|arrhythmia)\\b",
   ];
   if (hasMedicalRedFlagInClauses(text, patterns)) {
     return true;
@@ -654,6 +662,7 @@ const CONTEXT_MEDICAL_RED_FLAG_PATTERNS = [
   "\\bhadn'?t\\s+eaten\\b",
   "\\b(?:didn'?t|did\\s+not)\\s+eat(?:en)?\\b",
   "\\b(?:cardiac\\s+event|heart\\s+attack)\\b",
+  "\\b(?:palpitations?|arrhythmia)\\b",
 ];
 
 function hasCurrentMedicalRedFlag(text: string): boolean {
