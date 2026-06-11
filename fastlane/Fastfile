@@ -690,12 +690,29 @@ platform :ios do
     end
     screenshots
 
+    # PR #363 review (Codex P1): pin the review submission to the exact
+    # build the UAT evidence covers. Without an explicit build_number,
+    # deliver auto-selects the latest processed TestFlight build for the
+    # version — a build uploaded after UAT evidence was recorded would be
+    # submitted unverified.
+    evidence = File.read(File.expand_path("../docs/RELEASE_UAT_EVIDENCE.md", __dir__))
+    uat_build_number = evidence[/^\|\s*TestFlight build\s*\|\s*(\d+)\s*\|/, 1]
+    uat_app_version = evidence[/^\|\s*App version\s*\|\s*([0-9][0-9.]*)\s*\|/, 1]
+    if uat_build_number.to_s.empty? || uat_app_version.to_s.empty?
+      UI.user_error!(
+        "docs/RELEASE_UAT_EVIDENCE.md must record numeric 'TestFlight build' and 'App version' " \
+          "rows so the review submission is pinned to the UAT'd build."
+      )
+    end
+
     deliver(
       submit_for_review: true,
       automatic_release: false,
       force: true,
       skip_screenshots: false,
       screenshots_path: "fastlane/screenshots",
+      app_version: uat_app_version,
+      build_number: uat_build_number,
       api_key: volume_arc_app_store_connect_api_key
     )
   end
