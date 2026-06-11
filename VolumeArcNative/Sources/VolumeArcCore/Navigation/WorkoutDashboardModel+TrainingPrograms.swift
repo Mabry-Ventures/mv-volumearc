@@ -11,37 +11,56 @@ extension WorkoutDashboardModel {
         guard let extracted = CoachWorkoutPlanExtractor.plan(from: response, title: title) else {
             return nil
         }
-        let (clamped, events) = CoachPrescriptionClamp.clamp(extracted, input: coachPrescriptionClampInput())
+        let (clamped, events) = CoachPrescriptionClamp.clamp(
+            extracted,
+            input: coachPrescriptionClampInput(planResponse: response)
+        )
         recordPrescriptionClampEvents(events, source: "coach_extraction")
         return clamped
     }
 
     /// Build the clamp context from live dashboard state: demonstrated
     /// top weights from logged history, the largest recent session
-    /// volume, and whether the active conversation carries current
-    /// symptom or red-flag context.
-    func coachPrescriptionClampInput() -> CoachPrescriptionClamp.Input {
+    /// volume, and whether the session carries symptom or red-flag
+    /// context.
+    func coachPrescriptionClampInput(planResponse: String? = nil) -> CoachPrescriptionClamp.Input {
         var topWeights: [String: Double] = [:]
         #if canImport(SwiftData)
         if let workoutRepository {
-            let loggedIDs = recentSessions
-                .flatMap(\.exerciseIDs)
-                .filter { !$0.hasPrefix("healthkit-") }
-            for exerciseID in Set(loggedIDs).prefix(40) {
+            // PR #363 review (Codex P1): never truncate history — dropping
+            // a logged exercise would swap the athlete's demonstrated-top
+            // cap for the HIGHER first-exposure cap. Sorted for
+            // deterministic table construction.
+            let loggedIDs = Set(
+                recentSessions
+                    .flatMap(\.exerciseIDs)
+                    .filter { !$0.hasPrefix("healthkit-") }
+            ).sorted()
+            for exerciseID in loggedIDs {
                 guard let history = try? workoutRepository.history(forExercise: exerciseID),
                       history.topWeight > 0 else { continue }
                 topWeights[CoachPrescriptionClamp.normalizedExerciseKey(exerciseID)] = history.topWeight
             }
         }
         #endif
-        let lastUserPrompt = coachMessages.last(where: { $0.sender == .user })?.content ?? ""
+        // PR #363 review (CodeRabbit): symptom context is session-sticky.
+        // ANY user message in the current transcript, the structured
+        // training context, or the plan-bearing response itself carrying
+        // symptom/red-flag language keeps the conservative clamp, so
+        // re-parsing an older coach reply after a benign follow-up can
+        // never silently shed the stricter bounds.
+        let userSymptom = coachMessages.contains { message in
+            message.sender == .user
+                && CoachSafetyFilter.shouldBufferResponse(prompt: message.content, context: "")
+        }
+        let contextSymptom = CoachSafetyFilter.shouldBufferResponse(prompt: "", context: buildCoachContext())
+        let responseSymptom = planResponse.map {
+            CoachSafetyFilter.shouldBufferResponse(prompt: "", context: $0)
+        } ?? false
         return CoachPrescriptionClamp.Input(
             topWeightByExerciseKey: topWeights,
             maxRecentSessionVolume: recentSessions.map(\.totalVolumeLoad).max(),
-            hasSymptomContext: CoachSafetyFilter.shouldBufferResponse(
-                prompt: lastUserPrompt,
-                context: buildCoachContext()
-            )
+            hasSymptomContext: userSymptom || contextSymptom || responseSymptom
         )
     }
 

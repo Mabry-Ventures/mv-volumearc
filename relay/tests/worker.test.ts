@@ -1011,6 +1011,111 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("serves safety copy even when the normal bucket is exhausted", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "free",
+      question: "I have chest pain during my top set. What should I do?",
+      contextBlock: "## Training context\n- Readiness: 72/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+    const headers = await appAttestAuthHeaders(env, body);
+    const keyId = (headers as Record<string, string>)["X-VA-Attest-Key-ID"];
+    const now = Math.floor(Date.now() / 1000);
+    await env.RATE_LIMIT.put(`rl:${keyId}`, JSON.stringify(Array(30).fill(now)));
+
+    const response = await worker.fetch(coachRequest(headers, body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+  });
+
+  it("enforces the dedicated safety abuse bucket at the multiplied limit", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "free",
+      question: "I have chest pain during my top set. What should I do?",
+      contextBlock: "## Training context\n- Readiness: 72/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+    const headers = await appAttestAuthHeaders(env, body);
+    const keyId = (headers as Record<string, string>)["X-VA-Attest-Key-ID"];
+    const now = Math.floor(Date.now() / 1000);
+    await env.RATE_LIMIT.put(`rl:safety:${keyId}`, JSON.stringify(Array(300).fill(now)));
+
+    const response = await worker.fetch(coachRequest(headers, body), env);
+
+    expect(response.status).toBe(429);
+  });
+
+  it("returns 503 for coach requests while COACH_DISABLED is set", async () => {
+    const env = makeEnv({ COACH_DISABLED: "1" });
+    const headers = await appAttestAuthHeaders(env, COACH_BODY);
+
+    const response = await worker.fetch(coachRequest(headers), env);
+
+    expect(response.status).toBe(503);
+    await expect(json(response)).resolves.toMatchObject({ error: "coach_disabled" });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("still serves deterministic safety copy while COACH_DISABLED is set", async () => {
+    const env = makeEnv({ COACH_DISABLED: "1" });
+    const body = JSON.stringify({
+      intent: "free",
+      question: "I have chest pain during my top set. What should I do?",
+      contextBlock: "## Training context\n- Readiness: 72/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(
+      coachRequest(await appAttestAuthHeaders(env, body), body),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+  });
+
+  it("pins the model tier when COACH_FORCE_TIER is set", async () => {
+    const env = makeEnv({ COACH_FORCE_TIER: "flash-lite" });
+    const headers = {
+      ...(await appAttestAuthHeaders(env, COACH_BODY)),
+      "X-Coach-Tier": "pro",
+    };
+
+    const response = await worker.fetch(coachRequest(headers), env);
+
+    expect(response.status).toBe(200);
+    const upstreamUrl = String(vi.mocked(fetch).mock.calls[0]?.[0]);
+    expect(upstreamUrl).toContain("gemini-test-flash");
+    expect(upstreamUrl).not.toContain("gemini-test-pro");
+  });
+
+  it("exposes runtime kill-switch flags at /v1/config", async () => {
+    const env = makeEnv({ FM_COACH_DISABLED: "1" });
+
+    const response = await worker.fetch(
+      new Request("https://relay.test/v1/config", { method: "POST" }),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(json(response)).resolves.toMatchObject({ fmCoachDisabled: true });
+
+    const defaultResponse = await worker.fetch(
+      new Request("https://relay.test/v1/config", { method: "POST" }),
+      makeEnv(),
+    );
+    await expect(json(defaultResponse)).resolves.toMatchObject({ fmCoachDisabled: false });
+  });
+
   it("short-circuits medical red flags from rendered training context", async () => {
     const env = makeEnv();
     const body = JSON.stringify({

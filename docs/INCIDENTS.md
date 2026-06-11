@@ -120,6 +120,24 @@ These are the failure shapes most likely to fire alerts based on our current arc
 
 **Verify:** `curl -X POST https://relay.volumearc.app/v1/coach/stream -d '{"prompt":"test"}' -H 'Authorization: Bearer <token>'` returns 200 with a streaming body.
 
+### Coach kill switches (VOL-286)
+
+Use these when a coach brain misbehaves in production (unsafe content past the deterministic gates, runaway cost, upstream model incident). All three apply WITHOUT an app update or relay code deploy — they are Worker environment variables, flipped in the Cloudflare dashboard (Workers → volumearc-ai-relay → Settings → Variables) or via `wrangler`.
+
+| Switch | Effect | Latency |
+|---|---|---|
+| `COACH_DISABLED=1` | Every `/v1/coach` request returns 503; the app's `FallbackCoachProvider` treats 5xx as fallback-eligible, so athletes silently degrade to the on-device chain (FM → heuristic). Deterministic safety replies still serve — the safety short-circuit sits before the kill check. | Next coach turn |
+| `COACH_FORCE_TIER=flash-lite` | Pins every request to one model tier regardless of the `X-Coach-Tier` header — instant premium-tier downgrade during a Pro-model incident. | Next coach turn |
+| `FM_COACH_DISABLED=1` | Served via `POST /v1/config`; the app caches it (`RemoteCoachKillSwitchStore`) and `FoundationModelCoachProvider` checks it per turn, routing to its fallback. This is the only way to stop the ON-DEVICE brain remotely. | Next app launch fetches the flag; applies from the next coach turn after that |
+
+**Who flips:** Jared, or an agent with explicit instruction during an active incident. Record the flip + reason in the incident timeline.
+
+**Observability:** `coach.safety` telemetry — `killswitch.active` (FM path skipped), `gate.short_circuit` (red-flag pre-gate), `filter.replaced` (post-filter replacement), `clamp` (prescription bounds). A spike in any of these at `.error`/`.warning` severity is a leading indicator; route per the Sentry alert table above.
+
+**Verify after flipping:** `COACH_DISABLED` — a staging coach request returns 503 and the app shows the local-coach fallback within one turn. `FM_COACH_DISABLED` — `curl -X POST <relay>/v1/config` returns `{"fmCoachDisabled":true}` and a fresh app launch records `killswitch.active` on the next coach question.
+
+**Roll back:** unset the variable (or set to `0`). Same propagation latency.
+
 ### CloudKit auth failure (sync stalled)
 
 **Symptom:** `cloudsync.auth_failed` telemetry spike. Users may see sync-pending indicators that never clear.

@@ -131,17 +131,24 @@ final class CoachPrescriptionClampTests: XCTestCase {
         XCTAssertTrue(events.contains { $0.kind == .sessionVolumeCap && $0.original == 5 && $0.clamped == 2 })
     }
 
-    func testVolumeCapNeverEliminatesAnExercise() {
+    func testVolumeCapReducesRepsAfterSetFloorWithoutEliminatingExercise() {
         let input = CoachPrescriptionClamp.Input(
             topWeightByExerciseKey: ["barbell-back-squat": 200],
             maxRecentSessionVolume: 100
         )
 
-        let (plan, _) = CoachPrescriptionClamp.clamp(
+        let (plan, events) = CoachPrescriptionClamp.clamp(
             makePlan([makeExercise(sets: 5, reps: 10, weight: 200)]), input: input
         )
 
-        XCTAssertEqual(plan.exercises.first?.sets, 1, "Sets floor at 1 even when the cap is unreachable")
+        // PR #363 review: the cap is real — after the set floor, reps
+        // reduce too. The exercise itself is never deleted (signed
+        // policy), so the terminal residual is one rep of clamped load.
+        XCTAssertEqual(plan.exercises.first?.sets, 1)
+        XCTAssertEqual(plan.exercises.first?.reps, 1)
+        XCTAssertEqual(plan.exercises.count, 1)
+        XCTAssertTrue(events.contains { $0.kind == .sessionVolumeCap && $0.field == "sets" })
+        XCTAssertTrue(events.contains { $0.kind == .sessionVolumeCap && $0.field == "reps" })
     }
 
     // MARK: - Matching, idempotency, clean pass-through

@@ -453,21 +453,29 @@ public enum CoachSafetyFilter {
 
 public struct SafetyFilteredCoachProvider: AICoachProvider {
     private let base: AICoachProvider
+    private let telemetrySink: (any TelemetrySink)?
 
-    public init(base: AICoachProvider) {
+    public init(base: AICoachProvider, telemetrySink: (any TelemetrySink)? = nil) {
         self.base = base
+        self.telemetrySink = telemetrySink
     }
 
     public func coachResponse(for prompt: String, context: String) async throws -> String {
         if let redFlagResponse = CoachSafetyFilter.medicalRedFlagResponse(prompt: prompt, context: context) {
+            recordSafetyEvent(name: "gate.short_circuit", path: "non_streaming")
             return redFlagResponse
         }
         let response = try await base.coachResponse(for: prompt, context: context)
-        return CoachSafetyFilter.filteredResponse(prompt: prompt, context: context, response: response)
+        let filtered = CoachSafetyFilter.filteredResponse(prompt: prompt, context: context, response: response)
+        if filtered != response {
+            recordSafetyEvent(name: "filter.replaced", path: "non_streaming")
+        }
+        return filtered
     }
 
     public func streamCoachResponse(for prompt: String, context: String) -> AsyncThrowingStream<String, Error> {
         if let redFlagResponse = CoachSafetyFilter.medicalRedFlagResponse(prompt: prompt, context: context) {
+            recordSafetyEvent(name: "gate.short_circuit", path: "streaming")
             return AsyncThrowingStream { continuation in
                 continuation.yield(redFlagResponse)
                 continuation.finish()
@@ -490,6 +498,9 @@ public struct SafetyFilteredCoachProvider: AICoachProvider {
                         context: context,
                         response: accumulated
                     )
+                    if filtered != accumulated {
+                        recordSafetyEvent(name: "filter.replaced", path: "streaming")
+                    }
                     continuation.yield(filtered)
                     continuation.finish()
                 } catch {
@@ -498,5 +509,17 @@ public struct SafetyFilteredCoachProvider: AICoachProvider {
             }
             continuation.onTermination = { _ in task.cancel() }
         }
+    }
+
+    /// VOL-286: safety interventions are observable without ever logging
+    /// prompt or response content — names and paths only.
+    private func recordSafetyEvent(name: String, path: String) {
+        telemetrySink?.record(TelemetryEvent(
+            category: "coach.safety",
+            name: name,
+            severity: .warning,
+            message: "Coach safety boundary intervened.",
+            metadata: ["path": path]
+        ))
     }
 }

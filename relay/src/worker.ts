@@ -60,6 +60,13 @@ interface Env {
   REQUEST_TIMEOUT_MS: string;
   RATE_LIMIT_MAX_REQUESTS: string;
   RATE_LIMIT_WINDOW_SECONDS: string;
+  // VOL-286 operational kill switches. All optional; unset means normal
+  // operation. Flip with `wrangler secret put` / dashboard vars — no
+  // deploy needed.
+  COACH_DISABLED?: string; // "1" => /v1/coach returns 503 (app falls back on-device)
+  COACH_FORCE_TIER?: string; // e.g. "flash-lite" => ignore X-Coach-Tier, pin every request
+  FM_COACH_DISABLED?: string; // "1" => /v1/config tells the app to bypass on-device FM
+  SAFETY_RATE_LIMIT_MULTIPLIER?: string; // abuse bucket for safety replies (default 10x)
 }
 
 type FallbackCoachingStyle = "motivational" | "analytical" | "minimal" | "playful";
@@ -110,6 +117,9 @@ export default {
     try {
       if (url.pathname === "/v1/health") {
         return handleHealth(env);
+      }
+      if (url.pathname === "/v1/config") {
+        return await handleRuntimeConfig(request, env);
       }
       if (url.pathname === "/v1/attest/challenge") {
         return await handleAppAttestChallenge(request, env);
@@ -163,13 +173,30 @@ async function handleCoach(request: Request, env: Env): Promise<Response> {
 
   const deterministicSafetyResponse = coachSafetyResponse(body);
   if (deterministicSafetyResponse) {
-    // Mandatory safety replies are quota-free: they cost no Gemini call,
-    // and an athlete repeatedly asking about symptoms must never burn
-    // their rate budget (or hit a 429 instead of escalation copy) for it.
+    // Safety replies never touch the normal quota — an athlete repeatedly
+    // asking about symptoms must not burn budget that later 429s a workout
+    // question, and a full normal bucket must never block escalation copy.
+    // They carry their own generous bucket (default 10x) purely so an
+    // attested device cannot script unlimited SSE off red-flag prompts.
+    const safetyMultiplier = Number.parseInt(env.SAFETY_RATE_LIMIT_MULTIPLIER ?? "", 10) || 10;
+    const safetyOk = await checkRateLimit(`safety:${auth.deviceId}`, env, safetyMultiplier);
+    if (!safetyOk) {
+      return json({ error: "rate_limited" }, 429);
+    }
     return sseText(deterministicSafetyResponse, {
       "x-coach-model": "deterministic-safety",
       "x-coach-safety": "red-flag",
     });
+  }
+
+  // VOL-286: operational kill switch. COACH_DISABLED=1 fails every cloud
+  // coach request fast with 503; the app's FallbackCoachProvider treats
+  // 5xx as fallback-eligible, so athletes degrade to the on-device chain
+  // within one coach turn — no app update, no relay deploy. Deliberately
+  // placed AFTER the safety short-circuit so escalation copy still serves
+  // while the model path is dark.
+  if (env.COACH_DISABLED === "1") {
+    return json({ error: "coach_disabled" }, 503);
   }
 
   const rateOk = await checkRateLimit(auth.deviceId, env);
@@ -177,7 +204,10 @@ async function handleCoach(request: Request, env: Env): Promise<Response> {
     return json({ error: "rate_limited" }, 429);
   }
 
-  const tier = request.headers.get("X-Coach-Tier")?.toLowerCase();
+  const requestedTier = request.headers.get("X-Coach-Tier")?.toLowerCase();
+  // VOL-286: COACH_FORCE_TIER pins every request to one tier (for example
+  // "flash-lite" to downgrade pro instantly during a model incident).
+  const tier = env.COACH_FORCE_TIER?.toLowerCase() || requestedTier;
   const model = tier === "pro" ? env.MODEL_PREMIUM : env.MODEL_DEFAULT;
 
   return streamGemini(body, model, env);
@@ -883,6 +913,19 @@ function recordAuthEvent(name: string, metadata: Record<string, string> = {}): v
   }));
 }
 
+// VOL-286: unauthenticated-but-IP-limited runtime flags the app polls at
+// launch. Only non-sensitive booleans live here — it is the remote kill
+// path for on-device Foundation Models coaching, which never touches this
+// Worker on the inference path, so an app update is not required to stop
+// a misbehaving on-device brain.
+async function handleRuntimeConfig(request: Request, env: Env): Promise<Response> {
+  const rateOk = await checkRateLimit(`config:${clientAddress(request)}`, env);
+  if (!rateOk) {
+    return json({ error: "rate_limited" }, 429);
+  }
+  return json({ fmCoachDisabled: env.FM_COACH_DISABLED === "1" }, 200);
+}
+
 function clientAddress(request: Request): string {
   const forwarded = request.headers.get("CF-Connecting-IP") ?? request.headers.get("X-Forwarded-For");
   const first = forwarded?.split(",")[0]?.trim();
@@ -891,8 +934,8 @@ function clientAddress(request: Request): string {
 
 // --- Rate limiting ------------------------------------------------------
 
-async function checkRateLimit(deviceId: string, env: Env): Promise<boolean> {
-  const limit = Number.parseInt(env.RATE_LIMIT_MAX_REQUESTS, 10) || 30;
+async function checkRateLimit(deviceId: string, env: Env, limitMultiplier = 1): Promise<boolean> {
+  const limit = (Number.parseInt(env.RATE_LIMIT_MAX_REQUESTS, 10) || 30) * limitMultiplier;
   const windowSec = Number.parseInt(env.RATE_LIMIT_WINDOW_SECONDS, 10) || 600;
   const key = `rl:${deviceId}`;
   const raw = await env.RATE_LIMIT.get(key);

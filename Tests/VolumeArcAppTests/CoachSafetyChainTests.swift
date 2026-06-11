@@ -92,6 +92,57 @@ final class CoachSafetyChainTests: XCTestCase {
         XCTAssertTrue(lowered.contains("medical care"))
     }
 
+    // MARK: - VOL-286 — safety telemetry + kill switch
+
+    func testSafetyGateEmitsShortCircuitTelemetry() async throws {
+        let sink = InMemoryTelemetrySink()
+        let provider = SafetyFilteredCoachProvider(base: UnsafeMarkerProvider(), telemetrySink: sink)
+
+        _ = try await provider.coachResponse(
+            for: "I have chest pain during my top set. Should I push through?",
+            context: "Readiness: 90/100 - peak recovery"
+        )
+
+        XCTAssertTrue(sink.currentEvents.contains {
+            $0.category == "coach.safety" && $0.name == "gate.short_circuit"
+        })
+    }
+
+    #if canImport(FoundationModels) && !os(watchOS)
+    func testFoundationModelRemoteKillSwitchRoutesToFallback() async throws {
+        guard #available(iOS 26.0, visionOS 26.0, *) else {
+            throw XCTSkip("FoundationModels requires iOS 26")
+        }
+        let sink = InMemoryTelemetrySink()
+        let provider = FoundationModelCoachProvider(
+            fallback: FallbackMarkerProvider(),
+            telemetrySink: sink,
+            isRemotelyDisabled: { true }
+        )
+
+        let response = try await provider.coachResponse(
+            for: "How should I approach today's session?",
+            context: "Readiness: 82/100 - strong"
+        )
+
+        XCTAssertEqual(response, FallbackMarkerProvider.marker)
+        XCTAssertTrue(sink.currentEvents.contains {
+            $0.category == "coach.safety" && $0.name == "killswitch.active"
+        })
+    }
+    #endif
+
+    func testRemoteKillSwitchStoreRoundtrip() {
+        RemoteCoachKillSwitchStore.reset()
+        XCTAssertFalse(RemoteCoachKillSwitchStore.isFoundationModelCoachKilled)
+
+        RemoteCoachKillSwitchStore.update(foundationModelCoachKilled: true)
+        XCTAssertTrue(RemoteCoachKillSwitchStore.isFoundationModelCoachKilled)
+
+        RemoteCoachKillSwitchStore.reset()
+        XCTAssertFalse(RemoteCoachKillSwitchStore.isFoundationModelCoachKilled)
+    }
+
     // MARK: - Privacy redaction interaction
 
     func testStrictRedactionPreservesMedicalRedFlagDetection() {
@@ -112,4 +163,19 @@ final class CoachSafetyChainTests: XCTestCase {
 @MainActor
 private final class StubPremiumEntitlements: PremiumEntitlementProviding {
     let isPremium = true
+}
+
+/// Returns recognizably unsafe text so a leaked call is loud in assertions.
+private struct UnsafeMarkerProvider: AICoachProvider {
+    func coachResponse(for prompt: String, context: String) async throws -> String {
+        "Push through and go heavy."
+    }
+}
+
+private struct FallbackMarkerProvider: AICoachProvider {
+    static let marker = "fallback-provider-response"
+
+    func coachResponse(for prompt: String, context: String) async throws -> String {
+        Self.marker
+    }
 }

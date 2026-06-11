@@ -33,7 +33,7 @@ enum VolumeArcAIRuntimeFactory {
 
         #if DEBUG
         if let chaosProvider = makeChaosCoachProvider(relayProvider: relayProvider, telemetrySink: telemetrySink) {
-            return safetyFiltered(chaosProvider)
+            return safetyFiltered(chaosProvider, telemetrySink: telemetrySink)
         }
         #endif
 
@@ -52,7 +52,7 @@ enum VolumeArcAIRuntimeFactory {
         // remains first so the fallback journey still exercises the
         // production fallback wrapper.
         if VolumeArcRuntimeFlags.isDeterministicMode || VolumeArcRuntimeFlags.isPerformanceTestMode {
-            return safetyFiltered(LocalHeuristicAICoachProvider())
+            return safetyFiltered(LocalHeuristicAICoachProvider(), telemetrySink: telemetrySink)
         }
 
         #if canImport(FoundationModels) && !os(watchOS)
@@ -65,8 +65,11 @@ enum VolumeArcAIRuntimeFactory {
             if fmEnabled {
                 return safetyFiltered(FoundationModelCoachProvider(
                     fallback: relayProvider ?? LocalHeuristicAICoachProvider(),
-                    telemetrySink: telemetrySink
-                ))
+                    telemetrySink: telemetrySink,
+                    // VOL-286: relay-served kill switch for the on-device
+                    // brain, cached in UserDefaults and checked per turn.
+                    isRemotelyDisabled: { RemoteCoachKillSwitchStore.isFoundationModelCoachKilled }
+                ), telemetrySink: telemetrySink)
             }
         } else {
             recordFoundationModelsUnavailable(
@@ -83,7 +86,7 @@ enum VolumeArcAIRuntimeFactory {
         )
         #endif
 
-        return safetyFiltered(relayProvider ?? LocalHeuristicAICoachProvider())
+        return safetyFiltered(relayProvider ?? LocalHeuristicAICoachProvider(), telemetrySink: telemetrySink)
     }
 
     /// VOL-199: when the relay is configured, wrap it in a fallback provider
@@ -255,8 +258,11 @@ enum VolumeArcAIRuntimeFactory {
         ))
     }
 
-    private static func safetyFiltered(_ provider: AICoachProvider) -> AICoachProvider {
-        SafetyFilteredCoachProvider(base: provider)
+    private static func safetyFiltered(
+        _ provider: AICoachProvider,
+        telemetrySink: (any TelemetrySink)? = nil
+    ) -> AICoachProvider {
+        SafetyFilteredCoachProvider(base: provider, telemetrySink: telemetrySink)
     }
 }
 

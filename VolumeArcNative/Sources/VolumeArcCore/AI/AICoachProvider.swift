@@ -455,18 +455,34 @@ public struct FoundationModelCoachProvider: AICoachProvider {
     private let fallback: AICoachProvider
     private let coachingStyle: CoachingStyle
     private let telemetrySink: (any TelemetrySink)?
+    private let isRemotelyDisabled: (@Sendable () -> Bool)?
 
     public init(
         fallback: AICoachProvider,
         coachingStyle: CoachingStyle = .motivational,
-        telemetrySink: (any TelemetrySink)? = nil
+        telemetrySink: (any TelemetrySink)? = nil,
+        isRemotelyDisabled: (@Sendable () -> Bool)? = nil
     ) {
         self.fallback = fallback
         self.coachingStyle = coachingStyle
         self.telemetrySink = telemetrySink
+        self.isRemotelyDisabled = isRemotelyDisabled
     }
 
     public func coachResponse(for prompt: String, context: String) async throws -> String {
+        // VOL-286: remote kill switch — operations can stop the on-device
+        // brain without an app update. Checked per turn so a flag fetched
+        // mid-session applies on the next coach question.
+        if isRemotelyDisabled?() == true {
+            telemetrySink?.record(TelemetryEvent(
+                category: "coach.safety",
+                name: "killswitch.active",
+                severity: .warning,
+                message: "On-device FM coach disabled by remote kill switch; using fallback.",
+                metadata: ["path": "fm"]
+            ))
+            return try await fallback.coachResponse(for: prompt, context: context)
+        }
         do {
             let session = LanguageModelSession()
             // VOL-64: hand the on-device session the same templated prompt

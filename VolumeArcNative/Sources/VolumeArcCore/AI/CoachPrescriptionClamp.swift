@@ -282,11 +282,11 @@ public enum CoachPrescriptionClamp {
         return symptomContext ? symptomNoHistoryOtherCap : noHistoryOtherCap
     }
 
-    /// Reduces sets until the planned session volume fits the cap. The
-    /// one-set-per-exercise floor is signed policy (VOL-284): an exercise
-    /// is never deleted from the athlete's plan, so a plan whose
-    /// single-set volume still exceeds the cap retains that residual —
-    /// the per-exercise weight caps above bound the worst case.
+    /// Reduces sets, then reps, until the planned session volume fits the
+    /// cap. An exercise is never deleted (signed policy, VOL-284) and both
+    /// sets and reps floor at 1, so the terminal residual is one rep of an
+    /// already weight-clamped load per exercise — the cap is real, not
+    /// best-effort (PR #363 review).
     private static func applySessionVolumeCap(
         _ exercises: inout [WeeklyWorkoutExercise],
         input: Input,
@@ -295,6 +295,7 @@ public enum CoachPrescriptionClamp {
         guard let maxRecent = input.maxRecentSessionVolume, maxRecent > 0 else { return }
         let cap = maxRecent * (1 + maxSessionVolumeJumpFraction)
         let originalSets = exercises.map(\.sets)
+        let originalReps = exercises.map(\.reps)
 
         while sessionVolume(exercises) > cap {
             guard let index = indexOfLargestReducibleExercise(exercises) else { break }
@@ -309,10 +310,29 @@ public enum CoachPrescriptionClamp {
             )
         }
 
+        while sessionVolume(exercises) > cap {
+            guard let index = indexOfLargestRepReducibleExercise(exercises) else { break }
+            let exercise = exercises[index]
+            exercises[index] = WeeklyWorkoutExercise(
+                name: exercise.name,
+                sets: exercise.sets,
+                reps: exercise.reps - 1,
+                weight: exercise.weight,
+                targetRPE: exercise.targetRPE,
+                restSeconds: exercise.restSeconds
+            )
+        }
+
         for (index, exercise) in exercises.enumerated() where exercise.sets != originalSets[index] {
             events.append(Event(
                 kind: .sessionVolumeCap, exerciseName: exercise.name,
                 field: "sets", original: originalSets[index], clamped: exercise.sets
+            ))
+        }
+        for (index, exercise) in exercises.enumerated() where exercise.reps != originalReps[index] {
+            events.append(Event(
+                kind: .sessionVolumeCap, exerciseName: exercise.name,
+                field: "reps", original: originalReps[index], clamped: exercise.reps
             ))
         }
     }
@@ -326,6 +346,16 @@ public enum CoachPrescriptionClamp {
     private static func indexOfLargestReducibleExercise(_ exercises: [WeeklyWorkoutExercise]) -> Int? {
         exercises.indices
             .filter { exercises[$0].sets > 1 }
+            .max { lhs, rhs in
+                let lhsVolume = exercises[lhs].sets * exercises[lhs].reps * exercises[lhs].weight
+                let rhsVolume = exercises[rhs].sets * exercises[rhs].reps * exercises[rhs].weight
+                return lhsVolume < rhsVolume
+            }
+    }
+
+    private static func indexOfLargestRepReducibleExercise(_ exercises: [WeeklyWorkoutExercise]) -> Int? {
+        exercises.indices
+            .filter { exercises[$0].reps > 1 }
             .max { lhs, rhs in
                 let lhsVolume = exercises[lhs].sets * exercises[lhs].reps * exercises[lhs].weight
                 let rhsVolume = exercises[rhs].sets * exercises[rhs].reps * exercises[rhs].weight
