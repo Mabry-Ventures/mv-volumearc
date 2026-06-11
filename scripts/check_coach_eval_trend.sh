@@ -27,7 +27,13 @@ from typing import Any
 
 docs_path = Path(sys.argv[1])
 marketing_path = Path(sys.argv[2])
-expected_total = int(os.environ.get("COACH_EVAL_EXPECTED_TOTAL", "47"))
+expected_total = int(os.environ.get("COACH_EVAL_EXPECTED_TOTAL", "55"))
+expected_tiers = [
+    tier.strip()
+    for tier in os.environ.get("COACH_EVAL_EXPECTED_TIERS", "flash-lite,pro").split(",")
+    if tier.strip()
+]
+expected_rows = expected_total * max(1, len(expected_tiers))
 max_age_days = int(os.environ.get("COACH_EVAL_MAX_AGE_DAYS", "7"))
 now_override = os.environ.get("COACH_EVAL_NOW")
 required_sha = os.environ.get("COACH_EVAL_REQUIRED_SHA", "").strip()
@@ -93,12 +99,37 @@ else:
     total = latest_record.get("total")
     passed = latest_record.get("passed")
     failed = latest_record.get("failed")
-    if total != expected_total:
-        failures.append(f"latest coach eval total must be {expected_total}, got {total!r}")
-    if passed != expected_total:
-        failures.append(f"latest coach eval passed must be {expected_total}, got {passed!r}")
+    if total != expected_rows:
+        failures.append(f"latest coach eval total must be {expected_rows}, got {total!r}")
+    if passed != expected_rows:
+        failures.append(f"latest coach eval passed must be {expected_rows}, got {passed!r}")
     if failed != 0:
         failures.append(f"latest coach eval failed must be 0, got {failed!r}")
+
+    # VOL-285: per-provider green is required for every tier enabled in
+    # production routing. A brain without current passing safety evidence
+    # cannot ship.
+    providers = latest_record.get("providers")
+    if not isinstance(providers, dict):
+        failures.append("latest coach eval record must include per-provider results (providers)")
+    else:
+        for tier in expected_tiers:
+            block = providers.get(tier)
+            if not isinstance(block, dict):
+                failures.append(f"latest coach eval providers missing tier {tier!r}")
+                continue
+            if block.get("total") != expected_total:
+                failures.append(
+                    f"providers.{tier}.total must be {expected_total}, got {block.get('total')!r}"
+                )
+            if block.get("passed") != expected_total:
+                failures.append(
+                    f"providers.{tier}.passed must be {expected_total}, got {block.get('passed')!r}"
+                )
+            if block.get("failed") != 0:
+                failures.append(
+                    f"providers.{tier}.failed must be 0, got {block.get('failed')!r}"
+                )
 
     sha = str(latest_record.get("sha", "")).strip()
     if not sha:
@@ -117,9 +148,10 @@ else:
     if not isinstance(fixtures, list):
         failures.append("latest coach eval record must include a fixtures array")
         fixtures = []
-    if len(fixtures) != expected_total:
+    if len(fixtures) != expected_rows:
         failures.append(
-            f"latest coach eval fixture count must be {expected_total}, got {len(fixtures)}"
+            f"latest coach eval fixture count must be {expected_rows} "
+            f"({expected_total} fixtures x {len(expected_tiers)} tier(s)), got {len(fixtures)}"
         )
     fixture_ids: set[str] = set()
     for index, fixture in enumerate(fixtures):
@@ -161,8 +193,15 @@ else:
             if fixture_id in expected_fixture_ids:
                 failures.append(f"coach eval fixture id is duplicated: {fixture_id}")
             expected_fixture_ids.add(fixture_id)
-        missing_fixture_ids = sorted(expected_fixture_ids - fixture_ids)
-        unexpected_fixture_ids = sorted(fixture_ids - expected_fixture_ids)
+        # VOL-285: record rows are keyed `<fixture-id>@<tier>` so every
+        # on-disk fixture must appear once per expected tier.
+        expected_row_ids = {
+            f"{fixture_id}@{tier}"
+            for fixture_id in expected_fixture_ids
+            for tier in expected_tiers
+        }
+        missing_fixture_ids = sorted(expected_row_ids - fixture_ids)
+        unexpected_fixture_ids = sorted(fixture_ids - expected_row_ids)
         if missing_fixture_ids:
             failures.append(
                 "latest coach eval record is missing fixture IDs: "
@@ -229,7 +268,8 @@ assert latest_record is not None
 assert latest_timestamp is not None
 print(
     "Coach eval trend gate passed: "
-    f"{expected_total}/{expected_total} fixtures, "
+    f"{expected_total}/{expected_total} fixtures x {len(expected_tiers)} provider tier(s) "
+    f"[{', '.join(expected_tiers)}], "
     f"run {latest_record.get('run_id')}, "
     f"timestamp {latest_record.get('timestamp')}."
 )

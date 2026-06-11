@@ -200,6 +200,7 @@ jobs:
           passed=$(jq -r '.passed' "$summary")
           failed=$(jq -r '.failed' "$summary")
           fixtures=$(jq -c '.fixtures // []' "$summary")
+          providers=$(jq -c '.providers // {}' "$summary")
           axes=$(jq -c '
             def summarize($field):
               sort_by(.[$field] // "unknown")
@@ -228,7 +229,8 @@ jobs:
                   | summarize("readinessBucket")
                 ),
                 intent: ($fixtures | summarize("intent")),
-                style: ($fixtures | summarize("style"))
+                style: ($fixtures | summarize("style")),
+                tier: ($fixtures | summarize("tier"))
               }
           ' "$summary")
           echo "Eval results: $passed/$total passed, $failed failed"
@@ -252,7 +254,8 @@ jobs:
             --argjson failed "$failed" \
             --argjson axes "$axes" \
             --argjson fixtures "$fixtures" \
-            '{timestamp: $ts, sha: $sha, run_id: $run_id, total: $total, passed: $passed, failed: $failed, axes: $axes, fixtures: $fixtures}')
+            --argjson providers "$providers" \
+            '{timestamp: $ts, sha: $sha, run_id: $run_id, total: $total, passed: $passed, failed: $failed, providers: $providers, axes: $axes, fixtures: $fixtures}')
 
           # Append while preserving prior records.
           tmp=$(mktemp)

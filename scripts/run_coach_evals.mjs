@@ -16,6 +16,14 @@ const deviceIdBase = process.env.VOLUMEARC_EVAL_DEVICE_ID ?? "coach-eval-harness
 const httpTimeoutMs = positiveInt(process.env.VOLUMEARC_EVAL_HTTP_TIMEOUT_MS, 60_000);
 const fixtureLimit = optionalPositiveInt(process.env.VOLUMEARC_EVAL_FIXTURE_LIMIT);
 const fixtureIDs = csvSet(process.env.VOLUMEARC_EVAL_FIXTURE_IDS);
+// VOL-285: per-provider response axis. Every fixture runs once per cloud
+// tier so the brain paying users get (pro) carries the same safety
+// evidence as the default tier. Override with COACH_EVAL_TIERS=flash-lite
+// for a single-tier smoke run.
+const evalTiers = (() => {
+  const parsed = [...csvSet(process.env.COACH_EVAL_TIERS)];
+  return parsed.length > 0 ? parsed : ["flash-lite", "pro"];
+})();
 
 const encoder = new TextEncoder();
 const subtle = webcrypto.subtle;
@@ -32,7 +40,10 @@ async function main() {
   const attester = new EvalBrokerAttester(relayBaseUrl, brokerToken, deviceIdBase);
   await attester.bootstrap();
 
-  console.log(`Running ${fixtureFiles.length} coach eval fixture(s) against ${relayBaseUrl}`);
+  console.log(
+    `Running ${fixtureFiles.length} coach eval fixture(s) x ${evalTiers.length} tier(s) ` +
+    `[${evalTiers.join(", ")}] against ${relayBaseUrl}`,
+  );
   console.log("Auth mode: staging eval attestation broker");
   console.log(`Output dir: ${outputDir}\n`);
 
@@ -43,12 +54,14 @@ async function main() {
   for (const fixturePath of fixtureFiles) {
     const fixtureName = path.basename(fixturePath, ".json");
     const fixture = JSON.parse(await fs.readFile(fixturePath, "utf8"));
-    const result = await runFixture(fixture, fixtureName, attester);
-    rows.push(result);
-    if (result.verdict === "PASS") {
-      passed += 1;
-    } else {
-      failed += 1;
+    for (const tier of evalTiers) {
+      const result = await runFixture(fixture, fixtureName, attester, tier);
+      rows.push(result);
+      if (result.verdict === "PASS") {
+        passed += 1;
+      } else {
+        failed += 1;
+      }
     }
   }
 
@@ -116,8 +129,8 @@ async function preflight() {
   }
 }
 
-async function runFixture(fixture, fixtureName, attester) {
-  const fixtureId = fixture.id ?? fixtureName;
+async function runFixture(fixture, fixtureName, attester, tier) {
+  const fixtureId = `${fixture.id ?? fixtureName}@${tier}`;
   const bodyObject = {
     intent: fixture.intent,
     question: fixture.question,
@@ -127,9 +140,9 @@ async function runFixture(fixture, fixtureName, attester) {
     system: "",
   };
   const body = JSON.stringify(bodyObject);
-  const responsePath = path.join(outputDir, `${fixtureName}.response.txt`);
-  const streamPath = path.join(outputDir, `${fixtureName}.stream`);
-  const statusPath = path.join(outputDir, `${fixtureName}.status`);
+  const responsePath = path.join(outputDir, `${fixtureName}@${tier}.response.txt`);
+  const streamPath = path.join(outputDir, `${fixtureName}@${tier}.stream`);
+  const statusPath = path.join(outputDir, `${fixtureName}@${tier}.status`);
 
   let httpStatus = "000";
   let rawStream = "";
@@ -142,7 +155,7 @@ async function runFixture(fixture, fixtureName, attester) {
       headers: {
         "Accept": "text/event-stream",
         "Content-Type": "application/json",
-        "X-Coach-Tier": "flash-lite",
+        "X-Coach-Tier": tier,
         ...authHeaders,
       },
       body,
@@ -161,27 +174,27 @@ async function runFixture(fixture, fixtureName, attester) {
   const readiness = readinessScore(fixture.contextBlock);
   if (httpStatus !== "200") {
     console.log(`  FAIL  ${fixtureId} (HTTP ${httpStatus})`);
-    return row(fixture, readiness, "FAIL", `HTTP ${httpStatus}`);
+    return row(fixture, readiness, "FAIL", `HTTP ${httpStatus}`, tier);
   }
 
   const responseText = extractSSEText(rawStream).replace(/\r/g, "").replace(/ {2,}/g, " ").trim();
   await fs.writeFile(responsePath, `${responseText}\n`);
   if (!responseText) {
     console.log(`  FAIL  ${fixtureId} (empty response)`);
-    return row(fixture, readiness, "FAIL", "empty response");
+    return row(fixture, readiness, "FAIL", "empty response", tier);
   }
 
   const failures = runAssertions(fixture, responseText);
   if (failures.length === 0) {
     console.log(`  PASS  ${fixtureId}`);
-    return row(fixture, readiness, "PASS", "-");
+    return row(fixture, readiness, "PASS", "-", tier);
   }
 
   console.log(`  FAIL  ${fixtureId}`);
   for (const failure of failures) {
     console.log(`        - ${failure}`);
   }
-  return row(fixture, readiness, "FAIL", failures.join("; "));
+  return row(fixture, readiness, "FAIL", failures.join("; "), tier);
 }
 
 class EvalBrokerAttester {
@@ -283,6 +296,22 @@ function runAssertions(fixture, response) {
     const actual = enumeratedPlanDayCount(response);
     if (actual > assertions.maxEnumeratedPlanDays) {
       failures.push(`maxEnumeratedPlanDays=${assertions.maxEnumeratedPlanDays} violated (got ${actual})`);
+    }
+  }
+
+  // VOL-285: response-layer mirror of the deterministic prescription
+  // clamp (VOL-284). Any explicit load mention above the fixture's cap
+  // fails — a coach answer must never cite a load the clamp would refuse
+  // to schedule.
+  if (Number.isSafeInteger(assertions.maxPrescribedLoadLb)) {
+    for (const match of response.matchAll(/(\d{1,4})\s*(?:lb|lbs|pounds?)\b/gi)) {
+      const load = Number.parseInt(match[1], 10);
+      if (load > assertions.maxPrescribedLoadLb) {
+        failures.push(
+          `maxPrescribedLoadLb=${assertions.maxPrescribedLoadLb} violated (response cites ${load} lb)`,
+        );
+        break;
+      }
     }
   }
 
@@ -406,9 +435,10 @@ function nextExercise(contextBlock) {
   return match ? match[1] : "";
 }
 
-function row(fixture, readiness, verdict, note) {
+function row(fixture, readiness, verdict, note, tier) {
   return {
-    id: fixture.id ?? "unknown",
+    id: `${fixture.id ?? "unknown"}@${tier}`,
+    tier,
     verdict,
     note,
     intent: fixture.intent ?? "unknown",
@@ -430,13 +460,26 @@ function printSummary(rows, passed, failed) {
 }
 
 async function writeSummary(rows, passed, failed) {
+  const providers = {};
+  for (const item of rows) {
+    const tier = item.tier ?? "unknown";
+    providers[tier] ??= { total: 0, passed: 0, failed: 0 };
+    providers[tier].total += 1;
+    if (item.verdict === "PASS") {
+      providers[tier].passed += 1;
+    } else {
+      providers[tier].failed += 1;
+    }
+  }
   const summary = {
     timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
     relay: relayBaseUrl,
     authMode: "eval_attest_broker",
+    tiers: evalTiers,
     total: rows.length,
     passed,
     failed,
+    providers,
     fixtures: rows,
   };
   await fs.writeFile(path.join(outputDir, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
