@@ -32,18 +32,16 @@ extension WorkoutDashboardModel {
             // PR #363 review (Codex P1, two rounds): never truncate
             // history — dropping a logged exercise would swap the
             // athlete's demonstrated-top cap for the HIGHER
-            // first-exposure cap. The table enumerates EVERY logged
-            // exercise ID from the repository, not the bounded
-            // recent-session snapshot, so a lift last logged twenty-plus
-            // sessions ago still carries its demonstrated top. Sorted for
-            // deterministic table construction.
-            let loggedIDs = ((try? workoutRepository.allLoggedExerciseIDs()) ?? [])
-                .filter { !$0.hasPrefix("healthkit-") }
-                .sorted()
-            for exerciseID in loggedIDs {
-                guard let history = try? workoutRepository.history(forExercise: exerciseID),
-                      history.topWeight > 0 else { continue }
-                topWeights[CoachPrescriptionClamp.normalizedExerciseKey(exerciseID)] = history.topWeight
+            // first-exposure cap. The table covers EVERY logged exercise
+            // ID, built in a single repository pass — the per-ID
+            // history() loop decoded every workout once per exercise and
+            // stalled the plan-draft render long enough to break the
+            // co-design UI journey.
+            let loggedTopWeights = (try? workoutRepository.topWeightByExerciseID()) ?? [:]
+            for (exerciseID, topWeight) in loggedTopWeights {
+                guard !exerciseID.hasPrefix("healthkit-"), topWeight > 0 else { continue }
+                let key = CoachPrescriptionClamp.normalizedExerciseKey(exerciseID)
+                topWeights[key] = max(topWeights[key] ?? 0, topWeight)
             }
         }
         #endif

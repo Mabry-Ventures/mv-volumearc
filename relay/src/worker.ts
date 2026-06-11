@@ -67,6 +67,7 @@ interface Env {
   COACH_FORCE_TIER?: string; // e.g. "flash-lite" => ignore X-Coach-Tier, pin every request
   FM_COACH_DISABLED?: string; // "1" => /v1/config tells the app to bypass on-device FM
   SAFETY_RATE_LIMIT_MULTIPLIER?: string; // abuse bucket for safety replies (default 10x)
+  CONFIG_RATE_LIMIT_MULTIPLIER?: string; // shared-IP bucket for /v1/config (default 20x)
 }
 
 type FallbackCoachingStyle = "motivational" | "analytical" | "minimal" | "playful";
@@ -817,9 +818,18 @@ function isSharedNegationCarrier(line: string): boolean {
 }
 
 function isBareSharedNegationContinuation(line: string): boolean {
-  const trimmed = line.trim();
+  // PR #363 review (Codex P2): a pure time qualifier on the tail of a
+  // shared-negation list ("no chest pain or dizziness today") still
+  // describes the negated check-in, so strip it before matching. Event
+  // markers (after/felt/mid-set/...) stay escalation-worthy.
+  const trimmed = line
+    .trim()
+    .replace(
+      /(?:\s+(?:today|now|right\s+now|currently|at\s+the\s+moment|this\s+(?:morning|afternoon|evening|week)))+$/i,
+      "",
+    );
   const currentEventPattern =
-    "\\b(?:after|during|while|today|now|current(?:ly)?|reported|" +
+    "\\b(?:after|during|while|reported|" +
     "showed|shows|felt|feel|got|became|under\\s+load|episode|" +
     "mid[- ]?set|following)\\b";
   if (
@@ -978,7 +988,14 @@ function recordAuthEvent(name: string, metadata: Record<string, string> = {}): v
 // Worker on the inference path, so an app update is not required to stop
 // a misbehaving on-device brain.
 async function handleRuntimeConfig(request: Request, env: Env): Promise<Response> {
-  const rateOk = await checkRateLimit(`config:${clientAddress(request)}`, env);
+  // PR #363 review (Codex P2): /v1/config is unauthenticated, so the key
+  // is per-IP — but one carrier NAT or gym Wi-Fi front-ends many devices.
+  // During a kill-switch incident the flag must reach exactly those
+  // clustered clients, so this bucket is deliberately much larger than
+  // the per-device default (response is a tiny static JSON, so the abuse
+  // surface stays negligible).
+  const configMultiplier = Number.parseInt(env.CONFIG_RATE_LIMIT_MULTIPLIER ?? "", 10) || 20;
+  const rateOk = await checkRateLimit(`config:${clientAddress(request)}`, env, configMultiplier);
   if (!rateOk) {
     return json({ error: "rate_limited" }, 429);
   }

@@ -16,6 +16,35 @@ final class VolumeArcCoachPromptTemplateTests: XCTestCase {
 
     // MARK: - Renderer fundamentals
 
+    /// PR #363 review (Codex P2): "10 sets of 3" used to lose the captured
+    /// reps when the set count exceeded the cap — the pair was discarded,
+    /// reps defaulted to 1, and the handoff silently became 8x1.
+    func testExplicitSetCountAboveCapKeepsCapturedReps() {
+        let response = """
+        Volume day:
+        - Back Squat: 10 sets of 3
+        """
+
+        guard let plan = CoachWorkoutPlanExtractor.plan(from: response, title: "Coach Workout") else {
+            XCTFail("Expected an over-cap set count to still produce a plan")
+            return
+        }
+
+        XCTAssertEqual(plan.exercises.count, 1)
+        XCTAssertEqual(plan.exercises[0].sets, 8)
+        XCTAssertEqual(plan.exercises[0].reps, 3)
+    }
+
+    /// Bare NxM keeps the strict load-by-rep rejection: "12x3" with no
+    /// "sets" word must not parse into a clipped pair.
+    func testBareOverCapPairStillRejectedAsLoadByRep() {
+        let response = """
+        - Squat 12x315
+        """
+
+        XCTAssertNil(CoachWorkoutPlanExtractor.plan(from: response, title: "Coach Workout"))
+    }
+
     func testRenderEmbedsTemplateMarkerSystemPromptContextAndQuestion() {
         let context = makeContext()
         let rendered = CoachPromptTemplate.render(

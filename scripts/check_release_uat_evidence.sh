@@ -173,9 +173,19 @@ for field in required_build_fields:
 commit_value = build_values.get("Commit SHA", "").strip()
 expected_commit = expected_commit_sha()
 if commit_value and expected_commit and not placeholder_re.search(commit_value):
-    if commit_value != expected_commit and not expected_commit.startswith(commit_value):
+    # PR #363 review (Codex P2): a bare startswith() accepted arbitrarily
+    # short prefixes, so a manifest typo like "a" could match a different
+    # TestFlight candidate. Require git's 12-hex-char unambiguous floor
+    # before honoring a prefix match.
+    min_prefix = 12
+    prefix_ok = (
+        len(commit_value) >= min_prefix
+        and expected_commit.startswith(commit_value)
+    )
+    if commit_value != expected_commit and not prefix_ok:
         failures.append(
-            "build evidence field 'Commit SHA' does not match this release candidate: "
+            "build evidence field 'Commit SHA' does not match this release candidate "
+            f"(full SHA or >= {min_prefix}-char prefix required): "
             f"{commit_value!r} != {expected_commit!r}"
         )
 

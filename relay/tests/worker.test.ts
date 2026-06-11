@@ -856,6 +856,42 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("does not escalate a negated symptom list ending in a time qualifier", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "I have no chest pain or dizziness today. What should I train?",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not escalate a negated context list ending in a time qualifier", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Should I add five pounds next week?",
+      contextBlock: "## Training context\n- Check-in: denies chest pain, dizziness, or shortness of breath now.",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("short-circuits palpitations during training", async () => {
     const env = makeEnv();
     const body = JSON.stringify({
@@ -1350,6 +1386,23 @@ describe("volumearc-ai-relay App Attest auth", () => {
       makeEnv(),
     );
     await expect(json(defaultResponse)).resolves.toMatchObject({ fmCoachDisabled: false });
+  });
+
+  it("gives /v1/config a NAT-sized bucket beyond the per-device quota", async () => {
+    // PR #363 review (Codex P2): one gym/carrier IP fronts many devices,
+    // and during a kill-switch incident every launch must read the flag.
+    // The default per-device quota is 30/window; the config bucket is 20x.
+    const env = makeEnv();
+    for (let i = 0; i < 40; i += 1) {
+      const response = await worker.fetch(
+        new Request("https://relay.test/v1/config", {
+          method: "POST",
+          headers: { "CF-Connecting-IP": "203.0.113.7" },
+        }),
+        env,
+      );
+      expect(response.status).toBe(200);
+    }
   });
 
   it("short-circuits medical red flags from rendered training context", async () => {

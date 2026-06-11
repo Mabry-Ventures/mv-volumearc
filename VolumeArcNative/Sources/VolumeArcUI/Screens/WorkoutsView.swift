@@ -946,6 +946,7 @@ public struct WorkoutsView: View {
     private func logSet() {
         Task {
             VAHaptics.setLogged()
+            let indexBeforeLog = model.activeSessionExerciseIndex
             await model.logRecommendedSet(
                 weightOverride: activeTargetWeight,
                 repsOverride: activeTargetReps,
@@ -953,6 +954,16 @@ public struct WorkoutsView: View {
                 exerciseIDOverride: currentExerciseDefinition?.id,
                 exerciseNameOverride: currentExerciseName
             )
+            // PR #363 review (Codex P1): when this set completes the
+            // current exercise the model advances the index, and the next
+            // movement must not inherit this lift's weight/reps/RPE
+            // overrides. The `.onChange(of: activeSessionExerciseIndex)`
+            // backstop covers the rendered view, but every other advance
+            // path (defer/replace/skip) also resets directly — keep this
+            // path consistent rather than relying on view lifecycle.
+            if model.activeSessionExerciseIndex != indexBeforeLog || !model.isSessionActive {
+                resetLiveWorkoutOverrides()
+            }
             startRestTimer()
             toastPresenter.show(VAToast(
                 kind: .success,

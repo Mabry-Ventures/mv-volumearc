@@ -140,23 +140,75 @@ enum VolumeArcAppUITestSupport {
         _ element: XCUIElement,
         in app: XCUIApplication,
         timeout: TimeInterval = 15,
-        maxScrolls: Int = 3
+        maxScrolls: Int = 3,
+        preferAnchoredDrags: Bool = false
     ) -> Bool {
         let slice = max(0.5, timeout / Double(maxScrolls + 1))
         var discoveryAttempts = 0
         while !element.waitForExistence(timeout: slice) && discoveryAttempts < maxScrolls {
-            app.swipeUp()
+            if preferAnchoredDrags {
+                anchoredScroll(in: app, towardBottom: true)
+            } else {
+                app.swipeUp()
+            }
             discoveryAttempts += 1
         }
         guard element.exists else { return false }
         var hittabilityAttempts = 0
         while !element.isHittable && hittabilityAttempts < maxScrolls {
-            app.swipeUp()
+            if preferAnchoredDrags {
+                anchoredScroll(in: app, towardBottom: element.frame.midY >= app.frame.minY + 1)
+            } else {
+                app.swipeUp()
+            }
             hittabilityAttempts += 1
         }
         guard element.isHittable else { return false }
-        element.tap()
+        if preferAnchoredDrags {
+            // Tap the upper third of the element's VISIBLE rect. `isHittable`
+            // passes for partially visible elements, but XCUI dispatches
+            // taps at the activation point (center) — for a co-design row
+            // resting half-behind the coach quick-prompt rail, the center
+            // tap silently lands on the overlay chip and the row never
+            // expands (PR #363).
+            let visible = element.frame.intersection(app.frame)
+            guard !visible.isNull, visible.height > 0, app.frame.height > 0 else { return false }
+            // dy 0.15, not center: the coach message list's viewport ends
+            // ~45pt above the rail/composer block, and the app-frame
+            // intersection can't see that cutoff — element frames near the
+            // list bottom keep their full height while their lower half is
+            // unhittable. Points in the top sixth stay inside the real
+            // viewport for every element tall enough to be a tap target.
+            let normalized = CGVector(
+                dx: visible.midX / app.frame.width,
+                dy: (visible.minY + visible.height * 0.15) / app.frame.height
+            )
+            app.coordinate(withNormalizedOffset: normalized).tap()
+        } else {
+            element.tap()
+        }
         return true
+    }
+
+    /// Opt-in scroll dialect for the coach conversation surface, which
+    /// rubber-bands velocity flicks back to the rest offset (verified
+    /// frame-identical across four swipeUps in PR #363): an anchored slow
+    /// drag is the only gesture that displaces that scroll view. Default
+    /// callers keep the plain swipe + `element.tap()` path — onboarding
+    /// at accessibility5 depends on the flick's travel and on XCUI's
+    /// native tap fallbacks, and regressed under both generalized
+    /// variants of this helper.
+    private static func anchoredScroll(in app: XCUIApplication, towardBottom: Bool) {
+        let center = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let delta: CGFloat = towardBottom ? -220 : 220
+        center.press(forDuration: 0.15, thenDragTo: center.withOffset(CGVector(dx: 0, dy: delta)))
+        settleAfterScroll()
+    }
+
+    /// Bounded post-scroll settle: deceleration plus the lazy
+    /// container's rematerialization both finish well inside this window.
+    private static func settleAfterScroll() {
+        usleep(450_000)
     }
 
     /// Attach a snapshot of the app's accessibility tree to the running

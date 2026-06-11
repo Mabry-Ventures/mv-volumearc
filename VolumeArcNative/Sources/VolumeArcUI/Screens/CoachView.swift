@@ -32,11 +32,22 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
         VStack(spacing: 0) {
             coachHeader
             messageList
-            fallbackNotice
-            voiceNotice
-            latestWorkoutHandoff
-            quickPromptRail
-            composer
+        }
+        // Bottom controls ride a safe-area inset, not VStack siblings, so
+        // the message list is inset by the stack's measured height: draft
+        // content can always scroll clear of the rail/composer (PR #363:
+        // as siblings, straddling rows fed center-taps to the rail chips).
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            // Opaque backdrop: scroll content slides underneath, and the
+            // notice tints are translucent washes over this surface.
+            VStack(spacing: 0) {
+                fallbackNotice
+                voiceNotice
+                latestWorkoutHandoff
+                quickPromptRail
+                composer
+            }
+            .background(VA.Colors.surfaceGrouped)
         }
         .background(VA.Colors.surfaceGrouped)
         .navigationTitle(DashboardTab.coach.title)
@@ -92,10 +103,15 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
         if model.coachMessages.isEmpty {
             ScrollView {
                 VStack(alignment: .leading, spacing: VA.Space.lg) {
-                    welcomeCard
+                    // The draft leads when present: the athlete just asked
+                    // to plan, so the actionable card belongs above the
+                    // welcome copy and its exercise rows start in-viewport
+                    // (PR #363: below the welcome card, the VOL-275 footer
+                    // buried row 0 under the composer for good).
                     if showPlanDraft {
                         planningCard
                     }
+                    welcomeCard
                 }
                 .padding(VA.Space.lg)
                 .contentShape(Rectangle())

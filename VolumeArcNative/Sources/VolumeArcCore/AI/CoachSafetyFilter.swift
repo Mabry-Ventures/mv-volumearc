@@ -419,9 +419,22 @@ public enum CoachSafetyFilter {
     }
 
     private static func isBareSharedNegationContinuation(_ loweredLine: String) -> Bool {
-        let trimmed = loweredLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        var trimmed = loweredLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        // PR #363 review (Codex P2): a pure time qualifier on the tail of a
+        // shared-negation list ("no chest pain or dizziness today") still
+        // describes the negated check-in, so strip it before matching.
+        // Event markers (after/felt/mid-set/...) stay escalation-worthy —
+        // "dizziness after squats" is a fresh occurrence, not a qualifier.
+        let trailingTimeQualifier =
+            #"(?:\s+(?:today|now|right\s+now|currently|at\s+the\s+moment|"# +
+            #"this\s+(?:morning|afternoon|evening|week)))+$"#
+        trimmed = trimmed.replacingOccurrences(
+            of: trailingTimeQualifier,
+            with: "",
+            options: [.regularExpression, .caseInsensitive]
+        )
         let currentEventPattern =
-            #"\b(?:after|during|while|today|now|current(?:ly)?|reported|"# +
+            #"\b(?:after|during|while|reported|"# +
             #"showed|shows|felt|feel|got|became|under\s+load|episode|"# +
             #"mid[- ]?set|following)\b"#
         guard !containsPattern(

@@ -190,12 +190,20 @@ public enum CoachWorkoutPlanExtractor {
     }
 
     private static func setRepPair(in text: String) -> (sets: Int, reps: Int)? {
-        let patterns = [
-            #"(\d+)\s*(?:x|×)\s*(\d+)"#,
-            #"(\d+)\s*sets?\s*(?:of|x|×)?\s*(\d+)"#,
+        // PR #363 review (Codex P2): the two forms need different
+        // out-of-range policies. A bare "3x315" is usually load-by-rep
+        // confusion, so the strict guard rejects the whole pair. But
+        // "10 sets of 3" is unambiguous — discarding it made the caller
+        // fall back to firstInt("sets") with reps defaulting to 1
+        // (8x1 instead of the intended capped 8x3), silently changing
+        // the workout volume. The worded form clamps sets and keeps the
+        // captured reps instead.
+        let patterns: [(pattern: String, clampsSets: Bool)] = [
+            (#"(\d+)\s*(?:x|×)\s*(\d+)"#, false),
+            (#"(\d+)\s*sets?\s*(?:of|x|×)?\s*(\d+)"#, true),
         ]
         let range = NSRange(text.startIndex..<text.endIndex, in: text)
-        for pattern in patterns {
+        for (pattern, clampsSets) in patterns {
             guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
                   let match = regex.firstMatch(in: text, range: range)
             else { continue }
@@ -205,7 +213,12 @@ public enum CoachWorkoutPlanExtractor {
                   let sets = Int(text[setsRange]),
                   let reps = Int(text[repsRange])
             else { continue }
-            guard (1...8).contains(sets), (1...100).contains(reps) else { continue }
+            guard (1...100).contains(reps) else { continue }
+            if clampsSets {
+                guard sets >= 1 else { continue }
+                return (min(sets, 8), reps)
+            }
+            guard (1...8).contains(sets) else { continue }
             return (sets, reps)
         }
         return nil

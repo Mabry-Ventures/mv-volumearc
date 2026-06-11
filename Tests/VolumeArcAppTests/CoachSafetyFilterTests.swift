@@ -445,6 +445,41 @@ final class CoachSafetyFilterTests: XCTestCase {
 
     /// PR #363 review (CodeRabbit): palpitations/arrhythmia need positive
     /// matchers, not just negation entries.
+    /// PR #363 review (Codex P2): a pure time qualifier on the tail of a
+    /// shared-negation list must stay covered by the leading negator.
+    func testNegatedSymptomListWithTimeQualifierDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I have no chest pain or dizziness today. What should I train?",
+            context: "Readiness: 84/100 - strong recovery"
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testNegatedContextListWithTimeQualifierDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I add five pounds next week?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Check-in: denies chest pain, dizziness, or shortness of breath now.
+            """
+        )
+
+        XCTAssertNil(response)
+    }
+
+    /// Event markers stay escalation-worthy even inside a negated list —
+    /// "after heavy squats" reads as a fresh occurrence, so the
+    /// conservative posture keeps the escalation.
+    func testNegatedListWithEventMarkerStillEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I have no chest pain, but I felt dizziness after heavy squats.",
+            context: "Readiness: 84/100 - strong recovery"
+        )
+
+        XCTAssertNotNil(response)
+    }
+
     func testPalpitationsPromptEscalates() {
         let response = CoachSafetyFilter.medicalRedFlagResponse(
             prompt: "I have palpitations during squats. Should I keep going?",
