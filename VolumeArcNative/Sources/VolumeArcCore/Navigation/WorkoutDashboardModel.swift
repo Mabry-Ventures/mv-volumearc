@@ -380,8 +380,10 @@ public final class WorkoutDashboardModel: ObservableObject {
         telemetrySink: any TelemetrySink = InMemoryTelemetrySink(),
         featureFlags: (any FeatureFlagProvider)? = nil
     ) {
-        let coachProvider = LocalHeuristicAICoachProvider(
-            coachingStyle: state.athlete.coachingStyle
+        // VOL-283: even test/snapshot fixtures keep the safety wrapper
+        // outermost so no construction site models an unguarded provider.
+        let coachProvider = SafetyFilteredCoachProvider(
+            base: LocalHeuristicAICoachProvider(coachingStyle: state.athlete.coachingStyle)
         )
         self.init(
             aiProvider: coachProvider,

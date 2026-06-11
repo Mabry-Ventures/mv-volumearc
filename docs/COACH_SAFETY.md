@@ -1,0 +1,38 @@
+# Coach Safety Contract
+
+Last updated: 2026-06-11 (VOL-283; epic VOL-278)
+
+This is the binding contract for how the AI coach is prevented from harming an athlete, regardless of which model generates the response. Safety comes from deterministic code and eval evidence VolumeArc owns — never from trusting a provider. The contract is provider-agnostic by construction: swapping the AI brain (Apple Foundation Models, cloud relay tiers, local heuristic, or any future provider) must not change any guarantee below.
+
+## Guarantee tiers
+
+| Tier | Guarantee | Enforced by | Proven by |
+|---|---|---|---|
+| 0 — Pre-generation gate | A medical red-flag input (current chest pain, dizziness, fainting, breathing trouble, pregnancy, disordered-eating signals, cardiac history-in-session, minor + max-attempt) returns escalation copy and **never invokes any provider**. | `SafetyFilteredCoachProvider` red-flag branch (returns before constructing the base stream) | `CoachSafetyFilterTests` (`FailingIfCalledProvider` suite), `VolumeArcDashboardIntegrationTests.testAskCoachShortCircuitsMedicalRedFlagBeforeProvider` (spy proves zero invocations end to end) |
+| 1 — Symptom buffering + post-filter | Recovery-symptom inputs (sick, sore, run-down, tweaked, etc.) may reach a provider, but the response is buffered (never streamed raw to the UI) and replaced with the conservative rest-first answer unless it grants rest permission, offers a light option, includes a stop condition, and avoids push/heavy/grind language. | `CoachSafetyFilter.shouldBufferResponse` + `filteredResponse` inside the wrapper | `CoachSafetyFilterTests` buffering suite |
+| 2 — Relay-side deterministic checks | The cloud path re-checks red flags server-side before forwarding to the model, independent of app version. Covers the cloud path only — on-device FM never touches the relay, which is why Tier 0 lives in the app. | `relay/` Worker deterministic safety | Relay tests (`relay/` suite) |
+| 3 — Eval evidence | Response-layer fixtures assert `mustEscalateMedicalCare`, `mustRejectPromptInjection`, and plan-horizon bounds; the release gate blocks on a stale or failing trend. | `scripts/run_coach_evals.sh`, `scripts/check_coach_eval_trend.sh` | `Tests/Evals/CoachEvalFixtures/`, `docs/coach-eval-trend.json` |
+
+## Composition invariants
+
+1. **Every factory chain is wrapped outermost.** All `VolumeArcAIRuntimeFactory.makeCoachProvider` return paths apply `safetyFiltered(...)` last — deterministic, chaos, FM-led, and relay/local. Proven structurally by `CoachSafetyChainTests` (`provider is SafetyFilteredCoachProvider` per reachable branch).
+2. **The voice path sits behind the same gate.** `makeVoiceCoach` builds `AIRelayVoiceTransport` from `makeCoachProvider(...)`, never from a raw provider. Proven behaviorally by `CoachSafetyChainTests.testVoicePathShortCircuitsMedicalRedFlags`.
+3. **Production constructs providers only through the factory.** `VolumeArcApp.swift` is the only production call site. The dashboard's `@_spi(Testing)` snapshot init also wraps its fixture provider so no construction site in the repo models an unguarded chain.
+4. **Privacy redaction cannot defeat detection.** `PromptPrivacyRedactor` strips PII (email/phone/address/label tokens) and intentionally preserves medical language; the safety gate runs on the redacted prompt. Pinned by `CoachSafetyChainTests.testStrictRedactionPreservesMedicalRedFlagDetection` — if a future redaction pattern touches symptom text, that test fails.
+5. **Defense in depth is not the contract.** `LocalHeuristicAICoachProvider` duplicates red-flag checks inline; that duplication is belt-and-suspenders, not the guarantee. The wrapper is the guarantee. Do not remove the wrapper because an inner provider "already checks."
+
+## Rules for changing the AI brain
+
+- Any new provider or chain **must** return through `safetyFiltered(...)` in the factory. Extend `CoachSafetyChainTests` with the new branch in the same PR.
+- Any routing change (model swap, tier change, new provider enabled) requires green safety evals for that provider before it ships — per-provider eval axis and trend gating land under VOL-285; until then, a routing change requires a fresh full eval run (VOL-269 evidence standard).
+- The escalation copy and conservative recovery copy live in `CoachSafetyFilter` and are localized; copy changes route through the product-voice rules (VOL-279) and legal review (VOL-273).
+
+## Epic roadmap (VOL-278)
+
+| Child | Adds | Status |
+|---|---|---|
+| VOL-283 | Pre-gate composition proofs + this contract | Landed on `fix/volumearc-ga-readiness` |
+| VOL-284 | Deterministic prescription clamps (progression caps, symptom-context load freeze, rest/deload floors) | Open |
+| VOL-285 | Injury/symptom eval taxonomy + per-provider response axis + per-provider trend gate | Open |
+| VOL-286 | Kill switch (relay model disable, remote FM flag override) + `coach.safety.*` telemetry | Open |
+| VOL-287 | Onboarding medical disclaimer, age gating, emergency-resources copy, App Store rating answers | Open |

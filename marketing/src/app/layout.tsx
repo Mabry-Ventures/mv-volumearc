@@ -57,8 +57,8 @@ export const metadata: Metadata = {
 // Organization + WebSite give Google's rich-results pipeline a clean
 // shape for the App Store badge, the publisher, and site search. We
 // don't include `offers` yet because final App Store pricing isn't
-// locked in production (Pro is $9.99/mo / $79.99/yr per VOL-91 today
-// but copy-team may revise pre-launch — VOL-216 ASC metadata is the
+// locked in production (Pro is $9.99/mo / $59.99/yr per the VOL-273
+// pricing decision of 2026-06-11 — VOL-216 ASC metadata is the
 // SOT for what we publish). Once pricing is final, add `offers` /
 // `Offer` here and the App Store search snippet will get the price.
 const structuredData = [

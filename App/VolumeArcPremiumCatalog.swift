@@ -20,7 +20,7 @@ enum VolumeArcPremiumCatalog {
         StoreKitSubscriptionProductDisplay(
             id: "com.mabryventures.VolumeArc.premium.yearly",
             displayPrice: String(
-                localized: "$79.99",
+                localized: "$59.99",
                 comment: "Deterministic screenshot fixture yearly price"
             )
         ),

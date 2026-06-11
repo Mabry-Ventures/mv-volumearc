@@ -1127,6 +1127,28 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         })
     }
 
+    // MARK: - VOL-283 — coach safety boundary end to end
+
+    /// A medical red-flag prompt must produce escalation copy WITHOUT
+    /// the underlying provider ever being invoked. Production wiring
+    /// guarantees this by wrapping every factory chain in
+    /// `SafetyFilteredCoachProvider`; this test mirrors that wiring and
+    /// pins the boundary across the full dashboard pipeline (privacy
+    /// redaction, context build, streaming, message rendering).
+    func testAskCoachShortCircuitsMedicalRedFlagBeforeProvider() async throws {
+        let spy = CoachProviderInvocationSpy()
+        let model = makeDashboardModel(aiProvider: SafetyFilteredCoachProvider(base: spy))
+
+        await model.askCoach("I felt chest pain and got dizzy during squats — should I push through?")
+
+        XCTAssertEqual(model.coachMessages.map(\.sender), [.user, .coach])
+        let content = model.coachMessages.last?.content.lowercased() ?? ""
+        XCTAssertTrue(content.contains("stop the session"))
+        XCTAssertTrue(content.contains("medical care"))
+        let invocations = await spy.invocationCount
+        XCTAssertEqual(invocations, 0, "A red-flag prompt must never reach a coach provider")
+    }
+
     private func makeDashboardModel(
         aiProvider: any AICoachProvider = LocalHeuristicAICoachProvider(),
         recoveryReader: any RecoveryReader = UnavailableRecoveryReader(),
@@ -1767,6 +1789,17 @@ private actor RecordingDashboardWatchTransport: WatchSessionTransport {
     func send(_ payload: WatchPayload) async throws {
         guard reachable else { throw WatchTransportError.notReachable }
         sent.append(payload)
+    }
+}
+
+private actor CoachProviderInvocationSpy: AICoachProvider {
+    private(set) var invocationCount = 0
+
+    func coachResponse(for prompt: String, context: String) async throws -> String {
+        invocationCount += 1
+        // Unsafe sentinel — if the safety boundary ever leaks, the message
+        // assertions fail loudly instead of passing on safe-looking copy.
+        return "Push through and go heavy."
     }
 }
 #endif

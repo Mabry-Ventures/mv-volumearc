@@ -45,7 +45,7 @@ const plans = [
   {
     name: 'Pro',
     featured: true,
-    price: { Monthly: '$9.99', Annually: '$79.99' },
+    price: { Monthly: '$9.99', Annually: '$59.99' },
     description:
       'The full coach experience with the higher-capacity cloud tier and live voice coaching. For lifters who want the deepest prescription their data can give them.',
     button: {

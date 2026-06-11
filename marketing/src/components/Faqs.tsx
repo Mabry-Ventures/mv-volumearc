@@ -27,7 +27,7 @@ const faqs = [
     {
       question: 'What does Premium unlock?',
       answer:
-        'Premium ($9.99/month or $79.99/year) routes the coach to a higher-capacity cloud tier, unlocks single-turn voice coaching, and gates priority features. Cloud sync, on-device coaching, Live Activities, and the full workout tracker stay free for everyone.',
+        'Premium ($9.99/month or $59.99/year) routes the coach to a higher-capacity cloud tier, unlocks single-turn voice coaching, and gates priority features. Cloud sync, on-device coaching, Live Activities, and the full workout tracker stay free for everyone.',
     },
     {
       question: 'Will VolumeArc come to Android or the web?',
