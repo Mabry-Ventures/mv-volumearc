@@ -73,6 +73,13 @@ product_voice_patterns = [
   /AI coach/i,
   /AI coaching may use/i,
   /Google Gemini when you're online/i,
+  # VOL-279/VOL-281 positioning rule (docs/PRODUCT_POSITIONING.md):
+  # VolumeArc is the AI strength programming coach — generic coach
+  # framings collide with free/bundled platform coaches and must not
+  # drift back into product surfaces.
+  /fitness coach/i,
+  /wellness coach/i,
+  /personal trainer/i,
 ]
 
 failures = []

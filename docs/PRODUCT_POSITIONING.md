@@ -101,6 +101,19 @@ The pitch: *"Real human coaches write the programs. VolumeArc runs them."*
 | [VOL-275](https://linear.app/mabry-ventures/issue/VOL-275) | Prove co-design planning persistence/scheduling. | P2 launch gate |
 | [VOL-276](https://linear.app/mabry-ventures/issue/VOL-276) | Enforce release hygiene: no emojis, no stale project names, no unsupported launch claims. | P1 launch gate |
 
+## Product-voice rule: AI strength programming coach (2026-06-11, binding)
+
+Decided by Jared during the 2026-06-11 GA replan, after WWDC26 (Workout Buddy free and phone-less in watchOS 27; Apple's Health coach delayed to 27.1-27.4) and Google's Fitbit relaunch (Gemini Health Coach at $9.99/mo, free with Google AI Pro/Ultra, available on iOS):
+
+**VolumeArc is "the AI strength programming coach" — the prescriptive strength specialist.** Every product surface sells programming depth: progressive overload, readiness-driven set/rep/load prescriptions, autoregulation, recovery-timed deloads, and equipment-aware substitution. Premium is programming depth, never "AI access."
+
+Banned framings on product surfaces (app, watch, widgets, App Store metadata, selected marketing components) — enforced by `scripts/check_release_hygiene.sh` product-voice patterns so drift fails CI:
+
+- "AI coach" / "AI-powered strength" (pre-existing rules)
+- "fitness coach", "wellness coach", "personal trainer" (added with this rule — generic framings that collide head-on with free or bundled platform coaches)
+
+Allowed: "strength programming coach", "strength coach" qualified by prescriptive language, and technical/legal/privacy disclosures that must name AI processing factually.
+
 ## Explicit non-goals for this doc
 
 - Not a marketing plan. Marketing plan depends on this but is downstream.

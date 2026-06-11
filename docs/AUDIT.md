@@ -11,6 +11,22 @@
 | 2026-05-26 | **82** (engineering-weighted), **80** (user-visible-weighted) | 88 | 80 | 74 | 80 | 81 | Independent re-audit. Composite drop reflects re-weighting and 19 newly opened gaps (VOL-245 through VOL-263), not regressions. See [2026-05-26 re-audit](#2026-05-26-re-audit) below. |
 | 2026-06-06 | **84** (launch-readiness, release-branch hardening update) | 90 | 84 | 72 | 86 | 73 | Claude Design export audit plus current release-branch verification. The branch now fixes and verifies the clean Apple build, release binary-hardening, simulator performance, Semgrep, TruffleHog, marketing supply-chain, relay gates, offline coach failure journeys, no-iCloud launch fallback proof, 401 session-refresh retry proof, Foundation Models unavailable fallback proof, Profile subscription-management, About-surface, and Session Profiles proof, HealthKit-unavailable Today fallback proof, onboarding HealthKit grant/deny fixture proof, Coach voice permission/session proof, Workouts rest-timer expiry proof, Workouts history delete proof, onboarding force-quit recovery proof, active-workout force-quit recovery proof, coach-stream force-quit recovery proof, Watch offline replay telemetry proof, WatchConnectivity queue/reconnect notice proof, background refresh/processing proof, background-task wake/relaunch idempotency proof, push-notification tap routing proof, widget small/medium render and embed proof, Live Activity state/telemetry/Dynamic Island render proof, co-design edited-prescription scheduling into Workouts, iOS light/dark/warm-brand plus light accessibility and light/dark/warm-brand glass dashboard-surface visual snapshots, and additional Watch wire-contract journey proof; the composite remains below launch because the latest committed coach response-eval trend is stale/failing, Claude visual parity is only partially snapshot-gated, and physical iPhone + paired Watch UAT is not complete. See [2026-06-06 Claude Design + launch-readiness audit](#2026-06-06-claude-design--launch-readiness-audit). |
 
+## 2026-06-11 replan addendum (no re-score)
+
+The 2026-06-11 GA replan ([`VOLUMEARC_RELEASE.md`](VOLUMEARC_RELEASE.md#2026-06-11-replan)) re-baselines what the 2026-06-06 **84** composite and "no launch" verdict are measured against. This is a scope mapping, not a new audit; the next composite is scored against the descoped v1 surface set only.
+
+How the 2026-06-06 verdict items map under the descoped bar:
+
+| 2026-06-06 verdict item | Status under the 2026-06-11 bar | Evidence that flips it |
+|---|---|---|
+| Coach response-quality evidence failing/stale | Still blocking (VOL-269), but the harness itself is fixed: per-tier axis (55 fixtures x flash-lite/pro), negation-aware `mustNotMention`, eval secrets configured, first staging smoke 9/10 with the single failure confirmed as a harness false positive | A committed green `docs/coach-eval-trend.json` + marketing mirror at 55/55 per tier, no older than 7 days, produced on the release-candidate commit (`COACH_EVAL_REQUIRED_SHA` binding) |
+| Claude visual parity only partially snapshot-gated | Still blocking; VOL-270 full scope retained by decision (Watch/runtime, widgets, marketing caveat, physical review) | Full VOL-270 snapshot + signoff matrix green |
+| Physical iPhone + paired Watch UAT unproven | Still blocking (VOL-271) | `docs/RELEASE_UAT_EVIDENCE.md` complete for the exact TestFlight build (SHA + build-number bound; template rows rejected) |
+| Coverage ratchets (VolumeArcUI 50%, Watch 50%) counted against composite | Removed from the v1 bar: VOL-258/259 canceled to post-v1; the staged widget floor stays | Not a launch gate; tracked post-v1 |
+| Watch-face complication pack | Removed from the v1 bar: VOL-238 canceled; metadata/screenshots must carry no watch-face install claims | VOL-125 verification |
+| Coach safety (new since 2026-06-06) | Added as a hard gate: VOL-278 epic landed on branch (pre-gate proofs, prescription clamps, per-tier safety taxonomy, kill switches, onboarding disclaimer + age 16) | PR #363 merged with green CI; live eval trend per VOL-269; the binding contract is [`COACH_SAFETY.md`](COACH_SAFETY.md) |
+| Xcode Cloud worker startup dead (added 2026-06-07 as VOL-277) | Recovered 2026-06-11: PR builds run real actions and pass | Internal Testing archive producing a processed TestFlight build |
+
 ## 2026-06-06 Claude Design + launch-readiness audit
 
 ### Executive verdict
