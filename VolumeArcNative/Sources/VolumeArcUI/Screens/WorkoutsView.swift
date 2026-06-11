@@ -725,7 +725,13 @@ public struct WorkoutsView: View {
                     localized: "Chest · Shoulders · Triceps",
                     comment: "Featured workout focus"
                 ),
-                startWorkout: startWorkout
+                startWorkout: startWorkout,
+                savedTemplates: model.savedTemplates,
+                startSavedTemplate: { template in
+                    // Saved templates were clamped at save; coach source
+                    // keeps the start-path backstop (idempotent) anyway.
+                    startWorkout(title: template.name, plan: template.sessionPlan, source: .coach)
+                }
             )
             .accessibilityIdentifier("workouts.emptyState")
             if let tomorrowWorkout {
@@ -871,10 +877,10 @@ public struct WorkoutsView: View {
         startWorkout(title: nil)
     }
 
-    private func startWorkout(title: String?, plan: WorkoutSessionPlan? = nil) {
+    private func startWorkout(title: String?, plan: WorkoutSessionPlan? = nil, source: WorkoutPlanSource = .manual) {
         Task {
             VAHaptics.sessionStart()
-            await model.startWorkoutSession(title: title, plan: plan)
+            await model.startWorkoutSession(title: title, plan: plan, source: source)
         }
     }
 
@@ -901,7 +907,7 @@ public struct WorkoutsView: View {
             let scheduled = await model.scheduleWorkoutPlan(
                 draft.plan,
                 on: target.date,
-                source: "workouts_builder"
+                source: .workoutsBuilder
             )
             toastPresenter.show(VAToast(
                 kind: scheduled ? .success : .error,

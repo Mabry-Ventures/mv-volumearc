@@ -29,7 +29,7 @@ final class VolumeArcPersistenceController {
     let bootstrapStatus: BootstrapStatus
 
     private init() {
-        let schema = Schema(VolumeArcSchemaV5.models)
+        let schema = Schema(VolumeArcSchemaLatest.models)
         let bootstrap = Self.makeContainer(for: schema)
         container = bootstrap.container
         bootstrapStatus = bootstrap.status
@@ -223,6 +223,7 @@ final class VolumeArcPersistenceController {
                     configurations: [
                         primaryConfiguration(schema: syncableSchema()),
                         outboundQueueConfiguration(schema: outboundQueueSchema(), isStoredInMemoryOnly: false),
+                        localOnlyConfiguration(schema: localOnlySchema()),
                     ]
                 ),
                 status: BootstrapStatus(
@@ -375,6 +376,27 @@ final class VolumeArcPersistenceController {
 
     private static func outboundQueueSchema() -> Schema {
         Schema([OutboundSyncQueueRecord.self])
+    }
+
+    /// VOL-275: saved workout templates are deliberately device-local for
+    /// v1 (no CloudKit mirroring, no outbound-queue staging), so in the
+    /// cloud-synced container they need their own configuration — every
+    /// model in the container schema must belong to exactly one
+    /// configuration, and `syncableSchema()` intentionally excludes them.
+    /// The fallback containers use a single full-schema configuration, so
+    /// templates ride along there without this split.
+    private static func localOnlySchema() -> Schema {
+        Schema([WorkoutTemplateRecord.self])
+    }
+
+    private static func localOnlyConfiguration(schema: Schema) -> ModelConfiguration {
+        ModelConfiguration(
+            "VolumeArc-LocalOnly",
+            schema: schema,
+            isStoredInMemoryOnly: false,
+            allowsSave: true,
+            cloudKitDatabase: .none
+        )
     }
 }
 

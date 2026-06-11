@@ -90,6 +90,12 @@ enum VolumeArcLaunchBootstrapper {
         for memory in try context.fetch(FetchDescriptor<CoachMemoryRecord>()) {
             context.delete(memory)
         }
+        for program in try context.fetch(FetchDescriptor<TrainingProgramRecord>()) {
+            context.delete(program)
+        }
+        for template in try context.fetch(FetchDescriptor<WorkoutTemplateRecord>()) {
+            context.delete(template)
+        }
         for queuedChange in try context.fetch(FetchDescriptor<OutboundSyncQueueRecord>()) {
             context.delete(queuedChange)
         }

@@ -141,7 +141,7 @@ final class VolumeArcCoachStreamingPerfTests: XCTestCase {
     }
 
     private func makeModel(aiProvider: any AICoachProvider) throws -> WorkoutDashboardModel {
-        let schema = Schema(VolumeArcSchemaV5.models)
+        let schema = Schema(VolumeArcSchemaLatest.models)
         let config = ModelConfiguration(
             "CoachStreamingPerf-\(UUID().uuidString)",
             schema: schema,

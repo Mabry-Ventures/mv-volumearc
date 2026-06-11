@@ -6,6 +6,7 @@ import VolumeArcCore
 public struct CoachView: View { // swiftlint:disable:this type_body_length
     @ObservedObject var model: WorkoutDashboardModel
     @ObservedObject var navigation: DashboardNavigationModel
+    @EnvironmentObject private var toastPresenter: VAToastPresenter
     @State private var draftMessage: String = ""
     @State private var showPlanDraft: Bool = false
     @State private var expandedExerciseID: String?
@@ -204,7 +205,8 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
             expandedExerciseID: $expandedExerciseID,
             sendPlanFeedback: sendPlanFeedback(_:),
             schedulePlan: schedulePlanDraft,
-            startNow: startPlanNow
+            startNow: startPlanNow,
+            saveTemplate: savePlanDraftAsTemplate
         )
     }
 
@@ -620,7 +622,7 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
                 navigation.selectedTab = .workouts
                 return
             }
-            await model.startWorkoutSession(title: plan.title, plan: plan, source: "coach")
+            await model.startWorkoutSession(title: plan.title, plan: plan, source: .coach)
             navigation.selectedTab = .workouts
         }
     }
@@ -651,6 +653,33 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
         }
     }
 
+    /// VOL-275: persist the co-designed draft as a reusable template.
+    /// The model re-clamps coach-derived numbers before saving.
+    private func savePlanDraftAsTemplate() {
+        Task {
+            VAHaptics.tap()
+            dismissKeyboard()
+            let saved = await model.saveCoachTemplate(
+                named: planDraft.name,
+                plan: WorkoutSessionPlan(
+                    title: planDraft.name,
+                    durationMinutes: planDraft.durationMinutes,
+                    targetRPE: planDraft.targetRPE,
+                    exercises: planDraftWorkoutExercises
+                )
+            )
+            toastPresenter.show(VAToast(
+                kind: saved ? .success : .error,
+                title: saved
+                    ? String(localized: "Template saved", comment: "Toast title after saving a co-designed template")
+                    : String(localized: "Couldn't save template", comment: "Toast title when saving a template fails"),
+                message: saved
+                    ? String(localized: "Find it in Workouts under Templates.", comment: "Toast body after saving a co-designed template")
+                    : String(localized: "Try again in a moment.", comment: "Toast body when saving a template fails")
+            ))
+        }
+    }
+
     private func startPlanNow() {
         Task {
             VAHaptics.sessionStart()
@@ -665,7 +694,7 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
                     targetRPE: planDraft.targetRPE,
                     exercises: planDraftWorkoutExercises
                 ),
-                source: "coach"
+                source: .coach
             )
             navigation.selectedTab = .workouts
         }

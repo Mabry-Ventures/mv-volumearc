@@ -69,6 +69,8 @@ public final class WorkoutDashboardModel: ObservableObject {
     @Published public private(set) var operationalSignals: [OperationalSignalSummary] = []
 
     @Published public var coachMessages: [CoachMessage] = []
+    /// VOL-275: saved workout templates (newest first), loaded on refresh.
+    @Published public internal(set) var savedTemplates: [SavedWorkoutTemplate] = []
     @Published public private(set) var isCoachStreaming: Bool = false
     @Published public private(set) var coachFallbackNotice: String?
     @Published public private(set) var voicePermissionStatus = VoicePermissionStatus(
@@ -142,6 +144,7 @@ public final class WorkoutDashboardModel: ObservableObject {
     // the current weekly plan in planning prompts.
     let trainingPlanRepository: SwiftDataTrainingPlanRepository?
     let trainingProgramRepository: SwiftDataTrainingProgramRepository?
+    let workoutTemplateRepository: SwiftDataWorkoutTemplateRepository?
     private let refreshLoader: DashboardRefreshLoader?
     #endif
 
@@ -233,6 +236,7 @@ public final class WorkoutDashboardModel: ObservableObject {
             container: repository.container,
             trainingPlanRepository: trainingPlanRepository
         )
+        self.workoutTemplateRepository = SwiftDataWorkoutTemplateRepository(container: repository.container)
         self.refreshLoader = DashboardRefreshLoader(container: repository.container)
         self.syncEngine = syncEngine
         self.subscriptionStore = subscriptionStore
@@ -284,6 +288,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.userProfileRepository = nil
         self.trainingPlanRepository = nil
         self.trainingProgramRepository = nil
+        self.workoutTemplateRepository = nil
         self.refreshLoader = nil
         #endif
         self.syncEngine = syncEngine
@@ -331,6 +336,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.userProfileRepository = nil
         self.trainingPlanRepository = nil
         self.trainingProgramRepository = nil
+        self.workoutTemplateRepository = nil
         self.refreshLoader = nil
         #endif
         #if canImport(StoreKit)
@@ -472,6 +478,7 @@ public final class WorkoutDashboardModel: ObservableObject {
             self.trainingPrograms = snapshot.trainingPrograms
             self.activeProgram = snapshot.activeProgram
             self.coachMemory = snapshot.coachMemory
+            self.savedTemplates = (try? workoutTemplateRepository?.templates()) ?? []
 
             applyActiveWorkoutRecoverySnapshot(snapshot.activeWorkout)
 
@@ -756,13 +763,13 @@ public final class WorkoutDashboardModel: ObservableObject {
 
     // MARK: - Dashboard actions
     /// Start a new workout session. Coach-derived plans must pass
-    /// `source: "coach"` so the VOL-284 clamp backstop bounds the live
+    /// `source: .coach` so the VOL-284 clamp backstop bounds the live
     /// session targets exactly like the scheduling path; manual builder
     /// and library starts stay user-sovereign by signed policy.
     public func startWorkoutSession(
         title overrideTitle: String? = nil,
         plan: WorkoutSessionPlan? = nil,
-        source: String = "manual"
+        source: WorkoutPlanSource = .manual
     ) async {
         #if canImport(SwiftData)
         guard let workoutRepository else { return }
@@ -778,7 +785,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         }
         do {
             var startPlan = plan
-            if source == "coach", let plan {
+            if source == .coach, let plan {
                 startPlan = clampedForCoachStart(plan)
             }
             let resolvedPlan = activeSessionPlanCandidate(from: startPlan)

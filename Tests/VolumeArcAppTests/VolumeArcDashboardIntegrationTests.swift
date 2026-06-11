@@ -17,7 +17,7 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
     private var trainingPlanRepository: SwiftDataTrainingPlanRepository!
 
     override func setUp() async throws {
-        let schema = Schema(VolumeArcSchemaV5.models)
+        let schema = Schema(VolumeArcSchemaLatest.models)
         let config = ModelConfiguration(
             "IntegrationTest-\(UUID().uuidString)",
             schema: schema,
@@ -723,7 +723,7 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         let scheduled = await model.scheduleWorkoutPlan(
             plan,
             on: wednesday,
-            source: "workouts_builder",
+            source: .workoutsBuilder,
             calendar: Calendar(identifier: .gregorian)
         )
 
@@ -1178,7 +1178,7 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
                 )]
             ),
             on: .now,
-            source: "coach"
+            source: .coach
         )
         XCTAssertTrue(scheduled)
 
@@ -1208,7 +1208,7 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
                     weight: 855, targetRPE: 9, restSeconds: 120
                 )]
             ),
-            source: "coach"
+            source: .coach
         )
 
         XCTAssertTrue(model.isSessionActive)
@@ -1218,6 +1218,78 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
             $0.category == "coach.safety" && $0.name == "clamp"
                 && $0.metadata["source"] == "coach_start"
         })
+    }
+
+    /// PR #363 review (Codex P1): the clamp's history table must cover
+    /// every logged exercise, not just the bounded recent-session
+    /// snapshot — a stale-but-known lift keeps its demonstrated-top cap
+    /// instead of falling back to the higher first-exposure cap. The
+    /// model deliberately does NOT refresh here, so `recentSessions`
+    /// stays empty while the repository holds bench history.
+    func testStaleLoggedHistoryStillCapsCoachLoadBelowFirstExposure() async throws {
+        let model = makeDashboardModel()
+
+        let workout = try workoutRepository.createWorkout(title: "Old Bench Day")
+        try workoutRepository.appendSet(
+            WorkoutSetPerformance(weight: 65, reps: 8, rpe: 7, completedAt: .now),
+            forExercise: "bench-press",
+            to: workout.identifier
+        )
+        try workoutRepository.completeWorkout(identifier: workout.identifier)
+
+        XCTAssertTrue(model.recentSessions.isEmpty,
+                      "Precondition: the recent-session snapshot must not be the history source")
+
+        let clamped = model.clampedCoachWorkoutPlan(
+            from: "Bench Press: 3x5 at 200 lb",
+            title: "Coach Workout"
+        )
+        let weight = try XCTUnwrap(clamped?.exercises.first?.weight)
+        XCTAssertLessThan(weight, 135, "Demonstrated 65 lb history must beat the 135 lb first-exposure cap")
+        XCTAssertLessThanOrEqual(weight, 72, "Cap is demonstrated top x 1.10")
+        XCTAssertGreaterThanOrEqual(weight, 65)
+    }
+
+    /// VOL-275: save-a-template end to end — the co-designed plan
+    /// re-clamps at save, lands in the persisted template list, and the
+    /// saved prescription is startable.
+    func testSaveCoachTemplateClampsPersistsAndIsStartable() async throws {
+        let telemetry = InMemoryTelemetrySink()
+        let model = makeDashboardModel(telemetrySink: telemetry)
+
+        let saved = await model.saveCoachTemplate(
+            named: "Strength Block A",
+            plan: WorkoutSessionPlan(
+                title: "Strength Block A",
+                durationMinutes: 45,
+                targetRPE: 8,
+                exercises: [WeeklyWorkoutExercise(
+                    name: "Barbell Back Squat", sets: 3, reps: 5,
+                    weight: 855, targetRPE: 9, restSeconds: 120
+                )]
+            )
+        )
+        XCTAssertTrue(saved)
+
+        let template = model.savedTemplates.first
+        XCTAssertEqual(template?.name, "Strength Block A")
+        XCTAssertEqual(template?.exercises.first?.weight, 135,
+                       "Template numbers are stored clamped (no-history barbell cap)")
+        XCTAssertTrue(telemetry.currentEvents.contains {
+            $0.category == "coach.safety" && $0.name == "clamp"
+                && $0.metadata["source"] == "coach_template"
+        })
+        XCTAssertTrue(telemetry.currentEvents.contains {
+            $0.category == "coach" && $0.name == "template_saved"
+        })
+
+        await model.startWorkoutSession(
+            title: template?.name,
+            plan: template?.sessionPlan,
+            source: .coach
+        )
+        XCTAssertTrue(model.isSessionActive)
+        XCTAssertEqual(model.activeSessionExercise?.weight, 135)
     }
 
     func testManualStartStaysUserSovereignAndUnclamped() async throws {

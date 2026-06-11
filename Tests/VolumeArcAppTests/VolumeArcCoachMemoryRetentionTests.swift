@@ -222,7 +222,7 @@ final class VolumeArcCoachMemoryRetentionTests: XCTestCase {
     }
 
     private static func makeContainer() throws -> ModelContainer {
-        let schema = Schema(VolumeArcSchemaV5.models)
+        let schema = Schema(VolumeArcSchemaLatest.models)
         let config = ModelConfiguration(
             "CoachMemoryRetentionTest-\(UUID().uuidString)",
             schema: schema,

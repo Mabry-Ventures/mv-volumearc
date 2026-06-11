@@ -217,6 +217,27 @@ public struct SwiftDataWorkoutRepository: Sendable {
             }
     }
 
+    /// VOL-284 (PR #363 review, Codex P1): every exercise ID the athlete
+    /// has ever logged, across the same 200-workout window `history(
+    /// forExercise:)` reads. The prescription clamp builds its
+    /// demonstrated-top table from this set — enumerating only the
+    /// recent-session snapshot let a stale-but-known lift fall back to
+    /// the HIGHER first-exposure cap.
+    @MainActor
+    public func allLoggedExerciseIDs() throws -> Set<String> {
+        let workouts = try recentWorkouts(limit: 200)
+        var ids = Set<String>()
+        for workout in workouts {
+            for id in workout.exerciseIDsCSV.split(separator: ",") {
+                let trimmed = id.trimmingCharacters(in: .whitespaces)
+                if !trimmed.isEmpty {
+                    ids.insert(trimmed)
+                }
+            }
+        }
+        return ids
+    }
+
     /// Build an `ExerciseHistory` projection for a single exercise.
     @MainActor
     public func history(forExercise exerciseID: String, limit: Int = 20) throws -> ExerciseHistory {

@@ -11,6 +11,10 @@ struct WorkoutIdleLibrary: View {
     let featuredTitle: String
     let featuredFocus: String
     let startWorkout: () -> Void
+    /// VOL-275: saved co-designed templates render above the curated
+    /// catalog; each is startable with its persisted prescription.
+    var savedTemplates: [SavedWorkoutTemplate] = []
+    var startSavedTemplate: (SavedWorkoutTemplate) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: VA.Space.xl) {
@@ -124,6 +128,13 @@ struct WorkoutIdleLibrary: View {
             Text(String(localized: "Templates", comment: "Workout templates section title"))
                 .font(VA.Typography.title2)
                 .foregroundStyle(VA.Colors.textPrimary)
+            if !savedTemplates.isEmpty {
+                VStack(spacing: VA.Space.md) {
+                    ForEach(savedTemplates) { template in
+                        savedTemplateRow(template)
+                    }
+                }
+            }
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: VA.Space.md) {
                     ForEach(Self.templates) { template in
@@ -176,6 +187,42 @@ struct WorkoutIdleLibrary: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private func savedTemplateRow(_ template: SavedWorkoutTemplate) -> some View {
+        Button {
+            startSavedTemplate(template)
+        } label: {
+            VACard(style: .flat) {
+                HStack(alignment: .center, spacing: VA.Space.md) {
+                    WorkoutIllustrationTile(systemImage: "square.and.arrow.down.fill", size: 64, accent: VA.Colors.primary)
+                    VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                        HStack(spacing: VA.Space.xs) {
+                            Text(template.name)
+                                .font(VA.Typography.headline)
+                                .foregroundStyle(VA.Colors.textPrimary)
+                                .lineLimit(1)
+                            WorkoutChip(
+                                text: String(localized: "Saved", comment: "Saved template chip"),
+                                tone: .neutral
+                            )
+                        }
+                        Text(vaInflectedString(
+                            "^[\(template.exercises.count) exercise](inflect: true)",
+                            comment: "Saved template exercise count"
+                        ))
+                        .font(VA.Typography.footnote)
+                        .foregroundStyle(VA.Colors.textTertiary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(VA.Typography.caption)
+                        .foregroundStyle(VA.Colors.textTertiary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("workouts.template.saved.\(template.id)")
     }
 
     private func templateCard(_ template: WorkoutTemplateSummary) -> some View {

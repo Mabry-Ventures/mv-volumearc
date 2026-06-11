@@ -29,15 +29,17 @@ extension WorkoutDashboardModel {
         var topWeights: [String: Double] = [:]
         #if canImport(SwiftData)
         if let workoutRepository {
-            // PR #363 review (Codex P1): never truncate history — dropping
-            // a logged exercise would swap the athlete's demonstrated-top
-            // cap for the HIGHER first-exposure cap. Sorted for
+            // PR #363 review (Codex P1, two rounds): never truncate
+            // history — dropping a logged exercise would swap the
+            // athlete's demonstrated-top cap for the HIGHER
+            // first-exposure cap. The table enumerates EVERY logged
+            // exercise ID from the repository, not the bounded
+            // recent-session snapshot, so a lift last logged twenty-plus
+            // sessions ago still carries its demonstrated top. Sorted for
             // deterministic table construction.
-            let loggedIDs = Set(
-                recentSessions
-                    .flatMap(\.exerciseIDs)
-                    .filter { !$0.hasPrefix("healthkit-") }
-            ).sorted()
+            let loggedIDs = ((try? workoutRepository.allLoggedExerciseIDs()) ?? [])
+                .filter { !$0.hasPrefix("healthkit-") }
+                .sorted()
             for exerciseID in loggedIDs {
                 guard let history = try? workoutRepository.history(forExercise: exerciseID),
                       history.topWeight > 0 else { continue }
@@ -69,7 +71,7 @@ extension WorkoutDashboardModel {
     /// VOL-284 backstop for the workout-START path (PR #363 review,
     /// Codex P1): the coach handoff's Start button begins an active
     /// session directly instead of scheduling, so it must re-clamp the
-    /// same way `scheduleWorkoutPlan(source: "coach")` does — otherwise a
+    /// same way `scheduleWorkoutPlan(source: .coach)` does — otherwise a
     /// raw extracted prescription could go live unclamped. Idempotent for
     /// plans already clamped upstream.
     func clampedForCoachStart(_ plan: WorkoutSessionPlan) -> WorkoutSessionPlan {
@@ -94,6 +96,61 @@ extension WorkoutDashboardModel {
         ))
     }
 
+    /// VOL-275: persist a co-designed plan as a reusable template. The
+    /// plan re-clamps through the coach-source backstop before saving —
+    /// a template is stored numbers, so it gets the same deterministic
+    /// bounds as scheduling and starting.
+    @discardableResult
+    public func saveCoachTemplate(named rawName: String, plan: WorkoutSessionPlan) async -> Bool {
+        #if canImport(SwiftData)
+        guard let workoutTemplateRepository else {
+            telemetrySink.record(TelemetryEvent(
+                category: "coach",
+                name: "template_save_failed",
+                severity: .warning,
+                message: "Template repository unavailable.",
+                metadata: [:]
+            ))
+            return false
+        }
+        let (clamped, events) = CoachPrescriptionClamp.clamp(plan, input: coachPrescriptionClampInput())
+        recordPrescriptionClampEvents(events, source: "coach_template")
+
+        let trimmedName = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = trimmedName.isEmpty
+            ? String(localized: "Co-designed Template", comment: "Fallback name for a saved co-designed template")
+            : String(trimmedName.prefix(80))
+        do {
+            try workoutTemplateRepository.saveTemplate(SavedWorkoutTemplate(
+                name: name,
+                durationMinutes: clamped.durationMinutes,
+                targetRPE: clamped.targetRPE,
+                exercises: clamped.exercises
+            ))
+            savedTemplates = (try? workoutTemplateRepository.templates()) ?? savedTemplates
+            telemetrySink.record(TelemetryEvent(
+                category: "coach",
+                name: "template_saved",
+                severity: .info,
+                message: "Co-designed plan saved as a template.",
+                metadata: ["exerciseCount": "\(clamped.exercises.count)"]
+            ))
+            return true
+        } catch {
+            telemetrySink.record(TelemetryEvent(
+                category: "coach",
+                name: "template_save_failed",
+                severity: .warning,
+                message: "Failed to save co-designed template.",
+                metadata: ["error_type": String(describing: type(of: error))]
+            ))
+            return false
+        }
+        #else
+        return false
+        #endif
+    }
+
     /// Persist a co-designed workout draft into the weekly plan for tomorrow.
     /// Replaces any existing workout on that weekday and refreshes the
     /// dashboard so Today/Workouts pick up the change immediately.
@@ -113,7 +170,7 @@ extension WorkoutDashboardModel {
             exercises: exercises
         )
         let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) ?? now
-        return await scheduleWorkoutPlan(plan, on: tomorrow, source: "coach", calendar: calendar)
+        return await scheduleWorkoutPlan(plan, on: tomorrow, source: .coach, calendar: calendar)
     }
 
     /// Persist a draft workout into the weekly plan for a specific day.
@@ -123,7 +180,7 @@ extension WorkoutDashboardModel {
     public func scheduleWorkoutPlan(
         _ plan: WorkoutSessionPlan,
         on date: Date,
-        source: String = "workouts_builder",
+        source: WorkoutPlanSource = .workoutsBuilder,
         calendar: Calendar = .current
     ) async -> Bool {
         let trimmedRawTitle = plan.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -144,7 +201,7 @@ extension WorkoutDashboardModel {
         // prescription around the safety bounds. Clamping is idempotent;
         // plans already clamped at extraction pass through unchanged.
         var persistedPlan = plan
-        if source == "coach" {
+        if source == .coach {
             let (clamped, events) = CoachPrescriptionClamp.clamp(plan, input: coachPrescriptionClampInput())
             recordPrescriptionClampEvents(events, source: "coach_schedule")
             persistedPlan = clamped
@@ -175,7 +232,7 @@ extension WorkoutDashboardModel {
                     "title_present": trimmedRawTitle.isEmpty ? "false" : "true",
                     "title_length_bucket": coDesignedTitleLengthBucket(trimmedRawTitle),
                     "exerciseCount": "\(persistedPlan.exercises.count)",
-                    "source": source,
+                    "source": source.rawValue,
                 ]
             ))
             await refresh()

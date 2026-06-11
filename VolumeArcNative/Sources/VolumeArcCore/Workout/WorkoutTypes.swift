@@ -62,6 +62,17 @@ public struct WorkoutAutopilotState: Sendable {
     }
 }
 
+/// How a workout plan reached a persistence or session-start chokepoint.
+/// The `.coach` case gates the VOL-284 prescription-clamp backstop, so
+/// this is deliberately an enum (PR #363 review) — a string-literal typo
+/// at a call site would otherwise silently skip a safety branch. The raw
+/// value feeds telemetry metadata.
+public enum WorkoutPlanSource: String, Sendable, Equatable {
+    case manual
+    case coach
+    case workoutsBuilder = "workouts_builder"
+}
+
 public enum CoachWorkoutPlanExtractor {
     public static func plan(from response: String, title: String) -> WorkoutSessionPlan? {
         let exercises = response

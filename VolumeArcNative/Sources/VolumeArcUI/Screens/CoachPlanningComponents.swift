@@ -102,6 +102,7 @@ struct CoachPlanningCard: View {
     let sendPlanFeedback: (String) -> Void
     let schedulePlan: () -> Void
     let startNow: () -> Void
+    let saveTemplate: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: VA.Space.lg) {
@@ -211,6 +212,14 @@ struct CoachPlanningCard: View {
                 accessibilityIdentifier: "coach.plan.schedule.footer"
             ) {
                 schedulePlan()
+            }
+            VAButton(
+                String(localized: "Save template", comment: "Co-design save template footer action"),
+                icon: "square.and.arrow.down",
+                style: .secondary,
+                accessibilityIdentifier: "coach.plan.saveTemplate.footer"
+            ) {
+                saveTemplate()
             }
             VAButton(
                 String(localized: "Start now", comment: "Co-design start now footer action"),
