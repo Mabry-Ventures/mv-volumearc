@@ -640,10 +640,21 @@ struct RestTimerDisplay: View {
         guard remaining > 0 else {
             return String(localized: "Go time", comment: "Rest timer complete accessibility value")
         }
-        let bucketed = Int((Double(remaining) / 5).rounded(.up)) * 5
+        // Floor to the 5s bucket so the spoken countdown never overstates
+        // the time left (ceiling announced "10 seconds" at 6-9s). The
+        // sub-bucket tail reads as "less than 5 seconds", and "about"
+        // marks the bucketed value as approximate. Same 5s mutation
+        // cadence, so XCUITest snapshots stay unstarved.
+        let bucketed = (remaining / 5) * 5
+        guard bucketed > 0 else {
+            return String(
+                localized: "Less than 5 seconds remaining",
+                comment: "Rest timer countdown accessibility value when under five seconds remain"
+            )
+        }
         return vaInflectedString(
-            "^[\(bucketed) second](inflect: true) remaining",
-            comment: "Rest timer countdown accessibility value"
+            "about ^[\(bucketed) second](inflect: true) remaining",
+            comment: "Rest timer countdown accessibility value bucketed to five-second steps"
         )
     }
 
