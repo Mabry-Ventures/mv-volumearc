@@ -24,7 +24,8 @@ concurrency:
 
 env:
   # VOL-88: the current GitHub runner inventory exposes the dedicated
-  # Apple Silicon machine with the `mv-shared` label. Keep only portable
+  # Apple Silicon machine with the `mv-volumearc-runner` label
+  # (`mv-shared` retired 2026-06-11). Keep only portable
   # base tool locations here; prepare_ruby_toolchain.sh appends Ruby and
   # gem bins dynamically via GITHUB_PATH after detecting the runner image.
   PATH: /opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
@@ -44,12 +45,12 @@ env:
 jobs:
   build-and-test:
     name: Build & Test
-    # VOL-132: fork-PR guard. The `mv-shared` self-hosted runner is a
-    # privileged macOS host (Apple Developer signing identity, Keychain,
+    # VOL-132: fork-PR guard. The `mv-volumearc-runner` self-hosted runner
+    # is a privileged macOS host (Apple Developer signing identity, Keychain,
     # decoded SSH key for git operations, persistent DerivedData / SPM
     # cache, prior-job artifacts). A fork PR carries arbitrary code from a
     # contributor outside the upstream repo; allowing it to execute on
-    # `mv-shared` would let that code read or modify any of the above.
+    # `mv-volumearc-runner` would let that code read or modify any of the above.
     # This guard skips the job on PRs whose head repository differs from
     # the upstream — push events (main + tags) and same-repo PRs run as
     # normal. Fork contributors should ask a maintainer to push their
