@@ -1250,6 +1250,78 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(weight, 65)
     }
 
+    /// VOL-275 Watch leg: scheduling a co-designed plan mirrors it to the
+    /// watch as a `scheduledPlan` payload carrying the POST-CLAMP
+    /// prescription — the WatchConnectivity payload proof from the
+    /// acceptance criteria.
+    func testScheduleCoachPlanSendsClampedScheduledPlanPayloadToWatch() async throws {
+        let transport = RecordingDashboardWatchTransport(reachable: true)
+        let coordinator = WatchConnectivityCoordinator(
+            transport: transport,
+            payloadStore: DashboardInMemoryPendingPayloadStore()
+        )
+        let model = makeDashboardModel(watchConnectivityCoordinator: coordinator)
+
+        let scheduled = await model.scheduleWorkoutPlan(
+            WorkoutSessionPlan(
+                title: "Co-Designed Lower",
+                targetRPE: 9,
+                exercises: [WeeklyWorkoutExercise(
+                    name: "Barbell Back Squat", sets: 3, reps: 5,
+                    weight: 855, targetRPE: 9, restSeconds: 120
+                )]
+            ),
+            on: Date(timeIntervalSince1970: 1_765_000_000),
+            source: .coach
+        )
+        XCTAssertTrue(scheduled)
+
+        let sent = await transport.sent
+        let planPayload = try XCTUnwrap(
+            sent.first(where: { $0.kind == .scheduledPlan }),
+            "Scheduling a coach plan must mirror a scheduledPlan payload to the watch"
+        )
+        let decoded = try XCTUnwrap(WatchScheduledPlanPayload.decode(from: planPayload.body))
+        XCTAssertEqual(decoded.title, "Co-Designed Lower")
+        XCTAssertEqual(decoded.exercises.count, 1)
+        XCTAssertEqual(decoded.exercises.first?.weight, 135,
+                       "The watch mirror must carry the clamped load, never the raw 855 lb ask")
+        XCTAssertEqual(decoded.exercises.first?.sets, 3)
+        XCTAssertEqual(decoded.exercises.first?.reps, 5)
+    }
+
+    /// Watch payloads tolerate an offline phone: the scheduledPlan mirror
+    /// enqueues on failure and replays via the standard pending queue.
+    func testScheduledPlanPayloadQueuesWhenWatchUnreachable() async throws {
+        let transport = RecordingDashboardWatchTransport(reachable: false)
+        let coordinator = WatchConnectivityCoordinator(
+            transport: transport,
+            payloadStore: DashboardInMemoryPendingPayloadStore()
+        )
+        let model = makeDashboardModel(watchConnectivityCoordinator: coordinator)
+
+        let scheduled = await model.scheduleWorkoutPlan(
+            WorkoutSessionPlan(
+                title: "Queued Lower",
+                targetRPE: 8,
+                exercises: [WeeklyWorkoutExercise(
+                    name: "Front Squat", sets: 3, reps: 8,
+                    weight: 95, targetRPE: 8, restSeconds: 90
+                )]
+            ),
+            on: Date(timeIntervalSince1970: 1_765_000_000),
+            source: .coach
+        )
+        XCTAssertTrue(scheduled, "An unreachable watch must not fail the schedule itself")
+        let pending = await coordinator.pendingPayloadCount()
+        XCTAssertEqual(pending, 1, "The scheduledPlan payload should be queued for replay")
+
+        await transport.setReachable(true)
+        try await coordinator.flushPendingIfReachable()
+        let sent = await transport.sent
+        XCTAssertEqual(sent.filter { $0.kind == .scheduledPlan }.count, 1)
+    }
+
     /// VOL-275: save-a-template end to end — the co-designed plan
     /// re-clamps at save, lands in the persisted template list, and the
     /// saved prescription is startable.

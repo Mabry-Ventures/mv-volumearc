@@ -287,7 +287,13 @@ async function streamGemini(body: CoachRequestBody, model: string, env: Env): Pr
     contents: [...history, { role: "user", parts: [{ text: userMessage }] }],
     systemInstruction: { parts: [{ text: systemPrompt }] },
     generationConfig: {
-      temperature: usesFallbackRendering ? 0.35 : 0.7,
+      // 0.4, not 0.7: a strength coach prescribing loads should be
+      // consistent run to run — at 0.7 the premium tier oscillated
+      // between numeric prescriptions and vague prose, which both reads
+      // as flaky coaching and made the nightly eval gate a coin flip
+      // (PR #363: four @pro quality rows failed on pure sampling
+      // variance across consecutive identical runs).
+      temperature: usesFallbackRendering ? 0.35 : 0.4,
       maxOutputTokens: Number.parseInt(env.MAX_OUTPUT_TOKENS, 10) || 800,
       responseMimeType: "text/plain",
     },

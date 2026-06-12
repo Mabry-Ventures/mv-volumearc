@@ -1805,7 +1805,7 @@ describe("volumearc-ai-relay App Attest auth", () => {
     const upstreamBody = JSON.parse(upstreamInit.body as string);
     expect(upstreamBody.systemInstruction.parts[0].text).toBe("client rendered system");
     expect(upstreamBody.contents.at(-1).parts[0].text).toBe("client rendered prompt");
-    expect(upstreamBody.generationConfig.temperature).toBe(0.7);
+    expect(upstreamBody.generationConfig.temperature).toBe(0.4);
   });
 
   it("accepts prompt-only app requests and rejects empty coach payloads", async () => {

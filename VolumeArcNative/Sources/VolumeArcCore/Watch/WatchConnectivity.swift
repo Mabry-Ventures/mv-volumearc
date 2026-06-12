@@ -12,6 +12,7 @@ public enum WatchPayloadKind: String, Sendable, Codable {
     case formCheckStop
     case formCheckResult
     case formCheckStopped
+    case scheduledPlan
 }
 
 public struct WatchPayload: Sendable, Codable {
@@ -59,6 +60,55 @@ public struct WatchPayload: Sendable, Codable {
 public enum WatchConnectivityNotifications {
     public static let payloadDidArrive = Notification.Name("VolumeArc.WatchConnectivity.payloadDidArrive")
     public static let payloadUserInfoKey = "watchPayload"
+}
+
+/// VOL-275: a co-designed plan scheduled on the phone, mirrored to the
+/// watch so tomorrow's session is visible at a glance. The exercises
+/// carry the post-clamp prescription — this payload is built AFTER the
+/// coach-source safety backstop has bounded the plan, never from raw
+/// extraction output.
+public struct WatchScheduledPlanPayload: Sendable, Codable, Equatable {
+    public struct Exercise: Sendable, Codable, Equatable {
+        public let name: String
+        public let sets: Int
+        public let reps: Int
+        public let weight: Int
+
+        public init(name: String, sets: Int, reps: Int, weight: Int) {
+            self.name = name
+            self.sets = sets
+            self.reps = reps
+            self.weight = weight
+        }
+    }
+
+    public let title: String
+    public let dayOfWeek: Int
+    public let durationMinutes: Int?
+    public let targetRPE: Int?
+    public let exercises: [Exercise]
+
+    public init(
+        title: String,
+        dayOfWeek: Int,
+        durationMinutes: Int?,
+        targetRPE: Int?,
+        exercises: [Exercise]
+    ) {
+        self.title = title
+        self.dayOfWeek = dayOfWeek
+        self.durationMinutes = durationMinutes
+        self.targetRPE = targetRPE
+        self.exercises = exercises
+    }
+
+    public static func encode(_ payload: WatchScheduledPlanPayload) -> String {
+        SyncPayloadCodec.encode(payload) ?? "{}"
+    }
+
+    public static func decode(from body: String) -> WatchScheduledPlanPayload? {
+        SyncPayloadCodec.decode(WatchScheduledPlanPayload.self, from: body)
+    }
 }
 
 public struct WatchFormCheckStartPayload: Sendable, Codable, Equatable, Identifiable {
@@ -206,6 +256,10 @@ public struct WatchSessionSnapshot: Sendable, Codable {
     public let sessionActive: Bool
     public let statusMessage: String
     public let loggedSetCount: Int
+    /// VOL-275: encoded `WatchScheduledPlanPayload` body for tomorrow's
+    /// co-designed plan, so the watch keeps showing it across relaunches.
+    /// Optional + defaulted so pre-VOL-275 snapshots keep decoding.
+    public let scheduledPlanBody: String?
 
     public init(
         workoutID: String = "active-strength-session",
@@ -214,7 +268,8 @@ public struct WatchSessionSnapshot: Sendable, Codable {
         coachPrompt: String,
         sessionActive: Bool,
         statusMessage: String,
-        loggedSetCount: Int = 0
+        loggedSetCount: Int = 0,
+        scheduledPlanBody: String? = nil
     ) {
         self.workoutID = workoutID
         self.selectedAction = selectedAction
@@ -223,6 +278,7 @@ public struct WatchSessionSnapshot: Sendable, Codable {
         self.sessionActive = sessionActive
         self.statusMessage = statusMessage
         self.loggedSetCount = loggedSetCount
+        self.scheduledPlanBody = scheduledPlanBody
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -233,6 +289,7 @@ public struct WatchSessionSnapshot: Sendable, Codable {
         case sessionActive
         case statusMessage
         case loggedSetCount
+        case scheduledPlanBody
     }
 
     public init(from decoder: Decoder) throws {
@@ -244,6 +301,7 @@ public struct WatchSessionSnapshot: Sendable, Codable {
         self.sessionActive = try container.decode(Bool.self, forKey: .sessionActive)
         self.statusMessage = try container.decode(String.self, forKey: .statusMessage)
         self.loggedSetCount = try container.decodeIfPresent(Int.self, forKey: .loggedSetCount) ?? 0
+        self.scheduledPlanBody = try container.decodeIfPresent(String.self, forKey: .scheduledPlanBody)
     }
 }
 

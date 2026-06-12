@@ -233,6 +233,7 @@ extension WorkoutDashboardModel {
                     "source": source.rawValue,
                 ]
             ))
+            await sendScheduledPlanToWatch(scheduledWorkout)
             await refresh()
             return true
         } catch {
@@ -243,6 +244,36 @@ extension WorkoutDashboardModel {
         recordCoDesignedPlanScheduleFailure(title: trimmedRawTitle, reason: "swiftdata_unavailable")
         return false
         #endif
+    }
+
+    /// VOL-275: mirror the just-scheduled co-designed plan to the watch so
+    /// tomorrow's session is visible there. The payload carries the
+    /// POST-CLAMP prescription (the caller schedules `scheduledWorkout`
+    /// only after the coach-source backstop has bounded it). Send failures
+    /// are tolerated here — the coordinator enqueues the payload and
+    /// replays it on the next reconnect, which is the same guarantee every
+    /// other watch payload relies on.
+    private func sendScheduledPlanToWatch(_ workout: WeeklyWorkout) async {
+        guard let watchConnectivityCoordinator else { return }
+        let payload = WatchScheduledPlanPayload(
+            title: workout.title,
+            dayOfWeek: workout.dayOfWeek,
+            durationMinutes: workout.durationMinutes,
+            targetRPE: workout.targetRPE,
+            exercises: workout.exercises.map {
+                WatchScheduledPlanPayload.Exercise(
+                    name: $0.name,
+                    sets: $0.sets,
+                    reps: $0.reps,
+                    weight: $0.weight
+                )
+            }
+        )
+        try? await watchConnectivityCoordinator.send(WatchPayload(
+            kind: .scheduledPlan,
+            workoutID: "scheduled-plan-day-\(workout.dayOfWeek)",
+            body: WatchScheduledPlanPayload.encode(payload)
+        ))
     }
 
     /// Assign a curated multi-week program and replace the weekly schedule
