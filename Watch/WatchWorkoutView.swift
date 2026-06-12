@@ -161,10 +161,11 @@ final class WatchWorkoutModel: ObservableObject {
         if let snapshot = await stateStore.load() {
             activeWorkoutID = snapshot.workoutID
             // Nil body must CLEAR any in-memory plan — a snapshot without
-            // a plan is the truth, not an omission (PR #363 review).
-            scheduledPlan = snapshot.scheduledPlanBody.flatMap {
-                WatchScheduledPlanPayload.decode(from: $0)
-            }
+            // a plan is the truth, not an omission — and an EXPIRED plan
+            // clears the same way (PR #363 review).
+            scheduledPlan = snapshot.scheduledPlanBody
+                .flatMap { WatchScheduledPlanPayload.decode(from: $0) }
+                .flatMap { $0.isCurrent() ? $0 : nil }
             selectedAction = snapshot.selectedAction
             restEndsAt = snapshot.restEndsAt
             coachPrompt = snapshot.coachPrompt
@@ -217,7 +218,8 @@ final class WatchWorkoutModel: ObservableObject {
             guard let stopped = WatchFormCheckStoppedPayload.decode(from: payload.body) else { return }
             await applyFormCheckStopped(stopped)
         case .scheduledPlan:
-            guard let plan = WatchScheduledPlanPayload.decode(from: payload.body) else { return }
+            guard let plan = WatchScheduledPlanPayload.decode(from: payload.body),
+                  plan.isCurrent() else { return }
             scheduledPlan = plan
             // Date-agnostic on purpose: the chip derives Today/Tomorrow/
             // weekday from the payload's concrete date.
@@ -1554,7 +1556,9 @@ struct WatchWorkoutView: View {
 
                     watchVitalsChip
 
-                    if let plan = model.scheduledPlan {
+                    // Render-side expiry too: the date can roll while the
+                    // app stays resident.
+                    if let plan = model.scheduledPlan, plan.isCurrent() {
                         WatchScheduledPlanChip(plan: plan)
                     }
 

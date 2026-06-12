@@ -116,6 +116,13 @@ public struct WatchScheduledPlanPayload: Sendable, Codable, Equatable {
     public static func decode(from body: String) -> WatchScheduledPlanPayload? {
         SyncPayloadCodec.decode(WatchScheduledPlanPayload.self, from: body)
     }
+
+    /// A plan is current through the end of its scheduled day. The watch
+    /// must stop advertising yesterday's mirror once the date rolls
+    /// (PR #363 review, Codex P2).
+    public func isCurrent(asOf now: Date = .now, calendar: Calendar = .current) -> Bool {
+        calendar.startOfDay(for: scheduledFor) >= calendar.startOfDay(for: now)
+    }
 }
 
 public struct WatchFormCheckStartPayload: Sendable, Codable, Equatable, Identifiable {

@@ -105,6 +105,11 @@ public enum CoachWorkoutPlanExtractor {
 
         guard let name = exerciseName(from: normalizedLine),
               !name.isEmpty,
+              // "Rest 90 seconds between sets" is an instruction, not a
+              // movement — a bogus "Rest" exercise must never reach a
+              // schedule or template (PR #363 review, Codex P2). Prefix
+              // match: "Rest for", "Warm-up", "Cool down" all qualify.
+              !isRestInstructionName(name),
               let sets = firstInt(matching: #"(\d+)\s*sets?"#, in: normalizedLine)
                 ?? setRep?.sets
                 ?? (seconds == nil ? nil : 1)
@@ -187,6 +192,13 @@ public enum CoachWorkoutPlanExtractor {
               let matchRange = Range(match.range(at: 1), in: text)
         else { return nil }
         return Int(text[matchRange])
+    }
+
+    private static func isRestInstructionName(_ name: String) -> Bool {
+        name.range(
+            of: #"^(?:rest|cool[\s-]?down|warm[\s-]?up)\b"#,
+            options: [.regularExpression, .caseInsensitive]
+        ) != nil
     }
 
     private static func setRepPair(in text: String) -> (sets: Int, reps: Int)? {

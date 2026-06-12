@@ -82,7 +82,16 @@ extension WorkoutDashboardModel {
             message.sender == .user
                 && CoachSafetyFilter.shouldBufferResponse(prompt: message.content, context: "")
         }
-        let contextSymptom = CoachSafetyFilter.shouldBufferResponse(prompt: "", context: buildCoachContext())
+        // Coach-authored lines are excluded before the scan (PR #363
+        // review, Codex P2): persisted memories render as "User asked:" /
+        // "Coach said:" pairs, and a prior reply's prudence boilerplate
+        // ("stop at any pain") must not arm the symptom ceiling. Athlete
+        // text and training data keep full coverage.
+        let athleteAuthoredContext = buildCoachContext()
+            .components(separatedBy: .newlines)
+            .filter { !$0.contains("Coach said:") }
+            .joined(separator: "\n")
+        let contextSymptom = CoachSafetyFilter.shouldBufferResponse(prompt: "", context: athleteAuthoredContext)
         return CoachPrescriptionClamp.Input(
             topWeightByExerciseKey: topWeights,
             maxRecentSessionVolume: maxRecentVolume,

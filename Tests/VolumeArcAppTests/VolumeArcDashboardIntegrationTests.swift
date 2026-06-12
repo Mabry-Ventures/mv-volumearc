@@ -1304,6 +1304,34 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(weight, 225)
     }
 
+    /// PR #363 review (Codex P2, memories variant): a persisted coach
+    /// reply's boilerplate re-read from memory into the context block
+    /// must not arm the symptom ceiling either.
+    func testPersistedCoachBoilerplateMemoryDoesNotTripSymptomCeiling() async throws {
+        let model = makeDashboardModel()
+
+        let workout = try workoutRepository.createWorkout(title: "Squat Day")
+        try workoutRepository.appendSet(
+            WorkoutSetPerformance(weight: 200, reps: 5, rpe: 7, completedAt: .now),
+            forExercise: "back-squat",
+            to: workout.identifier
+        )
+        try workoutRepository.completeWorkout(identifier: workout.identifier)
+        try coachMemoryRepository.append(
+            content: "User asked: plan tomorrow\nCoach said: Move with intent and stop at any pain.",
+            theme: "planning"
+        )
+
+        let clamped = model.clampedCoachWorkoutPlan(
+            from: "Barbell Back Squat: 3x5 at 400 lb",
+            title: "Coach Workout"
+        )
+
+        let weight = try XCTUnwrap(clamped?.exercises.first?.weight)
+        XCTAssertEqual(weight, 220,
+                       "Demonstrated-top cap (200 x 1.10) applies; coach memory boilerplate must not arm the 60% ceiling")
+    }
+
     /// PR #363 review (Codex P2): coach BOILERPLATE ("stop at any pain")
     /// in a generated reply must not read as athlete symptom context —
     /// only user messages and the training context arm the symptom

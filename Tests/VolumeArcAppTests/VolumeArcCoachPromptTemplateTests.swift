@@ -16,6 +16,27 @@ final class VolumeArcCoachPromptTemplateTests: XCTestCase {
 
     // MARK: - Renderer fundamentals
 
+    /// PR #363 review (Codex P2): rest/cooldown instruction lines must
+    /// not become exercises.
+    func testRestInstructionLinesProduceNoExercises() {
+        XCTAssertNil(CoachWorkoutPlanExtractor.plan(
+            from: "Rest 90 seconds between sets",
+            title: "Coach Workout"
+        ))
+        XCTAssertNil(CoachWorkoutPlanExtractor.plan(
+            from: "Rest for 120 seconds, then cool down 60 seconds",
+            title: "Coach Workout"
+        ))
+    }
+
+    func testTimedMovementStillParses() throws {
+        let plan = try XCTUnwrap(CoachWorkoutPlanExtractor.plan(
+            from: "Plank: 3 sets of 30 seconds",
+            title: "Coach Workout"
+        ))
+        XCTAssertEqual(plan.exercises.first?.name, "Plank")
+    }
+
     /// PR #363 review (Codex P2): "10 sets of 3" used to lose the captured
     /// reps when the set count exceeded the cap — the pair was discarded,
     /// reps defaulted to 1, and the handoff silently became 8x1.

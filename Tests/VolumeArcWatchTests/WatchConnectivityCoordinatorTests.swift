@@ -298,6 +298,26 @@ final class WatchScheduledPlanPayloadTests: XCTestCase {
         XCTAssertEqual(decoded, payload)
     }
 
+    /// PR #363 review (Codex P2): the watch must not advertise a plan
+    /// whose scheduled day has passed.
+    func test_isCurrent_expires_after_the_scheduled_day() {
+        let calendar = Calendar.current
+        let now = Date(timeIntervalSince1970: 1_765_000_000)
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: now)!
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: now)!
+
+        func payload(for date: Date) -> WatchScheduledPlanPayload {
+            WatchScheduledPlanPayload(
+                title: "Plan", dayOfWeek: 3, scheduledFor: date,
+                durationMinutes: nil, targetRPE: nil, exercises: []
+            )
+        }
+
+        XCTAssertFalse(payload(for: yesterday).isCurrent(asOf: now, calendar: calendar))
+        XCTAssertTrue(payload(for: now).isCurrent(asOf: now, calendar: calendar))
+        XCTAssertTrue(payload(for: tomorrow).isCurrent(asOf: now, calendar: calendar))
+    }
+
     func test_decode_rejects_garbage_body() {
         XCTAssertNil(WatchScheduledPlanPayload.decode(from: "not json"))
     }
