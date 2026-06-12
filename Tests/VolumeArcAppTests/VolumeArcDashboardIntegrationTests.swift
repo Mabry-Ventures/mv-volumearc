@@ -1250,6 +1250,33 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(weight, 65)
     }
 
+    /// PR #363 review (Codex P2): history logged under a CATALOG ID
+    /// ("back-squat") must satisfy a coach plan that names the implement
+    /// ("Barbell Back Squat") — the catalog bridges the implement token,
+    /// so demonstrated tops survive coach phrasing instead of falling to
+    /// the 135 lb first-exposure cap.
+    func testCatalogIDHistoryMatchesImplementQualifiedCoachPlan() async throws {
+        let model = makeDashboardModel()
+
+        let workout = try workoutRepository.createWorkout(title: "Squat Day")
+        try workoutRepository.appendSet(
+            WorkoutSetPerformance(weight: 225, reps: 5, rpe: 8, completedAt: .now),
+            forExercise: "back-squat",
+            to: workout.identifier
+        )
+        try workoutRepository.completeWorkout(identifier: workout.identifier)
+
+        let clamped = model.clampedCoachWorkoutPlan(
+            from: "Barbell Back Squat: 3x5 at 400 lb",
+            title: "Coach Workout"
+        )
+
+        let weight = try XCTUnwrap(clamped?.exercises.first?.weight)
+        XCTAssertGreaterThan(weight, 135, "Demonstrated 225 lb history must beat the first-exposure cap")
+        XCTAssertLessThanOrEqual(weight, 247, "Cap is demonstrated top x 1.10")
+        XCTAssertGreaterThanOrEqual(weight, 225)
+    }
+
     /// PR #363 review (Codex P2): coach BOILERPLATE ("stop at any pain")
     /// in a generated reply must not read as athlete symptom context —
     /// only user messages and the training context arm the symptom

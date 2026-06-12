@@ -62,6 +62,38 @@ final class CoachPrescriptionClampTests: XCTestCase {
         XCTAssertEqual(clampedEvents.map(\.kind), [.loadCap])
     }
 
+    /// PR #363 review (Codex P2): logged history keyed by catalog IDs
+    /// (`back-squat`) carries no implement token, but a barbell-qualified
+    /// plan name means the same lift by the file's own convention — it
+    /// must inherit the demonstrated top, not the no-history cap.
+    func testBarbellQualifiedPlanInheritsCatalogIDHistory() {
+        let input = CoachPrescriptionClamp.Input(
+            topWeightByExerciseKey: ["back-squat": 200]
+        )
+
+        let (plan, events) = CoachPrescriptionClamp.clamp(
+            makePlan([makeExercise(name: "Barbell Back Squat", weight: 315)]), input: input
+        )
+
+        XCTAssertEqual(plan.exercises.first?.weight, 220,
+                       "Catalog-ID history must beat the 135 lb first-exposure fallback")
+        XCTAssertEqual(events.map(\.kind), [.loadCap])
+    }
+
+    func testDumbbellQualifiedPlanDoesNotInheritUnqualifiedHistory() {
+        let input = CoachPrescriptionClamp.Input(
+            topWeightByExerciseKey: ["bench-press": 200]
+        )
+
+        let (plan, _) = CoachPrescriptionClamp.clamp(
+            makePlan([makeExercise(name: "Dumbbell Bench Press", weight: 90)]), input: input
+        )
+
+        let weight = try? XCTUnwrap(plan.exercises.first?.weight)
+        XCTAssertEqual(weight, CoachPrescriptionClamp.noHistoryCap(for: "Dumbbell Bench Press", symptomContext: false),
+                       "Unqualified history is barbell-class; a dumbbell plan must keep its first-exposure cap")
+    }
+
     // MARK: - No-history first-exposure caps
 
     func testNoHistoryBarbellCap() {

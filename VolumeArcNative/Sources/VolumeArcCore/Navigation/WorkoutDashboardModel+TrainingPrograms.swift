@@ -42,6 +42,19 @@ extension WorkoutDashboardModel {
                 guard !exerciseID.hasPrefix("healthkit-"), topWeight > 0 else { continue }
                 let key = CoachPrescriptionClamp.normalizedExerciseKey(exerciseID)
                 topWeights[key] = max(topWeights[key] ?? 0, topWeight)
+                // PR #363 review (Codex P2): catalog IDs ("back-squat")
+                // carry no implement token, but coach plans usually name
+                // one ("Barbell Back Squat") — and the matcher refuses
+                // qualified-plan vs unqualified-history on purpose. The
+                // catalog knows the implement, so logged catalog lifts
+                // ALSO key under their implement-qualified name and the
+                // athlete's demonstrated top survives coach phrasing.
+                if let definition = VolumeArcExerciseCatalog.exercise(withID: exerciseID) {
+                    let qualified = CoachPrescriptionClamp.normalizedExerciseKey(
+                        "\(definition.primaryEquipment.rawValue) \(definition.name)"
+                    )
+                    topWeights[qualified] = max(topWeights[qualified] ?? 0, topWeight)
+                }
             }
         }
         #endif

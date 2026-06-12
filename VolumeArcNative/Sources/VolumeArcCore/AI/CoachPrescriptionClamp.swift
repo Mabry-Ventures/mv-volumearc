@@ -187,9 +187,17 @@ public enum CoachPrescriptionClamp {
                 }
             } else if planImplements == storedImplements {
                 heavyClass.append(weight)
+            } else if storedImplements.isEmpty, planImplements.isDisjoint(with: lightImplementTokens) {
+                // PR #363 review (Codex P2): unqualified history IS the
+                // heavy/barbell lift by the same convention as unqualified
+                // plan names below ("Bench Press" means the barbell lift),
+                // so a barbell-qualified plan inherits catalog-ID history
+                // like `back-squat` instead of dropping to the no-history
+                // cap. Light-implement plans still never inherit it.
+                heavyClass.append(weight)
             }
-            // Mismatched implements (e.g. dumbbell plan vs barbell or
-            // unqualified history) never transfer.
+            // Truly mismatched implements (e.g. dumbbell plan vs barbell
+            // history) never transfer.
         }
 
         // Prefer heavy-class candidates for unqualified names (a plain
