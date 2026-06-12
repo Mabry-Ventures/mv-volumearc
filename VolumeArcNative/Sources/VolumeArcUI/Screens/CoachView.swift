@@ -680,6 +680,12 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
         guard requireDraftExercises(
             message: String(localized: "A session needs at least one exercise.", comment: "Toast body when starting an empty co-designed plan")
         ) else { return }
+        // Session already live: route to it (handoff-card behavior).
+        guard !model.isSessionActive else {
+            dismissKeyboard()
+            navigation.selectedTab = .workouts
+            return
+        }
         Task {
             VAHaptics.sessionStart()
             dismissKeyboard()
@@ -699,9 +705,8 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
         }
     }
 
-    /// Every row can be removed in the editor — a template with no
-    /// exercises is stored noise and a blank start is a dead session
-    /// (PR #363 review).
+    /// Every row can be removed in the editor — an empty draft must not
+    /// save, schedule, or start (PR #363 review).
     private func requireDraftExercises(message: String) -> Bool {
         guard planDraft.exercises.isEmpty else { return true }
         VAHaptics.warning()

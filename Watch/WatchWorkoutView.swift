@@ -219,8 +219,10 @@ final class WatchWorkoutModel: ObservableObject {
         case .scheduledPlan:
             guard let plan = WatchScheduledPlanPayload.decode(from: payload.body) else { return }
             scheduledPlan = plan
+            // Date-agnostic on purpose: the chip derives Today/Tomorrow/
+            // weekday from the payload's concrete date.
             statusMessage = String(
-                localized: "Tomorrow's plan synced.",
+                localized: "Plan synced.",
                 comment: "Watch status after the phone mirrors a scheduled co-designed plan"
             )
             await persistState()
@@ -1121,11 +1123,11 @@ private struct WatchScheduledPlanChip: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: VA.Radius.sm, style: .continuous)
-                .fill(VA.Colors.primary.opacity(0.14))
+                .fill(VA.Colors.primary.opacity(VA.Opacity.chipFill))
         )
         .overlay(
             RoundedRectangle(cornerRadius: VA.Radius.sm, style: .continuous)
-                .strokeBorder(VA.Colors.primary.opacity(0.35), lineWidth: 1)
+                .strokeBorder(VA.Colors.primary.opacity(VA.Opacity.chipBorder), lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("watch.scheduledPlanChip")
@@ -1707,11 +1709,11 @@ struct WatchWorkoutView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: VA.Radius.sm, style: .continuous)
-                .fill(VA.Colors.secondary.opacity(0.14))
+                .fill(VA.Colors.secondary.opacity(VA.Opacity.chipFill))
         )
         .overlay(
             RoundedRectangle(cornerRadius: VA.Radius.sm, style: .continuous)
-                .strokeBorder(VA.Colors.secondary.opacity(0.35), lineWidth: 1)
+                .strokeBorder(VA.Colors.secondary.opacity(VA.Opacity.chipBorder), lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("watch.vitalsSayChip")

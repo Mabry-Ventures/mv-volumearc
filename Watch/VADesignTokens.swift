@@ -57,6 +57,14 @@ public enum VA {
         public static let aodAccent = primary.opacity(0.22)
     }
 
+    public enum Opacity {
+        /// Tinted chip fills (vitals, scheduled plan).
+        public static let chipFill: Double = 0.14
+
+        /// Tinted chip borders.
+        public static let chipBorder: Double = 0.35
+    }
+
     // MARK: - Typography
 
     /// Watch-scaled typography tokens. Each token maps to a SwiftUI text style
