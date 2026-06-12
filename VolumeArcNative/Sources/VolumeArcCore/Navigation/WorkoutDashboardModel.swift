@@ -478,7 +478,12 @@ public final class WorkoutDashboardModel: ObservableObject {
             self.trainingPrograms = snapshot.trainingPrograms
             self.activeProgram = snapshot.activeProgram
             self.coachMemory = snapshot.coachMemory
-            self.savedTemplates = (try? workoutTemplateRepository?.templates()) ?? []
+            // Keep the prior list when the template read fails — collapsing
+            // a persistence error into "no saved templates" hides the
+            // failure from the athlete AND from diagnostics (PR #363
+            // review). A throw here would abort the whole refresh for a
+            // secondary surface, so degrade by holding last-known-good.
+            self.savedTemplates = (try? workoutTemplateRepository?.templates()) ?? self.savedTemplates
 
             applyActiveWorkoutRecoverySnapshot(snapshot.activeWorkout)
 

@@ -480,6 +480,18 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertNotNil(response)
     }
 
+    /// PR #363 review (CodeRabbit, critical): the blanket "prior "
+    /// staleness match must never swallow a prior cardiac event.
+    func testPriorCardiacEventPromptStillEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I had a prior cardiac event and want to max out today. Plan?",
+            context: "Readiness: 90/100 - peak recovery"
+        )
+
+        XCTAssertNotNil(response)
+        XCTAssertTrue(response?.lowercased().contains("medical care") == true)
+    }
+
     func testPalpitationsPromptEscalates() {
         let response = CoachSafetyFilter.medicalRedFlagResponse(
             prompt: "I have palpitations during squats. Should I keep going?",

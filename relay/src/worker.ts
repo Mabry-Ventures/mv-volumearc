@@ -179,7 +179,7 @@ async function handleCoach(request: Request, env: Env): Promise<Response> {
     // question, and a full normal bucket must never block escalation copy.
     // They carry their own generous bucket (default 10x) purely so an
     // attested device cannot script unlimited SSE off red-flag prompts.
-    const safetyMultiplier = Number.parseInt(env.SAFETY_RATE_LIMIT_MULTIPLIER ?? "", 10) || 10;
+    const safetyMultiplier = parsePositiveInt(env.SAFETY_RATE_LIMIT_MULTIPLIER, 10);
     const safetyOk = await checkRateLimit(`safety:${auth.deviceId}`, env, safetyMultiplier);
     if (!safetyOk) {
       return json({ error: "rate_limited" }, 429);
@@ -746,6 +746,13 @@ function medicalRedFlagClauses(line: string): MedicalRedFlagClause[] {
 
 function isStaleMedicalRedFlagLine(line: string): boolean {
   const lowered = line.toLowerCase();
+  // PR #363 review (CodeRabbit, critical): "prior cardiac event" /
+  // "prior heart attack" are hard red flags in the safety contract —
+  // the blanket "prior " staleness match must never swallow them
+  // ("I had a prior cardiac event and want to max out today").
+  if (containsPattern("\\bprior\\s+(?:cardiac|heart)\\b", lowered)) {
+    return false;
+  }
   return ["historical note", "last year", "prior ", "previously cleared", "cleared by"].some((phrase) =>
     lowered.includes(phrase),
   );
@@ -1000,12 +1007,19 @@ async function handleRuntimeConfig(request: Request, env: Env): Promise<Response
   // clustered clients, so this bucket is deliberately much larger than
   // the per-device default (response is a tiny static JSON, so the abuse
   // surface stays negligible).
-  const configMultiplier = Number.parseInt(env.CONFIG_RATE_LIMIT_MULTIPLIER ?? "", 10) || 20;
+  const configMultiplier = parsePositiveInt(env.CONFIG_RATE_LIMIT_MULTIPLIER, 20);
   const rateOk = await checkRateLimit(`config:${clientAddress(request)}`, env, configMultiplier);
   if (!rateOk) {
     return json({ error: "rate_limited" }, 429);
   }
   return json({ fmCoachDisabled: env.FM_COACH_DISABLED === "1" }, 200);
+}
+
+// A mis-set multiplier ("-1", "0", garbage) must degrade to the default,
+// never to a non-positive limit that 429s the safety or kill-switch path.
+function parsePositiveInt(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 function clientAddress(request: Request): string {

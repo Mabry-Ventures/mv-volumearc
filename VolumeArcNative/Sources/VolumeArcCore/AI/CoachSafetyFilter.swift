@@ -340,7 +340,13 @@ public enum CoachSafetyFilter {
     }
 
     private static func isStaleMedicalRedFlagLine(_ loweredLine: String) -> Bool {
-        [
+        // PR #363 review (CodeRabbit, critical): "prior cardiac event" /
+        // "prior heart attack" are hard red flags in the safety contract —
+        // the blanket "prior " staleness match must never swallow them.
+        if containsPattern(#"\bprior\s+(?:cardiac|heart)\b"#, in: loweredLine) {
+            return false
+        }
+        return [
             "historical note",
             "last year",
             "prior ",

@@ -282,6 +282,7 @@ final class WatchScheduledPlanPayloadTests: XCTestCase {
         let payload = WatchScheduledPlanPayload(
             title: "Co-Designed Lower",
             dayOfWeek: 3,
+            scheduledFor: Date(timeIntervalSince1970: 1_765_000_000),
             durationMinutes: 52,
             targetRPE: 8,
             exercises: [

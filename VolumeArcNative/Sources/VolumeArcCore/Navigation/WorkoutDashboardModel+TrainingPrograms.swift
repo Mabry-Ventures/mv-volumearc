@@ -233,7 +233,7 @@ extension WorkoutDashboardModel {
                     "source": source.rawValue,
                 ]
             ))
-            await sendScheduledPlanToWatch(scheduledWorkout)
+            await sendScheduledPlanToWatch(scheduledWorkout, scheduledFor: date)
             await refresh()
             return true
         } catch {
@@ -253,11 +253,12 @@ extension WorkoutDashboardModel {
     /// are tolerated here — the coordinator enqueues the payload and
     /// replays it on the next reconnect, which is the same guarantee every
     /// other watch payload relies on.
-    private func sendScheduledPlanToWatch(_ workout: WeeklyWorkout) async {
+    private func sendScheduledPlanToWatch(_ workout: WeeklyWorkout, scheduledFor date: Date) async {
         guard let watchConnectivityCoordinator else { return }
         let payload = WatchScheduledPlanPayload(
             title: workout.title,
             dayOfWeek: workout.dayOfWeek,
+            scheduledFor: date,
             durationMinutes: workout.durationMinutes,
             targetRPE: workout.targetRPE,
             exercises: workout.exercises.map {

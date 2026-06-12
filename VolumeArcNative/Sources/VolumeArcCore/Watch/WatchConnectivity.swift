@@ -63,7 +63,7 @@ public enum WatchConnectivityNotifications {
 }
 
 /// VOL-275: a co-designed plan scheduled on the phone, mirrored to the
-/// watch so tomorrow's session is visible at a glance. The exercises
+/// watch so the upcoming session is visible at a glance. The exercises
 /// carry the post-clamp prescription — this payload is built AFTER the
 /// coach-source safety backstop has bounded the plan, never from raw
 /// extraction output.
@@ -84,6 +84,11 @@ public struct WatchScheduledPlanPayload: Sendable, Codable, Equatable {
 
     public let title: String
     public let dayOfWeek: Int
+    /// Concrete date the plan is scheduled for. The watch derives its
+    /// chip label (Today / Tomorrow / weekday) from this — a plan
+    /// scheduled for today must never render as "Tomorrow"
+    /// (PR #363 review, Codex P2).
+    public let scheduledFor: Date
     public let durationMinutes: Int?
     public let targetRPE: Int?
     public let exercises: [Exercise]
@@ -91,12 +96,14 @@ public struct WatchScheduledPlanPayload: Sendable, Codable, Equatable {
     public init(
         title: String,
         dayOfWeek: Int,
+        scheduledFor: Date,
         durationMinutes: Int?,
         targetRPE: Int?,
         exercises: [Exercise]
     ) {
         self.title = title
         self.dayOfWeek = dayOfWeek
+        self.scheduledFor = scheduledFor
         self.durationMinutes = durationMinutes
         self.targetRPE = targetRPE
         self.exercises = exercises

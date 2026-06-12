@@ -189,6 +189,10 @@ public enum VolumeArcSchemaV6: VersionedSchema {
         public var identifier: String = ""
         public var name: String = ""
         public var durationMinutes: Int = 0
+        /// 0 is the "no target RPE" sentinel: `SavedWorkoutTemplate.targetRPE`
+        /// nil persists as 0 and 0 decodes back to nil (RPE is 1-10, so 0
+        /// can never be a real target). CloudKit-compatible defaults
+        /// require a non-optional here.
         public var targetRPE: Int = 0
         public var exercisesJSON: String = "[]"
         public var source: String = "coach-codesign"

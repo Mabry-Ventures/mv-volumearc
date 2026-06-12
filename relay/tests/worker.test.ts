@@ -856,6 +856,37 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("short-circuits a prior cardiac event named in the prompt", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "I had a prior cardiac event and want to max out today. Plan?",
+      contextBlock: "## Training context\n- Readiness: 90/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps /v1/config alive when the multiplier is mis-set negative", async () => {
+    const env = makeEnv({ CONFIG_RATE_LIMIT_MULTIPLIER: "-1" });
+    const response = await worker.fetch(
+      new Request("https://relay.test/v1/config", {
+        method: "POST",
+        headers: { "CF-Connecting-IP": "203.0.113.9" },
+      }),
+      env,
+    );
+    expect(response.status).toBe(200);
+  });
+
   it("does not escalate a negated symptom list ending in a time qualifier", async () => {
     const env = makeEnv();
     const body = JSON.stringify({
@@ -907,6 +938,7 @@ describe("volumearc-ai-relay App Attest auth", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -943,6 +975,7 @@ describe("volumearc-ai-relay App Attest auth", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -1015,6 +1048,7 @@ describe("volumearc-ai-relay App Attest auth", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -1033,6 +1067,7 @@ describe("volumearc-ai-relay App Attest auth", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -1125,6 +1160,7 @@ describe("volumearc-ai-relay App Attest auth", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
     expect(fetch).not.toHaveBeenCalled();
   });
 

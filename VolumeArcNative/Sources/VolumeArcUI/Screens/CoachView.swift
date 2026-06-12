@@ -184,36 +184,7 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
         }
     }
 
-    private var welcomeCard: some View {
-        VACard(style: .elevated) {
-            VStack(alignment: .leading, spacing: VA.Space.md) {
-                HStack(alignment: .top, spacing: VA.Space.md) {
-                    Image(systemName: "waveform.and.mic")
-                        .font(VA.Typography.title2)
-                        .foregroundStyle(VA.Colors.primary)
-                        .frame(width: 44, height: 44)
-                        .background(VA.Colors.primary.opacity(0.12), in: Circle())
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: VA.Space.xs) {
-                        Text(String(localized: "Your Coach", comment: "Coach welcome card title"))
-                            .font(VA.Typography.title2)
-                            .foregroundStyle(VA.Colors.textPrimary)
-                        Text(String(
-                            localized: """
-                                Ask anything about your training — load selection, form cues, \
-                                recovery, or tomorrow's plan. I’ll ground the answer in your \
-                                recent sessions and readiness.
-                                """,
-                            comment: "Coach welcome card description"
-                        ))
-                        .font(VA.Typography.body)
-                        .foregroundStyle(VA.Colors.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-        }
-    }
+    private var welcomeCard: some View { CoachWelcomeCard() }
 
     private var planningCard: some View {
         CoachPlanningCard(
@@ -672,6 +643,9 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
     /// VOL-275: persist the co-designed draft as a reusable template.
     /// The model re-clamps coach-derived numbers before saving.
     private func savePlanDraftAsTemplate() {
+        guard requireDraftExercises(
+            message: String(localized: "Templates need at least one exercise.", comment: "Toast body when saving an empty co-designed plan")
+        ) else { return }
         Task {
             VAHaptics.tap()
             dismissKeyboard()
@@ -697,6 +671,9 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
     }
 
     private func startPlanNow() {
+        guard requireDraftExercises(
+            message: String(localized: "A session needs at least one exercise.", comment: "Toast body when starting an empty co-designed plan")
+        ) else { return }
         Task {
             VAHaptics.sessionStart()
             dismissKeyboard()
@@ -714,6 +691,20 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
             )
             navigation.selectedTab = .workouts
         }
+    }
+
+    /// Every row can be removed in the editor — a template with no
+    /// exercises is stored noise and a blank start is a dead session
+    /// (PR #363 review).
+    private func requireDraftExercises(message: String) -> Bool {
+        guard planDraft.exercises.isEmpty else { return true }
+        VAHaptics.warning()
+        toastPresenter.show(VAToast(
+            kind: .error,
+            title: String(localized: "Add an exercise first", comment: "Toast title for an empty co-designed plan action"),
+            message: message
+        ))
+        return false
     }
 
     private var planDraftWorkoutExercises: [WeeklyWorkoutExercise] {

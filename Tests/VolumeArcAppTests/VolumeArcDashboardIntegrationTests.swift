@@ -1343,10 +1343,7 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         )
         XCTAssertTrue(saved)
 
-        let template = model.savedTemplates.first
-        XCTAssertEqual(template?.name, "Strength Block A")
-        XCTAssertEqual(template?.exercises.first?.weight, 135,
-                       "Template numbers are stored clamped (no-history barbell cap)")
+        XCTAssertEqual(model.savedTemplates.first?.name, "Strength Block A")
         XCTAssertTrue(telemetry.currentEvents.contains {
             $0.category == "coach.safety" && $0.name == "clamp"
                 && $0.metadata["source"] == "coach_template"
@@ -1355,13 +1352,23 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
             $0.category == "coach" && $0.name == "template_saved"
         })
 
-        await model.startWorkoutSession(
+        // PR #363 review (CodeRabbit): assert against a REHYDRATED model
+        // over the same store, not the publisher the save path just
+        // mutated — this is what proves the V6 row actually persisted.
+        let rehydrated = makeDashboardModel()
+        await rehydrated.refresh()
+        let template = rehydrated.savedTemplates.first
+        XCTAssertEqual(template?.name, "Strength Block A")
+        XCTAssertEqual(template?.exercises.first?.weight, 135,
+                       "Template numbers are stored clamped (no-history barbell cap)")
+
+        await rehydrated.startWorkoutSession(
             title: template?.name,
             plan: template?.sessionPlan,
             source: .coach
         )
-        XCTAssertTrue(model.isSessionActive)
-        XCTAssertEqual(model.activeSessionExercise?.weight, 135)
+        XCTAssertTrue(rehydrated.isSessionActive)
+        XCTAssertEqual(rehydrated.activeSessionExercise?.weight, 135)
     }
 
     func testManualStartStaysUserSovereignAndUnclamped() async throws {

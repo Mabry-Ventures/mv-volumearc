@@ -77,12 +77,14 @@ public final class SwiftDataWorkoutTemplateRepository {
         )
         descriptor.fetchLimit = 1
 
+        var persistedCreatedAt = template.createdAt
         if let existing = try context.fetch(descriptor).first {
             existing.name = template.name
             existing.durationMinutes = template.durationMinutes ?? 0
             existing.targetRPE = template.targetRPE ?? 0
             existing.exercisesJSON = exercisesJSON
             existing.updatedAt = .now
+            persistedCreatedAt = existing.createdAt
         } else {
             context.insert(WorkoutTemplateRecord(
                 identifier: template.id,
@@ -94,7 +96,17 @@ public final class SwiftDataWorkoutTemplateRepository {
             ))
         }
         try context.save()
-        return template
+        // Return the STORED creation date — an update keeps the original
+        // record's createdAt, and the template list sorts by it, so the
+        // returned value must agree with storage (PR #363 review).
+        return SavedWorkoutTemplate(
+            id: template.id,
+            name: template.name,
+            durationMinutes: template.durationMinutes,
+            targetRPE: template.targetRPE,
+            exercises: template.exercises,
+            createdAt: persistedCreatedAt
+        )
     }
 
     @MainActor

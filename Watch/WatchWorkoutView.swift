@@ -1073,6 +1073,19 @@ final class WatchWorkoutModel: ObservableObject {
 private struct WatchScheduledPlanChip: View {
     let plan: WatchScheduledPlanPayload
 
+    /// Today / Tomorrow / weekday, derived from the concrete scheduled
+    /// date — a plan scheduled for today must never read "Tomorrow".
+    private var scheduleLabel: String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(plan.scheduledFor) {
+            return String(localized: "Today", comment: "Watch scheduled plan chip label for a today plan")
+        }
+        if calendar.isDateInTomorrow(plan.scheduledFor) {
+            return String(localized: "Tomorrow", comment: "Watch scheduled plan chip label for a tomorrow plan")
+        }
+        return plan.scheduledFor.formatted(.dateTime.weekday(.wide))
+    }
+
     var body: some View {
         HStack(spacing: VA.Space.sm) {
             Image(systemName: "calendar.badge.checkmark")
@@ -1080,7 +1093,7 @@ private struct WatchScheduledPlanChip: View {
                 .foregroundStyle(VA.Colors.primary)
 
             VStack(alignment: .leading, spacing: VA.Space.xxs) {
-                Text(String(localized: "Tomorrow", comment: "Watch scheduled co-designed plan chip label"))
+                Text(scheduleLabel)
                     .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.textSecondary)
                 Text(plan.title)
