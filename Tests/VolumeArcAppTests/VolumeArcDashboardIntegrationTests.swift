@@ -1357,14 +1357,15 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         // mutated — this is what proves the V6 row actually persisted.
         let rehydrated = makeDashboardModel()
         await rehydrated.refresh()
-        let template = rehydrated.savedTemplates.first
-        XCTAssertEqual(template?.name, "Strength Block A")
-        XCTAssertEqual(template?.exercises.first?.weight, 135,
+        let template = try XCTUnwrap(rehydrated.savedTemplates.first,
+                                     "Persisted template must rehydrate from the store")
+        XCTAssertEqual(template.name, "Strength Block A")
+        XCTAssertEqual(template.exercises.first?.weight, 135,
                        "Template numbers are stored clamped (no-history barbell cap)")
 
         await rehydrated.startWorkoutSession(
-            title: template?.name,
-            plan: template?.sessionPlan,
+            title: template.name,
+            plan: template.sessionPlan,
             source: .coach
         )
         XCTAssertTrue(rehydrated.isSessionActive)

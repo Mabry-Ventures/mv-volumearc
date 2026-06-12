@@ -872,6 +872,45 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
     expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    const sse = await response.text();
+    expect(sse.toLowerCase()).toContain("stop the session and seek medical care");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("does not escalate a denied prior cardiac event", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "No prior cardiac event, cleared by my doctor. Plan for today?",
+      contextBlock: "## Training context\n- Readiness: 88/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps scanning after a stale clause for a current bare symptom", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "I had chest pain last year, dizziness now during squats.",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
     expect(fetch).not.toHaveBeenCalled();
   });
 

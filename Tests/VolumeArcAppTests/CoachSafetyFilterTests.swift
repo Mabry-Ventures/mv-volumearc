@@ -443,6 +443,26 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertNil(response)
     }
 
+    func testDeniedPriorCardiacEventDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "No prior cardiac event, cleared by my doctor. Plan for today?",
+            context: "Readiness: 88/100 - strong recovery"
+        )
+
+        XCTAssertNil(response)
+    }
+
+    /// PR #363 review (Codex P1): a stale clause suppresses itself, not
+    /// what follows — the current bare symptom must still escalate.
+    func testStaleClauseFollowedByCurrentSymptomStillEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I had chest pain last year, dizziness now during squats.",
+            context: "Readiness: 84/100 - strong recovery"
+        )
+
+        XCTAssertNotNil(response)
+    }
+
     /// PR #363 review (CodeRabbit): palpitations/arrhythmia need positive
     /// matchers, not just negation entries.
     /// PR #363 review (Codex P2): a pure time qualifier on the tail of a

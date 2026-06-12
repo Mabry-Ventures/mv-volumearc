@@ -616,7 +616,7 @@ function hasMedicalRedFlagInLine(line: string, patterns: string[]): boolean {
   // — and clauses naming someone else's symptoms are excluded.
   const lineIsFirstPerson = containsPattern("\\bi\\b|\\bi'm\\b|\\bi've\\b", line);
   let sharedNegationCarries = false;
-  let followsNegatedClause = false;
+  let followsSuppressedClause = false;
   for (const clause of medicalRedFlagClauses(line)) {
     if (!clause.separatorAllowsSharedNegation) {
       sharedNegationCarries = false;
@@ -625,11 +625,16 @@ function hasMedicalRedFlagInLine(line: string, patterns: string[]): boolean {
     const lowered = clause.text.toLowerCase();
     if (isStaleMedicalRedFlagLine(lowered)) {
       sharedNegationCarries = false;
+      // PR #363 review (Codex P1): a stale clause suppresses ITSELF,
+      // not what follows — "I had chest pain last year, dizziness now
+      // during squats" keeps scanning the subject-bare continuation
+      // through the same first-person fallback negated clauses use.
+      followsSuppressedClause = true;
       continue;
     }
     if (isNegatedMedicalRedFlagLine(lowered)) {
       sharedNegationCarries = isSharedNegationCarrier(lowered);
-      followsNegatedClause = true;
+      followsSuppressedClause = true;
       continue;
     }
     if (
@@ -643,7 +648,7 @@ function hasMedicalRedFlagInLine(line: string, patterns: string[]): boolean {
     if (patterns.some((pattern) => containsPattern(pattern, clause.text))) {
       return true;
     }
-    if (!followsNegatedClause || !lineIsFirstPerson) {
+    if (!followsSuppressedClause || !lineIsFirstPerson) {
       continue;
     }
     const mentionsThirdParty = containsPattern(
@@ -798,6 +803,10 @@ function isNegatedMedicalRedFlagLine(line: string): boolean {
     "denies cardiac symptoms",
     "not experiencing cardiac symptoms",
     "no cardiac event",
+    "no prior cardiac event",
+    "denies prior cardiac event",
+    "no prior heart attack",
+    "denies prior heart attack",
     "denies cardiac event",
     "no heart attack",
     "denies heart attack",

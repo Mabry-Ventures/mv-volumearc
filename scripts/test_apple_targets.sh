@@ -706,7 +706,7 @@ run_ui_crashed_tests_attempt() {
 erase_ui_test_device() {
   xcrun simctl shutdown "$IOS_TEST_DEVICE_NAME" 2>/dev/null || true
   sleep 3
-  xcrun simctl erase "$IOS_TEST_DEVICE_NAME" 2>/dev/null || true
+  xcrun simctl erase "$IOS_TEST_DEVICE_NAME" 2>/dev/null
 }
 
 UI_DEVICE_ERASED=0
@@ -715,8 +715,14 @@ run_ui_shard() {
   local shard="$1"
   echo "::group::UI shard: $shard"
   if [ "$UI_DEVICE_ERASED" = "0" ]; then
-    erase_ui_test_device
-    UI_DEVICE_ERASED=1
+    # Only mark the device clean when the erase actually succeeded —
+    # otherwise the next shard retries instead of running on the very
+    # polluted state the erase exists to clear (PR #363 review).
+    if erase_ui_test_device; then
+      UI_DEVICE_ERASED=1
+    else
+      echo "::warning::simctl erase failed for $IOS_TEST_DEVICE_NAME; will retry before the next shard."
+    fi
   fi
   reset_app_state
   warm_simulator_for_tests

@@ -11,8 +11,8 @@ struct CoachWelcomeCard: View {
                     Image(systemName: "waveform.and.mic")
                         .font(VA.Typography.title2)
                         .foregroundStyle(VA.Colors.primary)
-                        .frame(width: 44, height: 44)
-                        .background(VA.Colors.primary.opacity(0.12), in: Circle())
+                        .frame(width: VA.Space.avatar, height: VA.Space.avatar)
+                        .background(VA.Colors.primary.opacity(VA.Opacity.subtleFill), in: Circle())
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: VA.Space.xs) {
                         Text(String(localized: "Your Coach", comment: "Coach welcome card title"))

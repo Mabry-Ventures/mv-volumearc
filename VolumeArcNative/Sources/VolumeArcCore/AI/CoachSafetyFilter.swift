@@ -185,7 +185,7 @@ public enum CoachSafetyFilter {
         // name someone else's symptoms are excluded either way.
         let lineIsFirstPerson = containsPattern(#"\bi\b|\bi'm\b|\bi've\b"#, in: line)
         var sharedNegationCarries = false
-        var followsNegatedClause = false
+        var followsSuppressedClause = false
         for clause in medicalRedFlagClauses(in: line) {
             if !clause.separatorAllowsSharedNegation {
                 sharedNegationCarries = false
@@ -194,11 +194,17 @@ public enum CoachSafetyFilter {
             let lowered = clause.text.lowercased()
             if isStaleMedicalRedFlagLine(lowered) {
                 sharedNegationCarries = false
+                // PR #363 review (Codex P1): a stale clause suppresses
+                // ITSELF, not what follows — "I had chest pain last year,
+                // dizziness now during squats" must keep scanning the
+                // subject-bare continuation through the same first-person
+                // fallback negated clauses use.
+                followsSuppressedClause = true
                 continue
             }
             if isNegatedMedicalRedFlagLine(lowered) {
                 sharedNegationCarries = isSharedNegationCarrier(lowered)
-                followsNegatedClause = true
+                followsSuppressedClause = true
                 continue
             }
             if sharedNegationCarries,
@@ -210,7 +216,7 @@ public enum CoachSafetyFilter {
             if patterns.contains(where: { containsPattern($0, in: clause.text) }) {
                 return true
             }
-            guard followsNegatedClause, lineIsFirstPerson else { continue }
+            guard followsSuppressedClause, lineIsFirstPerson else { continue }
             let mentionsThirdParty = containsPattern(
                 #"\b(?:my|his|her|their)\s+(?:wife|husband|partner|friend|buddy|client|coach|"#
                     + #"brother|sister|mom|mother|dad|father|son|daughter|teammate)\b"#,
@@ -356,7 +362,10 @@ public enum CoachSafetyFilter {
     }
 
     private static func isNegatedMedicalRedFlagLine(_ loweredLine: String) -> Bool {
-        [
+        negatedMedicalRedFlagPhrases.contains { loweredLine.contains($0) }
+    }
+
+    private static let negatedMedicalRedFlagPhrases: [String] = [
             "no chest pain",
             "denies chest pain",
             "without chest pain",
@@ -394,6 +403,10 @@ public enum CoachSafetyFilter {
             "denies cardiac symptoms",
             "not experiencing cardiac symptoms",
             "no cardiac event",
+            "no prior cardiac event",
+            "denies prior cardiac event",
+            "no prior heart attack",
+            "denies prior heart attack",
             "denies cardiac event",
             "no heart attack",
             "denies heart attack",
@@ -413,8 +426,7 @@ public enum CoachSafetyFilter {
             "eating normally",
             "symptoms resolved",
             "resolved symptoms",
-        ].contains { loweredLine.contains($0) }
-    }
+    ]
 
     private static func isSharedNegationCarrier(_ loweredLine: String) -> Bool {
         let negatedStatePattern =

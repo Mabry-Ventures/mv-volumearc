@@ -621,6 +621,12 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
     }
 
     private func schedulePlanDraft() {
+        guard requireDraftExercises(
+            message: String(
+                localized: "A scheduled session needs at least one exercise.",
+                comment: "Toast body when scheduling an empty co-designed plan"
+            )
+        ) else { return }
         let title = planDraft.name
         let exercises = planDraftWorkoutExercises
         Task {

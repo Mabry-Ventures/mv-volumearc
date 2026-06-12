@@ -480,10 +480,22 @@ public final class WorkoutDashboardModel: ObservableObject {
             self.coachMemory = snapshot.coachMemory
             // Keep the prior list when the template read fails — collapsing
             // a persistence error into "no saved templates" hides the
-            // failure from the athlete AND from diagnostics (PR #363
-            // review). A throw here would abort the whole refresh for a
-            // secondary surface, so degrade by holding last-known-good.
-            self.savedTemplates = (try? workoutTemplateRepository?.templates()) ?? self.savedTemplates
+            // failure from the athlete, and a throw would abort the whole
+            // refresh for a secondary surface. Degrade to last-known-good
+            // and surface the failure through telemetry (PR #363 review).
+            do {
+                if let templates = try workoutTemplateRepository?.templates() {
+                    self.savedTemplates = templates
+                }
+            } catch {
+                telemetrySink.record(TelemetryEvent(
+                    category: "coach",
+                    name: "template_read_failed",
+                    severity: .warning,
+                    message: "Saved-template read failed during refresh; keeping last-known-good list.",
+                    metadata: ["error_type": String(describing: type(of: error))]
+                ))
+            }
 
             applyActiveWorkoutRecoverySnapshot(snapshot.activeWorkout)
 

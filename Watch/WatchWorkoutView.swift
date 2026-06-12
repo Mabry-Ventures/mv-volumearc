@@ -160,8 +160,10 @@ final class WatchWorkoutModel: ObservableObject {
         }
         if let snapshot = await stateStore.load() {
             activeWorkoutID = snapshot.workoutID
-            if let body = snapshot.scheduledPlanBody {
-                scheduledPlan = WatchScheduledPlanPayload.decode(from: body)
+            // Nil body must CLEAR any in-memory plan — a snapshot without
+            // a plan is the truth, not an omission (PR #363 review).
+            scheduledPlan = snapshot.scheduledPlanBody.flatMap {
+                WatchScheduledPlanPayload.decode(from: $0)
             }
             selectedAction = snapshot.selectedAction
             restEndsAt = snapshot.restEndsAt
