@@ -340,6 +340,7 @@ async function streamGemini(body: CoachRequestBody, model: string, env: Env): Pr
     try {
       const reader = upstreamResp.body!.getReader();
       let buffered = "";
+      let emittedAnyText = false;
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -355,12 +356,22 @@ async function streamGemini(body: CoachRequestBody, model: string, env: Env): Pr
             const chunk = JSON.parse(payload) as GeminiStreamChunk;
             const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
             if (text) {
+              emittedAnyText = true;
               await writer.write(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
             }
           } catch {
             // Skip malformed JSON lines; upstream occasionally emits keepalives.
           }
         }
+      }
+      if (!emittedAnyText) {
+        // An upstream stream that completes without a single content token
+        // (e.g. all candidates safety-blocked) must NOT read as success —
+        // a clean `done` here leaves the coach bubble empty and the app's
+        // fallback chain never engages. The error event makes the client
+        // treat it as a failed turn and fall back on-device.
+        await writer.write(encoder.encode(`event: error\ndata: ${JSON.stringify({ message: "empty_generation" })}\n\n`));
+        return;
       }
       await writer.write(encoder.encode(`event: done\ndata: {}\n\n`));
     } catch (err) {
