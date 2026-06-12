@@ -217,6 +217,14 @@ public struct FallbackCoachProvider: AICoachProvider {
                     return "relay_5xx"
                 case 401:
                     return "relay_401"
+                case 200:
+                    // A "failed" 200 can only be a mid-stream relay error
+                    // event — the relay reports empty generations this way
+                    // (all candidates safety-blocked upstream). The stream
+                    // path only consults this when NOTHING was yielded, so
+                    // falling back on-device is exactly the promised
+                    // behavior (PR #363 review, Codex P2).
+                    return "relay_stream_error"
                 default:
                     return nil
                 }

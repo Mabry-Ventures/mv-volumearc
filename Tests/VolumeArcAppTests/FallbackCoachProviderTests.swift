@@ -13,6 +13,17 @@ final class FallbackCoachProviderTests: XCTestCase {
 
     // MARK: - Classification: fallback-eligible
 
+    /// PR #363 review (Codex P2): a mid-stream relay error event arrives
+    /// on an HTTP 200 — it must be fallback-eligible, or an empty
+    /// generation surfaces as an error instead of the on-device answer.
+    func testStreamErrorOn200IsFallbackEligible() {
+        let reason = FallbackCoachProvider.fallbackReason(
+            for: AIRuntimeIntegrationError.relayRequestFailed(statusCode: 200, message: "Relay emitted error event")
+        )
+
+        XCTAssertEqual(reason, "relay_stream_error")
+    }
+
     func testRelayUnavailableIsFallbackEligible() {
         XCTAssertEqual(
             FallbackCoachProvider.fallbackReason(
