@@ -1250,6 +1250,26 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(weight, 65)
     }
 
+    /// PR #363 review (Codex P2): coach BOILERPLATE ("stop at any pain")
+    /// in a generated reply must not read as athlete symptom context —
+    /// only user messages and the training context arm the symptom
+    /// ceiling. A clean transcript stays at the first-exposure cap.
+    func testCoachBoilerplateDoesNotTripSymptomCeiling() async throws {
+        let model = makeDashboardModel()
+
+        let clamped = model.clampedCoachWorkoutPlan(
+            from: """
+            Back Squat: 3x5 at 200 lb. Move with intent and stop at any \
+            pain — soreness is information, not a challenge.
+            """,
+            title: "Boilerplate Plan"
+        )
+
+        let weight = try XCTUnwrap(clamped?.exercises.first?.weight)
+        XCTAssertEqual(weight, 135,
+                       "No-history first-exposure cap applies; the 60% symptom ceiling must not")
+    }
+
     /// VOL-275 Watch leg: scheduling a co-designed plan mirrors it to the
     /// watch as a `scheduledPlan` payload carrying the POST-CLAMP
     /// prescription — the WatchConnectivity payload proof from the

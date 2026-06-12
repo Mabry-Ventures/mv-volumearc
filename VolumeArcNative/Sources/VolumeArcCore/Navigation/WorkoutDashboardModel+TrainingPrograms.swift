@@ -15,7 +15,7 @@ extension WorkoutDashboardModel {
         }
         let (clamped, events) = CoachPrescriptionClamp.clamp(
             extracted,
-            input: coachPrescriptionClampInput(planResponse: response)
+            input: coachPrescriptionClampInput()
         )
         recordPrescriptionClampEvents(events, source: "coach_extraction")
         return clamped
@@ -25,7 +25,7 @@ extension WorkoutDashboardModel {
     /// top weights from logged history, the largest recent session
     /// volume, and whether the session carries symptom or red-flag
     /// context.
-    func coachPrescriptionClampInput(planResponse: String? = nil) -> CoachPrescriptionClamp.Input {
+    func coachPrescriptionClampInput() -> CoachPrescriptionClamp.Input {
         var topWeights: [String: Double] = [:]
         #if canImport(SwiftData)
         if let workoutRepository {
@@ -45,24 +45,25 @@ extension WorkoutDashboardModel {
             }
         }
         #endif
-        // PR #363 review (CodeRabbit): symptom context is session-sticky.
-        // ANY user message in the current transcript, the structured
-        // training context, or the plan-bearing response itself carrying
-        // symptom/red-flag language keeps the conservative clamp, so
-        // re-parsing an older coach reply after a benign follow-up can
-        // never silently shed the stricter bounds.
+        // PR #363 review (CodeRabbit): symptom context is session-sticky —
+        // ANY user message in the current transcript or the structured
+        // training context carrying symptom/red-flag language keeps the
+        // conservative clamp, so re-parsing an older coach reply after a
+        // benign follow-up can never shed the stricter bounds. The
+        // GENERATED response is deliberately NOT scanned (PR #363 review,
+        // Codex P2): every athlete symptom that could shape a reply
+        // arrives through a user message or the training context — both
+        // covered above — while coach boilerplate ("stop at any pain")
+        // would false-trip the symptom ceiling on ordinary plans.
         let userSymptom = coachMessages.contains { message in
             message.sender == .user
                 && CoachSafetyFilter.shouldBufferResponse(prompt: message.content, context: "")
         }
         let contextSymptom = CoachSafetyFilter.shouldBufferResponse(prompt: "", context: buildCoachContext())
-        let responseSymptom = planResponse.map {
-            CoachSafetyFilter.shouldBufferResponse(prompt: "", context: $0)
-        } ?? false
         return CoachPrescriptionClamp.Input(
             topWeightByExerciseKey: topWeights,
             maxRecentSessionVolume: recentSessions.map(\.totalVolumeLoad).max(),
-            hasSymptomContext: userSymptom || contextSymptom || responseSymptom
+            hasSymptomContext: userSymptom || contextSymptom
         )
     }
 

@@ -16,7 +16,12 @@ enum RemoteCoachKillSwitchRefresher {
               let payload = try? JSONDecoder().decode(Payload.self, from: data)
         else { return }
 
-        RemoteCoachKillSwitchStore.update(foundationModelCoachKilled: payload.fmCoachDisabled ?? false)
+        // A 200 that OMITS the flag (relay rollback / schema mismatch) must
+        // leave the cache untouched — defaulting to false here would clear
+        // an active kill switch mid-incident (PR #363 review, Codex P2).
+        // Only an explicit value updates the store.
+        guard let fmCoachDisabled = payload.fmCoachDisabled else { return }
+        RemoteCoachKillSwitchStore.update(foundationModelCoachKilled: fmCoachDisabled)
     }
 
     private struct Payload: Decodable {

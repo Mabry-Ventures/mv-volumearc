@@ -582,6 +582,10 @@ add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   'VolumeArcAppAttestService.swift',
   'VolumeArcAppAttestRelaySessionProvider.swift',
   'VolumeArcCloudConfiguration.swift',
+  # VOL-286 / PR #363: RemoteCoachKillSwitchRefresherTests pins the
+  # explicit-flag-only cache contract via a URLProtocol stub. Same
+  # compiled-into-the-test-bundle pattern as the other App-layer types.
+  'VolumeArcCoachKillSwitchRefresher.swift',
   'VolumeArcLiveActivityController.swift',
   'VolumeArcPersistenceController.swift',
   'VolumeArcPremiumCatalog.swift',
