@@ -512,6 +512,34 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertTrue(response?.lowercased().contains("medical care") == true)
     }
 
+    /// A prior safety reply persisted to memory must not poison later
+    /// benign turns via the context scan.
+    func testCoachAuthoredMemoryLineDoesNotPoisonContextScan() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "What should I lift tomorrow?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Memory: User asked: plan tomorrow
+            - Memory: Coach said: Stop the session now and seek medical care. \
+            If symptoms include chest pain or fainting, call 911.
+            """
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testAthleteAuthoredMemoryRedFlagStillEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "What should I lift tomorrow?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Memory: User asked: I got chest pain during squats today, what now?
+            """
+        )
+
+        XCTAssertNotNil(response)
+    }
+
     func testPalpitationsPromptEscalates() {
         let response = CoachSafetyFilter.medicalRedFlagResponse(
             prompt: "I have palpitations during squats. Should I keep going?",

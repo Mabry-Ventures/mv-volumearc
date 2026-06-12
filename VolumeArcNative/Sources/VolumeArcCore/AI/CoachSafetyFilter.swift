@@ -248,6 +248,7 @@ public enum CoachSafetyFilter {
     private static func hasCurrentRecoverySymptoms(inContext context: String) -> Bool {
         context
             .components(separatedBy: .newlines)
+            .filter { !$0.contains("Coach said:") }
             .contains { line in
                 let lowered = line.lowercased()
                 guard !lowered.contains("pain-free"),
@@ -260,8 +261,13 @@ public enum CoachSafetyFilter {
     }
 
     private static func hasCurrentMedicalRedFlag(inContext context: String) -> Bool {
+        // Coach-authored memory lines are excluded: a prior safety reply
+        // contains the very phrases these scans match, and one red-flag
+        // turn must not poison every later benign turn until the memory
+        // ages out. Athlete-authored lines keep full coverage.
         context
             .components(separatedBy: .newlines)
+            .filter { !$0.contains("Coach said:") }
             .contains { line in
                 var sharedNegationCarries = false
                 for clause in medicalRedFlagClauses(in: line) {

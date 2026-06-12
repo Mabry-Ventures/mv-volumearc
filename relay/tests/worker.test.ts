@@ -940,6 +940,25 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(sse).not.toContain("event: done");
   });
 
+  it("does not escalate from a prior coach safety reply in memory context", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift tomorrow?",
+      contextBlock:
+        "## Training context\n- Readiness: 86/100\n- Memory: Coach said: Stop the session now and seek medical care. If symptoms include chest pain or fainting, call 911.",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps /v1/config alive when the multiplier is mis-set negative", async () => {
     const env = makeEnv({ CONFIG_RATE_LIMIT_MULTIPLIER: "-1" });
     const response = await worker.fetch(

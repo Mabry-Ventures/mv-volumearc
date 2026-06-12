@@ -700,7 +700,10 @@ const CONTEXT_MEDICAL_RED_FLAG_PATTERNS = [
 
 function hasCurrentMedicalRedFlag(text: string): boolean {
   const patterns = CONTEXT_MEDICAL_RED_FLAG_PATTERNS;
-  return text.split(/\r?\n/).some((line) => {
+  // Coach-authored memory lines are excluded — a prior safety reply
+  // contains the very phrases these scans match, and one red-flag turn
+  // must not poison later benign turns until the memory ages out.
+  return text.split(/\r?\n/).filter((line) => !line.includes("Coach said:")).some((line) => {
     let sharedNegationCarries = false;
     for (const clause of medicalRedFlagClauses(line)) {
       if (!clause.separatorAllowsSharedNegation) {
