@@ -313,8 +313,9 @@ public enum CoachPromptTemplate {
             trend from the context to decide. If a "Recovery (Apple Health)"
             section shows HRV down >5% from baseline or sleep debt >3h, that's a
             strong deload signal in itself. If a deload is warranted, name the
-            specific intensity and volume cut. If not, propose a lighter top set
-            and reassess tomorrow.
+            specific intensity and volume cut in concrete numbers (a percentage
+            or sets x reps). If not, propose a lighter top set and reassess
+            tomorrow.
             """
         case .form:
             return """
@@ -362,9 +363,11 @@ public enum CoachPromptTemplate {
         current 7-day training week. Do not provide 14 days, a second week,
         or multi-week programming unless the athlete explicitly asks for
         that horizon. Use the active program, weekly schedule, next-up
-        movement, readiness, and recovery context when present; if the
-        weekly schedule is not present, say only the next known session is
-        available and avoid inventing additional days.
+        movement, readiness, and recovery context when present, and ground
+        the plan visibly: name the readiness or recovery state the week is
+        built around and give prescribed days an RPE target. If the
+        weekly schedule is not present, say only the next known session
+        is available and avoid inventing additional days.
         """
     }
 

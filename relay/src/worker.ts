@@ -941,7 +941,7 @@ function intentEnvelope(intent: CoachRequestBody["intent"]): string {
       return [
         "The athlete is considering a deload.",
         "Use readiness, recent RPE trend, HRV delta, sleep debt, and training load to decide.",
-        "If a deload is warranted, clearly name the deload/back-off call and a specific intensity or volume cut.",
+        "If a deload is warranted, clearly name the deload/back-off call and a specific intensity or volume cut in concrete numbers (a percentage or sets x reps).",
       ].join(" ");
     case "form":
       return [
@@ -960,6 +960,7 @@ function intentEnvelope(intent: CoachRequestBody["intent"]): string {
         "The athlete wants an exercise substitution.",
         "Use the next-up exercise from the context as the anchor and name it or its primary movement pattern in the answer.",
         "Recommend a substitute that hits the same pattern, and choose a pain-free option when pain or stiffness is mentioned.",
+        "Give the substitute's prescription as explicit sets and reps.",
       ].join(" ");
     case "planning":
       return [
@@ -967,6 +968,7 @@ function intentEnvelope(intent: CoachRequestBody["intent"]): string {
         "Treat today as one next known session, and this week/current week as no more than the current 7-day training week.",
         "Do not provide 14 days, a second week, or multi-week programming unless explicitly requested.",
         "Use the active program, weekly schedule, next-up movement, readiness, and recovery context; if the weekly schedule is missing, say only the next known session is available.",
+        "Ground the plan visibly: name the readiness or recovery state the week is built around, and give prescribed days an RPE target.",
       ].join(" ");
     case "free":
       return [
