@@ -187,13 +187,18 @@ public enum CoachPrescriptionClamp {
                 }
             } else if planImplements == storedImplements {
                 heavyClass.append(weight)
-            } else if storedImplements.isEmpty, planImplements.isDisjoint(with: lightImplementTokens) {
+            } else if storedImplements.isEmpty,
+                      planImplements.isDisjoint(with: lightImplementTokens),
+                      storedTokens == planTokens.subtracting(planImplements) {
                 // PR #363 review (Codex P2): unqualified history IS the
                 // heavy/barbell lift by the same convention as unqualified
                 // plan names below ("Bench Press" means the barbell lift),
                 // so a barbell-qualified plan inherits catalog-ID history
                 // like `back-squat` instead of dropping to the no-history
-                // cap. Light-implement plans still never inherit it.
+                // cap — but ONLY when the delta is exactly the implement
+                // token. A sparse custom key ("press") passing the broad
+                // subset gate above must not lend its top to
+                // `barbell-bench-press`. Light plans still never inherit.
                 heavyClass.append(weight)
             }
             // Truly mismatched implements (e.g. dumbbell plan vs barbell

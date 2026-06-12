@@ -27,8 +27,18 @@ extension WorkoutDashboardModel {
     /// context.
     func coachPrescriptionClampInput() -> CoachPrescriptionClamp.Input {
         var topWeights: [String: Double] = [:]
+        // PR #363 review (CodeRabbit): the session-volume guard reads the
+        // PERSISTED sessions, not the published snapshot — before the
+        // first refresh `recentSessions` is empty and the volume cap
+        // would silently skip on the start/schedule/template backstops.
+        // The snapshot is only the fallback when no repository exists.
+        var maxRecentVolume = recentSessions.map(\.totalVolumeLoad).max()
         #if canImport(SwiftData)
         if let workoutRepository {
+            if let persisted = try? workoutRepository.recentSessions(limit: 20),
+               let persistedMax = persisted.map(\.totalVolumeLoad).max() {
+                maxRecentVolume = persistedMax
+            }
             // PR #363 review (Codex P1, two rounds): never truncate
             // history — dropping a logged exercise would swap the
             // athlete's demonstrated-top cap for the HIGHER
@@ -75,7 +85,7 @@ extension WorkoutDashboardModel {
         let contextSymptom = CoachSafetyFilter.shouldBufferResponse(prompt: "", context: buildCoachContext())
         return CoachPrescriptionClamp.Input(
             topWeightByExerciseKey: topWeights,
-            maxRecentSessionVolume: recentSessions.map(\.totalVolumeLoad).max(),
+            maxRecentSessionVolume: maxRecentVolume,
             hasSymptomContext: userSymptom || contextSymptom
         )
     }

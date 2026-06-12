@@ -1250,6 +1250,33 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(weight, 65)
     }
 
+    /// PR #363 review (CodeRabbit): the session-volume guard must read
+    /// PERSISTED history — before the first refresh the published
+    /// `recentSessions` snapshot is empty, and a nil max volume silently
+    /// skipped the cap on the start/schedule/template backstops.
+    func testSessionVolumeCapEngagesBeforeFirstRefresh() async throws {
+        let model = makeDashboardModel()
+
+        let workout = try workoutRepository.createWorkout(title: "Light Bench Day")
+        try workoutRepository.appendSet(
+            WorkoutSetPerformance(weight: 65, reps: 8, rpe: 7, completedAt: .now),
+            forExercise: "bench-press",
+            to: workout.identifier
+        )
+        try workoutRepository.completeWorkout(identifier: workout.identifier)
+
+        XCTAssertTrue(model.recentSessions.isEmpty,
+                      "Precondition: the published snapshot must not be the volume source")
+
+        let clamped = model.clampedCoachWorkoutPlan(
+            from: "Bench Press: 5x10 at 70 lb",
+            title: "Coach Workout"
+        )
+        let exercise = try XCTUnwrap(clamped?.exercises.first)
+        XCTAssertLessThan(exercise.sets, 5,
+                          "A 3500 lb session against a 520 lb recent max must trip the volume cap pre-refresh")
+    }
+
     /// PR #363 review (Codex P2): history logged under a CATALOG ID
     /// ("back-squat") must satisfy a coach plan that names the implement
     /// ("Barbell Back Squat") — the catalog bridges the implement token,

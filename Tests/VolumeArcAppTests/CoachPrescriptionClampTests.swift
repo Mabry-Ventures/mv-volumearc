@@ -94,6 +94,24 @@ final class CoachPrescriptionClampTests: XCTestCase {
                        "Unqualified history is barbell-class; a dumbbell plan must keep its first-exposure cap")
     }
 
+    /// PR #363 review (CodeRabbit): the subset gate admits sparse custom
+    /// keys ("press" ⊂ "barbell-bench-press"), so the catalog-ID bridge
+    /// must demand an implement-only delta — unrelated history can never
+    /// widen a qualified plan's cap.
+    func testSparseUnqualifiedKeyDoesNotLendHistoryToQualifiedPlan() {
+        let input = CoachPrescriptionClamp.Input(
+            topWeightByExerciseKey: ["press": 200]
+        )
+
+        let (plan, events) = CoachPrescriptionClamp.clamp(
+            makePlan([makeExercise(name: "Barbell Bench Press", weight: 300)]), input: input
+        )
+
+        XCTAssertEqual(plan.exercises.first?.weight, CoachPrescriptionClamp.noHistoryBarbellCap,
+                       "A sparse custom key must not widen the demonstrated-top cap")
+        XCTAssertEqual(events.map(\.kind), [.noHistoryCap])
+    }
+
     // MARK: - No-history first-exposure caps
 
     func testNoHistoryBarbellCap() {
