@@ -488,12 +488,11 @@ public enum CoachSafetyFilter {
         ].contains { containsPattern($0, in: trimmed) }
     }
 
-    /// Compiled-regex cache. `String.range(of:options:)` recompiles the
-    /// ICU pattern on every call, and the safety scans run hundreds of
-    /// matches per coach turn across per-clause and per-line loops —
-    /// enough to put coach first-token p50 over its budget (PR #363
-    /// perf, VOL-99). NSCache is thread-safe; scans run from the main
-    /// actor and streaming tasks.
+    // Compiled-regex cache. `String.range(of:options:)` recompiles the
+    // ICU pattern on every call, and the safety scans run hundreds of
+    // matches per coach turn across per-clause and per-line loops —
+    // enough to put coach first-token p50 over its budget (PR #363
+    // perf, VOL-99). Scans run from the main actor and streaming tasks.
     // NSCache is documented thread-safe ("you can add, remove, and query
     // items in the cache from different threads without having to lock
     // the cache yourself"), which is exactly the shared-mutable-state
