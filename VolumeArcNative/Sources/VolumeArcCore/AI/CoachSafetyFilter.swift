@@ -79,7 +79,10 @@ public enum CoachSafetyFilter {
         return medicalRedFlagResponseText()
     }
 
-    public static func medicalRedFlagResponse(from text: String) -> String? {
+    /// Built once: this array is consulted on every coach turn, and
+    /// per-call string assembly was a measurable slice of the breached
+    /// coach first-token budget (PR #363 perf, VOL-99).
+    private static let redFlagPatterns: [String] = {
         let nearby = "[\\s\\S]{0,80}"
         // An unowned pregnancy term describes the asker ("20 weeks
         // pregnant and still squatting"), so pregnancy patterns exclude
@@ -92,7 +95,7 @@ public enum CoachSafetyFilter {
             "(?<!\\b(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate|she)\\s(?:is|was)\\s)(?<!she'?s\\s)"
         let pregnancySubjectLookahead =
             "(?!\\s+(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate)\\b)"
-        let redFlagPatterns = [
+        return [
             "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
                 nearby + "\\bchest\\s+pain\\b",
             "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
@@ -139,6 +142,9 @@ public enum CoachSafetyFilter {
             "\\b(i\\s*(?:feel|felt|have|had|get|got|notice|noticed)|i\\W?m\\s+having|my)\\b" +
                 nearby + "\\b(?:palpitations?|arrhythmia)\\b",
         ]
+    }()
+
+    public static func medicalRedFlagResponse(from text: String) -> String? {
         let minorSafetyConcern =
             containsPattern("\\b(i\\s*am|i\\W?m|age(?:d)?|as\\s+a)\\s+1[0-7]\\b", in: text) ||
             containsPattern("\\bunder\\s+18\\b", in: text) ||
@@ -482,8 +488,31 @@ public enum CoachSafetyFilter {
         ].contains { containsPattern($0, in: trimmed) }
     }
 
+    /// Compiled-regex cache. `String.range(of:options:)` recompiles the
+    /// ICU pattern on every call, and the safety scans run hundreds of
+    /// matches per coach turn across per-clause and per-line loops —
+    /// enough to put coach first-token p50 over its budget (PR #363
+    /// perf, VOL-99). NSCache is thread-safe; scans run from the main
+    /// actor and streaming tasks.
+    // NSCache is documented thread-safe ("you can add, remove, and query
+    // items in the cache from different threads without having to lock
+    // the cache yourself"), which is exactly the shared-mutable-state
+    // guarantee the strict-concurrency checker can't see.
+    nonisolated(unsafe) private static let compiledPatternCache = NSCache<NSString, NSRegularExpression>()
+
     private static func containsPattern(_ pattern: String, in text: String) -> Bool {
-        text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+        let key = pattern as NSString
+        let regex: NSRegularExpression
+        if let cached = compiledPatternCache.object(forKey: key) {
+            regex = cached
+        } else if let compiled = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) {
+            compiledPatternCache.setObject(compiled, forKey: key)
+            regex = compiled
+        } else {
+            return false
+        }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        return regex.firstMatch(in: text, range: range) != nil
     }
 
     private static let recoverySymptomPatterns = [
