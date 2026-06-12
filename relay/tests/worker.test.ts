@@ -779,7 +779,7 @@ describe("volumearc-ai-relay App Attest auth", () => {
     const systemPrompt = upstreamBody.systemInstruction.parts[0].text as string;
     const userMessage = upstreamBody.contents.at(-1).parts[0].text as string;
     expect(systemPrompt).toContain("Data-driven");
-    expect(systemPrompt).toContain("cite at least one specific number");
+    expect(systemPrompt).toContain("Cite at least one specific number");
     expect(systemPrompt).toContain("do not use the words push, PR, or go heavier");
     expect(userMessage).toContain("[VAC:tmpl] intent=recovery style=analytical");
     expect(userMessage).toContain("HRV delta");
@@ -918,6 +918,60 @@ describe("volumearc-ai-relay App Attest auth", () => {
     const env = makeEnv();
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
       new Response('data: {"candidates":[{"content":{"parts":[{"text":""}]}}]}\n\ndata: [DONE]\n\n', {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+      }),
+    );
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift today?",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    const sse = await response.text();
+    expect(sse).toContain("event: error");
+    expect(sse).toContain("empty_generation");
+    expect(sse).not.toContain("event: done");
+  });
+
+  it("joins multi-part chunks and excludes thought parts from the stream", async () => {
+    const env = makeEnv();
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response(
+        'data: {"candidates":[{"content":{"parts":[{"thought":true,"text":"reasoning"},{"text":"Hold "},{"text":"185 lb"}]}}]}\n\n' +
+          'data: {"candidates":[{"content":{"parts":[{"text":""},{"text":" for 3 sets of 5."}]}}]}\n\n',
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      ),
+    );
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift today?",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    const sse = await response.text();
+    expect(sse).toContain("Hold 185 lb");
+    expect(sse).toContain(" for 3 sets of 5.");
+    expect(sse).not.toContain("reasoning");
+    expect(sse).toContain("event: done");
+  });
+
+  it("treats a whitespace-only generation as empty, not done", async () => {
+    const env = makeEnv();
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response('data: {"candidates":[{"content":{"parts":[{"text":"\\n"}]}}]}\n\ndata: [DONE]\n\n', {
         status: 200,
         headers: { "content-type": "text/event-stream" },
       }),

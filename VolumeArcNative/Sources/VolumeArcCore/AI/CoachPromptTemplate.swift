@@ -343,7 +343,8 @@ public enum CoachPromptTemplate {
             The athlete wants an exercise substitution. Use the next-up exercise
             from the context as the anchor. Recommend a substitute that hits the
             same primary movement pattern with the equipment they have, and give
-            the substitute's prescription as explicit sets and reps.
+            the substitute's prescription as explicit sets and reps; never
+            omit them.
             """
         case .planning:
             return planningEnvelope
