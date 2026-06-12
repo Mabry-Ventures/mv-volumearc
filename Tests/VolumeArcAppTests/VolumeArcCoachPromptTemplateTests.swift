@@ -29,6 +29,14 @@ final class VolumeArcCoachPromptTemplateTests: XCTestCase {
         ))
     }
 
+    func testRestPauseMovementStillParses() throws {
+        let plan = try XCTUnwrap(CoachWorkoutPlanExtractor.plan(
+            from: "Rest-Pause Bench Press: 3 sets of 8 at 185 lb",
+            title: "Coach Workout"
+        ))
+        XCTAssertEqual(plan.exercises.first?.name, "Rest-Pause Bench Press")
+    }
+
     func testTimedMovementStillParses() throws {
         let plan = try XCTUnwrap(CoachWorkoutPlanExtractor.plan(
             from: "Plank: 3 sets of 30 seconds",

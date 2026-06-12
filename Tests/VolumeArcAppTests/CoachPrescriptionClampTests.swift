@@ -98,6 +98,17 @@ final class CoachPrescriptionClampTests: XCTestCase {
     /// keys ("press" ⊂ "barbell-bench-press"), so the catalog-ID bridge
     /// must demand an implement-only delta — unrelated history can never
     /// widen a qualified plan's cap.
+    /// PR #363 review (CodeRabbit): only the BARBELL alias inherits
+    /// unqualified history — machine/smith implements load differently.
+    func testMachinePlanDoesNotInheritUnqualifiedHistory() {
+        let table = ["bench-press": 315.0]
+
+        XCTAssertNil(
+            CoachPrescriptionClamp.topWeight(for: "Machine Bench Press", in: table),
+            "Machine plans must stay at the no-history cap, not inherit barbell-convention history"
+        )
+    }
+
     func testSparseUnqualifiedKeyDoesNotLendHistoryToQualifiedPlan() {
         let input = CoachPrescriptionClamp.Input(
             topWeightByExerciseKey: ["press": 200]

@@ -195,8 +195,11 @@ public enum CoachWorkoutPlanExtractor {
     }
 
     private static func isRestInstructionName(_ name: String) -> Bool {
+        // Instruction-shaped only: the rest word ends the name or leads
+        // into instruction phrasing. "Rest-Pause Bench Press" is a real
+        // movement and must keep parsing (PR #363 review).
         name.range(
-            of: #"^(?:rest|cool[\s-]?down|warm[\s-]?up)\b"#,
+            of: #"^(?:rest|cool[\s-]?down|warm[\s-]?up)(?:$|\s+(?:for|period|between|\d))"#,
             options: [.regularExpression, .caseInsensitive]
         ) != nil
     }
