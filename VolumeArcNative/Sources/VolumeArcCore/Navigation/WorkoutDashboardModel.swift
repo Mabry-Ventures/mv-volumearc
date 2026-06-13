@@ -924,7 +924,11 @@ public final class WorkoutDashboardModel: ObservableObject {
               index != activeSessionExerciseIndex
         else { return }
 
-        let previousExercise = activeSessionPlan.exercises[activeSessionExerciseIndex]
+        // The index can legitimately sit one past the end after the
+        // final lift was skipped (the parked "no lifts remain" state) —
+        // subscripting it unguarded crashed when the athlete then tapped
+        // an earlier exercise in the workout map.
+        let previousExercise = activeSessionPlan.exercise(at: activeSessionExerciseIndex)
         let nextExercise = activeSessionPlan.exercises[index]
         activeSessionExerciseIndex = index
         loggedSetCountForActiveExercise = min(
@@ -938,7 +942,8 @@ public final class WorkoutDashboardModel: ObservableObject {
             severity: .info,
             message: "Moved active session to another exercise.",
             metadata: [
-                "from_exercise_id": Self.exerciseIdentifier(named: previousExercise.name),
+                "from_exercise_id": previousExercise
+                    .map { Self.exerciseIdentifier(named: $0.name) } ?? "none",
                 "to_exercise_id": Self.exerciseIdentifier(named: nextExercise.name),
             ]
         ))

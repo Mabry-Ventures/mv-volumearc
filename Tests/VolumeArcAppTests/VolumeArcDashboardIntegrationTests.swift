@@ -932,6 +932,47 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertEqual(relaunched.loggedSetCountForActiveExercise, 0)
     }
 
+    /// PR #363 round 18: from the parked state (final lift skipped),
+    /// tapping an earlier exercise in the workout map must reload it,
+    /// not crash on the out-of-range parked index.
+    func testReselectingEarlierExerciseFromParkedStateReloadsIt() async throws {
+        let model = makeDashboardModel(
+            activeSessionStateStore: InMemoryActiveWorkoutSessionStateStore()
+        )
+        let plan = WorkoutSessionPlan(
+            title: "Two-lift day",
+            exercises: [
+                WeeklyWorkoutExercise(
+                    name: "Bench Press",
+                    sets: 1,
+                    reps: 5,
+                    weight: 185,
+                    targetRPE: 8,
+                    restSeconds: 150
+                ),
+                WeeklyWorkoutExercise(
+                    name: "Barbell Row",
+                    sets: 3,
+                    reps: 8,
+                    weight: 135,
+                    targetRPE: 7,
+                    restSeconds: 120
+                ),
+            ]
+        )
+
+        await model.startWorkoutSession(plan: plan)
+        await model.logRecommendedSet()
+        model.moveActiveSession(toExerciseAt: 1)
+        _ = model.skipActiveSessionExercise()
+        XCTAssertNil(model.activeSessionExercise)
+
+        model.moveActiveSession(toExerciseAt: 0)
+
+        XCTAssertEqual(model.activeSessionExercise?.name, "Bench Press")
+        XCTAssertEqual(model.activeSessionExerciseIndex, 0)
+    }
+
     func testSkippingCurrentExerciseRemovesItWithoutInflatingSetProgress() async throws {
         let activeSessionStateStore = InMemoryActiveWorkoutSessionStateStore()
         let model = makeDashboardModel(activeSessionStateStore: activeSessionStateStore)
