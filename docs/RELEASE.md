@@ -36,6 +36,16 @@ Live App Store Connect state checked on 2026-06-06:
 
 There is **no live tag-triggered TestFlight workflow** in App Store Connect today. Treat any older `Tag -> TestFlight` references as stale until a new Xcode Cloud workflow with a `v*` tag trigger is intentionally created and verified.
 
+#### Conserving Xcode Cloud build minutes
+
+Xcode Cloud is metered (the allotment was exhausted once and bumped to 250 hours). `VolumeArc PR` and `VolumeArc Main` re-run iOS build/test that the **free self-hosted `ci.yml` "Build & Test" job already covers**, so they must not fire on changes that can't affect the iOS build. Both workflows carry a **"Files and Folders" start condition that excludes** the non-iOS trees — Xcode Cloud skips a build when *every* changed file falls inside an excluded folder. Configured exclusions (set in App Store Connect → Xcode Cloud → workflow → Start Conditions; not expressible in-repo):
+
+- `relay/` — Cloudflare Worker (TypeScript); has its own `vitest` coverage.
+- `marketing/` — Next.js site; gated by `marketing.yml`.
+- `docs/` — documentation only.
+
+Pushes isolated to those trees (most of PR #363's churn was relay/eval/doc rounds) no longer spend Xcode Cloud minutes. Any change touching `App/`, `VolumeArcNative/`, `Watch/`, `VolumeArcApple.xcodeproj/`, `TestPlans/`, `Package.*`, `ci_scripts/`, or `.swiftlint.yml` still triggers a full Xcode Cloud build. The `Internal Testing` archive workflow is manual, so it is unaffected and remains the only intended consumer of Xcode Cloud minutes for actual TestFlight cuts.
+
 ### Main → Internal TestFlight flow
 
 1. Merge all changes to `main` after required GitHub and Xcode Cloud PR gates pass.
