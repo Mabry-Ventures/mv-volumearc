@@ -846,6 +846,48 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         })
     }
 
+    /// PR #363 round 17: skipping the FINAL planned lift must park the
+    /// session in the "no planned lifts remain" state, not rewind to an
+    /// already-completed exercise.
+    func testSkippingFinalExerciseParksSessionInsteadOfRewinding() async throws {
+        let model = makeDashboardModel(
+            activeSessionStateStore: InMemoryActiveWorkoutSessionStateStore()
+        )
+        let plan = WorkoutSessionPlan(
+            title: "Two-lift day",
+            exercises: [
+                WeeklyWorkoutExercise(
+                    name: "Bench Press",
+                    sets: 1,
+                    reps: 5,
+                    weight: 185,
+                    targetRPE: 8,
+                    restSeconds: 150
+                ),
+                WeeklyWorkoutExercise(
+                    name: "Barbell Row",
+                    sets: 3,
+                    reps: 8,
+                    weight: 135,
+                    targetRPE: 7,
+                    restSeconds: 120
+                ),
+            ]
+        )
+
+        await model.startWorkoutSession(plan: plan)
+        await model.logRecommendedSet()
+        model.moveActiveSession(toExerciseAt: 1)
+
+        let outcome = try XCTUnwrap(model.skipActiveSessionExercise())
+
+        XCTAssertEqual(outcome.skippedExercise, "Barbell Row")
+        XCTAssertNil(outcome.nextExercise)
+        XCTAssertNil(model.activeSessionExercise)
+        XCTAssertEqual(model.activeSessionPlan?.exercises.count, 1)
+        XCTAssertTrue(model.isSessionActive)
+    }
+
     func testSkippingCurrentExerciseRemovesItWithoutInflatingSetProgress() async throws {
         let activeSessionStateStore = InMemoryActiveWorkoutSessionStateStore()
         let model = makeDashboardModel(activeSessionStateStore: activeSessionStateStore)

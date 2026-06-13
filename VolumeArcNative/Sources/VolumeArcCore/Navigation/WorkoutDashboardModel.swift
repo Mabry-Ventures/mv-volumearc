@@ -969,11 +969,20 @@ public final class WorkoutDashboardModel: ObservableObject {
                 targetRPE: activeSessionPlan.targetRPE,
                 exercises: exercises
             )
-            activeSessionExerciseIndex = min(skippedIndex, exercises.count - 1)
-            loggedSetCountForActiveExercise = min(
-                loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] ?? 0,
-                max(1, exercises[activeSessionExerciseIndex].sets)
-            )
+            if skippedIndex >= exercises.count {
+                // Skipping the FINAL lift must not rewind to a completed
+                // one: parking the index one past the end makes
+                // activeSessionExercise nil, which is the "No planned
+                // lifts remain" state the skip toast already models.
+                activeSessionExerciseIndex = exercises.count
+                loggedSetCountForActiveExercise = 0
+            } else {
+                activeSessionExerciseIndex = skippedIndex
+                loggedSetCountForActiveExercise = min(
+                    loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] ?? 0,
+                    max(1, exercises[activeSessionExerciseIndex].sets)
+                )
+            }
             persistActiveSessionStateIfNeeded()
         }
 
