@@ -67,7 +67,12 @@ enabled = true
 # stable `gemini-3.5-flash` instead of the hot-swapped latest alias.
 MODEL_DEFAULT = "gemini-3.1-flash-lite"
 MODEL_PREMIUM = "gemini-3.5-flash"
-MAX_OUTPUT_TOKENS = "800"
+# 4096, not 800: the premium tier is a thinking model whose thoughts bill
+# against this budget. At 800 total, thinking starved the visible answer
+# to mid-word cutoffs (eval 27452720641); 4096 leaves room for a complete
+# answer after a bounded 512-token thinking budget. Billed on tokens
+# actually generated, so short answers don't cost the full budget.
+MAX_OUTPUT_TOKENS = "4096"
 REQUEST_TIMEOUT_MS = "45000"
 # VOL-245: staging rate limit raised from production's 30/10min to
 # 200/10min so the 47-fixture nightly eval run completes in a single

@@ -1011,7 +1011,7 @@ describe("volumearc-ai-relay App Attest auth", () => {
     proRequest.headers.set("X-Coach-Tier", "pro");
     await worker.fetch(proRequest, env);
     const proBody = JSON.parse((fetch as ReturnType<typeof vi.fn>).mock.calls.at(-1)![1].body as string);
-    expect(proBody.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 128 });
+    expect(proBody.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 512 });
 
     const liteBody2 = JSON.stringify({
       intent: "progression",
