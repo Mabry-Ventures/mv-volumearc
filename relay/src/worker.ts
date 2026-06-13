@@ -295,6 +295,12 @@ async function streamGemini(body: CoachRequestBody, model: string, env: Env): Pr
       // variance across consecutive identical runs).
       temperature: usesFallbackRendering ? 0.35 : 0.4,
       maxOutputTokens: Number.parseInt(env.MAX_OUTPUT_TOKENS, 10) || 800,
+      // The premium tier is a thinking model and its thoughts bill
+      // against maxOutputTokens. Left unbounded, dynamic thinking
+      // starved the visible answer down to a mid-word cutoff (eval run
+      // 27449698129 row 09) or a whitespace-only stream (run
+      // 27446605564 row 26). 128 is the model's minimum budget.
+      ...(model === env.MODEL_PREMIUM ? { thinkingConfig: { thinkingBudget: 128 } } : {}),
       responseMimeType: "text/plain",
     },
     safetySettings: [
@@ -341,12 +347,20 @@ async function streamGemini(body: CoachRequestBody, model: string, env: Env): Pr
       const reader = upstreamResp.body!.getReader();
       let buffered = "";
       let emittedAnyText = false;
-      while (true) {
+      let upstreamDone = false;
+      while (!upstreamDone) {
         const { value, done } = await reader.read();
-        if (done) break;
-        buffered += decoder.decode(value, { stream: true });
+        upstreamDone = done;
+        if (done) {
+          // Flush: a final data line without a trailing newline (and
+          // any multibyte tail held by the decoder) would otherwise be
+          // dropped with the stream still ending in a clean done.
+          buffered += decoder.decode();
+        } else {
+          buffered += decoder.decode(value, { stream: true });
+        }
         const lines = buffered.split("\n");
-        buffered = lines.pop() ?? "";
+        buffered = upstreamDone ? "" : (lines.pop() ?? "");
         for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed || !trimmed.startsWith("data:")) continue;

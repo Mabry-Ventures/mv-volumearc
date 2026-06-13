@@ -994,6 +994,64 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(sse).not.toContain("event: done");
   });
 
+  it("pins a thinking budget for the pro tier only", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift today?",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const proHeaders = await appAttestAuthHeaders(env, body);
+    const proRequest = coachRequest(proHeaders, body);
+    proRequest.headers.set("X-Coach-Tier", "pro");
+    await worker.fetch(proRequest, env);
+    const proBody = JSON.parse((fetch as ReturnType<typeof vi.fn>).mock.calls.at(-1)![1].body as string);
+    expect(proBody.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 128 });
+
+    const liteBody2 = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift today?",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+    await worker.fetch(coachRequest(await appAttestAuthHeaders(env, liteBody2), liteBody2), env);
+    const liteUpstream = JSON.parse((fetch as ReturnType<typeof vi.fn>).mock.calls.at(-1)![1].body as string);
+    expect(liteUpstream.generationConfig.thinkingConfig).toBeUndefined();
+  });
+
+  it("flushes a final upstream line that has no trailing newline", async () => {
+    const env = makeEnv();
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response(
+        'data: {"candidates":[{"content":{"parts":[{"text":"Hold 185 lb"}]}}]}\n\n' +
+          'data: {"candidates":[{"content":{"parts":[{"text":" for 3 sets of 5."}]}}]}',
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      ),
+    );
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift today?",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    const sse = await response.text();
+    expect(sse).toContain("Hold 185 lb");
+    expect(sse).toContain(" for 3 sets of 5.");
+    expect(sse).toContain("event: done");
+  });
+
   it("does not escalate from a prior coach safety reply in memory context", async () => {
     const env = makeEnv();
     const body = JSON.stringify({
