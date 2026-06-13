@@ -650,14 +650,21 @@ public final class WorkoutDashboardModel: ObservableObject {
         if loggedSetCountsByExerciseIndex.isEmpty, state.loggedSetCountForActiveExercise > 0 {
             loggedSetCountsByExerciseIndex[state.activeExerciseIndex] = state.loggedSetCountForActiveExercise
         }
-        let maxIndex = max(0, state.plan.exercises.count - 1)
-        activeSessionExerciseIndex = min(max(0, state.activeExerciseIndex), maxIndex)
-        let activeSetCount = state.plan.exercise(at: activeSessionExerciseIndex).map { max(1, $0.sets) } ?? 1
-        loggedSetCountForActiveExercise = min(
-            max(0, loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] ?? state.loggedSetCountForActiveExercise),
-            activeSetCount
-        )
-        loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] = loggedSetCountForActiveExercise
+        // Skipping the final planned lift parks the index one past the
+        // end ("no planned lifts remain"), and that state persists.
+        // Restore must keep the parked index rather than clamp it back
+        // onto the last in-range lift, or a force-quit resurrects the
+        // completed-exercise rewind the skip path just removed.
+        activeSessionExerciseIndex = min(max(0, state.activeExerciseIndex), state.plan.exercises.count)
+        if let restoredExercise = state.plan.exercise(at: activeSessionExerciseIndex) {
+            loggedSetCountForActiveExercise = min(
+                max(0, loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] ?? state.loggedSetCountForActiveExercise),
+                max(1, restoredExercise.sets)
+            )
+            loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] = loggedSetCountForActiveExercise
+        } else {
+            loggedSetCountForActiveExercise = 0
+        }
     }
 
     private func advanceActiveSessionPlanAfterLoggedSet() {

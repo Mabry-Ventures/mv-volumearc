@@ -888,6 +888,50 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertTrue(model.isSessionActive)
     }
 
+    /// PR #363 round 17 follow-up: the parked state persists as an index
+    /// one past the end, and restore used to clamp it back onto the last
+    /// completed lift — so a force-quit after skipping the final lift
+    /// resurrected the rewind on relaunch.
+    func testSkippedFinalExerciseStaysParkedAcrossRelaunch() async throws {
+        let activeSessionStateStore = InMemoryActiveWorkoutSessionStateStore()
+        let model = makeDashboardModel(activeSessionStateStore: activeSessionStateStore)
+        let plan = WorkoutSessionPlan(
+            title: "Two-lift day",
+            exercises: [
+                WeeklyWorkoutExercise(
+                    name: "Bench Press",
+                    sets: 1,
+                    reps: 5,
+                    weight: 185,
+                    targetRPE: 8,
+                    restSeconds: 150
+                ),
+                WeeklyWorkoutExercise(
+                    name: "Barbell Row",
+                    sets: 3,
+                    reps: 8,
+                    weight: 135,
+                    targetRPE: 7,
+                    restSeconds: 120
+                ),
+            ]
+        )
+
+        await model.startWorkoutSession(plan: plan)
+        await model.logRecommendedSet()
+        model.moveActiveSession(toExerciseAt: 1)
+        _ = try XCTUnwrap(model.skipActiveSessionExercise())
+        XCTAssertNil(model.activeSessionExercise)
+
+        let relaunched = makeDashboardModel(activeSessionStateStore: activeSessionStateStore)
+        await relaunched.refresh()
+
+        XCTAssertTrue(relaunched.isSessionActive)
+        XCTAssertNil(relaunched.activeSessionExercise)
+        XCTAssertEqual(relaunched.activeSessionPlan?.exercises.map(\.name), ["Bench Press"])
+        XCTAssertEqual(relaunched.loggedSetCountForActiveExercise, 0)
+    }
+
     func testSkippingCurrentExerciseRemovesItWithoutInflatingSetProgress() async throws {
         let activeSessionStateStore = InMemoryActiveWorkoutSessionStateStore()
         let model = makeDashboardModel(activeSessionStateStore: activeSessionStateStore)
