@@ -1052,6 +1052,46 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(sse).toContain("event: done");
   });
 
+  it.each([
+    ["I am dizzy during squats"],
+    ["I am having trouble breathing after squats"],
+    ["I have breathing trouble mid-set"],
+  ])("short-circuits spelled-out red flag: %s", async (question) => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question,
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps third-party modal pregnancy as a coaching question", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "My wife might be pregnant; should I train heavy this week?",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("does not escalate from a prior coach safety reply in memory context", async () => {
     const env = makeEnv();
     const body = JSON.stringify({

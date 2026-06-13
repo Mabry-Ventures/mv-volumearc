@@ -92,25 +92,28 @@ public enum CoachSafetyFilter {
         // ("my pregnant wife") routes to normal coaching. Mirrored in
         // relay/src/worker.ts.
         let thirdPartyPregnancyGuard =
-            "(?<!\\b(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate|she)\\s(?:is|was)\\s)(?<!she'?s\\s)"
+            "(?<!\\b(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate|she)" +
+            "\\s(?:is|was|might\\sbe|may\\sbe|could\\sbe|will\\sbe|just\\sgot|got|became)\\s)(?<!she'?s\\s)"
         let pregnancySubjectLookahead =
             "(?!\\s+(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate)\\b)"
         return [
-            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|i\\s+am|my)\\b" +
                 nearby + "\\bchest\\s+pain\\b",
-            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|i\\s+am|my)\\b" +
                 nearby + "\\bpain\\s+in\\s+(?:(?:the|my|your|his|her|their|its)\\s+)?chest\\b",
-            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|i\\s+am|my)\\b" +
                 nearby + "\\bdizz(?:y|iness)\\b",
-            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|i\\s+am|my)\\b" +
                 nearby + "\\blightheaded\\b",
-            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|i\\s+am|my)\\b" +
                 nearby + "\\bfaint(?:ed|ing)?\\b",
             "\\b(i\\s*(?:passed\\s+out|blacked\\s+out|have\\s+syncope|had\\s+syncope)|i\\W?ve\\s+(?:passed|blacked)\\s+out)\\b",
-            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|my)\\b" +
+            "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|i\\s+am|my)\\b" +
                 nearby +
                 "\\b(?:severe\\s+)?short(?:ness)?\\s+of\\s+breath\\b",
-            "\\b(i\\s*(?:can'?t|cannot)\\s+breathe|hard\\s+to\\s+breathe)\\b",
+            "\\b(i\\s*(?:can'?t|cannot)\\s+breathe|hard\\s+to\\s+breathe|" +
+                "(?:having\\s+|have\\s+|had\\s+|got\\s+)?trouble\\s+breathing|" +
+                "breathing\\s+trouble|struggling\\s+to\\s+breathe)\\b",
             // The wide gap means the guard must sit on the term itself:
             // "I am careful since my wife is pregnant" stays coaching.
             "\\b(i\\s*(?:am|might\\s+be|may\\s+be)|i\\W?m)\\b" + nearby +
@@ -128,7 +131,7 @@ public enum CoachSafetyFilter {
             // by the guard; bare phrasing escalates.
             thirdPartyPregnancyGuard + "\\bpregnan(?:t|cy)\\b" + pregnancySubjectLookahead +
                 nearby + "\\b(?:train|training|lift|lifting|heavy|squat|deadlift|workout)\\b",
-            "\\b(i\\s*(?:have|had|am\\s+dealing\\s+with)|i\\W?m\\s+dealing\\s+with)\\b" +
+            "\\b(i\\s*(?:have|had|am\\s+dealing\\s+with)|(?:i\\W?m|i\\s+am)\\s+dealing\\s+with)\\b" +
                 nearby + "\\b(?:eating\\s+disorder|restrict\\w*|starv\\w*|purg\\w*|not\\s+eating)\\b",
             // Both branches require the eating verb — a bare "I haven't"
             // must never escalate ("I haven't trained in a week" is a
@@ -139,7 +142,7 @@ public enum CoachSafetyFilter {
                 nearby + "\\b(?:cut|weight|fat|cardio|train|training|squat|lift|workout)\\b",
             "\\b(i\\s*(?:have|had|experienced|experience)|my)\\b" +
                 nearby + "\\b(?:cardiac\\s+event|heart\\s+attack)\\b",
-            "\\b(i\\s*(?:feel|felt|have|had|get|got|notice|noticed)|i\\W?m\\s+having|my)\\b" +
+            "\\b(i\\s*(?:feel|felt|have|had|get|got|notice|noticed)|(?:i\\W?m|i\\s+am)\\s+having|my)\\b" +
                 nearby + "\\b(?:palpitations?|arrhythmia)\\b",
         ]
     }()
@@ -248,7 +251,22 @@ public enum CoachSafetyFilter {
     }
 
     private static func hasRecoverySymptoms(_ text: String) -> Bool {
-        recoverySymptomPatterns.contains { containsPattern($0, in: text) }
+        let scrubbed = strippingNegatedRecoveryCheckIns(text)
+        return recoverySymptomPatterns.contains { containsPattern($0, in: scrubbed) }
+    }
+
+    /// "No pain today, can we add five pounds?" is a recovery check-in,
+    /// not a symptom report — negated symptom mentions are removed
+    /// before matching so they cannot arm conservative buffering or the
+    /// clamp's symptom ceiling, while "knee pain" keeps full coverage.
+    private static func strippingNegatedRecoveryCheckIns(_ text: String) -> String {
+        text.replacingOccurrences(
+            of: #"\b(?:no|not|without|zero|denies?|denied|free\s+of)\s+(?:any\s+|more\s+|new\s+)?"# +
+                #"(?:pain|sore(?:ness)?|tight(?:ness)?|aches?|aching|injur(?:y|ies)|symptoms?|twinge|strain)\b"# +
+                #"|\b(?:pain|sore(?:ness)?|tight(?:ness)?|injury|symptom)[-\s]free\b"#,
+            with: " ",
+            options: [.regularExpression, .caseInsensitive]
+        )
     }
 
     private static func hasCurrentRecoverySymptoms(inContext context: String) -> Bool {

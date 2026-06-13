@@ -540,6 +540,56 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertNotNil(response)
     }
 
+    /// PR #363 round 15: "I am <symptom>" spelled out must escalate
+    /// exactly like "I'm <symptom>".
+    func testSpelledOutFirstPersonSymptomsEscalate() {
+        XCTAssertNotNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I am dizzy during squats", context: ""
+        ))
+        XCTAssertNotNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I am lightheaded after deadlifts", context: ""
+        ))
+    }
+
+    func testTroubleBreathingWordingsEscalate() {
+        XCTAssertNotNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I am having trouble breathing after squats", context: ""
+        ))
+        XCTAssertNotNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I have breathing trouble mid-set", context: ""
+        ))
+    }
+
+    func testNegatedTroubleBreathingStaysCoaching() {
+        XCTAssertNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "No trouble breathing today — ready to push the pace?", context: ""
+        ))
+    }
+
+    func testThirdPartyModalPregnancyStaysCoaching() {
+        XCTAssertNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "My wife might be pregnant; should I train heavy this week?", context: ""
+        ))
+    }
+
+    func testFirstPersonModalPregnancyStillEscalates() {
+        XCTAssertNotNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I might be pregnant — keep training heavy?", context: ""
+        ))
+    }
+
+    /// PR #363 round 15: a negated recovery check-in must not arm
+    /// conservative buffering (and through it the clamp's 60% symptom
+    /// ceiling); a real symptom report still does.
+    func testNegatedRecoveryCheckInDoesNotBuffer() {
+        XCTAssertFalse(CoachSafetyFilter.shouldBufferResponse(
+            prompt: "No pain today, can we add five pounds?", context: ""
+        ))
+        XCTAssertTrue(CoachSafetyFilter.shouldBufferResponse(
+            prompt: "Sharp knee pain during squats today", context: ""
+        ))
+    }
+
     func testPalpitationsPromptEscalates() {
         let response = CoachSafetyFilter.medicalRedFlagResponse(
             prompt: "I have palpitations during squats. Should I keep going?",
