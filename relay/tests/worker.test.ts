@@ -992,6 +992,7 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(sse).toContain("event: error");
     expect(sse).toContain("empty_generation");
     expect(sse).not.toContain("event: done");
+    expect(sse).not.toContain('data: {"text"');
   });
 
   it("pins a thinking budget for the pro tier only", async () => {
@@ -1090,6 +1091,32 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("withholds leading whitespace but keeps it after real text", async () => {
+    const env = makeEnv();
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response(
+        'data: {"candidates":[{"content":{"parts":[{"text":"\\n"}]}}]}\n\n' +
+          'data: {"candidates":[{"content":{"parts":[{"text":"Hold 185 lb for 3 sets."}]}}]}\n\n',
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      ),
+    );
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift today?",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    const sse = await response.text();
+    expect(sse).toContain("Hold 185 lb for 3 sets.");
+    expect(sse).not.toContain('data: {"text":"\\n"}');
+    expect(sse).toContain("event: done");
   });
 
   it("does not escalate from a prior coach safety reply in memory context", async () => {

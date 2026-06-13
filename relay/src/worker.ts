@@ -386,6 +386,14 @@ async function streamGemini(body: CoachRequestBody, model: string, env: Env): Pr
               // back on-device.
               if (text.trim().length > 0) {
                 emittedAnyText = true;
+              } else if (!emittedAnyText) {
+                // Withhold leading whitespace-only chunks too: emitting
+                // one marks the turn as yielded on the client, which
+                // disarms the on-device fallback the empty_generation
+                // guard exists to trigger. After real text has flowed,
+                // standalone whitespace passes through so word
+                // boundaries are never glued together.
+                continue;
               }
               await writer.write(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
             }
