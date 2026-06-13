@@ -1157,6 +1157,25 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("does not escalate from possessive third-party pregnancy in context", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift tomorrow?",
+      contextBlock:
+        "## Training context\n- Readiness: 84/100\n- Memory: User asked: my wife's pregnancy keeps us busy, tips for me?",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("escalates first-person pregnancy in context", async () => {
     const env = makeEnv();
     const body = JSON.stringify({

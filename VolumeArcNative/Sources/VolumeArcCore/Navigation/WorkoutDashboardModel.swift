@@ -968,12 +968,28 @@ public final class WorkoutDashboardModel: ObservableObject {
         )
 
         if exercises.isEmpty {
-            self.activeSessionPlan = nil
+            // Keep a non-nil EMPTY plan rather than clearing it: every
+            // parked-planned state (single-lift skip here, or final-lift
+            // skip of a multi-lift plan below) is then uniformly
+            // `activeSessionPlan != nil && activeSessionExercise == nil`,
+            // which the hasActiveExercise card gate and the
+            // logRecommendedSet autopilot guard both key on. Clearing the
+            // plan made a skipped single-lift session indistinguishable
+            // from a deliberate no-plan autopilot session, so the guard
+            // missed it and Log Set could record an autopilot lift into
+            // the workout (PR #363 review, Codex P2). All activeSessionPlan
+            // consumers guard on isEmpty/indices.contains, so an empty
+            // plan safely no-ops them. Index parks one past the (empty)
+            // end so activeSessionExercise is nil.
+            self.activeSessionPlan = WorkoutSessionPlan(
+                title: activeSessionPlan.title,
+                durationMinutes: activeSessionPlan.durationMinutes,
+                targetRPE: activeSessionPlan.targetRPE,
+                exercises: []
+            )
             activeSessionExerciseIndex = 0
             loggedSetCountForActiveExercise = 0
-            if let activeWorkoutID {
-                activeSessionStateStore.clear(workoutID: activeWorkoutID)
-            }
+            persistActiveSessionStateIfNeeded()
         } else {
             self.activeSessionPlan = WorkoutSessionPlan(
                 title: activeSessionPlan.title,
@@ -1578,13 +1594,15 @@ public extension WorkoutDashboardModel {
         #if canImport(SwiftData)
         guard let workoutRepository else { return }
 
-        // A parked PLANNED session (final lift skipped, plan present but
-        // no current exercise) must not fall back to the autopilot
-        // suggestion for logging — that would record an unplanned lift.
-        // Gated on activeSessionPlan so a deliberate autopilot-only
-        // session (started with no plan) still logs its recommendation.
-        // The WorkoutsView card is already hidden in this state; this is
-        // the authoritative model-level guard. (PR #363 review, Codex P2.)
+        // A parked PLANNED session (final lift skipped, plan present —
+        // possibly empty — but no current exercise) must not record a set:
+        // there is no current planned lift, and the WorkoutsView card is
+        // hidden in this state so there is no manual-log entry point, so
+        // any call here would be the autopilot fallback recording an
+        // unplanned lift. Gated on activeSessionPlan so a deliberate
+        // autopilot-only session (started with no plan) still logs its
+        // recommendation. Authoritative model-level guard.
+        // (PR #363 review, Codex P2.)
         if activeSessionPlan != nil && activeSessionExercise == nil {
             return
         }

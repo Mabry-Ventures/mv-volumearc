@@ -1196,15 +1196,19 @@ public struct WorkoutsView: View {
         model.activeWorkoutTitle ?? String(localized: "Strength Session", comment: "Default active workout title")
     }
 
+    /// A parked PLANNED session: the plan is present (possibly emptied by
+    /// skipping the final lift) but there is no current exercise. In this
+    /// state the dashboard's standalone autopilot suggestion must not leak
+    /// into the active-session card, Form Check, the completed-session
+    /// primaryLift, or Log Set. A deliberate no-plan autopilot session
+    /// (plan nil) is unaffected. Matches the model guard in
+    /// logRecommendedSet. (PR #363 review, Codex + CodeRabbit.)
+    private var isParkedPlannedSession: Bool {
+        model.activeSessionPlan != nil && model.activeSessionExercise == nil
+    }
+
     private var hasActiveExercise: Bool {
-        // A parked PLANNED session (final lift skipped: plan present but
-        // no current exercise) must show "no planned lifts remain", not
-        // the dashboard's standalone autopilot suggestion — otherwise Log
-        // Set offers an unplanned lift. Gated on activeSessionPlan so a
-        // deliberate no-plan autopilot session (and the dashboard's
-        // between-session recommendation) still surface the card. Matches
-        // the model-level guard in logRecommendedSet.
-        if model.activeSessionPlan != nil && model.activeSessionExercise == nil {
+        if isParkedPlannedSession {
             return replacementExercise != nil
         }
         return model.activeSessionExercise != nil || model.autopilot != nil || replacementExercise != nil
@@ -1257,13 +1261,20 @@ public struct WorkoutsView: View {
     }
 
     private var currentExerciseName: String {
-        replacementExercise?.name
+        if isParkedPlannedSession {
+            return replacementExercise?.name
+                ?? String(localized: "Current exercise", comment: "Fallback active workout current exercise name")
+        }
+        return replacementExercise?.name
             ?? model.activeSessionExercise?.name
             ?? model.autopilot?.nextExerciseName
             ?? String(localized: "Current exercise", comment: "Fallback active workout current exercise name")
     }
 
     private var currentExerciseDefinition: ExerciseDefinition? {
+        if isParkedPlannedSession {
+            return replacementExercise
+        }
         if let replacementExercise {
             return replacementExercise
         }
@@ -1322,6 +1333,9 @@ public struct WorkoutsView: View {
     }
 
     private var formCheckExercise: FormCheckExercise? {
+        // A parked planned session has no real lift to form-check; do not
+        // fall back to the autopilot exercise.
+        guard !isParkedPlannedSession else { return nil }
         return FormCheckExercise.infer(
             exerciseID: currentExerciseDefinition?.id ?? model.autopilot?.nextExerciseID ?? "",
             name: currentExerciseName

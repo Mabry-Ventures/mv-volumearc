@@ -581,6 +581,25 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertNotNil(response)
     }
 
+    /// PR #363 round 23 (CodeRabbit): possessive third-party pregnancy
+    /// ("my wife's pregnancy") must stay coaching on both the prompt and
+    /// context paths; first-person/bare pregnancy still escalates.
+    func testPossessiveThirdPartyPregnancyStaysCoaching() {
+        XCTAssertNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Any training tweaks to support my wife's pregnancy?", context: ""
+        ))
+        XCTAssertNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "What should I lift tomorrow?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Memory: User asked: my partner's pregnancy has us busy, tips for me?
+            """
+        ))
+        XCTAssertNotNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Tips for my own pregnancy training?", context: ""
+        ))
+    }
+
     /// PR #363 round 15: "I am <symptom>" spelled out must escalate
     /// exactly like "I'm <symptom>".
     func testSpelledOutFirstPersonSymptomsEscalate() {

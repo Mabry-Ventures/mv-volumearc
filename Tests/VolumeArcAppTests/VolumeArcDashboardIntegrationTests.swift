@@ -978,6 +978,48 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         )
     }
 
+    /// PR #363 round 23 (Codex P2): skipping the ONLY lift of a
+    /// single-exercise plan keeps a non-nil empty parked plan, so the
+    /// autopilot-log guard still fires — a stray Log Set records nothing
+    /// and cannot corrupt the workout history.
+    func testSkippedSingleLiftSessionStaysParkedAndBlocksAutopilotLog() async throws {
+        let model = makeDashboardModel(
+            activeSessionStateStore: InMemoryActiveWorkoutSessionStateStore()
+        )
+        let plan = WorkoutSessionPlan(
+            title: "One-lift day",
+            exercises: [
+                WeeklyWorkoutExercise(
+                    name: "Bench Press",
+                    sets: 1,
+                    reps: 5,
+                    weight: 185,
+                    targetRPE: 8,
+                    restSeconds: 150
+                ),
+            ]
+        )
+
+        await model.startWorkoutSession(plan: plan)
+        _ = model.skipActiveSessionExercise()
+
+        XCTAssertNil(model.activeSessionExercise)
+        XCTAssertNotNil(
+            model.activeSessionPlan,
+            "Skipping the only lift keeps an empty parked plan, not nil."
+        )
+        XCTAssertEqual(model.activeSessionPlan?.exercises.count, 0)
+
+        let before = model.loggedSetCountThisSession
+        await model.logRecommendedSet(weightOverride: 999, repsOverride: 5, rpeOverride: 7)
+
+        XCTAssertEqual(
+            model.loggedSetCountThisSession,
+            before,
+            "A skipped single-lift session must not log a fallback autopilot set."
+        )
+    }
+
     /// PR #363 round 18: from the parked state (final lift skipped),
     /// tapping an earlier exercise in the workout map must reload it,
     /// not crash on the out-of-range parked index.
