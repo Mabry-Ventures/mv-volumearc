@@ -180,6 +180,14 @@ public enum CoachPrescriptionClamp {
             }
             let storedImplements = storedTokens.intersection(implementTokens)
             if planImplements.isEmpty {
+                // An unqualified plan name ("Bench Press") inherits only
+                // from history that is the SAME movement made MORE specific
+                // — stored is a superset ("barbell bench press"; the exact
+                // catalog ID "bench-press" is already returned above). A
+                // sparser stored key that is a proper subset ("press") is a
+                // different/generic lift and must not seed this plan's cap
+                // (PR #363 review, Codex P2).
+                guard planTokens.isSubset(of: storedTokens) else { continue }
                 if storedImplements.isDisjoint(with: lightImplementTokens) {
                     heavyClass.append(weight)
                 } else {

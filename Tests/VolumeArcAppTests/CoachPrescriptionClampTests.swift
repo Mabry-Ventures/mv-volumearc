@@ -277,6 +277,22 @@ final class CoachPrescriptionClampTests: XCTestCase {
         )
     }
 
+    /// PR #363 round 24 (Codex P2): a sparse custom key ("press") that is
+    /// a proper subset of an unqualified plan name ("Bench Press") is a
+    /// different/generic lift and must not seed the plan's cap. A superset
+    /// (the same movement made specific) still inherits.
+    func testSparseCustomKeyDoesNotSeedUnqualifiedPlan() {
+        XCTAssertNil(
+            CoachPrescriptionClamp.topWeight(for: "Bench Press", in: ["press": 135]),
+            "A sparse custom key must not lend its top to an unrelated unqualified plan"
+        )
+        XCTAssertEqual(
+            CoachPrescriptionClamp.topWeight(for: "Bench Press", in: ["barbell-bench-press": 225]),
+            225,
+            "A superset (same movement made specific) still inherits"
+        )
+    }
+
     func testCleanPlanPassesThroughUntouched() {
         let input = CoachPrescriptionClamp.Input(
             topWeightByExerciseKey: ["barbell-back-squat": 200],
