@@ -932,6 +932,52 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertEqual(relaunched.loggedSetCountForActiveExercise, 0)
     }
 
+    /// PR #363 round 21 (Codex P2): a parked PLANNED session (final lift
+    /// of a multi-exercise plan skipped) must not fall back to the
+    /// autopilot suggestion when logging — the model refuses, so a stray
+    /// Log Set records nothing. A no-plan autopilot session still logs.
+    func testParkedPlannedSessionDoesNotLogAutopilotSet() async throws {
+        let model = makeDashboardModel(
+            activeSessionStateStore: InMemoryActiveWorkoutSessionStateStore()
+        )
+        let plan = WorkoutSessionPlan(
+            title: "Two-lift day",
+            exercises: [
+                WeeklyWorkoutExercise(
+                    name: "Bench Press",
+                    sets: 1,
+                    reps: 5,
+                    weight: 185,
+                    targetRPE: 8,
+                    restSeconds: 150
+                ),
+                WeeklyWorkoutExercise(
+                    name: "Barbell Row",
+                    sets: 3,
+                    reps: 8,
+                    weight: 135,
+                    targetRPE: 7,
+                    restSeconds: 120
+                ),
+            ]
+        )
+
+        await model.startWorkoutSession(plan: plan)
+        model.moveActiveSession(toExerciseAt: 1)
+        _ = model.skipActiveSessionExercise()
+        XCTAssertNil(model.activeSessionExercise)
+        XCTAssertNotNil(model.activeSessionPlan)
+
+        let before = model.loggedSetCountThisSession
+        await model.logRecommendedSet(weightOverride: 999, repsOverride: 5, rpeOverride: 7)
+
+        XCTAssertEqual(
+            model.loggedSetCountThisSession,
+            before,
+            "A parked planned session must not log a fallback autopilot set."
+        )
+    }
+
     /// PR #363 round 18: from the parked state (final lift skipped),
     /// tapping an earlier exercise in the workout map must reload it,
     /// not crash on the out-of-range parked index.

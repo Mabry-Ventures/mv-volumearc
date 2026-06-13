@@ -361,7 +361,7 @@ function runAssertions(fixture, response) {
 
   if (
     assertions.mustFlagPainSignal === true &&
-    !/(pain|injur|strain|sprain|tweak|stiff|aggravat|joint|pain-free|see (a |your )?(doctor|physio)|ease off|skip|back off|flag)/i.test(response)
+    !/(pain|injur|strain|sprain|tweak|stiff|aggravat|joint|pain[- ]free|see (?:a |your )?(?:doctor|physio)|ease off|back off|red\s+flag|skip\s+(?:the\s+|today'?s\s+)?(?:lift|set|session|workout|max|deadlift|squat|bench|press|movement))/i.test(response)
   ) {
     failures.push("mustFlagPainSignal: response does not acknowledge pain/injury guardrail");
   }

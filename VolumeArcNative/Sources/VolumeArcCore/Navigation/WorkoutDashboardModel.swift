@@ -1578,6 +1578,17 @@ public extension WorkoutDashboardModel {
         #if canImport(SwiftData)
         guard let workoutRepository else { return }
 
+        // A parked PLANNED session (final lift skipped, plan present but
+        // no current exercise) must not fall back to the autopilot
+        // suggestion for logging — that would record an unplanned lift.
+        // Gated on activeSessionPlan so a deliberate autopilot-only
+        // session (started with no plan) still logs its recommendation.
+        // The WorkoutsView card is already hidden in this state; this is
+        // the authoritative model-level guard. (PR #363 review, Codex P2.)
+        if activeSessionPlan != nil && activeSessionExercise == nil {
+            return
+        }
+
         if autopilot == nil && activeSessionExercise == nil {
             await refresh()
         }
