@@ -1197,7 +1197,17 @@ public struct WorkoutsView: View {
     }
 
     private var hasActiveExercise: Bool {
-        model.activeSessionExercise != nil || model.autopilot != nil || replacementExercise != nil
+        // During an active session the card is session-driven. When the
+        // final planned lift has been skipped the session parks with no
+        // current exercise (activeSessionExercise nil), and autopilot —
+        // the dashboard's standalone "next up" suggestion — must NOT leak
+        // in, or Log Set would record an unplanned lift instead of
+        // showing "no planned lifts remain." Autopilot only drives the
+        // card when no session is active.
+        if model.isSessionActive {
+            return model.activeSessionExercise != nil || replacementExercise != nil
+        }
+        return model.activeSessionExercise != nil || model.autopilot != nil || replacementExercise != nil
     }
 
     private var currentExerciseSetCount: Int {

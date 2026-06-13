@@ -569,6 +569,15 @@ function renderedTrainingContext(prompt: string | undefined): string | undefined
   return beforeFocus.slice(contextStart).trim();
 }
 
+// Shared by the prompt scan (hasMedicalRedFlag) and the context scan
+// (CONTEXT_MEDICAL_RED_FLAG_PATTERNS): "my wife is pregnant" routes to
+// coaching, a bare or first-person mention escalates. Mirrored in
+// CoachSafetyFilter.swift.
+const THIRD_PARTY_PREGNANCY_GUARD =
+  "(?<!\\b(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate|she)\\s(?:is|was|might\\sbe|may\\sbe|could\\sbe|will\\sbe|just\\sgot|got|became)\\s)(?<!she'?s\\s)";
+const PREGNANCY_SUBJECT_LOOKAHEAD =
+  "(?!\\s+(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate)\\b)";
+
 function hasMedicalRedFlag(text: string): boolean {
   const nearby = "[\\s\\S]{0,80}";
   // An unowned pregnancy term describes the asker ("20 weeks pregnant
@@ -577,10 +586,8 @@ function hasMedicalRedFlag(text: string): boolean {
   // possessor immediately before the term ("my wife is pregnant",
   // "she's pregnant") or right after it ("my pregnant wife") routes to
   // normal coaching. Mirrored in CoachSafetyFilter.swift.
-  const thirdPartyPregnancyGuard =
-    "(?<!\\b(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate|she)\\s(?:is|was|might\\sbe|may\\sbe|could\\sbe|will\\sbe|just\\sgot|got|became)\\s)(?<!she'?s\\s)";
-  const pregnancySubjectLookahead =
-    "(?!\\s+(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate)\\b)";
+  const thirdPartyPregnancyGuard = THIRD_PARTY_PREGNANCY_GUARD;
+  const pregnancySubjectLookahead = PREGNANCY_SUBJECT_LOOKAHEAD;
   const patterns = [
     "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|i\\s+am|my)\\b" +
       nearby + "\\bchest\\s+pain\\b",
@@ -730,7 +737,7 @@ const CONTEXT_MEDICAL_RED_FLAG_PATTERNS = [
   "\\b(?:severe\\s+)?short(?:ness)?\\s+of\\s+breath\\b",
   "\\b(can'?t|cannot)\\s+breathe\\b",
   "\\bhard\\s+to\\s+breathe\\b",
-  "\\bpregnan(?:t|cy)\\b",
+  THIRD_PARTY_PREGNANCY_GUARD + "\\bpregnan(?:t|cy)\\b" + PREGNANCY_SUBJECT_LOOKAHEAD,
   "\\b(?:eating\\s+disorder|restrict\\w*|starv\\w*|purg\\w*|not\\s+eating)\\b",
   "\\bhaven'?t\\s+eaten\\b",
   "\\bhadn'?t\\s+eaten\\b",
@@ -739,12 +746,20 @@ const CONTEXT_MEDICAL_RED_FLAG_PATTERNS = [
   "\\b(?:palpitations?|arrhythmia)\\b",
 ];
 
+// A coach-authored memory line ("Coach said: ..."), optionally bulleted
+// or "Memory:"-prefixed. Anchored to the line start so a mid-line
+// mention does not hide a current symptom on the same line. Mirrors
+// CoachSafetyFilter.isCoachAuthoredMemoryLine.
+function isCoachAuthoredMemoryLine(line: string): boolean {
+  return /^\s*(?:[-*]\s*)?(?:memory:\s*)?coach\s+said:/i.test(line);
+}
+
 function hasCurrentMedicalRedFlag(text: string): boolean {
   const patterns = CONTEXT_MEDICAL_RED_FLAG_PATTERNS;
   // Coach-authored memory lines are excluded — a prior safety reply
   // contains the very phrases these scans match, and one red-flag turn
   // must not poison later benign turns until the memory ages out.
-  return text.split(/\r?\n/).filter((line) => !line.includes("Coach said:")).some((line) => {
+  return text.split(/\r?\n/).filter((line) => !isCoachAuthoredMemoryLine(line)).some((line) => {
     let sharedNegationCarries = false;
     for (const clause of medicalRedFlagClauses(line)) {
       if (!clause.separatorAllowsSharedNegation) {

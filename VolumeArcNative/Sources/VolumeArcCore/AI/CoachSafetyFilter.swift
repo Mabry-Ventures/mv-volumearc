@@ -79,6 +79,17 @@ public enum CoachSafetyFilter {
         return medicalRedFlagResponseText()
     }
 
+    // Third-party pregnancy guard shared by the prompt-scan patterns
+    // (redFlagPatterns) and the context-scan patterns
+    // (contextMedicalRedFlagPatterns): "my wife is pregnant" routes to
+    // normal coaching, a bare or first-person mention escalates.
+    // Mirrored in relay/src/worker.ts.
+    private static let thirdPartyPregnancyGuard =
+        "(?<!\\b(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate|she)" +
+        "\\s(?:is|was|might\\sbe|may\\sbe|could\\sbe|will\\sbe|just\\sgot|got|became)\\s)(?<!she'?s\\s)"
+    private static let pregnancySubjectLookahead =
+        "(?!\\s+(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate)\\b)"
+
     /// Built once: this array is consulted on every coach turn, and
     /// per-call string assembly was a measurable slice of the breached
     /// coach first-token budget (PR #363 perf, VOL-99).
@@ -91,11 +102,8 @@ public enum CoachSafetyFilter {
         // ("my wife is pregnant", "she's pregnant") or right after it
         // ("my pregnant wife") routes to normal coaching. Mirrored in
         // relay/src/worker.ts.
-        let thirdPartyPregnancyGuard =
-            "(?<!\\b(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate|she)" +
-            "\\s(?:is|was|might\\sbe|may\\sbe|could\\sbe|will\\sbe|just\\sgot|got|became)\\s)(?<!she'?s\\s)"
-        let pregnancySubjectLookahead =
-            "(?!\\s+(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate)\\b)"
+        let thirdPartyPregnancyGuard = Self.thirdPartyPregnancyGuard
+        let pregnancySubjectLookahead = Self.pregnancySubjectLookahead
         return [
             "\\b(i\\s*(?:feel|felt|have|had|experienced|experience|got|gotten)|i\\W?m|i\\s+am|my)\\b" +
                 nearby + "\\bchest\\s+pain\\b",
@@ -269,10 +277,18 @@ public enum CoachSafetyFilter {
         )
     }
 
+    /// A coach-authored memory line ("Coach said: ..."), optionally
+    /// bulleted or "Memory:"-prefixed. Anchored to the line start so a
+    /// mid-line mention does not hide a current symptom on the same line.
+    /// Mirrored in relay/src/worker.ts.
+    private static func isCoachAuthoredMemoryLine(_ line: String) -> Bool {
+        containsPattern(#"^\s*(?:[-*]\s*)?(?:memory:\s*)?coach\s+said:"#, in: line)
+    }
+
     private static func hasCurrentRecoverySymptoms(inContext context: String) -> Bool {
         context
             .components(separatedBy: .newlines)
-            .filter { !$0.contains("Coach said:") }
+            .filter { !isCoachAuthoredMemoryLine($0) }
             .contains { line in
                 let lowered = line.lowercased()
                 guard !lowered.contains("pain-free"),
@@ -291,7 +307,7 @@ public enum CoachSafetyFilter {
         // ages out. Athlete-authored lines keep full coverage.
         context
             .components(separatedBy: .newlines)
-            .filter { !$0.contains("Coach said:") }
+            .filter { !isCoachAuthoredMemoryLine($0) }
             .contains { line in
                 var sharedNegationCarries = false
                 for clause in medicalRedFlagClauses(in: line) {
@@ -571,7 +587,7 @@ public enum CoachSafetyFilter {
         #"\b(?:severe\s+)?short(?:ness)?\s+of\s+breath\b"#,
         #"\b(can'?t|cannot)\s+breathe\b"#,
         #"\bhard\s+to\s+breathe\b"#,
-        #"\bpregnan(?:t|cy)\b"#,
+        Self.thirdPartyPregnancyGuard + #"\bpregnan(?:t|cy)\b"# + Self.pregnancySubjectLookahead,
         #"\b(?:eating\s+disorder|restrict\w*|starv\w*|purg\w*|not\s+eating)\b"#,
         #"\bhaven'?t\s+eaten\b"#,
         #"\bhadn'?t\s+eaten\b"#,

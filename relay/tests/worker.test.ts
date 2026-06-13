@@ -1119,6 +1119,63 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(sse).toContain("event: done");
   });
 
+  it("still escalates when a current symptom shares a line with a mid-line Coach said:", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift tomorrow?",
+      contextBlock:
+        "## Training context\n- Readiness: 84/100\n- Note: Coach said: rest today, but I passed out mid-set",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("does not escalate from third-party pregnancy in context", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift tomorrow?",
+      contextBlock:
+        "## Training context\n- Readiness: 84/100\n- Memory: User asked: my wife is pregnant, any tips for me?",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("escalates first-person pregnancy in context", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift tomorrow?",
+      contextBlock:
+        "## Training context\n- Readiness: 84/100\n- Memory: User asked: I am 20 weeks pregnant, any tips?",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("does not escalate from a prior coach safety reply in memory context", async () => {
     const env = makeEnv();
     const body = JSON.stringify({

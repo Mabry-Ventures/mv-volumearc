@@ -540,6 +540,47 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertNotNil(response)
     }
 
+    /// PR #363 round 20 (CodeRabbit): the Coach-said exclusion is anchored
+    /// to the line start, so a current symptom sharing a line with a
+    /// mid-line "Coach said:" is still scanned and escalates.
+    func testMidLineCoachSaidDoesNotHideCurrentSymptom() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "What should I lift tomorrow?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Note: Coach said: rest today, but I passed out mid-set
+            """
+        )
+
+        XCTAssertNotNil(response)
+    }
+
+    /// PR #363 round 20 (Codex): third-party pregnancy in CONTEXT must
+    /// not escalate later benign turns; first-person still does.
+    func testThirdPartyPregnancyInContextStaysCoaching() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "What should I lift tomorrow?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Memory: User asked: my wife is pregnant, any tips for me?
+            """
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testFirstPersonPregnancyInContextEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "What should I lift tomorrow?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Memory: User asked: I am 20 weeks pregnant, any tips?
+            """
+        )
+
+        XCTAssertNotNil(response)
+    }
+
     /// PR #363 round 15: "I am <symptom>" spelled out must escalate
     /// exactly like "I'm <symptom>".
     func testSpelledOutFirstPersonSymptomsEscalate() {
