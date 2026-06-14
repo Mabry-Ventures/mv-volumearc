@@ -164,19 +164,29 @@ public struct ActiveWorkoutSessionState: Codable, Equatable, Sendable {
     public let activeExerciseIndex: Int
     public let loggedSetCountForActiveExercise: Int
     public let loggedSetCountsByExerciseIndex: [Int: Int]
+    /// PR #363 (CodeRabbit): true when the session is parked with no
+    /// current exercise (the final planned lift was skipped). A parked
+    /// state is recoverable even when the plan is empty, so a relaunch
+    /// restores `activeSessionPlan != nil && activeSessionExercise == nil`
+    /// and the `logRecommendedSet` autopilot guard still fires — instead
+    /// of falling back to a nil plan that would let an autopilot set land
+    /// in the parked workout.
+    public let parked: Bool
 
     public init(
         workoutID: String,
         plan: WorkoutSessionPlan,
         activeExerciseIndex: Int,
         loggedSetCountForActiveExercise: Int,
-        loggedSetCountsByExerciseIndex: [Int: Int] = [:]
+        loggedSetCountsByExerciseIndex: [Int: Int] = [:],
+        parked: Bool = false
     ) {
         self.workoutID = workoutID
         self.plan = plan
         self.activeExerciseIndex = activeExerciseIndex
         self.loggedSetCountForActiveExercise = loggedSetCountForActiveExercise
         self.loggedSetCountsByExerciseIndex = loggedSetCountsByExerciseIndex
+        self.parked = parked
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -185,6 +195,7 @@ public struct ActiveWorkoutSessionState: Codable, Equatable, Sendable {
         case activeExerciseIndex
         case loggedSetCountForActiveExercise
         case loggedSetCountsByExerciseIndex
+        case parked
     }
 
     public init(from decoder: Decoder) throws {
@@ -200,6 +211,7 @@ public struct ActiveWorkoutSessionState: Codable, Equatable, Sendable {
             [Int: Int].self,
             forKey: .loggedSetCountsByExerciseIndex
         ) ?? [:]
+        parked = try container.decodeIfPresent(Bool.self, forKey: .parked) ?? false
     }
 }
 
@@ -230,7 +242,10 @@ public final class UserDefaultsActiveSessionStateStore: ActiveWorkoutSessionStat
     }
 
     public func save(_ state: ActiveWorkoutSessionState) {
-        guard state.plan.isEmpty == false else {
+        // A parked state is persisted even with an empty plan so a relaunch
+        // can restore it as parked (PR #363, CodeRabbit). Genuinely empty,
+        // non-parked states are still dropped.
+        guard state.plan.isEmpty == false || state.parked else {
             clear(workoutID: state.workoutID)
             return
         }
@@ -262,7 +277,10 @@ public final class InMemoryActiveWorkoutSessionStateStore: ActiveWorkoutSessionS
     public func save(_ state: ActiveWorkoutSessionState) {
         lock.lock()
         defer { lock.unlock() }
-        guard state.plan.isEmpty == false else {
+        // A parked state is persisted even with an empty plan so a relaunch
+        // can restore it as parked (PR #363, CodeRabbit). Genuinely empty,
+        // non-parked states are still dropped.
+        guard state.plan.isEmpty == false || state.parked else {
             states.removeValue(forKey: state.workoutID)
             return
         }

@@ -1297,24 +1297,38 @@ public struct WorkoutsView: View {
     }
 
     private var activeTargetWeight: Double {
-        targetWeightOverride ?? model.activeSessionExercise.map { Double($0.weight) } ?? model.autopilot?.nextTarget.weight ?? 0
+        // A parked planned session has no current lift; never fall back to
+        // the autopilot target (PR #363 review, CodeRabbit).
+        if isParkedPlannedSession { return targetWeightOverride ?? 0 }
+        return targetWeightOverride ?? model.activeSessionExercise.map { Double($0.weight) } ?? model.autopilot?.nextTarget.weight ?? 0
     }
 
     private var activeTargetReps: Int {
-        targetRepsOverride ?? model.activeSessionExercise?.reps ?? model.autopilot?.nextTarget.repRange.lowerBound ?? 1
+        if isParkedPlannedSession { return targetRepsOverride ?? 1 }
+        return targetRepsOverride ?? model.activeSessionExercise?.reps ?? model.autopilot?.nextTarget.repRange.lowerBound ?? 1
     }
 
     private var activeTargetRPE: Double {
-        targetRPEOverride ?? model.activeSessionExercise.map { Double($0.targetRPE) } ?? model.autopilot?.nextTarget.targetRPE ?? 7.0
+        if isParkedPlannedSession { return targetRPEOverride ?? 7.0 }
+        return targetRPEOverride ?? model.activeSessionExercise.map { Double($0.targetRPE) } ?? model.autopilot?.nextTarget.targetRPE ?? 7.0
     }
 
     private var activeTargetUnit: String {
-        model.autopilot?.nextTarget.unit ?? String(localized: "lb", comment: "Default strength training load unit")
+        if isParkedPlannedSession {
+            return String(localized: "lb", comment: "Default strength training load unit")
+        }
+        return model.autopilot?.nextTarget.unit ?? String(localized: "lb", comment: "Default strength training load unit")
     }
 
     private var activeWorkoutExerciseNames: [String] {
         if let plan = model.activeSessionPlan, !plan.exercises.isEmpty {
             return plan.exercises.map(\.name)
+        }
+        // Parked planned session (e.g. the single-lift plan emptied by a
+        // final skip): show no rows rather than leaking autopilot /
+        // next-workout suggestions (PR #363 review, CodeRabbit).
+        if isParkedPlannedSession {
+            return []
         }
         var names: [String] = []
         if let replacementExercise {

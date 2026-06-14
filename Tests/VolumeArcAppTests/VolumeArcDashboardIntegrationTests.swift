@@ -1020,11 +1020,14 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         )
     }
 
-    /// PR #363 round 25 (Codex P2): skipping the only lift must CLEAR the
-    /// persisted state, not leave the stale pre-skip plan on disk — a
-    /// relaunch would otherwise resurrect the skipped lift and re-enable
-    /// logging it.
-    func testSkippedSingleLiftClearsStalePersistedPlan() async throws {
+    /// PR #363 round 26 (Codex P2 + CodeRabbit): skipping the only lift
+    /// must persist a PARKED SENTINEL — an empty plan flagged `parked` —
+    /// rather than the stale pre-skip plan (which would resurrect the
+    /// skipped lift on relaunch) or nothing (which would restore a nil
+    /// plan and let an autopilot set land in the parked workout). The
+    /// empty+parked state overwrites the pre-skip plan and restores as
+    /// `activeSessionPlan != nil && activeSessionExercise == nil`.
+    func testSkippedSingleLiftPersistsParkedSentinel() async throws {
         let store = InMemoryActiveWorkoutSessionStateStore()
         let model = makeDashboardModel(activeSessionStateStore: store)
         let plan = WorkoutSessionPlan(
@@ -1044,16 +1047,19 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         await model.startWorkoutSession(plan: plan)
         let workoutID = try XCTUnwrap(model.activeWorkoutID)
         await model.logRecommendedSet()
-        XCTAssertNotNil(
-            store.load(workoutID: workoutID),
-            "Precondition: the in-progress plan is persisted for crash recovery."
-        )
+        let preSkip = try XCTUnwrap(store.load(workoutID: workoutID))
+        XCTAssertFalse(preSkip.plan.exercises.isEmpty, "Precondition: pre-skip plan is persisted.")
 
         _ = model.skipActiveSessionExercise()
 
-        XCTAssertNil(
+        let parkedState = try XCTUnwrap(
             store.load(workoutID: workoutID),
-            "Skipping the only lift must clear the stale pre-skip plan from disk."
+            "The parked sentinel must persist, not be cleared."
+        )
+        XCTAssertTrue(parkedState.parked, "Persisted state must be flagged parked.")
+        XCTAssertTrue(
+            parkedState.plan.exercises.isEmpty,
+            "Parked sentinel must be an empty plan, so the skipped lift cannot be resurrected."
         )
     }
 
