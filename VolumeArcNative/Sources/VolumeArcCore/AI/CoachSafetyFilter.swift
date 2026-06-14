@@ -86,7 +86,7 @@ public enum CoachSafetyFilter {
     // Mirrored in relay/src/worker.ts.
     private static let thirdPartyPregnancyGuard =
         "(?<!\\b(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate|she)" +
-        "\\s(?:is|was|might\\sbe|may\\sbe|could\\sbe|will\\sbe|just\\sgot|got|became)\\s)(?<!she'?s\\s)" +
+        "\\s(?:is|was|might\\sbe|may\\sbe|could\\sbe|will\\sbe|just\\sgot|got|became)\\s)(?<!she(?:'|\u{2019})?s\\s)" +
         "(?<!\\b(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate)(?:'|\u{2019})s\\s)"
     private static let pregnancySubjectLookahead =
         "(?!\\s+(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate)\\b)"

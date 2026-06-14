@@ -574,7 +574,7 @@ function renderedTrainingContext(prompt: string | undefined): string | undefined
 // coaching, a bare or first-person mention escalates. Mirrored in
 // CoachSafetyFilter.swift.
 const THIRD_PARTY_PREGNANCY_GUARD =
-  "(?<!\\b(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate|she)\\s(?:is|was|might\\sbe|may\\sbe|could\\sbe|will\\sbe|just\\sgot|got|became)\\s)(?<!she'?s\\s)" +
+  "(?<!\\b(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate|she)\\s(?:is|was|might\\sbe|may\\sbe|could\\sbe|will\\sbe|just\\sgot|got|became)\\s)(?<!she(?:'|’)?s\\s)" +
   "(?<!\\b(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate)(?:'|’)s\\s)";
 const PREGNANCY_SUBJECT_LOOKAHEAD =
   "(?!\\s+(?:wife|partner|girlfriend|husband|spouse|sister|mom|mother|daughter|friend|client|teammate)\\b)";
