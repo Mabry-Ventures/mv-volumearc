@@ -1020,6 +1020,43 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         )
     }
 
+    /// PR #363 round 25 (Codex P2): skipping the only lift must CLEAR the
+    /// persisted state, not leave the stale pre-skip plan on disk — a
+    /// relaunch would otherwise resurrect the skipped lift and re-enable
+    /// logging it.
+    func testSkippedSingleLiftClearsStalePersistedPlan() async throws {
+        let store = InMemoryActiveWorkoutSessionStateStore()
+        let model = makeDashboardModel(activeSessionStateStore: store)
+        let plan = WorkoutSessionPlan(
+            title: "One-lift day",
+            exercises: [
+                WeeklyWorkoutExercise(
+                    name: "Bench Press",
+                    sets: 2,
+                    reps: 5,
+                    weight: 185,
+                    targetRPE: 8,
+                    restSeconds: 150
+                ),
+            ]
+        )
+
+        await model.startWorkoutSession(plan: plan)
+        let workoutID = try XCTUnwrap(model.activeWorkoutID)
+        await model.logRecommendedSet()
+        XCTAssertNotNil(
+            store.load(workoutID: workoutID),
+            "Precondition: the in-progress plan is persisted for crash recovery."
+        )
+
+        _ = model.skipActiveSessionExercise()
+
+        XCTAssertNil(
+            store.load(workoutID: workoutID),
+            "Skipping the only lift must clear the stale pre-skip plan from disk."
+        )
+    }
+
     /// PR #363 round 18: from the parked state (final lift skipped),
     /// tapping an earlier exercise in the workout map must reload it,
     /// not crash on the out-of-range parked index.

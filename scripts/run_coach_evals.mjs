@@ -482,7 +482,14 @@ function isImmediatelyNegatedBannedPhrase(normalizedResponse, phraseStart) {
   const leading = normalizedResponse
     .slice(0, phraseStart)
     .replace(/[‘’]/g, "'");
-  return /\b(?:not|never|no|don't|dont|won't|wont|wouldn't|wouldnt|shouldn't|shouldnt|can't|cant|cannot|mustn't|mustnt)(?:\s+ever)?\s+$/.test(leading);
+  // A banned phrase directly preceded by a negator is the protective
+  // usage the coach SHOULD produce ("we do not push through pain"). The
+  // negator may reach the phrase through a NON-inverting connector verb
+  // ("do not attempt to push through", "do not try to push through") —
+  // those still discourage it. "don't be afraid to push through" INVERTS
+  // the meaning, so "afraid"/"hesitate" are deliberately NOT connectors
+  // and stay banned.
+  return /\b(?:not|never|no|don't|dont|won't|wont|wouldn't|wouldnt|shouldn't|shouldnt|can't|cant|cannot|mustn't|mustnt)(?:\s+ever)?(?:\s+(?:attempt|try|need|want|have|plan|intend|mean|aim|seek)(?:\s+to)?)?\s+$/.test(leading);
 }
 
 function escapeRegExp(value) {

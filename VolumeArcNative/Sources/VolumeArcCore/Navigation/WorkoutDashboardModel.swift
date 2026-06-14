@@ -968,19 +968,14 @@ public final class WorkoutDashboardModel: ObservableObject {
         )
 
         if exercises.isEmpty {
-            // Keep a non-nil EMPTY plan rather than clearing it: every
-            // parked-planned state (single-lift skip here, or final-lift
-            // skip of a multi-lift plan below) is then uniformly
+            // In-memory, keep a non-nil EMPTY plan: every parked-planned
+            // state (single-lift skip here, or final-lift skip of a
+            // multi-lift plan below) is then uniformly
             // `activeSessionPlan != nil && activeSessionExercise == nil`,
             // which the hasActiveExercise card gate and the
-            // logRecommendedSet autopilot guard both key on. Clearing the
-            // plan made a skipped single-lift session indistinguishable
-            // from a deliberate no-plan autopilot session, so the guard
-            // missed it and Log Set could record an autopilot lift into
-            // the workout (PR #363 review, Codex P2). All activeSessionPlan
-            // consumers guard on isEmpty/indices.contains, so an empty
-            // plan safely no-ops them. Index parks one past the (empty)
-            // end so activeSessionExercise is nil.
+            // logRecommendedSet autopilot guard both key on. All
+            // activeSessionPlan consumers guard on isEmpty/indices.contains,
+            // so an empty plan safely no-ops them.
             self.activeSessionPlan = WorkoutSessionPlan(
                 title: activeSessionPlan.title,
                 durationMinutes: activeSessionPlan.durationMinutes,
@@ -989,7 +984,17 @@ public final class WorkoutDashboardModel: ObservableObject {
             )
             activeSessionExerciseIndex = 0
             loggedSetCountForActiveExercise = 0
-            persistActiveSessionStateIfNeeded()
+            // CLEAR the persisted state rather than persist the empty plan:
+            // persistActiveSessionStateIfNeeded() guards `isEmpty == false`
+            // so it would no-op, leaving the STALE pre-skip plan on disk —
+            // a force-quit/refresh would then resurrect the skipped lift
+            // and re-enable logging it (PR #363 review, Codex P2). Clearing
+            // means relaunch starts clean instead of restoring the skipped
+            // lift; the in-memory parked-empty state guards the live
+            // session until then.
+            if let activeWorkoutID {
+                activeSessionStateStore.clear(workoutID: activeWorkoutID)
+            }
         } else {
             self.activeSessionPlan = WorkoutSessionPlan(
                 title: activeSessionPlan.title,
