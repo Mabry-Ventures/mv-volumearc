@@ -152,6 +152,19 @@ final class CoachSafetyChainTests: XCTestCase {
     /// stale-version) acceptance reads as not accepted, and recording the
     /// current version clears it without touching the athlete profile.
     func testSafetyDisclaimerRePromptsUntilAccepted() {
+        // Snapshot + restore: the store writes through UserDefaults.standard,
+        // so leaving it mutated would make a later test that seeds an
+        // accepted disclaimer start from isAccepted == false, making the
+        // suite order-dependent (PR #363 review, CodeRabbit).
+        let wasAccepted = SafetyDisclaimerAcknowledgmentStore.isAccepted
+        defer {
+            if wasAccepted {
+                SafetyDisclaimerAcknowledgmentStore.recordAccepted()
+            } else {
+                SafetyDisclaimerAcknowledgmentStore.reset()
+            }
+        }
+
         SafetyDisclaimerAcknowledgmentStore.reset()
         XCTAssertFalse(
             SafetyDisclaimerAcknowledgmentStore.isAccepted,
@@ -160,8 +173,6 @@ final class CoachSafetyChainTests: XCTestCase {
 
         SafetyDisclaimerAcknowledgmentStore.recordAccepted()
         XCTAssertTrue(SafetyDisclaimerAcknowledgmentStore.isAccepted)
-
-        SafetyDisclaimerAcknowledgmentStore.reset()
     }
 
     // MARK: - Privacy redaction interaction

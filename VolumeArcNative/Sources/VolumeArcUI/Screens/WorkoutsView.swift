@@ -1257,7 +1257,16 @@ public struct WorkoutsView: View {
     }
 
     private var compactTarget: String {
-        "\(Int(activeTargetWeight)) x \(activeTargetReps)"
+        // A parked planned session has no real target; the neutral
+        // helper defaults (0/1) must not render as "0 x 1"
+        // (PR #363 review, CodeRabbit).
+        if isParkedPlannedSession {
+            return String(
+                localized: "No target",
+                comment: "Set-log target label when no planned lifts remain in the active session"
+            )
+        }
+        return "\(Int(activeTargetWeight)) x \(activeTargetReps)"
     }
 
     private var currentExerciseName: String {
@@ -1371,6 +1380,12 @@ public struct WorkoutsView: View {
     }
 
     private var nextExerciseTargetPreview: String {
+        if isParkedPlannedSession {
+            return String(
+                localized: "Complete the session or add another move.",
+                comment: "Up-next preview when no planned lifts remain in the active session"
+            )
+        }
         if let next = model.nextActiveSessionExercise {
             return "\(next.reps) reps - \(next.weight) \(activeTargetUnit)"
         }
