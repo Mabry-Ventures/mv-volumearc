@@ -143,6 +143,27 @@ final class CoachSafetyChainTests: XCTestCase {
         XCTAssertFalse(RemoteCoachKillSwitchStore.isFoundationModelCoachKilled)
     }
 
+    // MARK: - Safety acknowledgment re-prompt
+
+    /// PR #363 (Codex P1): users who completed onboarding before the
+    /// safety disclaimer shipped have no recorded acceptance, so the
+    /// root-level `SafetyAcknowledgmentGateView` must re-prompt them. This
+    /// pins the store invariant the gate keys on — an unrecorded (or
+    /// stale-version) acceptance reads as not accepted, and recording the
+    /// current version clears it without touching the athlete profile.
+    func testSafetyDisclaimerRePromptsUntilAccepted() {
+        SafetyDisclaimerAcknowledgmentStore.reset()
+        XCTAssertFalse(
+            SafetyDisclaimerAcknowledgmentStore.isAccepted,
+            "An existing user with no recorded acceptance must be re-prompted."
+        )
+
+        SafetyDisclaimerAcknowledgmentStore.recordAccepted()
+        XCTAssertTrue(SafetyDisclaimerAcknowledgmentStore.isAccepted)
+
+        SafetyDisclaimerAcknowledgmentStore.reset()
+    }
+
     // MARK: - Privacy redaction interaction
 
     func testStrictRedactionPreservesMedicalRedFlagDetection() {

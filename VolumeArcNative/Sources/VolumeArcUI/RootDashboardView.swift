@@ -113,6 +113,15 @@ public struct RootDashboardView: View {
                 model.coachMessages = Self.seededCoachWorkoutHandoffMessages
             }
             navigation.showOnboarding = model.hasLoadedInitialData && !model.isOnboardingComplete
+            // PR #363 (Codex P1): users who completed onboarding before the
+            // safety disclaimer shipped (or before a currentVersion bump)
+            // never acknowledged it — onboarding only re-runs for
+            // `!isOnboardingComplete`. Gate them behind the standalone
+            // safety prompt. New users acknowledge inside onboarding, so
+            // `isAccepted` is already true by the time it completes.
+            navigation.showSafetyAcknowledgment = model.hasLoadedInitialData
+                && model.isOnboardingComplete
+                && !SafetyDisclaimerAcknowledgmentStore.isAccepted
             // XCUITest affordance: open the Profile surface directly so
             // tests that target Profile-only rows do not depend on
             // simulator-specific TabView hit testing.
@@ -184,6 +193,14 @@ public struct RootDashboardView: View {
                     model.recordOnboardingResumed(stepRaw: stepRaw)
                 }
             )
+        }
+        // PR #363 (Codex P1): root-level safety re-prompt for already-
+        // onboarded users who have not accepted the current safety version.
+        // Non-dismissible — the athlete must accept before using the app.
+        .fullScreenCover(isPresented: $navigation.showSafetyAcknowledgment) {
+            SafetyAcknowledgmentGateView {
+                navigation.showSafetyAcknowledgment = false
+            }
         }
         // VOL-93: paywall sheet attached at the root so it can be triggered
         // from launch arguments (`-ShowPaywallOnLaunch`) as well as from
@@ -440,6 +457,44 @@ public enum VolumeArcAppearancePreference: String, CaseIterable, Identifiable, S
         case .dark:
             return .dark
         }
+    }
+}
+
+/// PR #363 (Codex P1): root-level blocking safety-acknowledgment gate for
+/// users who completed onboarding before the disclaimer shipped (or before
+/// a `SafetyDisclaimerAcknowledgmentStore.currentVersion` bump). Reuses the
+/// onboarding disclaimer copy via `SafetyDisclaimerContent` and records
+/// acceptance without touching the athlete's profile. Non-dismissible: like
+/// first-run onboarding, the athlete must accept the current safety version
+/// to proceed.
+struct SafetyAcknowledgmentGateView: View {
+    let onAcknowledged: () -> Void
+    @State private var acknowledged = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                SafetyDisclaimerContent(
+                    acknowledged: $acknowledged,
+                    acknowledgeIdentifier: "safety.gate.acknowledge"
+                )
+                .padding(VA.Space.lg)
+            }
+
+            VAButton(
+                String(localized: "Continue", comment: "Safety acknowledgment gate continue button"),
+                style: .primary,
+                accessibilityIdentifier: "safety.gate.continue"
+            ) {
+                VAHaptics.tap()
+                SafetyDisclaimerAcknowledgmentStore.recordAccepted()
+                onAcknowledged()
+            }
+            .disabled(!acknowledged)
+            .padding(VA.Space.lg)
+        }
+        .background(VA.Colors.surfacePrimary.ignoresSafeArea())
+        .interactiveDismissDisabled(true)
     }
 }
 #endif

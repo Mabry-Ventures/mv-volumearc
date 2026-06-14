@@ -954,80 +954,11 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
     // MARK: - Safety step (VOL-287)
 
     private var safetyStep: some View {
-        VStack(alignment: .leading, spacing: VA.Space.xl) {
-            VStack(alignment: .leading, spacing: VA.Space.md) {
-                Text(String(localized: "Train hard, train safe", comment: "Onboarding safety step title"))
-                    .font(VA.Typography.title)
-                    .foregroundStyle(VA.Colors.textPrimary)
-                Text(String(
-                    localized: "VolumeArc is a training coach, not a medical provider. Know the ground rules before your first set.",
-                    comment: "Onboarding safety step description"
-                ))
-                .font(VA.Typography.body)
-                .foregroundStyle(VA.Colors.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-
-            VStack(alignment: .leading, spacing: VA.Space.lg) {
-                OnboardingProofRow(
-                    icon: "stethoscope",
-                    title: String(localized: "Not medical advice", comment: "Onboarding safety row title — medical boundary"),
-                    detail: String(
-                        localized: """
-                        The coach gives strength guidance from your training data. It never \
-                        replaces a clinician, and it tells you to stop and seek care when \
-                        symptoms show up.
-                        """,
-                        comment: "Onboarding safety row detail — medical boundary"
-                    )
-                )
-                OnboardingProofRow(
-                    icon: "hand.raised.fill",
-                    title: String(localized: "Pain ends the set", comment: "Onboarding safety row title — pain rule"),
-                    detail: String(
-                        localized: """
-                        Prescriptions stay inside your demonstrated history. Stop any set \
-                        that causes pain, dizziness, or trouble breathing.
-                        """,
-                        comment: "Onboarding safety row detail — pain rule"
-                    )
-                )
-                OnboardingProofRow(
-                    icon: "cross.case.fill",
-                    title: String(localized: "Emergencies come first", comment: "Onboarding safety row title — emergency"),
-                    detail: String(
-                        localized: """
-                        For chest pain, fainting, or severe shortness of breath, call 911 \
-                        or your local emergency number before anything else.
-                        """,
-                        comment: "Onboarding safety row detail — emergency"
-                    )
-                )
-            }
-
-            Toggle(isOn: $safetyAcknowledged) {
-                Text(String(
-                    localized: """
-                    I'm \(SafetyDisclaimerAcknowledgmentStore.minimumAgeYears) or older \
-                    (or training with my guardian's approval), and I understand VolumeArc \
-                    provides training guidance, not medical advice.
-                    """,
-                    comment: "Onboarding safety acknowledgment toggle label; the number is the minimum age"
-                ))
-                .font(VA.Typography.footnote)
-                .foregroundStyle(VA.Colors.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-            .tint(VA.Colors.primary)
-            .padding(VA.Space.md)
-            .background(VA.Colors.surfaceSecondary, in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
-            .accessibilityIdentifier("onboarding.safety.acknowledge")
-            .accessibilityHint(String(
-                localized: "Required to continue.",
-                comment: "Accessibility hint for the onboarding safety acknowledgment toggle"
-            ))
-        }
-        .vaAppear()
+        // VOL-287 / PR #363 (Codex P1): the disclaimer copy lives in the
+        // shared SafetyDisclaimerContent so onboarding and the root-level
+        // re-prompt gate (SafetyAcknowledgmentGateView) never drift.
+        SafetyDisclaimerContent(acknowledged: $safetyAcknowledged)
+            .vaAppear()
     }
 
     // MARK: - Action row
@@ -1207,6 +1138,93 @@ private extension OnboardingView.Step {
             self = .safety
         case .done:
             self = .done
+        }
+    }
+}
+
+/// The age + medical-boundary safety disclaimer. Single source of the
+/// safety/legal copy, shown both as the onboarding safety step
+/// (`OnboardingView.safetyStep`) and, for users who completed onboarding
+/// before the disclaimer shipped (or after a `currentVersion` bump), by
+/// the root-level `SafetyAcknowledgmentGateView` (PR #363, Codex P1).
+/// Keeping it in one view ensures the two surfaces never drift.
+struct SafetyDisclaimerContent: View {
+    @Binding var acknowledged: Bool
+    var acknowledgeIdentifier: String = "onboarding.safety.acknowledge"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: VA.Space.xl) {
+            VStack(alignment: .leading, spacing: VA.Space.md) {
+                Text(String(localized: "Train hard, train safe", comment: "Onboarding safety step title"))
+                    .font(VA.Typography.title)
+                    .foregroundStyle(VA.Colors.textPrimary)
+                Text(String(
+                    localized: "VolumeArc is a training coach, not a medical provider. Know the ground rules before your first set.",
+                    comment: "Onboarding safety step description"
+                ))
+                .font(VA.Typography.body)
+                .foregroundStyle(VA.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(alignment: .leading, spacing: VA.Space.lg) {
+                OnboardingProofRow(
+                    icon: "stethoscope",
+                    title: String(localized: "Not medical advice", comment: "Onboarding safety row title — medical boundary"),
+                    detail: String(
+                        localized: """
+                        The coach gives strength guidance from your training data. It never \
+                        replaces a clinician, and it tells you to stop and seek care when \
+                        symptoms show up.
+                        """,
+                        comment: "Onboarding safety row detail — medical boundary"
+                    )
+                )
+                OnboardingProofRow(
+                    icon: "hand.raised.fill",
+                    title: String(localized: "Pain ends the set", comment: "Onboarding safety row title — pain rule"),
+                    detail: String(
+                        localized: """
+                        Prescriptions stay inside your demonstrated history. Stop any set \
+                        that causes pain, dizziness, or trouble breathing.
+                        """,
+                        comment: "Onboarding safety row detail — pain rule"
+                    )
+                )
+                OnboardingProofRow(
+                    icon: "cross.case.fill",
+                    title: String(localized: "Emergencies come first", comment: "Onboarding safety row title — emergency"),
+                    detail: String(
+                        localized: """
+                        For chest pain, fainting, or severe shortness of breath, call 911 \
+                        or your local emergency number before anything else.
+                        """,
+                        comment: "Onboarding safety row detail — emergency"
+                    )
+                )
+            }
+
+            Toggle(isOn: $acknowledged) {
+                Text(String(
+                    localized: """
+                    I'm \(SafetyDisclaimerAcknowledgmentStore.minimumAgeYears) or older \
+                    (or training with my guardian's approval), and I understand VolumeArc \
+                    provides training guidance, not medical advice.
+                    """,
+                    comment: "Onboarding safety acknowledgment toggle label; the number is the minimum age"
+                ))
+                .font(VA.Typography.footnote)
+                .foregroundStyle(VA.Colors.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .tint(VA.Colors.primary)
+            .padding(VA.Space.md)
+            .background(VA.Colors.surfaceSecondary, in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+            .accessibilityIdentifier(acknowledgeIdentifier)
+            .accessibilityHint(String(
+                localized: "Required to continue.",
+                comment: "Accessibility hint for the onboarding safety acknowledgment toggle"
+            ))
         }
     }
 }
