@@ -112,15 +112,23 @@ public struct RootDashboardView: View {
             if shouldSeedCoachWorkoutHandoff {
                 model.coachMessages = Self.seededCoachWorkoutHandoffMessages
             }
-            navigation.showOnboarding = model.hasLoadedInitialData && !model.isOnboardingComplete
-            // PR #363 (Codex P1): users who completed onboarding before the
-            // safety disclaimer shipped (or before a currentVersion bump)
-            // never acknowledged it — onboarding only re-runs for
-            // `!isOnboardingComplete`. Gate them behind the standalone
-            // safety prompt. New users acknowledge inside onboarding, so
-            // `isAccepted` is already true by the time it completes.
-            navigation.showSafetyAcknowledgment = model.hasLoadedInitialData
-                && model.isOnboardingComplete
+            // PR #363 (Codex P1): the launch gates derive from
+            // refresh-INDEPENDENT persisted state, not
+            // model.hasLoadedInitialData. A failed dashboard refresh must
+            // not (a) bypass the onboarding/safety gates into the unlocked
+            // UI, nor (b) re-onboard an already-onboarded athlete — which
+            // would overwrite their profile via updateProfile. The model's
+            // isOnboardingComplete seeds the persisted flag so existing
+            // users migrate on their first launch after this ships. New
+            // users acknowledge safety inside onboarding, so isAccepted is
+            // already true once onboarding completes (safety gate stays
+            // off). See OnboardingCompletionStore.
+            if model.isOnboardingComplete {
+                OnboardingCompletionStore.markComplete()
+            }
+            let isOnboarded = OnboardingCompletionStore.isComplete || model.isOnboardingComplete
+            navigation.showOnboarding = !isOnboarded
+            navigation.showSafetyAcknowledgment = isOnboarded
                 && !SafetyDisclaimerAcknowledgmentStore.isAccepted
             // XCUITest affordance: open the Profile surface directly so
             // tests that target Profile-only rows do not depend on
@@ -219,8 +227,14 @@ public struct RootDashboardView: View {
             guard model.hasLoadedInitialData else { return }
             if isComplete {
                 OnboardingProgressStore.clear()
+                // Persist the completion so the launch gates survive a
+                // future failed refresh without re-onboarding (PR #363).
+                OnboardingCompletionStore.markComplete()
             }
-            navigation.showOnboarding = !isComplete
+            let isOnboarded = OnboardingCompletionStore.isComplete || isComplete
+            navigation.showOnboarding = !isOnboarded
+            navigation.showSafetyAcknowledgment = isOnboarded
+                && !SafetyDisclaimerAcknowledgmentStore.isAccepted
         }
         .onChange(of: navigation.selectedTab) { _, _ in
             VAHaptics.selection()

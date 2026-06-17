@@ -33,3 +33,28 @@ public enum SafetyDisclaimerAcknowledgmentStore {
         UserDefaults.standard.removeObject(forKey: acceptedAtKey)
     }
 }
+
+/// PR #363 (Codex P1): refresh-independent record that first-run
+/// onboarding has completed at least once. `RootDashboardView` derives
+/// its launch gates from this (and `SafetyDisclaimerAcknowledgmentStore`)
+/// rather than `WorkoutDashboardModel.hasLoadedInitialData`, so a failed
+/// dashboard refresh can neither bypass the onboarding/safety gates nor
+/// make an already-onboarded athlete re-onboard (which would overwrite
+/// their profile via `updateProfile`). The model's `isOnboardingComplete`
+/// seeds this on every observation, so existing users migrate on their
+/// first launch after this ships.
+public enum OnboardingCompletionStore {
+    private static let completedKey = "com.mabryventures.VolumeArc.onboarding.completed"
+
+    public static var isComplete: Bool {
+        UserDefaults.standard.bool(forKey: completedKey)
+    }
+
+    public static func markComplete() {
+        UserDefaults.standard.set(true, forKey: completedKey)
+    }
+
+    public static func reset() {
+        UserDefaults.standard.removeObject(forKey: completedKey)
+    }
+}

@@ -175,6 +175,32 @@ final class CoachSafetyChainTests: XCTestCase {
         XCTAssertTrue(SafetyDisclaimerAcknowledgmentStore.isAccepted)
     }
 
+    /// PR #363 (Codex P1): onboarding completion is recorded in a
+    /// refresh-independent store so the launch gates survive a failed
+    /// dashboard refresh without re-onboarding an existing athlete.
+    func testOnboardingCompletionStoreRoundtrip() {
+        let wasComplete = OnboardingCompletionStore.isComplete
+        defer {
+            if wasComplete {
+                OnboardingCompletionStore.markComplete()
+            } else {
+                OnboardingCompletionStore.reset()
+            }
+        }
+
+        OnboardingCompletionStore.reset()
+        XCTAssertFalse(
+            OnboardingCompletionStore.isComplete,
+            "A fresh install has not completed onboarding."
+        )
+
+        OnboardingCompletionStore.markComplete()
+        XCTAssertTrue(
+            OnboardingCompletionStore.isComplete,
+            "Completion persists independently of a dashboard refresh."
+        )
+    }
+
     // MARK: - Privacy redaction interaction
 
     func testStrictRedactionPreservesMedicalRedFlagDetection() {
