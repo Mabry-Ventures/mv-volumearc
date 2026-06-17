@@ -6,5 +6,5 @@ source "https://rubygems.org"
 # 1. Bump the version in this Gemfile to the new minor (e.g. ~> 2.234)
 # 2. `bundle update fastlane` locally on a runner-matched Ruby (.ruby-version)
 # 3. Commit the updated Gemfile.lock alongside this Gemfile
-gem "fastlane", "~> 2.233"
+gem "fastlane", "~> 2.236"
 gem "xcodeproj", "~> 1.27"
