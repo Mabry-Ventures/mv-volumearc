@@ -600,6 +600,21 @@ final class CoachSafetyFilterTests: XCTestCase {
         ))
     }
 
+    /// PR #363 round 27 (Codex P2): a third-party pregnancy with an
+    /// intervening qualifier before the gestational age ("my wife is
+    /// currently 4 months pregnant") stays coaching; first-person with the
+    /// same qualifier still escalates.
+    func testQualifiedThirdPartyPregnancyStaysCoaching() {
+        XCTAssertNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "My wife is currently 4 months pregnant; should I train heavy this week?",
+            context: ""
+        ))
+        XCTAssertNotNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I am currently 4 months pregnant — can I keep training heavy?",
+            context: ""
+        ))
+    }
+
     /// PR #363 round 15: "I am <symptom>" spelled out must escalate
     /// exactly like "I'm <symptom>".
     func testSpelledOutFirstPersonSymptomsEscalate() {
