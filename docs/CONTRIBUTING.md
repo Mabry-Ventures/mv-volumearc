@@ -161,7 +161,7 @@ done < /tmp/to-delete.txt
 
 The `Require AI Code Reviews` ruleset on `main` requires the following checks to pass before merge — there is no "advisory" mode:
 
-- `Build & Test` — full iOS/watchOS pipeline on the `mv-shared` self-hosted runner
+- `Build & Test` — full iOS/watchOS pipeline on the `mv-volumearc-runner` self-hosted runner
 - `CodeRabbit Code Review` — wait-for-signal job (20-minute window) in `ai-review-gate.yml`
 - `Codex Code Review` — wait-for-signal job (15-minute window) in `ai-review-gate.yml`
 
@@ -180,7 +180,7 @@ Every bypass should be documented in `docs/incident-log.md` with the reason and 
 
 ### Forked PRs
 
-The `mv-shared` self-hosted CI runner is privileged (Apple Developer signing identity, Keychain, decoded SSH key, persistent DerivedData) so PRs from external forks **do not run CI** (VOL-132). The `Build & Test`, `Performance budgets`, and `Deploy to TestFlight` jobs all carry an `if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository` guard that skips them on fork PRs.
+The `mv-volumearc-runner` self-hosted CI runner is privileged (Apple Developer signing identity, Keychain, decoded SSH key, persistent DerivedData) so PRs from external forks **do not run CI** (VOL-132). The `Build & Test`, `Performance budgets`, and `Deploy to TestFlight` jobs all carry an `if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository` guard that skips them on fork PRs.
 
 The AI review gate (`.github/workflows/ai-review-gate.yml`) carries the same fork guard (VOL-251) on both the `request-ai-reviews` job (which would otherwise spend billed Codex + CodeRabbit minutes on fork PRs) and the `pull_request_target` branch of the `ai-review` job. Comment-event branches (`issue_comment`, `pull_request_review`, `pull_request_review_comment`) remain unguarded so the gate can still observe bot responses to upstream-only review requests.
 
@@ -215,10 +215,10 @@ The host runs multiple per-tenant runner instances, each as its own macOS user a
 | `mv-volumearc-runner` | `volumearc-runner` (UID 505) | Done `/Users/volumearc-runner/secrets/AuthKey_YR7UQCU7GN.p8` |
 | `mv-shared-01..04` | `githubrunner` (UID 502) — flex pool | Not supported |
 
-**Label-routing matrix:** a job with `runs-on: [self-hosted, mv-volumearc-runner]` matches **5 runners** (1 dedicated `volumearc-runner` + 4 flex). The 4 flex runners do NOT have the ASC key on-disk. Other shared labels:
+**Label-routing matrix** (re-registered 2026-06-11 — verify current inventory in GitHub → Organization Settings → Actions → Runners): VolumeArc workflows target `runs-on: [self-hosted, mv-volumearc-runner]`, served by the dedicated `volumearc-runner` instance. Flex runners do NOT have the ASC key on-disk. Other labels:
 
-- `mv-shared` → 6 runners (mv-volumearc-runner + 4 flex + mv-helloyaya-runner)
-- `mac-studio` → 10 runners
+- `mv-shared` → **retired 2026-06-11** (previously spanned mv-volumearc-runner + 4 flex + mv-helloyaya-runner); do not target it
+- `mac-studio` → host-wide label for non-VolumeArc work
 - Auto-tags: `self-hosted`, `macOS`, `ARM64`
 
 Anything else queues forever.
@@ -321,7 +321,7 @@ Routine hands-on intervention the host owner performs (you can't do these from a
 
 #### What will silently bite you
 
-1. **Wrong `runs-on:` label.** If you target a label that doesn't exist (or has a typo), the job queues forever. Stick to `mv-volumearc-runner`, `mv-shared`, or `mac-studio`.
+1. **Wrong `runs-on:` label.** If you target a label that doesn't exist (or has a typo), the job queues forever. Stick to `mv-volumearc-runner` (`mv-shared` was retired 2026-06-11; `mac-studio` is for non-VolumeArc work).
 2. **ASC key on flex runner.** Release workflows that naively do `cat $APP_STORE_CONNECT_API_KEY_PATH` and land on a flex runner fail. Either pin or use the ephemeral-keychain pattern from a GitHub Actions secret.
 3. **`brew update` is suppressed.** Explicit `brew update && brew install` if your step needs the latest formula.
 4. **Concurrency.** With every workflow on the single host, a typical PR queues ~5 jobs (Build & Test + AI review gate + Trufflehog). The runner service is configured for multiple concurrent jobs; verify after major macOS upgrades that it's still running `--unattended --replace --labels self-hosted,mv-volumearc-runner` with parallel-job support enabled.

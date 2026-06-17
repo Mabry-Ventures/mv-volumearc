@@ -412,8 +412,8 @@ public struct TodayView: View {
 
     private var recentSessionsSection: some View {
         let count = weeklyVolumeSummary.currentWeekSessionCount
-        let subtitle = String(
-            localized: "^[\(count) session](inflect: true) this week",
+        let subtitle = vaInflectedString(
+            "^[\(count) session](inflect: true) this week",
             comment: "Recent sessions subtitle with current week session count"
         )
         return VStack(alignment: .leading, spacing: VA.Space.md) {
@@ -637,11 +637,10 @@ private extension TodayView {
             return "\(source) • \(session.durationMinutes)min"
         }
         let rpeText = String(format: "%.1f", session.averageRPE)
-        let setsText = String(
-            localized: "^[\(session.completedSetCount) set](inflect: true)",
-            comment: "Session summary set count"
+        return vaInflectedString(
+            "^[\(session.completedSetCount) set](inflect: true) • \(session.durationMinutes)min • RPE \(rpeText)",
+            comment: "Recent session summary with set count, duration, and average RPE"
         )
-        return "\(setsText) • \(session.durationMinutes)min • RPE \(rpeText)"
     }
 
     func sessionMetricLabel(for session: RecentSession) -> String {
@@ -660,4 +659,5 @@ private extension TodayView {
             : String(localized: "lb", comment: "Weight unit abbreviation — pounds")
     }
 }
+
 #endif

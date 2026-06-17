@@ -219,7 +219,7 @@ configure_target(app_target, bundle_id: 'com.mabryventures.VolumeArc', extra: {
   # Store metadata change before this flips to 1,2.
   'TARGETED_DEVICE_FAMILY' => '1',
   'INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents' => 'YES',
-  'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc reads your completed workouts, heart-rate variability, sleep, Workout Effort, wrist temperature, and respiratory rate from Apple Health to show your training history, calculate readiness, and let the AI coach reference your recovery trend (HRV vs baseline, sleep debt, weekly strength load, Vitals trends, and Training Load).',
+  'INFOPLIST_KEY_NSHealthShareUsageDescription' => 'VolumeArc reads your completed workouts, heart-rate variability, sleep, Workout Effort, wrist temperature, and respiratory rate from Apple Health to show your training history, calculate readiness, and ground your coach\'s strength prescriptions in your recovery trend (HRV vs baseline, sleep debt, weekly strength load, Vitals trends, and Training Load).',
   'INFOPLIST_KEY_NSHealthUpdateUsageDescription' => 'VolumeArc writes completed workouts so your training history stays in sync with Apple Health.',
   'INFOPLIST_KEY_NSCameraUsageDescription' => 'VolumeArc uses the rear camera for on-device form-check analysis. Video frames are processed locally and are not uploaded.',
   'INFOPLIST_KEY_NSMicrophoneUsageDescription' => 'VolumeArc uses the microphone for voice coaching requests and voice workout logging.',
@@ -582,6 +582,10 @@ add_selected_swift_sources(app_group, app_tests_target, ROOT.join('App'), [
   'VolumeArcAppAttestService.swift',
   'VolumeArcAppAttestRelaySessionProvider.swift',
   'VolumeArcCloudConfiguration.swift',
+  # VOL-286 / PR #363: RemoteCoachKillSwitchRefresherTests pins the
+  # explicit-flag-only cache contract via a URLProtocol stub. Same
+  # compiled-into-the-test-bundle pattern as the other App-layer types.
+  'VolumeArcCoachKillSwitchRefresher.swift',
   'VolumeArcLiveActivityController.swift',
   'VolumeArcPersistenceController.swift',
   'VolumeArcPremiumCatalog.swift',

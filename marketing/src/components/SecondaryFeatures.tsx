@@ -24,7 +24,7 @@ const features = [
   {
     name: 'CloudKit sync',
     description:
-      'Your training history syncs across iPhone, iPad, and Watch via your private CloudKit container. No accounts, no third-party servers.',
+      'Your training history syncs between iPhone and Apple Watch through your private CloudKit container. Sign in with Apple can seed your profile identity; we do not operate a user account database.',
     icon: DeviceCardsIcon,
   },
   {

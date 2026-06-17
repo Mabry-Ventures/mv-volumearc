@@ -35,6 +35,14 @@ public final class DashboardNavigationModel: ObservableObject {
     @Published public var selectedTab: DashboardTab = .today
     @Published public var coachPrompt: String?
     @Published public var showOnboarding: Bool = false
+    /// PR #363 (Codex P1): when true, `RootDashboardView` presents the
+    /// standalone safety-acknowledgment gate over the dashboard. Set for
+    /// users who completed onboarding before the safety disclaimer shipped
+    /// (or after a `SafetyDisclaimerAcknowledgmentStore.currentVersion`
+    /// bump) — they have `isOnboardingComplete == true` so the onboarding
+    /// gate never re-runs, but must still accept the current safety
+    /// version before using the app.
+    @Published public var showSafetyAcknowledgment: Bool = false
     /// VOL-93: when true, `RootDashboardView` presents the paywall over
     /// the dashboard as a sheet. Mirrors `showOnboarding` so XCUITests
     /// can launch with `-ShowPaywallOnLaunch 1` and assert the paywall

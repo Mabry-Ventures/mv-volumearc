@@ -15,15 +15,17 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://volumearc.app'),
   title: {
     template: '%s · VolumeArc',
-    default: 'VolumeArc — The deepest Apple-ecosystem strength coach',
+    default: 'VolumeArc — The AI strength programming coach for Apple Watch',
   },
   description:
-    'Apple-native strength coaching that runs on-device, drives prescription from your real recovery data, and lives natively on your Apple Watch. Built for iOS 26 + watchOS 26.',
+    'Prescriptive strength programming that runs on-device: sets, reps, and loads autoregulated from your real recovery data, natively on iPhone and Apple Watch. Built for iOS 26 + watchOS 26.',
   applicationName: 'VolumeArc',
   authors: [{ name: 'Mabry Ventures', url: 'https://mabryventures.com' }],
   keywords: [
     'strength training',
-    'strength coach',
+    'strength programming',
+    'progressive overload',
+    'hypertrophy',
     'Apple Watch',
     'iOS 26',
     'watchOS 26',
@@ -33,9 +35,9 @@ export const metadata: Metadata = {
     'lifting app',
   ],
   openGraph: {
-    title: 'VolumeArc — The deepest Apple-ecosystem strength coach',
+    title: 'VolumeArc — The AI strength programming coach for Apple Watch',
     description:
-      'Apple-native strength coaching that runs on-device, drives prescription from your real recovery data, and lives natively on your Apple Watch.',
+      'Prescriptive strength programming that runs on-device: sets, reps, and loads autoregulated from your real recovery data, natively on iPhone and Apple Watch.',
     url: 'https://volumearc.app',
     siteName: 'VolumeArc',
     locale: 'en_US',
@@ -43,9 +45,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'VolumeArc — The deepest Apple-ecosystem strength coach',
+    title: 'VolumeArc — The AI strength programming coach for Apple Watch',
     description:
-      'Apple-native strength coaching that runs on-device, drives prescription from your real recovery data, and lives natively on your Apple Watch.',
+      'Prescriptive strength programming that runs on-device: sets, reps, and loads autoregulated from your real recovery data, natively on iPhone and Apple Watch.',
   },
   robots: {
     index: true,
@@ -57,8 +59,8 @@ export const metadata: Metadata = {
 // Organization + WebSite give Google's rich-results pipeline a clean
 // shape for the App Store badge, the publisher, and site search. We
 // don't include `offers` yet because final App Store pricing isn't
-// locked in production (Pro is $9.99/mo / $79.99/yr per VOL-91 today
-// but copy-team may revise pre-launch — VOL-216 ASC metadata is the
+// locked in production (Pro is $9.99/mo / $59.99/yr per the VOL-273
+// pricing decision of 2026-06-11 — VOL-216 ASC metadata is the
 // SOT for what we publish). Once pricing is final, add `offers` /
 // `Offer` here and the App Store search snippet will get the price.
 const structuredData = [
@@ -67,7 +69,7 @@ const structuredData = [
     '@type': 'SoftwareApplication',
     name: 'VolumeArc',
     description:
-      'Apple-native strength coaching that runs on-device, drives prescription from your real recovery data, and lives natively on your Apple Watch.',
+      'Prescriptive strength programming that runs on-device: sets, reps, and loads autoregulated from your real recovery data, natively on iPhone and Apple Watch.',
     applicationCategory: 'HealthApplication',
     operatingSystem: 'iOS 26, watchOS 26',
     url: 'https://volumearc.app',

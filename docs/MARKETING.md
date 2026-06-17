@@ -71,7 +71,7 @@ Removed from the Pocket template:
    - `RESEND_FROM_EMAIL=VolumeArc <noreply@volumearc.app>` after the sending domain is verified in Resend
    - `SUPPORT_EMAIL_TO=support@mabryventures.com`
 4. **Push to `main`** → Vercel builds and deploys to production within ~1 minute.
-5. **Open a PR** → Vercel posts a preview URL to the PR.
+5. **Preview deployments are disabled** to conserve Vercel build minutes. `marketing/vercel.json` sets `"ignoreCommand": "[ \"$VERCEL_ENV\" != \"production\" ]"`, so Vercel's Git integration cancels every non-production (branch/PR) build at the ignore step before it compiles — the GitHub App was previously rebuilding the whole site on *every* app-only push to any branch (≈25 wasted builds across PR #363 alone, none of which touched `marketing/`). Only `main` (`VERCEL_ENV=production`) builds. PRs that change `marketing/` are still validated by the path-scoped [`marketing.yml`](../.github/workflows/marketing.yml) gate; if you need a live preview of a marketing change before merge, run `npm run build && npm start` locally or trigger a one-off `vercel` CLI deploy.
 
 The CI gate at [`.github/workflows/marketing.yml`](../.github/workflows/marketing.yml) runs `npm ci && npm run lint && npm run check:legal && npm run build` on every PR touching `marketing/**` or the public coach-eval trend file. After the production build, it also runs the VOL-217 quality gates:
 

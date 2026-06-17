@@ -10,7 +10,6 @@ const footerNav = [
       { label: 'Features', href: '/#features' },
       { label: 'Pricing', href: '/#pricing' },
       { label: 'FAQs', href: '/#faqs' },
-      { label: 'Watch faces', href: '/watch-faces' },
       { label: 'Coach quality', href: '/quality' },
     ],
   },
@@ -44,7 +43,7 @@ export function Footer() {
                   VolumeArc
                 </p>
                 <p className="mt-0.5 text-sm text-gray-500">
-                  Deepest Apple-ecosystem strength coach.
+                  The AI strength programming coach.
                 </p>
               </div>
             </div>
@@ -68,6 +67,14 @@ export function Footer() {
               </ul>
             </div>
           ))}
+        </div>
+        <div className="border-t border-gray-200 py-6">
+          <p className="text-sm text-gray-500">
+            VolumeArc provides strength-training guidance, not medical advice.
+            Stop any set that causes pain, dizziness, or trouble breathing,
+            and for emergencies call 911 or your local emergency number.
+            Consult a physician before starting a new training program.
+          </p>
         </div>
         <div className="flex flex-col items-start gap-y-3 border-t border-gray-200 py-8 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-gray-500">

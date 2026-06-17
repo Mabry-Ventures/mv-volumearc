@@ -1,11 +1,20 @@
 #if canImport(SwiftUI)
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 import VolumeArcCore
 
 struct WorkoutIdleLibrary: View {
     let featuredTitle: String
     let featuredFocus: String
     let startWorkout: () -> Void
+    /// VOL-275: saved co-designed templates render above the curated
+    /// catalog; each is startable with its persisted prescription.
+    var savedTemplates: [SavedWorkoutTemplate] = []
+    var startSavedTemplate: (SavedWorkoutTemplate) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: VA.Space.xl) {
@@ -119,6 +128,13 @@ struct WorkoutIdleLibrary: View {
             Text(String(localized: "Templates", comment: "Workout templates section title"))
                 .font(VA.Typography.title2)
                 .foregroundStyle(VA.Colors.textPrimary)
+            if !savedTemplates.isEmpty {
+                VStack(spacing: VA.Space.md) {
+                    ForEach(savedTemplates) { template in
+                        savedTemplateRow(template)
+                    }
+                }
+            }
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: VA.Space.md) {
                     ForEach(Self.templates) { template in
@@ -156,8 +172,8 @@ struct WorkoutIdleLibrary: View {
                         Text(focus)
                             .font(VA.Typography.footnote)
                             .foregroundStyle(VA.Colors.textSecondary)
-                        Text(String(
-                            localized: "\(duration) min · ^[\(exercises) exercise](inflect: true)",
+                        Text(vaInflectedString(
+                            "\(duration) min · ^[\(exercises) exercise](inflect: true)",
                             comment: "Workout library row duration and exercise count"
                         ))
                         .font(VA.Typography.footnote)
@@ -171,6 +187,42 @@ struct WorkoutIdleLibrary: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private func savedTemplateRow(_ template: SavedWorkoutTemplate) -> some View {
+        Button {
+            startSavedTemplate(template)
+        } label: {
+            VACard(style: .flat) {
+                HStack(alignment: .center, spacing: VA.Space.md) {
+                    WorkoutIllustrationTile(systemImage: "square.and.arrow.down.fill", size: 64, accent: VA.Colors.primary)
+                    VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                        HStack(spacing: VA.Space.xs) {
+                            Text(template.name)
+                                .font(VA.Typography.headline)
+                                .foregroundStyle(VA.Colors.textPrimary)
+                                .lineLimit(1)
+                            WorkoutChip(
+                                text: String(localized: "Saved", comment: "Saved template chip"),
+                                tone: .neutral
+                            )
+                        }
+                        Text(vaInflectedString(
+                            "^[\(template.exercises.count) exercise](inflect: true)",
+                            comment: "Saved template exercise count"
+                        ))
+                        .font(VA.Typography.footnote)
+                        .foregroundStyle(VA.Colors.textTertiary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(VA.Typography.caption)
+                        .foregroundStyle(VA.Colors.textTertiary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("workouts.template.saved.\(template.id)")
     }
 
     private func templateCard(_ template: WorkoutTemplateSummary) -> some View {
@@ -318,9 +370,10 @@ struct WorkoutHistorySection: View {
     }
 
     private var subtitle: String {
-        sessions.count == 1
-            ? String(localized: "1 completed session", comment: "Workouts history subtitle, singular")
-            : String(localized: "\(sessions.count) completed sessions", comment: "Workouts history subtitle, plural")
+        vaInflectedString(
+            "^[\(sessions.count) completed session](inflect: true)",
+            comment: "Workouts history subtitle with completed session count"
+        )
     }
 
     private func historyRow(_ session: RecentSession) -> some View {
@@ -411,10 +464,10 @@ struct WorkoutHistorySection: View {
             return "\(source) - \(session.durationMinutes)min"
         }
         let rpeText = String(format: "%.1f", session.averageRPE)
-        let setsText = session.completedSetCount == 1
-            ? String(localized: "1 set", comment: "Session summary set count, singular")
-            : String(localized: "^[\(session.completedSetCount) set](inflect: true)", comment: "Session summary set count")
-        return "\(setsText) - \(session.durationMinutes)min - RPE \(rpeText)"
+        return vaInflectedString(
+            "^[\(session.completedSetCount) set](inflect: true) - \(session.durationMinutes)min - RPE \(rpeText)",
+            comment: "Workout session summary with set count, duration, and average RPE"
+        )
     }
 
     private func metricLabel(for session: RecentSession) -> String {
@@ -475,14 +528,75 @@ struct WorkoutIllustrationTile: View {
     let systemImage: String
     let size: CGFloat
     let accent: Color
+    var illustrationAssetName: String?
 
     var body: some View {
+        ZStack {
+            tileContent
+        }
+        .frame(width: size, height: size)
+        .background(VA.Colors.textTertiary.opacity(0.10), in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+        .accessibilityHidden(true)
+    }
+
+    // The illustration must stay out of the layout conversation: a
+    // `scaledToFill` image whose ideal size disagrees with the fixed tile
+    // frame re-invalidates lazy containers on every UpdateCycle pass,
+    // which pegs the main thread and starves XCUITest's accessibility
+    // snapshots (the workout-journey "Timed out while evaluating UI
+    // query" hang). `Color.clear.overlay` reports exactly the tile frame
+    // and clips the fill overflow.
+    @ViewBuilder
+    private var tileContent: some View {
+        if let illustration = Self.cachedIllustration(named: illustrationAssetName, pointSize: size) {
+            Color.clear
+                .overlay(illustration.resizable().scaledToFill())
+                .clipShape(RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+        } else {
+            fallbackIcon
+        }
+    }
+
+    // Bundle/catalog lookups run per body evaluation on this always-live
+    // surface, and a missing asset re-probes the catalog every time, so
+    // both hits and misses are memoized. The hit path also pre-decodes a
+    // tile-sized thumbnail once — the source illustrations are 1024² PNGs
+    // and redrawing the full bitmap on every invalidation of a frequently
+    // re-rendered surface is wasted main-thread time. Body always runs on
+    // the main actor, which makes the unsynchronized static safe.
+    @MainActor private static var illustrationLookupCache: [String: Image?] = [:]
+
+    @MainActor
+    private static func cachedIllustration(named assetName: String?, pointSize: CGFloat) -> Image? {
+        guard let assetName else { return nil }
+        let cacheKey = "\(assetName)@\(Int(pointSize.rounded()))"
+        if let cached = illustrationLookupCache[cacheKey] {
+            return cached
+        }
+        let resolved: Image?
+        #if canImport(UIKit)
+        let pixelEdge = pointSize * 3 // decode once at max device scale
+        resolved = UIImage(named: assetName, in: .main, compatibleWith: nil)
+            .map { source in
+                source.preparingThumbnail(of: CGSize(width: pixelEdge, height: pixelEdge)) ?? source
+            }
+            .map(Image.init(uiImage:))
+        #elseif canImport(AppKit)
+        resolved = NSImage(named: NSImage.Name(assetName)).map(Image.init(nsImage:))
+        #else
+        // Non-UIKit/AppKit preview or test hosts cannot probe the asset
+        // catalog for existence; fall back to the icon rather than render
+        // an empty image.
+        resolved = nil
+        #endif
+        illustrationLookupCache[cacheKey] = resolved
+        return resolved
+    }
+
+    private var fallbackIcon: some View {
         Image(systemName: systemImage)
             .font(size >= 80 ? VA.Typography.title : VA.Typography.headline)
             .foregroundStyle(accent)
-            .frame(width: size, height: size)
-            .background(VA.Colors.textTertiary.opacity(0.10), in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
-            .accessibilityHidden(true)
     }
 }
 
@@ -548,14 +662,15 @@ struct RestTimerDisplay: View {
             restRing(remaining: remaining, progress: progress)
                 .accessibilityElement()
                 .accessibilityLabel(String(localized: "Rest timer", comment: "Rest timer accessibility label"))
-                .accessibilityValue(
-                    remaining == 0
-                        ? String(localized: "Go time", comment: "Rest timer complete accessibility value")
-                        : String(
-                            localized: "^[\(remaining) second](inflect: true) remaining",
-                            comment: "Rest timer countdown accessibility value"
-                        )
-                )
+                // The value is coarsened to 5s buckets and the element is
+                // marked updates-frequently: a per-tick accessibility
+                // mutation forces XCUITest to restart any in-flight query
+                // snapshot, which starved every query on this surface for
+                // the full countdown ("Timed out while evaluating UI
+                // query" in the workout journeys). VoiceOver still gets a
+                // live countdown, just at 5s granularity.
+                .accessibilityValue(restAccessibilityValue(remaining: remaining))
+                .accessibilityAddTraits(.updatesFrequently)
                 .task(id: remaining) {
                     updateCompletionState(remaining: remaining)
                 }
@@ -568,12 +683,35 @@ struct RestTimerDisplay: View {
         .accessibilityIdentifier("workouts.restTimer")
     }
 
+    private func restAccessibilityValue(remaining: Int) -> String {
+        guard remaining > 0 else {
+            return String(localized: "Go time", comment: "Rest timer complete accessibility value")
+        }
+        // Floor to the 5s bucket so the spoken countdown never overstates
+        // the time left (ceiling announced "10 seconds" at 6-9s). The
+        // sub-bucket tail reads as "less than 5 seconds", and "about"
+        // marks the bucketed value as approximate. Same 5s mutation
+        // cadence, so XCUITest snapshots stay unstarved.
+        let bucketed = (remaining / 5) * 5
+        guard bucketed > 0 else {
+            return String(
+                localized: "Less than 5 seconds remaining",
+                comment: "Rest timer countdown accessibility value when under five seconds remain"
+            )
+        }
+        return vaInflectedString(
+            "about ^[\(bucketed) second](inflect: true) remaining",
+            comment: "Rest timer countdown accessibility value bucketed to five-second steps"
+        )
+    }
+
     private func restRing(remaining: Int, progress: Double) -> some View {
         ZStack {
             VAProgressRing(
                 progress: progress,
                 lineWidth: 10,
-                color: remaining == 0 ? VA.Colors.success : VA.Colors.primary
+                color: remaining == 0 ? VA.Colors.success : VA.Colors.primary,
+                animated: false // 1Hz tick-driven; see VAProgressRing
             )
             .frame(width: 190, height: 190)
             VStack(spacing: VA.Space.xs) {
@@ -605,4 +743,5 @@ struct RestTimerDisplay: View {
         }
     }
 }
+
 #endif

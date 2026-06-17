@@ -275,6 +275,67 @@ final class WatchConnectivityCoordinatorTests: XCTestCase {
     }
 }
 
+// MARK: - VOL-275 scheduled-plan payload
+
+final class WatchScheduledPlanPayloadTests: XCTestCase {
+    func test_round_trip_preserves_clamped_prescription() throws {
+        let payload = WatchScheduledPlanPayload(
+            title: "Co-Designed Lower",
+            dayOfWeek: 3,
+            scheduledFor: Date(timeIntervalSince1970: 1_765_000_000),
+            durationMinutes: 52,
+            targetRPE: 8,
+            exercises: [
+                .init(name: "Back Squat", sets: 4, reps: 6, weight: 225),
+                .init(name: "Romanian Deadlift", sets: 3, reps: 10, weight: 185),
+            ]
+        )
+
+        let decoded = try XCTUnwrap(
+            WatchScheduledPlanPayload.decode(from: WatchScheduledPlanPayload.encode(payload))
+        )
+
+        XCTAssertEqual(decoded, payload)
+    }
+
+    /// PR #363 review (Codex P2): the watch must not advertise a plan
+    /// whose scheduled day has passed.
+    func test_isCurrent_expires_after_the_scheduled_day() {
+        let calendar = Calendar.current
+        let now = Date(timeIntervalSince1970: 1_765_000_000)
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: now)!
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: now)!
+
+        func payload(for date: Date) -> WatchScheduledPlanPayload {
+            WatchScheduledPlanPayload(
+                title: "Plan", dayOfWeek: 3, scheduledFor: date,
+                durationMinutes: nil, targetRPE: nil, exercises: []
+            )
+        }
+
+        XCTAssertFalse(payload(for: yesterday).isCurrent(asOf: now, calendar: calendar))
+        XCTAssertTrue(payload(for: now).isCurrent(asOf: now, calendar: calendar))
+        XCTAssertTrue(payload(for: tomorrow).isCurrent(asOf: now, calendar: calendar))
+    }
+
+    func test_decode_rejects_garbage_body() {
+        XCTAssertNil(WatchScheduledPlanPayload.decode(from: "not json"))
+    }
+
+    /// Pre-VOL-275 snapshots have no `scheduledPlanBody`; decoding them
+    /// must keep working so a watch app update never loses session state.
+    func test_legacy_session_snapshot_decodes_without_plan_body() throws {
+        let legacyJSON = """
+        {"workoutID":"w1","selectedAction":"hold","restEndsAt":730000000,        "coachPrompt":"p","sessionActive":true,"statusMessage":"s","loggedSetCount":2}
+        """
+        let snapshot = SyncPayloadCodec.decode(WatchSessionSnapshot.self, from: legacyJSON)
+
+        XCTAssertNotNil(snapshot)
+        XCTAssertNil(snapshot?.scheduledPlanBody)
+        XCTAssertEqual(snapshot?.loggedSetCount, 2)
+    }
+}
+
 // MARK: - Test doubles
 
 /// Hermetic fake transport: records every sent payload, can be set to

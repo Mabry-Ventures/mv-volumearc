@@ -70,6 +70,7 @@ public struct PaywallView: View {
             // memory/scroll-perf win is marginal at 5 elements.
             VStack(alignment: .leading, spacing: VA.Space.xl) {
                 hero
+                premiumOutcomeBand
                 premiumProofBand
                 featureComparison
                 plans
@@ -111,8 +112,14 @@ public struct PaywallView: View {
                 // Models, and Live Activities are free per
                 // `docs/PLATFORM.md` (VOL-91); promising them as Premium
                 // value is paid-subscription misrepresentation.
+                // VOL-279 (repositioning): premium is programming depth,
+                // never generic AI access.
                 Text(String(
-                    localized: "A deeper coach and live voice when your hands are full, built for better calls between sets.",
+                    localized: """
+                        Upgrade the programming depth: progression read from your full \
+                        lift history, sharper between-set calls, and voice when typing \
+                        breaks focus.
+                        """,
                     comment: "Paywall hero description — Premium unlocks (Pro coach + live voice)"
                 ))
                     .font(VA.Typography.body)
@@ -199,6 +206,28 @@ public struct PaywallView: View {
         ))
     }
 
+    private var premiumOutcomeBand: some View {
+        HStack(spacing: VA.Space.sm) {
+            PaywallOutcomePill(
+                value: String(localized: "Full", comment: "Paywall outcome value"),
+                label: String(localized: "history read", comment: "Paywall outcome label")
+            )
+            PaywallOutcomePill(
+                value: String(localized: "Voice", comment: "Paywall outcome value"),
+                label: String(localized: "between sets", comment: "Paywall outcome label")
+            )
+            PaywallOutcomePill(
+                value: String(localized: "Low", comment: "Paywall outcome value"),
+                label: String(localized: "pressure", comment: "Paywall outcome label")
+            )
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(String(
+            localized: "Premium includes full-history coaching, voice between sets, and low-pressure guidance.",
+            comment: "Paywall outcome band accessibility label"
+        ))
+    }
+
     private func heroBadge(_ title: String, icon: String) -> some View {
         HStack(spacing: VA.Space.xs) {
             Image(systemName: icon)
@@ -247,7 +276,7 @@ public struct PaywallView: View {
                     PaywallProofRow(
                         icon: "list.bullet.clipboard.fill",
                         title: String(localized: "Remembers your training", comment: "Paywall proof row title"),
-                        detail: String(localized: "Coach Pro reviews saved sessions before it answers.", comment: "Paywall proof row detail")
+                        detail: String(localized: "Coach Pro reads your full lift history before it prescribes.", comment: "Paywall proof row detail")
                     )
                     PaywallProofRow(
                         icon: "waveform.and.mic",
@@ -327,7 +356,11 @@ public struct PaywallView: View {
                     comment: "Premium feature name — pro coach tier"
                 ),
                 description: String(
-                    localized: "Looks at your full training history before answering, so advice fits your patterns, not just your last set.",
+                    localized: """
+                        Reads your full training history before prescribing, so \
+                        progression builds on what you've actually lifted — not just \
+                        your last set.
+                        """,
                     comment: "Premium feature description — pro coach tier"
                 )
             ),
@@ -587,6 +620,33 @@ private struct PaywallProofRow: View {
                     .foregroundStyle(VA.Colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+}
+
+private struct PaywallOutcomePill: View {
+    let value: String
+    let label: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: VA.Space.xxs) {
+            Text(value)
+                .font(VA.Typography.headline)
+                .foregroundStyle(VA.Colors.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+            Text(label)
+                .font(VA.Typography.caption)
+                .foregroundStyle(VA.Colors.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(VA.Space.md)
+        .background(VA.Colors.surfacePrimary, in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous)
+                .stroke(VA.Colors.primary.opacity(0.18), lineWidth: 1)
         }
     }
 }

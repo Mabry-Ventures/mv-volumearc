@@ -48,6 +48,13 @@ enum VolumeArcLaunchBootstrapper {
         if (resolvedUITestMode || resolvedSeedFixtures) && !shouldPreservePersistence {
             try resetState(in: container)
             OnboardingProgressStore.clear()
+            // VOL-287: deterministic launches start with the safety
+            // disclaimer unacknowledged so onboarding tests exercise the
+            // real consent gate. PR #363: also clear the refresh-independent
+            // onboarding-completion flag so a stale value from a prior
+            // launch can't suppress the first-run onboarding gate.
+            SafetyDisclaimerAcknowledgmentStore.reset()
+            OnboardingCompletionStore.reset()
         }
 
         if resolvedSkipOnboarding || resolvedSeedFixtures {
@@ -60,6 +67,20 @@ enum VolumeArcLaunchBootstrapper {
                 profile: resolvedSeedFixtures ? deterministicProfile : VolumeArcProductDefaults.userProfile,
                 onboardingCompleted: resolvedSkipOnboarding
             )
+            if resolvedSkipOnboarding {
+                // Skip-onboarded seeded launches land directly on the
+                // dashboard, so seed BOTH launch-gate stores as satisfied.
+                // Otherwise RootDashboardView's safety gate
+                // (isOnboarded && !isAccepted) covers the dashboard and
+                // seeded journeys waiting for `root.dashboard` stall
+                // (PR #363, Codex P2).
+                OnboardingCompletionStore.markComplete()
+                SafetyDisclaimerAcknowledgmentStore.recordAccepted()
+            } else {
+                // Seeding fixtures WITHOUT skipping onboarding still
+                // exercises the real first-run consent gate.
+                SafetyDisclaimerAcknowledgmentStore.reset()
+            }
         }
 
         if resolvedSeedFixtures {
@@ -84,6 +105,12 @@ enum VolumeArcLaunchBootstrapper {
         }
         for memory in try context.fetch(FetchDescriptor<CoachMemoryRecord>()) {
             context.delete(memory)
+        }
+        for program in try context.fetch(FetchDescriptor<TrainingProgramRecord>()) {
+            context.delete(program)
+        }
+        for template in try context.fetch(FetchDescriptor<WorkoutTemplateRecord>()) {
+            context.delete(template)
         }
         for queuedChange in try context.fetch(FetchDescriptor<OutboundSyncQueueRecord>()) {
             context.delete(queuedChange)

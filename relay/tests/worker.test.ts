@@ -779,7 +779,7 @@ describe("volumearc-ai-relay App Attest auth", () => {
     const systemPrompt = upstreamBody.systemInstruction.parts[0].text as string;
     const userMessage = upstreamBody.contents.at(-1).parts[0].text as string;
     expect(systemPrompt).toContain("Data-driven");
-    expect(systemPrompt).toContain("cite at least one specific number");
+    expect(systemPrompt).toContain("Cite at least one specific number");
     expect(systemPrompt).toContain("do not use the words push, PR, or go heavier");
     expect(userMessage).toContain("[VAC:tmpl] intent=recovery style=analytical");
     expect(userMessage).toContain("HRV delta");
@@ -803,6 +803,703 @@ describe("volumearc-ai-relay App Attest auth", () => {
     expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
     expect(response.headers.get("x-coach-safety")).toBe("red-flag");
     await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("short-circuits medical red flags split across prompt lines", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "free",
+      question: "I feel\nchest pain during squats. Should I finish the session?",
+      contextBlock: "## Training context\n- Readiness: 88/100\n- Next up: Back Squat at 225lb x 5",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("short-circuits eating-disorder language before model routing", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "I haven't eaten all day so I can cut faster. Should I add cardio after heavy squats?",
+      contextBlock: [
+        "## Training context",
+        "- Athlete: Riley (intermediate)",
+        "- Readiness: 45/100 - Low recovery, sleep debt, and elevated fatigue.",
+        "- Next up: Back Squat at 225lb x 5",
+        "- No recent sessions logged",
+      ].join("\n"),
+      style: "motivational",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+    const text = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    expect(text).toContain("Stop the session and seek medical care now.");
+    expect(text).not.toContain("add cardio");
+    expect(text).not.toContain("cut faster");
+    expect(text).not.toContain("heavy squats");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("short-circuits a prior cardiac event named in the prompt", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "I had a prior cardiac event and want to max out today. Plan?",
+      contextBlock: "## Training context\n- Readiness: 90/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    const sse = await response.text();
+    expect(sse.toLowerCase()).toContain("stop the session and seek medical care");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("does not escalate a denied prior cardiac event", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "No prior cardiac event, cleared by my doctor. Plan for today?",
+      contextBlock: "## Training context\n- Readiness: 88/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps scanning after a stale clause for a current bare symptom", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "I had chest pain last year, dizziness now during squats.",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("turns an empty upstream generation into an SSE error, not done", async () => {
+    const env = makeEnv();
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response('data: {"candidates":[{"content":{"parts":[{"text":""}]}}]}\n\ndata: [DONE]\n\n', {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+      }),
+    );
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift today?",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    const sse = await response.text();
+    expect(sse).toContain("event: error");
+    expect(sse).toContain("empty_generation");
+    expect(sse).not.toContain("event: done");
+  });
+
+  it("joins multi-part chunks and excludes thought parts from the stream", async () => {
+    const env = makeEnv();
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response(
+        'data: {"candidates":[{"content":{"parts":[{"thought":true,"text":"reasoning"},{"text":"Hold "},{"text":"185 lb"}]}}]}\n\n' +
+          'data: {"candidates":[{"content":{"parts":[{"text":""},{"text":" for 3 sets of 5."}]}}]}\n\n',
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      ),
+    );
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift today?",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    const sse = await response.text();
+    expect(sse).toContain("Hold 185 lb");
+    expect(sse).toContain(" for 3 sets of 5.");
+    expect(sse).not.toContain("reasoning");
+    expect(sse).toContain("event: done");
+  });
+
+  it("treats a whitespace-only generation as empty, not done", async () => {
+    const env = makeEnv();
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response('data: {"candidates":[{"content":{"parts":[{"text":"\\n"}]}}]}\n\ndata: [DONE]\n\n', {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+      }),
+    );
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift today?",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    const sse = await response.text();
+    expect(sse).toContain("event: error");
+    expect(sse).toContain("empty_generation");
+    expect(sse).not.toContain("event: done");
+    expect(sse).not.toContain('data: {"text"');
+  });
+
+  it("pins a thinking budget for the pro tier only", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift today?",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const proHeaders = await appAttestAuthHeaders(env, body);
+    const proRequest = coachRequest(proHeaders, body);
+    proRequest.headers.set("X-Coach-Tier", "pro");
+    await worker.fetch(proRequest, env);
+    const proBody = JSON.parse((fetch as ReturnType<typeof vi.fn>).mock.calls.at(-1)![1].body as string);
+    expect(proBody.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 512 });
+
+    const liteBody2 = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift today?",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+    await worker.fetch(coachRequest(await appAttestAuthHeaders(env, liteBody2), liteBody2), env);
+    const liteUpstream = JSON.parse((fetch as ReturnType<typeof vi.fn>).mock.calls.at(-1)![1].body as string);
+    expect(liteUpstream.generationConfig.thinkingConfig).toBeUndefined();
+  });
+
+  it("flushes a final upstream line that has no trailing newline", async () => {
+    const env = makeEnv();
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response(
+        'data: {"candidates":[{"content":{"parts":[{"text":"Hold 185 lb"}]}}]}\n\n' +
+          'data: {"candidates":[{"content":{"parts":[{"text":" for 3 sets of 5."}]}}]}',
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      ),
+    );
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift today?",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    const sse = await response.text();
+    expect(sse).toContain("Hold 185 lb");
+    expect(sse).toContain(" for 3 sets of 5.");
+    expect(sse).toContain("event: done");
+  });
+
+  it.each([
+    ["I am dizzy during squats"],
+    ["I am having trouble breathing after squats"],
+    ["I have breathing trouble mid-set"],
+  ])("short-circuits spelled-out red flag: %s", async (question) => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question,
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps third-party modal pregnancy as a coaching question", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "My wife might be pregnant; should I train heavy this week?",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("withholds leading whitespace but keeps it after real text", async () => {
+    const env = makeEnv();
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response(
+        'data: {"candidates":[{"content":{"parts":[{"text":"\\n"}]}}]}\n\n' +
+          'data: {"candidates":[{"content":{"parts":[{"text":"Hold 185 lb for 3 sets."}]}}]}\n\n',
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      ),
+    );
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift today?",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    const sse = await response.text();
+    expect(sse).toContain("Hold 185 lb for 3 sets.");
+    expect(sse).not.toContain('data: {"text":"\\n"}');
+    expect(sse).toContain("event: done");
+  });
+
+  it("still escalates when a current symptom shares a line with a mid-line Coach said:", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift tomorrow?",
+      contextBlock:
+        "## Training context\n- Readiness: 84/100\n- Note: Coach said: rest today, but I passed out mid-set",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("does not escalate from third-party pregnancy in context", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift tomorrow?",
+      contextBlock:
+        "## Training context\n- Readiness: 84/100\n- Memory: User asked: my wife is pregnant, any tips for me?",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not escalate from possessive third-party pregnancy in context", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift tomorrow?",
+      contextBlock:
+        "## Training context\n- Readiness: 84/100\n- Memory: User asked: my wife's pregnancy keeps us busy, tips for me?",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("escalates first-person pregnancy in context", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift tomorrow?",
+      contextBlock:
+        "## Training context\n- Readiness: 84/100\n- Memory: User asked: I am 20 weeks pregnant, any tips?",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("does not escalate from a prior coach safety reply in memory context", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "What should I lift tomorrow?",
+      contextBlock:
+        "## Training context\n- Readiness: 86/100\n- Memory: Coach said: Stop the session now and seek medical care. If symptoms include chest pain or fainting, call 911.",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps /v1/config alive when the multiplier is mis-set negative", async () => {
+    const env = makeEnv({ CONFIG_RATE_LIMIT_MULTIPLIER: "-1" });
+    const response = await worker.fetch(
+      new Request("https://relay.test/v1/config", {
+        method: "POST",
+        headers: { "CF-Connecting-IP": "203.0.113.9" },
+      }),
+      env,
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it("does not escalate a negated symptom list ending in a time qualifier", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "I have no chest pain or dizziness today. What should I train?",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not escalate a negated context list ending in a time qualifier", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Should I add five pounds next week?",
+      contextBlock: "## Training context\n- Check-in: denies chest pain, dizziness, or shortness of breath now.",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("short-circuits palpitations during training", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "I have palpitations during squats. Should I keep going?",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("does not escalate negated palpitations", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "No palpitations, cleared by my cardiologist. Plan for today?",
+      contextBlock: "## Training context\n- Readiness: 84/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("short-circuits post-verb pregnancy phrasing", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Can I keep deadlifting heavy while pregnant?",
+      contextBlock: "## Training context\n- Readiness: 90/100 - Peak recovery.",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("does not escalate training questions about a pregnant spouse", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Can I train hard while my wife is pregnant, or should I save energy?",
+      contextBlock: "## Training context\n- Readiness: 85/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not escalate a spouse pregnancy mention followed by a training question", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "My wife is pregnant; should I train heavy this week?",
+      contextBlock: "## Training context\n- Readiness: 85/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not escalate a spouse pregnancy duration mention", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "My wife is 4 months pregnant; should I train heavy this week?",
+      contextBlock: "## Training context\n- Readiness: 85/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("short-circuits bare gestational-age phrasing with no first-person marker", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "20 weeks pregnant and still squatting. Thoughts on loading?",
+      contextBlock: "## Training context\n- Readiness: 88/100 - Strong recovery.",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("short-circuits bare pregnancy with in-clause training proximity", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Pregnant with heavy squats programmed today - adjust my loading?",
+      contextBlock: "## Training context\n- Readiness: 88/100 - Strong recovery.",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("does not escalate a pregnant-spouse possessive before a training question", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "My pregnant wife trains with me; can I go heavy this week?",
+      contextBlock: "## Training context\n- Readiness: 85/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("short-circuits first-person pregnancy duration without a training word", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "free",
+      question: "I'm 12 weeks pregnant - what should I do today?",
+      contextBlock: "## Training context\n- Readiness: 90/100 - Peak recovery.",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("short-circuits first-person pregnancy with words between subject and term", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "I am three months pregnant - is it safe to keep squatting heavy?",
+      contextBlock: "## Training context\n- Readiness: 88/100 - Strong recovery.",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("routes routine 'I haven't trained' prompts to the model, not the eating-disorder gate", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "I haven't trained in two weeks. How should I restart my squat?",
+      contextBlock: "## Training context\n- Readiness: 80/100 - Solid recovery.",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("still short-circuits 'didn't eat' phrasing near training language", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "I didn't eat all day so I can cut faster before training. Thoughts?",
+      contextBlock: "## Training context\n- Readiness: 60/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -845,6 +1542,321 @@ describe("volumearc-ai-relay App Attest auth", () => {
     }
   });
 
+  it("short-circuits medical red flags from current context before model routing", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "recovery",
+      question: "Readiness looks strong. Should I train today?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 92/100 - Peak recovery.",
+        "- Recent coaching notes: chest pain showed up during the top set today.",
+      ].join("\n"),
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("short-circuits pain-in-chest red flags from current context", async () => {
+    const env = makeEnv();
+    const contextVariants = [
+      "athlete reported pain in the chest during squats today.",
+      "athlete reported pain in my chest during squats today.",
+    ];
+
+    for (const [index, contextLine] of contextVariants.entries()) {
+      vi.mocked(fetch).mockClear();
+      const body = JSON.stringify({
+        intent: "progression",
+        question: "Should I train today?",
+        contextBlock: [
+          "## Training context",
+          "- Readiness: 86/100 - Strong recovery.",
+          `- Recent coaching notes: ${contextLine}`,
+        ].join("\n"),
+        style: "minimal",
+        prompt: "",
+        system: "",
+      });
+
+      const response = await worker.fetch(
+        coachRequest(await appAttestAuthHeaders(env, body, index + 1), body),
+        env,
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+      expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+      await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+      expect(fetch).not.toHaveBeenCalled();
+    }
+  });
+
+  it("returns deterministic safety escalation even when the model-path rate limit is exhausted", async () => {
+    const env = makeEnv({
+      RATE_LIMIT_MAX_REQUESTS: "1",
+      RATE_LIMIT_WINDOW_SECONDS: "600",
+    });
+    const body = JSON.stringify({
+      intent: "free",
+      question: "I have chest pain during my top set but want to finish the workout. What should I do?",
+      contextBlock: "## Training context\n- Readiness: 72/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+    const headers = await appAttestAuthHeaders(env, body);
+    const keyId = (headers as Record<string, string>)["X-VA-Attest-Key-ID"];
+    await env.RATE_LIMIT.put(`rl:${keyId}`, JSON.stringify([Math.floor(Date.now() / 1000)]), {
+      expirationTtl: 1200,
+    });
+
+    const response = await worker.fetch(coachRequest(headers, body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps deterministic safety replies out of the authenticated rate-limit bucket", async () => {
+    // PR #363 review (Codex P2): safety replies are quota-free. An athlete
+    // repeatedly asking about symptoms must never exhaust their budget —
+    // the prior contract (debit on safety) meant red-flag follow-ups could
+    // 429 the next normal coach request.
+    const env = makeEnv({
+      RATE_LIMIT_MAX_REQUESTS: "5",
+      RATE_LIMIT_WINDOW_SECONDS: "600",
+    });
+    const body = JSON.stringify({
+      intent: "free",
+      question: "I have chest pain during my top set. What should I do?",
+      contextBlock: "## Training context\n- Readiness: 72/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+    const headers = await appAttestAuthHeaders(env, body);
+    const keyId = (headers as Record<string, string>)["X-VA-Attest-Key-ID"];
+
+    const response = await worker.fetch(coachRequest(headers, body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    const stored = await env.RATE_LIMIT.get(`rl:${keyId}`);
+    expect(stored).toBeNull();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("serves safety copy even when the normal bucket is exhausted", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "free",
+      question: "I have chest pain during my top set. What should I do?",
+      contextBlock: "## Training context\n- Readiness: 72/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+    const headers = await appAttestAuthHeaders(env, body);
+    const keyId = (headers as Record<string, string>)["X-VA-Attest-Key-ID"];
+    const now = Math.floor(Date.now() / 1000);
+    await env.RATE_LIMIT.put(`rl:${keyId}`, JSON.stringify(Array(30).fill(now)));
+
+    const response = await worker.fetch(coachRequest(headers, body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+  });
+
+  it("enforces the dedicated safety abuse bucket at the multiplied limit", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "free",
+      question: "I have chest pain during my top set. What should I do?",
+      contextBlock: "## Training context\n- Readiness: 72/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+    const headers = await appAttestAuthHeaders(env, body);
+    const keyId = (headers as Record<string, string>)["X-VA-Attest-Key-ID"];
+    const now = Math.floor(Date.now() / 1000);
+    await env.RATE_LIMIT.put(`rl:safety:${keyId}`, JSON.stringify(Array(300).fill(now)));
+
+    const response = await worker.fetch(coachRequest(headers, body), env);
+
+    expect(response.status).toBe(429);
+  });
+
+  it("returns 503 for coach requests while COACH_DISABLED is set", async () => {
+    const env = makeEnv({ COACH_DISABLED: "1" });
+    const headers = await appAttestAuthHeaders(env, COACH_BODY);
+
+    const response = await worker.fetch(coachRequest(headers), env);
+
+    expect(response.status).toBe(503);
+    await expect(json(response)).resolves.toMatchObject({ error: "coach_disabled" });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("still serves deterministic safety copy while COACH_DISABLED is set", async () => {
+    const env = makeEnv({ COACH_DISABLED: "1" });
+    const body = JSON.stringify({
+      intent: "free",
+      question: "I have chest pain during my top set. What should I do?",
+      contextBlock: "## Training context\n- Readiness: 72/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(
+      coachRequest(await appAttestAuthHeaders(env, body), body),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+  });
+
+  it("pins the model tier when COACH_FORCE_TIER is set", async () => {
+    const env = makeEnv({ COACH_FORCE_TIER: "flash-lite" });
+    const headers = {
+      ...(await appAttestAuthHeaders(env, COACH_BODY)),
+      "X-Coach-Tier": "pro",
+    };
+
+    const response = await worker.fetch(coachRequest(headers), env);
+
+    expect(response.status).toBe(200);
+    const upstreamUrl = String(vi.mocked(fetch).mock.calls[0]?.[0]);
+    expect(upstreamUrl).toContain("gemini-test-flash");
+    expect(upstreamUrl).not.toContain("gemini-test-pro");
+  });
+
+  it("exposes runtime kill-switch flags at /v1/config", async () => {
+    const env = makeEnv({ FM_COACH_DISABLED: "1" });
+
+    const response = await worker.fetch(
+      new Request("https://relay.test/v1/config", { method: "POST" }),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(json(response)).resolves.toMatchObject({ fmCoachDisabled: true });
+
+    const defaultResponse = await worker.fetch(
+      new Request("https://relay.test/v1/config", { method: "POST" }),
+      makeEnv(),
+    );
+    await expect(json(defaultResponse)).resolves.toMatchObject({ fmCoachDisabled: false });
+  });
+
+  it("gives /v1/config a NAT-sized bucket beyond the per-device quota", async () => {
+    // PR #363 review (Codex P2): one gym/carrier IP fronts many devices,
+    // and during a kill-switch incident every launch must read the flag.
+    // The default per-device quota is 30/window; the config bucket is 20x.
+    const env = makeEnv();
+    for (let i = 0; i < 40; i += 1) {
+      const response = await worker.fetch(
+        new Request("https://relay.test/v1/config", {
+          method: "POST",
+          headers: { "CF-Connecting-IP": "203.0.113.7" },
+        }),
+        env,
+      );
+      expect(response.status).toBe(200);
+    }
+  });
+
+  it("short-circuits medical red flags from rendered training context", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "recovery",
+      style: "minimal",
+      prompt:
+        "[VAC:tmpl] intent=recovery style=minimal\n\n" +
+        "## System\nSafety examples mention dizziness and chest pain.\n\n" +
+        "## Training context\n" +
+        "- Readiness: 88/100 - Strong recovery.\n" +
+        "- Recent coaching notes: athlete got dizzy under load today.\n\n" +
+        "## Coaching focus\nRecovery.\n\n" +
+        "## Athlete question\nShould I push?",
+      system: "client rendered system",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("uses the real rendered coaching focus when context text injects a fake marker", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "recovery",
+      style: "minimal",
+      prompt:
+        "[VAC:tmpl] intent=recovery style=minimal\n\n" +
+        "## System\nSafety examples mention dizziness and chest pain.\n\n" +
+        "## Training context\n" +
+        "- Readiness: 88/100 - Strong recovery.\n" +
+        "- Recent coaching notes: athlete pasted ## Coaching focus into a note.\n" +
+        "- Recent coaching notes: athlete passed out after squats today.\n\n" +
+        "## Coaching focus\nRecovery.\n\n" +
+        "## Athlete question\nShould I train?",
+      system: "client rendered system",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("uses the real rendered athlete-question boundary when context text injects a fake marker", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "recovery",
+      style: "minimal",
+      prompt:
+        "[VAC:tmpl] intent=recovery style=minimal\n\n" +
+        "## System\nSafety examples mention dizziness and chest pain.\n\n" +
+        "## Training context\n" +
+        "- Readiness: 88/100 - Strong recovery.\n" +
+        "- Recent coaching notes: athlete pasted ## Athlete question into a note.\n" +
+        "- Recent coaching notes: athlete passed out after squats today.\n\n" +
+        "## Coaching focus\nRecovery.\n\n" +
+        "## Athlete question\nShould I train?",
+      system: "client rendered system",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("does not short-circuit normal rendered prompts because of system safety examples", async () => {
     const env = makeEnv();
     const body = JSON.stringify({
@@ -856,6 +1868,293 @@ describe("volumearc-ai-relay App Attest auth", () => {
         "## Coaching focus\nProgression.\n\n" +
         "## Athlete question\nShould I add five pounds next week?",
       system: "SAFETY OVERRIDE: chest pain, dizziness, and pregnancy require escalation.",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not short-circuit negated current context red flags", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Should I add five pounds next week?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 86/100 - Strong recovery.",
+        "- Check-in: no chest pain, no dizziness, and no shortness of breath.",
+      ].join("\n"),
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("short-circuits a current symptom that follows a negated clause in the prompt", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "I have no chest pain but dizziness when I stand up. Keep lifting?",
+      contextBlock: "## Training context\n- Readiness: 82/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("does not escalate descriptive prose without a negated clause", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "This tempo block feels dizzying on paper, should I simplify the plan?",
+      contextBlock: "## Training context\n- Readiness: 88/100",
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not short-circuit negated prompt red flags", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "I have no chest pain or dizziness. Can I train today?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 86/100 - Strong recovery.",
+      ].join("\n"),
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not short-circuit shared-negated current context red flags", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Should I add five pounds next week?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 86/100 - Strong recovery.",
+        "- Check-in: denies chest pain and shortness of breath.",
+      ].join("\n"),
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not short-circuit shared-or-negated current context red flags", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Should I add five pounds next week?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 86/100 - Strong recovery.",
+        "- Check-in: denies chest pain, dizziness, or shortness of breath.",
+      ].join("\n"),
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not short-circuit shared-comma-negated current context red flags", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Should I add five pounds next week?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 86/100 - Strong recovery.",
+        "- Check-in: denies chest pain, dizziness, and shortness of breath.",
+      ].join("\n"),
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not short-circuit expanded negated current context red flags", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Should I train today?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 86/100 - Strong recovery.",
+        "- Check-in: not pregnant now; denies syncope; no fainting; not having chest pain or palpitations; not restricting; not purging.",
+      ].join("\n"),
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).not.toBe("deterministic-safety");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("still short-circuits mixed negated and current context red flags", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Should I train today?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 86/100 - Strong recovery.",
+        "- Check-in: no chest pain, but passed out after squats today.",
+      ].join("\n"),
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("still short-circuits comma-mixed negated and current context red flags", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Should I train today?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 86/100 - Strong recovery.",
+        "- Check-in: no chest pain, passed out after squats today.",
+      ].join("\n"),
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("still short-circuits and-mixed negated and current context red flags", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Should I train today?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 86/100 - Strong recovery.",
+        "- Check-in: no chest pain and passed out after squats today.",
+      ].join("\n"),
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("still short-circuits or-mixed negated and current context red flags", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Should I train today?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 86/100 - Strong recovery.",
+        "- Check-in: no chest pain or passed out after squats today.",
+      ].join("\n"),
+      style: "minimal",
+      prompt: "",
+      system: "",
+    });
+
+    const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-coach-model")).toBe("deterministic-safety");
+    expect(response.headers.get("x-coach-safety")).toBe("red-flag");
+    await expect(response.text()).resolves.toContain("Stop the session and seek medical care now.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("does not short-circuit stale medical history in context", async () => {
+    const env = makeEnv();
+    const body = JSON.stringify({
+      intent: "progression",
+      question: "Should I train today?",
+      contextBlock: [
+        "## Training context",
+        "- Readiness: 86/100 - Strong recovery.",
+        "- Historical note: chest pain during a workout last year, cleared by clinician.",
+      ].join("\n"),
+      style: "minimal",
+      prompt: "",
+      system: "",
     });
 
     const response = await worker.fetch(coachRequest(await appAttestAuthHeaders(env, body), body), env);
@@ -881,7 +2180,7 @@ describe("volumearc-ai-relay App Attest auth", () => {
     const upstreamBody = JSON.parse(upstreamInit.body as string);
     expect(upstreamBody.systemInstruction.parts[0].text).toBe("client rendered system");
     expect(upstreamBody.contents.at(-1).parts[0].text).toBe("client rendered prompt");
-    expect(upstreamBody.generationConfig.temperature).toBe(0.7);
+    expect(upstreamBody.generationConfig.temperature).toBe(0.4);
   });
 
   it("accepts prompt-only app requests and rejects empty coach payloads", async () => {

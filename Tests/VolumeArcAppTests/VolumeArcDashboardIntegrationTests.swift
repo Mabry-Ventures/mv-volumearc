@@ -17,7 +17,7 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
     private var trainingPlanRepository: SwiftDataTrainingPlanRepository!
 
     override func setUp() async throws {
-        let schema = Schema(VolumeArcSchemaV5.models)
+        let schema = Schema(VolumeArcSchemaLatest.models)
         let config = ModelConfiguration(
             "IntegrationTest-\(UUID().uuidString)",
             schema: schema,
@@ -723,7 +723,7 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         let scheduled = await model.scheduleWorkoutPlan(
             plan,
             on: wednesday,
-            source: "workouts_builder",
+            source: .workoutsBuilder,
             calendar: Calendar(identifier: .gregorian)
         )
 
@@ -830,15 +830,331 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
 
         XCTAssertEqual(model.activeSessionExercise?.name, "Front Squat")
 
-        model.skipActiveSessionExercise()
+        let skip = try XCTUnwrap(model.skipActiveSessionExercise())
 
+        XCTAssertEqual(skip.skippedExercise, "Front Squat")
+        XCTAssertEqual(skip.nextExercise, "Romanian Deadlift")
         XCTAssertEqual(model.activeSessionExercise?.name, "Romanian Deadlift")
+        XCTAssertEqual(model.activeSessionPlan?.exercises.map(\.name), ["Romanian Deadlift"])
+        XCTAssertEqual(model.loggedSetCountThisSession, 0)
+        XCTAssertEqual(model.loggedSetCountForActiveExercise, 0)
         XCTAssertTrue(telemetry.currentEvents.contains {
             $0.category == "workout" && $0.name == "exercise_replaced"
         })
         XCTAssertTrue(telemetry.currentEvents.contains {
             $0.category == "workout" && $0.name == "exercise_skipped"
         })
+    }
+
+    /// PR #363 round 17: skipping the FINAL planned lift must park the
+    /// session in the "no planned lifts remain" state, not rewind to an
+    /// already-completed exercise.
+    func testSkippingFinalExerciseParksSessionInsteadOfRewinding() async throws {
+        let model = makeDashboardModel(
+            activeSessionStateStore: InMemoryActiveWorkoutSessionStateStore()
+        )
+        let plan = WorkoutSessionPlan(
+            title: "Two-lift day",
+            exercises: [
+                WeeklyWorkoutExercise(
+                    name: "Bench Press",
+                    sets: 1,
+                    reps: 5,
+                    weight: 185,
+                    targetRPE: 8,
+                    restSeconds: 150
+                ),
+                WeeklyWorkoutExercise(
+                    name: "Barbell Row",
+                    sets: 3,
+                    reps: 8,
+                    weight: 135,
+                    targetRPE: 7,
+                    restSeconds: 120
+                ),
+            ]
+        )
+
+        await model.startWorkoutSession(plan: plan)
+        await model.logRecommendedSet()
+        model.moveActiveSession(toExerciseAt: 1)
+
+        let outcome = try XCTUnwrap(model.skipActiveSessionExercise())
+
+        XCTAssertEqual(outcome.skippedExercise, "Barbell Row")
+        XCTAssertNil(outcome.nextExercise)
+        XCTAssertNil(model.activeSessionExercise)
+        XCTAssertEqual(model.activeSessionPlan?.exercises.count, 1)
+        XCTAssertTrue(model.isSessionActive)
+    }
+
+    /// PR #363 round 17 follow-up: the parked state persists as an index
+    /// one past the end, and restore used to clamp it back onto the last
+    /// completed lift — so a force-quit after skipping the final lift
+    /// resurrected the rewind on relaunch.
+    func testSkippedFinalExerciseStaysParkedAcrossRelaunch() async throws {
+        let activeSessionStateStore = InMemoryActiveWorkoutSessionStateStore()
+        let model = makeDashboardModel(activeSessionStateStore: activeSessionStateStore)
+        let plan = WorkoutSessionPlan(
+            title: "Two-lift day",
+            exercises: [
+                WeeklyWorkoutExercise(
+                    name: "Bench Press",
+                    sets: 1,
+                    reps: 5,
+                    weight: 185,
+                    targetRPE: 8,
+                    restSeconds: 150
+                ),
+                WeeklyWorkoutExercise(
+                    name: "Barbell Row",
+                    sets: 3,
+                    reps: 8,
+                    weight: 135,
+                    targetRPE: 7,
+                    restSeconds: 120
+                ),
+            ]
+        )
+
+        await model.startWorkoutSession(plan: plan)
+        await model.logRecommendedSet()
+        model.moveActiveSession(toExerciseAt: 1)
+        _ = try XCTUnwrap(model.skipActiveSessionExercise())
+        XCTAssertNil(model.activeSessionExercise)
+
+        let relaunched = makeDashboardModel(activeSessionStateStore: activeSessionStateStore)
+        await relaunched.refresh()
+
+        XCTAssertTrue(relaunched.isSessionActive)
+        XCTAssertNil(relaunched.activeSessionExercise)
+        XCTAssertEqual(relaunched.activeSessionPlan?.exercises.map(\.name), ["Bench Press"])
+        XCTAssertEqual(relaunched.loggedSetCountForActiveExercise, 0)
+    }
+
+    /// PR #363 round 21 (Codex P2): a parked PLANNED session (final lift
+    /// of a multi-exercise plan skipped) must not fall back to the
+    /// autopilot suggestion when logging — the model refuses, so a stray
+    /// Log Set records nothing. A no-plan autopilot session still logs.
+    func testParkedPlannedSessionDoesNotLogAutopilotSet() async throws {
+        let model = makeDashboardModel(
+            activeSessionStateStore: InMemoryActiveWorkoutSessionStateStore()
+        )
+        let plan = WorkoutSessionPlan(
+            title: "Two-lift day",
+            exercises: [
+                WeeklyWorkoutExercise(
+                    name: "Bench Press",
+                    sets: 1,
+                    reps: 5,
+                    weight: 185,
+                    targetRPE: 8,
+                    restSeconds: 150
+                ),
+                WeeklyWorkoutExercise(
+                    name: "Barbell Row",
+                    sets: 3,
+                    reps: 8,
+                    weight: 135,
+                    targetRPE: 7,
+                    restSeconds: 120
+                ),
+            ]
+        )
+
+        await model.startWorkoutSession(plan: plan)
+        model.moveActiveSession(toExerciseAt: 1)
+        _ = model.skipActiveSessionExercise()
+        XCTAssertNil(model.activeSessionExercise)
+        XCTAssertNotNil(model.activeSessionPlan)
+
+        let before = model.loggedSetCountThisSession
+        await model.logRecommendedSet(weightOverride: 999, repsOverride: 5, rpeOverride: 7)
+
+        XCTAssertEqual(
+            model.loggedSetCountThisSession,
+            before,
+            "A parked planned session must not log a fallback autopilot set."
+        )
+    }
+
+    /// PR #363 round 23 (Codex P2): skipping the ONLY lift of a
+    /// single-exercise plan keeps a non-nil empty parked plan, so the
+    /// autopilot-log guard still fires — a stray Log Set records nothing
+    /// and cannot corrupt the workout history.
+    func testSkippedSingleLiftSessionStaysParkedAndBlocksAutopilotLog() async throws {
+        let model = makeDashboardModel(
+            activeSessionStateStore: InMemoryActiveWorkoutSessionStateStore()
+        )
+        let plan = WorkoutSessionPlan(
+            title: "One-lift day",
+            exercises: [
+                WeeklyWorkoutExercise(
+                    name: "Bench Press",
+                    sets: 1,
+                    reps: 5,
+                    weight: 185,
+                    targetRPE: 8,
+                    restSeconds: 150
+                ),
+            ]
+        )
+
+        await model.startWorkoutSession(plan: plan)
+        _ = model.skipActiveSessionExercise()
+
+        XCTAssertNil(model.activeSessionExercise)
+        XCTAssertNotNil(
+            model.activeSessionPlan,
+            "Skipping the only lift keeps an empty parked plan, not nil."
+        )
+        XCTAssertEqual(model.activeSessionPlan?.exercises.count, 0)
+
+        let before = model.loggedSetCountThisSession
+        await model.logRecommendedSet(weightOverride: 999, repsOverride: 5, rpeOverride: 7)
+
+        XCTAssertEqual(
+            model.loggedSetCountThisSession,
+            before,
+            "A skipped single-lift session must not log a fallback autopilot set."
+        )
+    }
+
+    /// PR #363 round 26 (Codex P2 + CodeRabbit): skipping the only lift
+    /// must persist a PARKED SENTINEL — an empty plan flagged `parked` —
+    /// rather than the stale pre-skip plan (which would resurrect the
+    /// skipped lift on relaunch) or nothing (which would restore a nil
+    /// plan and let an autopilot set land in the parked workout). The
+    /// empty+parked state overwrites the pre-skip plan and restores as
+    /// `activeSessionPlan != nil && activeSessionExercise == nil`.
+    func testSkippedSingleLiftPersistsParkedSentinel() async throws {
+        let store = InMemoryActiveWorkoutSessionStateStore()
+        let model = makeDashboardModel(activeSessionStateStore: store)
+        let plan = WorkoutSessionPlan(
+            title: "One-lift day",
+            exercises: [
+                WeeklyWorkoutExercise(
+                    name: "Bench Press",
+                    sets: 2,
+                    reps: 5,
+                    weight: 185,
+                    targetRPE: 8,
+                    restSeconds: 150
+                ),
+            ]
+        )
+
+        await model.startWorkoutSession(plan: plan)
+        let workoutID = try XCTUnwrap(model.activeWorkoutID)
+        await model.logRecommendedSet()
+        let preSkip = try XCTUnwrap(store.load(workoutID: workoutID))
+        XCTAssertFalse(preSkip.plan.exercises.isEmpty, "Precondition: pre-skip plan is persisted.")
+
+        _ = model.skipActiveSessionExercise()
+
+        let parkedState = try XCTUnwrap(
+            store.load(workoutID: workoutID),
+            "The parked sentinel must persist, not be cleared."
+        )
+        XCTAssertTrue(parkedState.parked, "Persisted state must be flagged parked.")
+        XCTAssertTrue(
+            parkedState.plan.exercises.isEmpty,
+            "Parked sentinel must be an empty plan, so the skipped lift cannot be resurrected."
+        )
+    }
+
+    /// PR #363 round 18: from the parked state (final lift skipped),
+    /// tapping an earlier exercise in the workout map must reload it,
+    /// not crash on the out-of-range parked index.
+    func testReselectingEarlierExerciseFromParkedStateReloadsIt() async throws {
+        let model = makeDashboardModel(
+            activeSessionStateStore: InMemoryActiveWorkoutSessionStateStore()
+        )
+        let plan = WorkoutSessionPlan(
+            title: "Two-lift day",
+            exercises: [
+                WeeklyWorkoutExercise(
+                    name: "Bench Press",
+                    sets: 1,
+                    reps: 5,
+                    weight: 185,
+                    targetRPE: 8,
+                    restSeconds: 150
+                ),
+                WeeklyWorkoutExercise(
+                    name: "Barbell Row",
+                    sets: 3,
+                    reps: 8,
+                    weight: 135,
+                    targetRPE: 7,
+                    restSeconds: 120
+                ),
+            ]
+        )
+
+        await model.startWorkoutSession(plan: plan)
+        await model.logRecommendedSet()
+        model.moveActiveSession(toExerciseAt: 1)
+        _ = model.skipActiveSessionExercise()
+        XCTAssertNil(model.activeSessionExercise)
+
+        model.moveActiveSession(toExerciseAt: 0)
+
+        XCTAssertEqual(model.activeSessionExercise?.name, "Bench Press")
+        XCTAssertEqual(model.activeSessionExerciseIndex, 0)
+    }
+
+    func testSkippingCurrentExerciseRemovesItWithoutInflatingSetProgress() async throws {
+        let activeSessionStateStore = InMemoryActiveWorkoutSessionStateStore()
+        let model = makeDashboardModel(activeSessionStateStore: activeSessionStateStore)
+        let plan = WorkoutSessionPlan(
+            title: "Busy gym upper",
+            exercises: [
+                WeeklyWorkoutExercise(
+                    name: "Bench Press",
+                    sets: 3,
+                    reps: 5,
+                    weight: 185,
+                    targetRPE: 8,
+                    restSeconds: 150
+                ),
+                WeeklyWorkoutExercise(
+                    name: "Barbell Row",
+                    sets: 3,
+                    reps: 8,
+                    weight: 135,
+                    targetRPE: 7,
+                    restSeconds: 120
+                ),
+                WeeklyWorkoutExercise(
+                    name: "Overhead Press",
+                    sets: 2,
+                    reps: 6,
+                    weight: 95,
+                    targetRPE: 7,
+                    restSeconds: 120
+                ),
+            ]
+        )
+
+        await model.startWorkoutSession(plan: plan)
+        let workoutID = try XCTUnwrap(model.activeWorkoutID)
+        await model.logRecommendedSet()
+        model.moveActiveSession(toExerciseAt: 1)
+        await model.logRecommendedSet()
+
+        let skip = try XCTUnwrap(model.skipActiveSessionExercise())
+
+        XCTAssertEqual(skip.skippedExercise, "Barbell Row")
+        XCTAssertEqual(skip.nextExercise, "Overhead Press")
+        XCTAssertEqual(model.loggedSetCountThisSession, 2)
+        XCTAssertEqual(model.activeSessionExercise?.name, "Overhead Press")
+        XCTAssertEqual(model.activeSessionPlan?.exercises.map(\.name), ["Bench Press", "Overhead Press"])
+        XCTAssertEqual(model.loggedSetCountForActiveExercise, 0)
+        XCTAssertEqual(
+            activeSessionStateStore.load(workoutID: workoutID)?.loggedSetCountsByExerciseIndex,
+            [0: 1]
+        )
     }
 
     func testActiveSessionPlanCanDeferAndSelectExercisesForBusyGym() async throws {
@@ -1067,6 +1383,372 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertTrue(telemetry.currentEvents.contains {
             $0.category == "account" && $0.name == "apple_sign_in_connected"
         })
+    }
+
+    // MARK: - VOL-283 — coach safety boundary end to end
+
+    /// A medical red-flag prompt must produce escalation copy WITHOUT
+    /// the underlying provider ever being invoked. Production wiring
+    /// guarantees this by wrapping every factory chain in
+    /// `SafetyFilteredCoachProvider`; this test mirrors that wiring and
+    /// pins the boundary across the full dashboard pipeline (privacy
+    /// redaction, context build, streaming, message rendering).
+    func testAskCoachShortCircuitsMedicalRedFlagBeforeProvider() async throws {
+        let spy = CoachProviderInvocationSpy()
+        let model = makeDashboardModel(aiProvider: SafetyFilteredCoachProvider(base: spy))
+
+        await model.askCoach("I felt chest pain and got dizzy during squats — should I push through?")
+
+        XCTAssertEqual(model.coachMessages.map(\.sender), [.user, .coach])
+        let content = model.coachMessages.last?.content.lowercased() ?? ""
+        XCTAssertTrue(content.contains("stop the session"))
+        XCTAssertTrue(content.contains("medical care"))
+        let invocations = await spy.invocationCount
+        XCTAssertEqual(invocations, 0, "A red-flag prompt must never reach a coach provider")
+    }
+
+    // MARK: - VOL-284 — prescription clamps end to end
+
+    /// A coach response prescribing an absurd load must be clamped both
+    /// at extraction (what the athlete previews) and at the coach-source
+    /// scheduling backstop (what persists), with `coach.safety.clamp`
+    /// telemetry recording the intervention.
+    func testCoachExtractedPlanClampsInsaneLoadBeforePersisting() async throws {
+        let telemetry = InMemoryTelemetrySink()
+        let model = makeDashboardModel(telemetrySink: telemetry)
+
+        let preview = model.clampedCoachWorkoutPlan(
+            from: "Squat: 3x5 at 855 lb\nBench Press: 3x8 at 600 lbs",
+            title: "Coach Workout"
+        )
+        XCTAssertEqual(preview?.exercises.map(\.weight), [135, 135],
+                       "No logged history -> barbell first-exposure cap")
+
+        // Route the RAW extracted numbers at the persistence backstop to
+        // prove no caller can bypass the clamp for coach-sourced plans.
+        let scheduled = await model.scheduleWorkoutPlan(
+            WorkoutSessionPlan(
+                title: "Backstop Probe",
+                targetRPE: 9,
+                exercises: [WeeklyWorkoutExercise(
+                    name: "Barbell Back Squat", sets: 3, reps: 5,
+                    weight: 855, targetRPE: 9, restSeconds: 120
+                )]
+            ),
+            on: .now,
+            source: .coach
+        )
+        XCTAssertTrue(scheduled)
+
+        let persisted = try trainingPlanRepository.weeklyWorkouts()
+            .first { $0.title == "Backstop Probe" }
+        XCTAssertEqual(persisted?.exercises.first?.weight, 135)
+        XCTAssertTrue(telemetry.currentEvents.contains {
+            $0.category == "coach.safety" && $0.name == "clamp"
+        })
+    }
+
+    /// PR #363 review (Codex P1): the coach handoff's Start button begins
+    /// an active session without scheduling, so the start path needs the
+    /// same coach-source backstop — a raw extracted 855 lb prescription
+    /// must go live clamped.
+    func testCoachSourcedStartClampsInsaneLoadBeforeGoingLive() async throws {
+        let telemetry = InMemoryTelemetrySink()
+        let model = makeDashboardModel(telemetrySink: telemetry)
+
+        await model.startWorkoutSession(
+            title: "Handoff Probe",
+            plan: WorkoutSessionPlan(
+                title: "Handoff Probe",
+                targetRPE: 9,
+                exercises: [WeeklyWorkoutExercise(
+                    name: "Barbell Back Squat", sets: 3, reps: 5,
+                    weight: 855, targetRPE: 9, restSeconds: 120
+                )]
+            ),
+            source: .coach
+        )
+
+        XCTAssertTrue(model.isSessionActive)
+        XCTAssertEqual(model.activeSessionExercise?.weight, 135,
+                       "No logged history -> barbell first-exposure cap on the live session target")
+        XCTAssertTrue(telemetry.currentEvents.contains {
+            $0.category == "coach.safety" && $0.name == "clamp"
+                && $0.metadata["source"] == "coach_start"
+        })
+    }
+
+    /// PR #363 review (Codex P1): the clamp's history table must cover
+    /// every logged exercise, not just the bounded recent-session
+    /// snapshot — a stale-but-known lift keeps its demonstrated-top cap
+    /// instead of falling back to the higher first-exposure cap. The
+    /// model deliberately does NOT refresh here, so `recentSessions`
+    /// stays empty while the repository holds bench history.
+    func testStaleLoggedHistoryStillCapsCoachLoadBelowFirstExposure() async throws {
+        let model = makeDashboardModel()
+
+        let workout = try workoutRepository.createWorkout(title: "Old Bench Day")
+        try workoutRepository.appendSet(
+            WorkoutSetPerformance(weight: 65, reps: 8, rpe: 7, completedAt: .now),
+            forExercise: "bench-press",
+            to: workout.identifier
+        )
+        try workoutRepository.completeWorkout(identifier: workout.identifier)
+
+        XCTAssertTrue(model.recentSessions.isEmpty,
+                      "Precondition: the recent-session snapshot must not be the history source")
+
+        let clamped = model.clampedCoachWorkoutPlan(
+            from: "Bench Press: 3x5 at 200 lb",
+            title: "Coach Workout"
+        )
+        let weight = try XCTUnwrap(clamped?.exercises.first?.weight)
+        XCTAssertLessThan(weight, 135, "Demonstrated 65 lb history must beat the 135 lb first-exposure cap")
+        XCTAssertLessThanOrEqual(weight, 72, "Cap is demonstrated top x 1.10")
+        XCTAssertGreaterThanOrEqual(weight, 65)
+    }
+
+    /// PR #363 review (CodeRabbit): the session-volume guard must read
+    /// PERSISTED history — before the first refresh the published
+    /// `recentSessions` snapshot is empty, and a nil max volume silently
+    /// skipped the cap on the start/schedule/template backstops.
+    func testSessionVolumeCapEngagesBeforeFirstRefresh() async throws {
+        let model = makeDashboardModel()
+
+        let workout = try workoutRepository.createWorkout(title: "Light Bench Day")
+        try workoutRepository.appendSet(
+            WorkoutSetPerformance(weight: 65, reps: 8, rpe: 7, completedAt: .now),
+            forExercise: "bench-press",
+            to: workout.identifier
+        )
+        try workoutRepository.completeWorkout(identifier: workout.identifier)
+
+        XCTAssertTrue(model.recentSessions.isEmpty,
+                      "Precondition: the published snapshot must not be the volume source")
+
+        let clamped = model.clampedCoachWorkoutPlan(
+            from: "Bench Press: 5x10 at 70 lb",
+            title: "Coach Workout"
+        )
+        let exercise = try XCTUnwrap(clamped?.exercises.first)
+        XCTAssertLessThan(exercise.sets, 5,
+                          "A 3500 lb session against a 520 lb recent max must trip the volume cap pre-refresh")
+    }
+
+    /// PR #363 review (Codex P2): history logged under a CATALOG ID
+    /// ("back-squat") must satisfy a coach plan that names the implement
+    /// ("Barbell Back Squat") — the catalog bridges the implement token,
+    /// so demonstrated tops survive coach phrasing instead of falling to
+    /// the 135 lb first-exposure cap.
+    func testCatalogIDHistoryMatchesImplementQualifiedCoachPlan() async throws {
+        let model = makeDashboardModel()
+
+        let workout = try workoutRepository.createWorkout(title: "Squat Day")
+        try workoutRepository.appendSet(
+            WorkoutSetPerformance(weight: 225, reps: 5, rpe: 8, completedAt: .now),
+            forExercise: "back-squat",
+            to: workout.identifier
+        )
+        try workoutRepository.completeWorkout(identifier: workout.identifier)
+
+        let clamped = model.clampedCoachWorkoutPlan(
+            from: "Barbell Back Squat: 3x5 at 400 lb",
+            title: "Coach Workout"
+        )
+
+        let weight = try XCTUnwrap(clamped?.exercises.first?.weight)
+        XCTAssertGreaterThan(weight, 135, "Demonstrated 225 lb history must beat the first-exposure cap")
+        XCTAssertLessThanOrEqual(weight, 247, "Cap is demonstrated top x 1.10")
+        XCTAssertGreaterThanOrEqual(weight, 225)
+    }
+
+    /// PR #363 review (Codex P2, memories variant): a persisted coach
+    /// reply's boilerplate re-read from memory into the context block
+    /// must not arm the symptom ceiling either.
+    func testPersistedCoachBoilerplateMemoryDoesNotTripSymptomCeiling() async throws {
+        let model = makeDashboardModel()
+
+        let workout = try workoutRepository.createWorkout(title: "Squat Day")
+        try workoutRepository.appendSet(
+            WorkoutSetPerformance(weight: 200, reps: 5, rpe: 7, completedAt: .now),
+            forExercise: "back-squat",
+            to: workout.identifier
+        )
+        try workoutRepository.completeWorkout(identifier: workout.identifier)
+        try coachMemoryRepository.append(
+            content: "User asked: plan tomorrow\nCoach said: Move with intent and stop at any pain.",
+            theme: "planning"
+        )
+
+        let clamped = model.clampedCoachWorkoutPlan(
+            from: "Barbell Back Squat: 3x5 at 400 lb",
+            title: "Coach Workout"
+        )
+
+        let weight = try XCTUnwrap(clamped?.exercises.first?.weight)
+        XCTAssertEqual(weight, 220,
+                       "Demonstrated-top cap (200 x 1.10) applies; coach memory boilerplate must not arm the 60% ceiling")
+    }
+
+    /// PR #363 review (Codex P2): coach BOILERPLATE ("stop at any pain")
+    /// in a generated reply must not read as athlete symptom context —
+    /// only user messages and the training context arm the symptom
+    /// ceiling. A clean transcript stays at the first-exposure cap.
+    func testCoachBoilerplateDoesNotTripSymptomCeiling() async throws {
+        let model = makeDashboardModel()
+
+        let clamped = model.clampedCoachWorkoutPlan(
+            from: """
+            Back Squat: 3x5 at 200 lb. Move with intent and stop at any \
+            pain — soreness is information, not a challenge.
+            """,
+            title: "Boilerplate Plan"
+        )
+
+        let weight = try XCTUnwrap(clamped?.exercises.first?.weight)
+        XCTAssertEqual(weight, 135,
+                       "No-history first-exposure cap applies; the 60% symptom ceiling must not")
+    }
+
+    /// VOL-275 Watch leg: scheduling a co-designed plan mirrors it to the
+    /// watch as a `scheduledPlan` payload carrying the POST-CLAMP
+    /// prescription — the WatchConnectivity payload proof from the
+    /// acceptance criteria.
+    func testScheduleCoachPlanSendsClampedScheduledPlanPayloadToWatch() async throws {
+        let transport = RecordingDashboardWatchTransport(reachable: true)
+        let coordinator = WatchConnectivityCoordinator(
+            transport: transport,
+            payloadStore: DashboardInMemoryPendingPayloadStore()
+        )
+        let model = makeDashboardModel(watchConnectivityCoordinator: coordinator)
+
+        let scheduled = await model.scheduleWorkoutPlan(
+            WorkoutSessionPlan(
+                title: "Co-Designed Lower",
+                targetRPE: 9,
+                exercises: [WeeklyWorkoutExercise(
+                    name: "Barbell Back Squat", sets: 3, reps: 5,
+                    weight: 855, targetRPE: 9, restSeconds: 120
+                )]
+            ),
+            on: Date(timeIntervalSince1970: 1_765_000_000),
+            source: .coach
+        )
+        XCTAssertTrue(scheduled)
+
+        let sent = await transport.sent
+        let planPayload = try XCTUnwrap(
+            sent.first(where: { $0.kind == .scheduledPlan }),
+            "Scheduling a coach plan must mirror a scheduledPlan payload to the watch"
+        )
+        let decoded = try XCTUnwrap(WatchScheduledPlanPayload.decode(from: planPayload.body))
+        XCTAssertEqual(decoded.title, "Co-Designed Lower")
+        XCTAssertEqual(decoded.exercises.count, 1)
+        XCTAssertEqual(decoded.exercises.first?.weight, 135,
+                       "The watch mirror must carry the clamped load, never the raw 855 lb ask")
+        XCTAssertEqual(decoded.exercises.first?.sets, 3)
+        XCTAssertEqual(decoded.exercises.first?.reps, 5)
+    }
+
+    /// Watch payloads tolerate an offline phone: the scheduledPlan mirror
+    /// enqueues on failure and replays via the standard pending queue.
+    func testScheduledPlanPayloadQueuesWhenWatchUnreachable() async throws {
+        let transport = RecordingDashboardWatchTransport(reachable: false)
+        let coordinator = WatchConnectivityCoordinator(
+            transport: transport,
+            payloadStore: DashboardInMemoryPendingPayloadStore()
+        )
+        let model = makeDashboardModel(watchConnectivityCoordinator: coordinator)
+
+        let scheduled = await model.scheduleWorkoutPlan(
+            WorkoutSessionPlan(
+                title: "Queued Lower",
+                targetRPE: 8,
+                exercises: [WeeklyWorkoutExercise(
+                    name: "Front Squat", sets: 3, reps: 8,
+                    weight: 95, targetRPE: 8, restSeconds: 90
+                )]
+            ),
+            on: Date(timeIntervalSince1970: 1_765_000_000),
+            source: .coach
+        )
+        XCTAssertTrue(scheduled, "An unreachable watch must not fail the schedule itself")
+        let pending = await coordinator.pendingPayloadCount()
+        XCTAssertEqual(pending, 1, "The scheduledPlan payload should be queued for replay")
+
+        await transport.setReachable(true)
+        try await coordinator.flushPendingIfReachable()
+        let sent = await transport.sent
+        XCTAssertEqual(sent.filter { $0.kind == .scheduledPlan }.count, 1)
+    }
+
+    /// VOL-275: save-a-template end to end — the co-designed plan
+    /// re-clamps at save, lands in the persisted template list, and the
+    /// saved prescription is startable.
+    func testSaveCoachTemplateClampsPersistsAndIsStartable() async throws {
+        let telemetry = InMemoryTelemetrySink()
+        let model = makeDashboardModel(telemetrySink: telemetry)
+
+        let saved = await model.saveCoachTemplate(
+            named: "Strength Block A",
+            plan: WorkoutSessionPlan(
+                title: "Strength Block A",
+                durationMinutes: 45,
+                targetRPE: 8,
+                exercises: [WeeklyWorkoutExercise(
+                    name: "Barbell Back Squat", sets: 3, reps: 5,
+                    weight: 855, targetRPE: 9, restSeconds: 120
+                )]
+            )
+        )
+        XCTAssertTrue(saved)
+
+        XCTAssertEqual(model.savedTemplates.first?.name, "Strength Block A")
+        XCTAssertTrue(telemetry.currentEvents.contains {
+            $0.category == "coach.safety" && $0.name == "clamp"
+                && $0.metadata["source"] == "coach_template"
+        })
+        XCTAssertTrue(telemetry.currentEvents.contains {
+            $0.category == "coach" && $0.name == "template_saved"
+        })
+
+        // PR #363 review (CodeRabbit): assert against a REHYDRATED model
+        // over the same store, not the publisher the save path just
+        // mutated — this is what proves the V6 row actually persisted.
+        let rehydrated = makeDashboardModel()
+        await rehydrated.refresh()
+        let template = try XCTUnwrap(rehydrated.savedTemplates.first,
+                                     "Persisted template must rehydrate from the store")
+        XCTAssertEqual(template.name, "Strength Block A")
+        XCTAssertEqual(template.exercises.first?.weight, 135,
+                       "Template numbers are stored clamped (no-history barbell cap)")
+
+        await rehydrated.startWorkoutSession(
+            title: template.name,
+            plan: template.sessionPlan,
+            source: .coach
+        )
+        XCTAssertTrue(rehydrated.isSessionActive)
+        XCTAssertEqual(rehydrated.activeSessionExercise?.weight, 135)
+    }
+
+    func testManualStartStaysUserSovereignAndUnclamped() async throws {
+        let model = makeDashboardModel()
+
+        await model.startWorkoutSession(
+            title: "Manual Probe",
+            plan: WorkoutSessionPlan(
+                title: "Manual Probe",
+                targetRPE: 9,
+                exercises: [WeeklyWorkoutExercise(
+                    name: "Barbell Back Squat", sets: 3, reps: 5,
+                    weight: 405, targetRPE: 9, restSeconds: 120
+                )]
+            )
+        )
+
+        XCTAssertEqual(model.activeSessionExercise?.weight, 405,
+                       "Manual builder loads are user-sovereign by signed policy")
     }
 
     private func makeDashboardModel(
@@ -1709,6 +2391,17 @@ private actor RecordingDashboardWatchTransport: WatchSessionTransport {
     func send(_ payload: WatchPayload) async throws {
         guard reachable else { throw WatchTransportError.notReachable }
         sent.append(payload)
+    }
+}
+
+private actor CoachProviderInvocationSpy: AICoachProvider {
+    private(set) var invocationCount = 0
+
+    func coachResponse(for prompt: String, context: String) async throws -> String {
+        invocationCount += 1
+        // Unsafe sentinel — if the safety boundary ever leaks, the message
+        // assertions fail loudly instead of passing on safe-looking copy.
+        return "Push through and go heavy."
     }
 }
 #endif

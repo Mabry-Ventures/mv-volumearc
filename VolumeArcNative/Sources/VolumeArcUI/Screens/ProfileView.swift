@@ -231,10 +231,7 @@ public struct ProfileView: View { // swiftlint:disable:this type_body_length
             .accessibilityIdentifier("profile.advancementRow")
             profileRow(
                 label: String(localized: "Equipment", comment: "Profile row label"),
-                value: String(
-                    localized: "^[\(model.athlete.availableEquipment.count) type](inflect: true)",
-                    comment: "Equipment count on Profile row"
-                ),
+                value: profileLocalizedTypeCount(model.athlete.availableEquipment.count),
                 icon: "dumbbell.fill"
             ) {
                 VAHaptics.tap()
@@ -266,7 +263,7 @@ public struct ProfileView: View { // swiftlint:disable:this type_body_length
 
     private var coachMemoryCountText: String {
         let count = model.coachMemory.entries.count
-        return String(localized: "^[\(count) note](inflect: true)", comment: "Profile coach memory count value")
+        return profileLocalizedNoteCount(count)
     }
 
     private var subscriptionCard: some View {
@@ -394,12 +391,10 @@ public struct ProfileView: View { // swiftlint:disable:this type_body_length
                 } label: {
                     profileRowLabel(
                         label: String(localized: "Watch Faces", comment: "Profile watch faces row label"),
-                        value: bundledWatchFaces.count == 1
-                            ? String(localized: "1 preset", comment: "Profile watch faces singular row value")
-                            : String(
-                                localized: "\(bundledWatchFaces.count) presets",
-                                comment: "Profile watch faces plural row value"
-                            ),
+                        value: vaInflectedString(
+                            "^[\(bundledWatchFaces.count) preset](inflect: true)",
+                            comment: "Profile watch faces preset count row value"
+                        ),
                         icon: "applewatch"
                     )
                 }
@@ -531,6 +526,7 @@ public struct ProfileView: View { // swiftlint:disable:this type_body_length
         case .sessionProfiles:
             SessionProfilesSheet(
                 athlete: model.athlete,
+                activeProfileName: $activeSessionProfileName,
                 saveDefaults: { sessionMinutes, weeklyDays in
                     saveProfileDefaults(sessionTimeBudgetMinutes: sessionMinutes, weeklyTrainingDays: weeklyDays)
                 }
@@ -663,6 +659,18 @@ public struct ProfileView: View { // swiftlint:disable:this type_body_length
             profileRowLabel(label: label, value: value, icon: icon)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(profileRowAccessibilityLabel(label: label, value: value))
+        .accessibilityValue(value)
+    }
+
+    private func profileRowAccessibilityLabel(label: String, value: String) -> String {
+        let trimmedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedValue.isEmpty else { return label }
+        return String(
+            localized: "\(label), \(trimmedValue)",
+            comment: "Profile row accessibility label with current setting value"
+        )
     }
 
     private func saveProfileDefaults(
@@ -1262,8 +1270,7 @@ private struct EquipmentPreferencesSheet: View {
 
 private struct SessionProfilesSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("volumearc.sessionProfiles.active")
-    private var persistedActiveProfileName = WorkoutSessionProfile.defaultProfile.rawValue
+    @Binding private var persistedActiveProfileName: String
     @AppStorage("volumearc.sessionProfiles.customNames")
     private var persistedCustomProfileNamesRaw = ""
     @AppStorage("volumearc.sessionProfiles.legDayRule")
@@ -1281,7 +1288,12 @@ private struct SessionProfilesSheet: View {
 
     private let builtInProfileNames = WorkoutSessionProfile.allCases.map(\.rawValue)
 
-    init(athlete: AthleteProfile, saveDefaults: @escaping (Int, Int) -> Void) {
+    init(
+        athlete: AthleteProfile,
+        activeProfileName: Binding<String>,
+        saveDefaults: @escaping (Int, Int) -> Void
+    ) {
+        _persistedActiveProfileName = activeProfileName
         _sessionMinutes = State(initialValue: athlete.sessionTimeBudgetMinutes)
         _weeklyTrainingDays = State(initialValue: athlete.weeklyTrainingDays)
         self.saveDefaults = saveDefaults
@@ -1425,12 +1437,17 @@ private struct SessionProfilesSheet: View {
     }
 
     private var canAddCustomProfile: Bool {
-        !normalizedNewProfileName.isEmpty &&
-            !profileNames.contains { $0.caseInsensitiveCompare(normalizedNewProfileName) == .orderedSame }
+        !normalizedNewProfileName.isEmpty
     }
 
     private func addCustomProfile() {
         guard canAddCustomProfile else { return }
+        if let existingName = profileNames.first(where: { $0.caseInsensitiveCompare(normalizedNewProfileName) == .orderedSame }) {
+            activeProfileName = existingName
+            newProfileName = ""
+            VAHaptics.tap()
+            return
+        }
         var names = customProfileNames
         names.append(normalizedNewProfileName)
         customProfileNamesRaw = names.joined(separator: "\n")
@@ -1879,5 +1896,13 @@ private struct ProfileStat: View {
         }
         .frame(maxWidth: .infinity)
     }
+}
+
+private func profileLocalizedTypeCount(_ count: Int) -> String {
+    vaInflectedString("^[\(count) type](inflect: true)", comment: "Profile equipment type count")
+}
+
+private func profileLocalizedNoteCount(_ count: Int) -> String {
+    vaInflectedString("^[\(count) note](inflect: true)", comment: "Profile coach memory note count")
 }
 #endif

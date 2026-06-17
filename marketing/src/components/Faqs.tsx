@@ -5,7 +5,7 @@ const faqs = [
     {
       question: 'How is VolumeArc’s coach different from a chatbot?',
       answer:
-        'VolumeArc’s coach runs through a structured prompt template — system persona, intent envelope, and a context block built from your readiness, recent sessions, and current program. Every prompt is regression-tested against a 20-fixture eval matrix before it ships. We publish the eval results at /quality.',
+        'It prescribes instead of chatting: sets, reps, and loads bounded by your demonstrated history, with deterministic safety gates that escalate medical red flags instead of answering them. Every prompt runs through a structured template and is regression-tested against a fixture matrix — covering readiness, intents, injuries, and red-flag scenarios, run per model tier — with results published at /quality.',
     },
     {
       question: 'Does coaching work offline?',
@@ -27,7 +27,7 @@ const faqs = [
     {
       question: 'What does Premium unlock?',
       answer:
-        'Premium ($9.99/month or $79.99/year) routes the coach to a higher-capacity cloud tier, unlocks single-turn voice coaching, and gates priority features. Cloud sync, on-device coaching, Live Activities, and the full workout tracker stay free for everyone.',
+        'Premium ($9.99/month or $59.99/year) routes the coach to a higher-capacity cloud tier, unlocks single-turn voice coaching, and gates priority features. Cloud sync, on-device coaching, Live Activities, and the full workout tracker stay free for everyone.',
     },
     {
       question: 'Will VolumeArc come to Android or the web?',

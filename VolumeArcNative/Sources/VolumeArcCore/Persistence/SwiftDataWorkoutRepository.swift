@@ -217,6 +217,47 @@ public struct SwiftDataWorkoutRepository: Sendable {
             }
     }
 
+    /// VOL-284 (PR #363 review, Codex P1): top working weight for every
+    /// exercise ID the athlete has ever logged, across the same
+    /// 200-workout window `history(forExercise:)` reads. The prescription
+    /// clamp builds its demonstrated-top table from this — enumerating
+    /// only the recent-session snapshot let a stale-but-known lift fall
+    /// back to the HIGHER first-exposure cap.
+    ///
+    /// Single pass by construction: result-identical to calling
+    /// `history(forExercise:limit:).topWeight` per distinct ID (same
+    /// newest-200 window, same newest-`sessionLimit`-sessions-per-exercise
+    /// bound), but decodes each workout's `setsJSON` exactly once instead
+    /// of once per distinct exercise. The per-ID loop was quadratic
+    /// enough to stall the coach plan-draft render behind the clamp
+    /// input (PR #363 follow-up).
+    @MainActor
+    public func topWeightByExerciseID(sessionLimit: Int = 20) throws -> [String: Double] {
+        let workouts = try recentWorkouts(limit: 200)
+        var topWeights: [String: Double] = [:]
+        var sessionCounts: [String: Int] = [:]
+        for workout in workouts {
+            guard let data = workout.setsJSON.data(using: .utf8),
+                  let logged = try? JSONDecoder().decode([LoggedSet].self, from: data),
+                  !logged.isEmpty
+            else { continue }
+            var maxWeightThisWorkout: [String: Double] = [:]
+            for entry in logged {
+                maxWeightThisWorkout[entry.exerciseID] = max(
+                    maxWeightThisWorkout[entry.exerciseID] ?? 0,
+                    entry.set.weight
+                )
+            }
+            for (exerciseID, weight) in maxWeightThisWorkout {
+                let seen = sessionCounts[exerciseID] ?? 0
+                guard seen < sessionLimit else { continue }
+                sessionCounts[exerciseID] = seen + 1
+                topWeights[exerciseID] = max(topWeights[exerciseID] ?? 0, weight)
+            }
+        }
+        return topWeights
+    }
+
     /// Build an `ExerciseHistory` projection for a single exercise.
     @MainActor
     public func history(forExercise exerciseID: String, limit: Int = 20) throws -> ExerciseHistory {

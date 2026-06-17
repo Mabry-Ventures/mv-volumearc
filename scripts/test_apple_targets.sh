@@ -694,9 +694,36 @@ run_ui_crashed_tests_attempt() {
   return "$status"
 }
 
+# PR #363: the surgical bundle uninstall leaves simulator-level state
+# (springboard/AX daemon caches) that accumulates across CI runs on the
+# self-hosted runner and eventually starves XCUITest query snapshots —
+# the feedback journey failed three consecutive CI runs with "Timed out
+# while evaluating UI query" while passing 6/6 locally after a device
+# erase. Erase JUST the resolved UI-test device before the UI phase.
+# Scope note: this is safe because the fleet currently runs a single
+# runner instance (mv-volumearc-runner); if concurrent runners ever
+# share this Mac again, revisit per the VOL-75 history above.
+erase_ui_test_device() {
+  xcrun simctl shutdown "$IOS_TEST_DEVICE_NAME" 2>/dev/null || true
+  sleep 3
+  xcrun simctl erase "$IOS_TEST_DEVICE_NAME" 2>/dev/null
+}
+
+UI_DEVICE_ERASED=0
+
 run_ui_shard() {
   local shard="$1"
   echo "::group::UI shard: $shard"
+  if [ "$UI_DEVICE_ERASED" = "0" ]; then
+    # Only mark the device clean when the erase actually succeeded —
+    # otherwise the next shard retries instead of running on the very
+    # polluted state the erase exists to clear (PR #363 review).
+    if erase_ui_test_device; then
+      UI_DEVICE_ERASED=1
+    else
+      echo "::warning::simctl erase failed for $IOS_TEST_DEVICE_NAME; will retry before the next shard."
+    fi
+  fi
   reset_app_state
   warm_simulator_for_tests
 

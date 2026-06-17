@@ -62,10 +62,12 @@ final class VolumeArcHealthKitPermissionJourneyTests: XCTestCase {
             "Onboarding cover should be visible on first launch"
         )
 
-        // Tap Continue 5 times: welcome → profile → preferences →
-        // coachingStyle → permissions → done. Each Continue advances
-        // one step. The permissions step is the 5th Continue tap.
-        for stepIndex in 0..<5 {
+        // Tap Continue 6 times: welcome → profile → preferences →
+        // coachingStyle → permissions → safety → done. Each Continue
+        // advances one step. The permissions step is the 5th Continue
+        // tap; the safety step (VOL-287) is the 6th and requires the
+        // acknowledgment toggle before Continue enables.
+        for stepIndex in 0..<6 {
             dismissKeyboardIfPresent(in: app)
             let continueButton = app.descendants(matching: .any)
                 .matching(identifier: "onboarding.continue").firstMatch
@@ -110,6 +112,33 @@ final class VolumeArcHealthKitPermissionJourneyTests: XCTestCase {
                         "VOL-127: permissions step rationale should surface '\(rationaleNeedle)' before the system prompt fires"
                     )
                 }
+
+                let notificationRequest = app.descendants(matching: .any)
+                    .matching(identifier: "onboarding.permissions.notifications")
+                    .firstMatch
+                XCTAssertFalse(
+                    notificationRequest.waitForExistence(timeout: 1),
+                    "Onboarding must not expose the iOS notification permission request; Profile owns the explicit ask."
+                )
+
+                let notificationEducation = app.descendants(matching: .any)
+                    .matching(identifier: "onboarding.permissions.notificationEducation")
+                    .firstMatch
+                XCTAssertTrue(
+                    notificationEducation.waitForExistence(timeout: 5),
+                    "Onboarding should explain optional workout alerts without triggering the system notification prompt."
+                )
+            }
+
+            if stepIndex == 5 {
+                let acknowledge = app.descendants(matching: .any)
+                    .matching(identifier: "onboarding.safety.acknowledge")
+                    .firstMatch
+                XCTAssertTrue(
+                    acknowledge.waitForExistence(timeout: 10),
+                    "Safety step should expose the acknowledgment toggle (VOL-287)"
+                )
+                acknowledge.tap()
             }
 
             if stepIndex == 1 {
@@ -377,6 +406,21 @@ final class VolumeArcHealthKitPermissionJourneyTests: XCTestCase {
         XCTAssertTrue(
             continueButton.waitForExistence(timeout: 15),
             "Continue should be reachable on permissions"
+        )
+        continueButton.tap()
+
+        // VOL-287: the safety step sits between permissions and done —
+        // acknowledge, then continue once more before Finish appears.
+        let acknowledge = app.descendants(matching: .any)
+            .matching(identifier: "onboarding.safety.acknowledge").firstMatch
+        XCTAssertTrue(
+            acknowledge.waitForExistence(timeout: 15),
+            "Safety step should expose the acknowledgment toggle (VOL-287)"
+        )
+        acknowledge.tap()
+        XCTAssertTrue(
+            continueButton.waitForExistence(timeout: 15),
+            "Continue should be reachable on the safety step"
         )
         continueButton.tap()
 

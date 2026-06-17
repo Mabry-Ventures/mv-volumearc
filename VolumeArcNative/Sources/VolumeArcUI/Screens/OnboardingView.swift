@@ -22,7 +22,6 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
     /// callback keep compiling — a missing callback degrades the step
     /// to "informational only, just tap Continue to advance".
     let onRequestHealthAuthorization: (() async -> Bool)?
-    let onRequestNotificationAuthorization: (() async -> Bool)?
     let onConnectAppleAccount: ((OnboardingAppleAccount) async -> Void)?
     let onResumeFromSavedProgress: ((Int) -> Void)?
 
@@ -33,7 +32,6 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
     /// any business logic — Continue advances unconditionally — so a
     /// "false" value just means we don't change the button label.
     @State private var healthAuthorizationDidComplete: Bool
-    @State private var notificationAuthorizationDidComplete: Bool
     @State private var appleAccountDidConnect = false
     @State private var appleAccountStatusMessage: String?
     @State private var didRecordResumeTelemetry = false
@@ -49,13 +47,12 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
         self._isPresented = isPresented
         self.onComplete = onComplete
         self.onRequestHealthAuthorization = onRequestHealthAuthorization
-        self.onRequestNotificationAuthorization = onRequestNotificationAuthorization
         self.onConnectAppleAccount = onConnectAppleAccount
         self.onResumeFromSavedProgress = onResumeFromSavedProgress
         self._step = State(initialValue: Self.initialStep())
         self._result = State(initialValue: Self.initialResult())
         self._healthAuthorizationDidComplete = State(initialValue: false)
-        self._notificationAuthorizationDidComplete = State(initialValue: false)
+        self._safetyAcknowledged = State(initialValue: SafetyDisclaimerAcknowledgmentStore.isAccepted)
     }
 
     @_spi(Testing) public init(
@@ -74,13 +71,14 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
         self._isPresented = isPresented
         self.onComplete = onComplete
         self.onRequestHealthAuthorization = onRequestHealthAuthorization
-        self.onRequestNotificationAuthorization = onRequestNotificationAuthorization
         self.onConnectAppleAccount = onConnectAppleAccount
         self.onResumeFromSavedProgress = onResumeFromSavedProgress
         self._step = State(initialValue: Step(snapshotStep: snapshotStep))
         self._result = State(initialValue: snapshotResult)
         self._healthAuthorizationDidComplete = State(initialValue: snapshotHealthAuthorizationDidComplete)
-        self._notificationAuthorizationDidComplete = State(initialValue: snapshotNotificationAuthorizationDidComplete)
+        // Deterministic for snapshots: the safety step always renders with
+        // the acknowledgment toggle off regardless of device state.
+        self._safetyAcknowledged = State(initialValue: false)
     }
 
     public var body: some View {
@@ -178,6 +176,11 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
 
     // MARK: - Step content
 
+    /// VOL-287: gate state for the safety step's Continue button. Seeded
+    /// from the persisted acknowledgment so a force-quit on the safety
+    /// step resumes with the toggle as the athlete left it.
+    @State private var safetyAcknowledged: Bool
+
     @ViewBuilder
     private var stepContent: some View {
         switch step {
@@ -186,6 +189,7 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
         case .preferences: preferencesStep
         case .coachingStyle: coachingStyleStep
         case .permissions: permissionsStep
+        case .safety: safetyStep
         case .done: doneStep
         }
     }
@@ -200,10 +204,11 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
                     .font(VA.Typography.title)
                     .foregroundStyle(VA.Colors.textPrimary)
                     .multilineTextAlignment(.center)
-                // VOL-247 (copy pass): tightened the prior 19-word verbose
-                // copy to 11-word coach-voice — same promise, less padding.
+                // VOL-279 (repositioning): the first-run promise is a
+                // strength program that adapts to readiness — prescriptive
+                // programming language, not generic coach framing.
                 Text(String(
-                    localized: "A strength coach that adapts to your recovery and guides every set.",
+                    localized: "A strength program that adapts to your readiness and prescribes every set, rep, and load.",
                     comment: "Onboarding welcome step description"
                 ))
                     .font(VA.Typography.body)
@@ -226,8 +231,8 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
                 )
                 OnboardingProofRow(
                     icon: "chart.line.uptrend.xyaxis",
-                    title: String(localized: "Readiness-aware training", comment: "Onboarding proof row title"),
-                    detail: String(localized: "Your plan adapts when recovery says to back off.", comment: "Onboarding proof row detail")
+                    title: String(localized: "Readiness-driven programming", comment: "Onboarding proof row title"),
+                    detail: String(localized: "Loads and volume autoregulate when recovery says to back off.", comment: "Onboarding proof row detail")
                 )
                 OnboardingProofRow(
                     icon: "lock.shield.fill",
@@ -684,59 +689,8 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
                     .disabled(healthAuthorizationDidComplete)
             }
 
-            if onRequestNotificationAuthorization != nil {
-                VACard(style: .glass) {
-                    VStack(alignment: .leading, spacing: VA.Space.md) {
-                        HStack(alignment: .top, spacing: VA.Space.sm) {
-                            Image(systemName: "bell.badge.fill")
-                                .font(VA.Typography.title2)
-                                .foregroundStyle(VA.Colors.primary)
-                                .accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: VA.Space.xxs) {
-                                Text(String(
-                                    localized: "Workout reminders",
-                                    comment: "Onboarding notification permission card title"
-                                ))
-                                .font(VA.Typography.headline)
-                                .foregroundStyle(VA.Colors.textPrimary)
-                                Text(String(
-                                    localized: """
-                                    VolumeArc can send rest-timer alerts and scheduled-workout nudges. \
-                                    No streak guilt, no marketing pushes.
-                                    """,
-                                    comment: "Onboarding notification permission rationale"
-                                ))
-                                .font(VA.Typography.footnote)
-                                .foregroundStyle(VA.Colors.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-
-                        VAButton(
-                            notificationAuthorizationDidComplete
-                                ? String(
-                                    localized: "Notifications Enabled",
-                                    comment: "Onboarding notification permission enabled button label"
-                                )
-                                : String(
-                                    localized: "Allow Workout Notifications",
-                                    comment: "Onboarding notification permission request button label"
-                                ),
-                            icon: notificationAuthorizationDidComplete ? "checkmark.circle.fill" : "bell.fill",
-                            style: notificationAuthorizationDidComplete ? .ghost : .secondary,
-                            accessibilityIdentifier: "onboarding.permissions.notifications"
-                        ) {
-                            Task {
-                                VAHaptics.tap()
-                                let granted = await onRequestNotificationAuthorization?() ?? false
-                                notificationAuthorizationDidComplete = granted
-                            }
-                        }
-                        .disabled(notificationAuthorizationDidComplete)
-                    }
-                }
+            notificationEducationCard
                 .frame(maxWidth: VA.Space.onboardingMaxWidth)
-            }
 
             Text(String(
                 localized: "You can change these anytime from Profile.",
@@ -747,6 +701,39 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
             .multilineTextAlignment(.center)
             .frame(maxWidth: VA.Space.onboardingMaxWidth)
         }
+    }
+
+    private var notificationEducationCard: some View {
+        VACard(style: .glass) {
+            HStack(alignment: .top, spacing: VA.Space.md) {
+                Image(systemName: "bell.badge.fill")
+                    .font(VA.Typography.title2)
+                    .foregroundStyle(VA.Colors.primary)
+                    .frame(width: VA.Space.iconBadge, height: VA.Space.iconBadge)
+                    .background(VA.Colors.primary.opacity(VA.Opacity.iconPanelAccent), in: Circle())
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: VA.Space.xs) {
+                    Text(String(
+                        localized: "Workout alerts are optional",
+                        comment: "Onboarding notification education title"
+                    ))
+                    .font(VA.Typography.headline)
+                    .foregroundStyle(VA.Colors.textPrimary)
+                    Text(String(
+                        localized: """
+                        VolumeArc can remind you about scheduled sessions and rest timers. \
+                        You will choose this later from Profile, after the app explains exactly what it sends.
+                        """,
+                        comment: "Onboarding notification education copy"
+                    ))
+                    .font(VA.Typography.footnote)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("onboarding.permissions.notificationEducation")
     }
 
     private var healthConnectButton: some View {
@@ -964,6 +951,16 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
         }
     }
 
+    // MARK: - Safety step (VOL-287)
+
+    private var safetyStep: some View {
+        // VOL-287 / PR #363 (Codex P1): the disclaimer copy lives in the
+        // shared SafetyDisclaimerContent so onboarding and the root-level
+        // re-prompt gate (SafetyAcknowledgmentGateView) never drift.
+        SafetyDisclaimerContent(acknowledged: $safetyAcknowledged)
+            .vaAppear()
+    }
+
     // MARK: - Action row
 
     private var actionRow: some View {
@@ -1000,11 +997,18 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
                 if step == .done {
                     onComplete(result)
                 } else {
+                    // VOL-287: leaving the safety step records the
+                    // versioned acknowledgment (toggle is required to
+                    // enable Continue, so this only fires after consent).
+                    if step == .safety {
+                        SafetyDisclaimerAcknowledgmentStore.recordAccepted()
+                    }
                     withAnimation(VAAnimation.standard) {
                         saveStep(Step(rawValue: step.rawValue + 1) ?? .done)
                     }
                 }
             }
+            .disabled(step == .safety && !safetyAcknowledged)
         }
     }
 
@@ -1046,7 +1050,11 @@ public struct OnboardingView: View { // swiftlint:disable:this type_body_length
         // triggers the HealthKit auth prompt via the dashboard model;
         // tests use `addUIInterruptionMonitor` to drive the system sheet.
         case permissions = 4
-        case done = 5
+        // VOL-287: required safety disclaimer + age acknowledgment.
+        // Inserting before `done` renumbers it; acceptable pre-launch
+        // (no shipped build has persisted step state to migrate).
+        case safety = 5
+        case done = 6
     }
 }
 
@@ -1109,6 +1117,7 @@ public struct OnboardingAppleAccount: Sendable, Equatable {
     case preferences
     case coachingStyle
     case permissions
+    case safety
     case done
 }
 
@@ -1125,8 +1134,97 @@ private extension OnboardingView.Step {
             self = .coachingStyle
         case .permissions:
             self = .permissions
+        case .safety:
+            self = .safety
         case .done:
             self = .done
+        }
+    }
+}
+
+/// The age + medical-boundary safety disclaimer. Single source of the
+/// safety/legal copy, shown both as the onboarding safety step
+/// (`OnboardingView.safetyStep`) and, for users who completed onboarding
+/// before the disclaimer shipped (or after a `currentVersion` bump), by
+/// the root-level `SafetyAcknowledgmentGateView` (PR #363, Codex P1).
+/// Keeping it in one view ensures the two surfaces never drift.
+struct SafetyDisclaimerContent: View {
+    @Binding var acknowledged: Bool
+    var acknowledgeIdentifier: String = "onboarding.safety.acknowledge"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: VA.Space.xl) {
+            VStack(alignment: .leading, spacing: VA.Space.md) {
+                Text(String(localized: "Train hard, train safe", comment: "Onboarding safety step title"))
+                    .font(VA.Typography.title)
+                    .foregroundStyle(VA.Colors.textPrimary)
+                Text(String(
+                    localized: "VolumeArc is a training coach, not a medical provider. Know the ground rules before your first set.",
+                    comment: "Onboarding safety step description"
+                ))
+                .font(VA.Typography.body)
+                .foregroundStyle(VA.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(alignment: .leading, spacing: VA.Space.lg) {
+                OnboardingProofRow(
+                    icon: "stethoscope",
+                    title: String(localized: "Not medical advice", comment: "Onboarding safety row title — medical boundary"),
+                    detail: String(
+                        localized: """
+                        The coach gives strength guidance from your training data. It never \
+                        replaces a clinician, and it tells you to stop and seek care when \
+                        symptoms show up.
+                        """,
+                        comment: "Onboarding safety row detail — medical boundary"
+                    )
+                )
+                OnboardingProofRow(
+                    icon: "hand.raised.fill",
+                    title: String(localized: "Pain ends the set", comment: "Onboarding safety row title — pain rule"),
+                    detail: String(
+                        localized: """
+                        Prescriptions stay inside your demonstrated history. Stop any set \
+                        that causes pain, dizziness, or trouble breathing.
+                        """,
+                        comment: "Onboarding safety row detail — pain rule"
+                    )
+                )
+                OnboardingProofRow(
+                    icon: "cross.case.fill",
+                    title: String(localized: "Emergencies come first", comment: "Onboarding safety row title — emergency"),
+                    detail: String(
+                        localized: """
+                        For chest pain, fainting, or severe shortness of breath, call 911 \
+                        or your local emergency number before anything else.
+                        """,
+                        comment: "Onboarding safety row detail — emergency"
+                    )
+                )
+            }
+
+            Toggle(isOn: $acknowledged) {
+                Text(String(
+                    localized: """
+                    I'm \(SafetyDisclaimerAcknowledgmentStore.minimumAgeYears) or older \
+                    (or training with my guardian's approval), and I understand VolumeArc \
+                    provides training guidance, not medical advice.
+                    """,
+                    comment: "Onboarding safety acknowledgment toggle label; the number is the minimum age"
+                ))
+                .font(VA.Typography.footnote)
+                .foregroundStyle(VA.Colors.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .tint(VA.Colors.primary)
+            .padding(VA.Space.md)
+            .background(VA.Colors.surfaceSecondary, in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous))
+            .accessibilityIdentifier(acknowledgeIdentifier)
+            .accessibilityHint(String(
+                localized: "Required to continue.",
+                comment: "Accessibility hint for the onboarding safety acknowledgment toggle"
+            ))
         }
     }
 }

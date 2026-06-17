@@ -102,6 +102,7 @@ struct CoachPlanningCard: View {
     let sendPlanFeedback: (String) -> Void
     let schedulePlan: () -> Void
     let startNow: () -> Void
+    let saveTemplate: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: VA.Space.lg) {
@@ -109,6 +110,7 @@ struct CoachPlanningCard: View {
             actionGrid
             targetChips
             exerciseList
+            footerActions
         }
         .padding(VA.Space.lg)
         .vaGlassBackground(in: RoundedRectangle(cornerRadius: VA.Radius.xl, style: .continuous))
@@ -191,34 +193,44 @@ struct CoachPlanningCard: View {
     }
 
     private var actionGrid: some View {
+        VAButton(
+            String(localized: "Refine plan", comment: "Co-design refine plan action"),
+            icon: "slider.horizontal.3",
+            style: .secondary,
+            accessibilityIdentifier: "coach.plan.refine"
+        ) {
+            sendPlanFeedback(String(localized: "Refine this plan around my recovery and equipment", comment: "Coach plan feedback prompt"))
+        }
+    }
+
+    private var footerActions: some View {
         VStack(spacing: VA.Space.sm) {
-            HStack(spacing: VA.Space.sm) {
-                VAButton(
-                    String(localized: "Refine plan", comment: "Co-design refine plan action"),
-                    icon: "slider.horizontal.3",
-                    style: .secondary,
-                    accessibilityIdentifier: "coach.plan.refine"
-                ) {
-                    sendPlanFeedback(String(localized: "Refine this plan around my recovery and equipment", comment: "Coach plan feedback prompt"))
-                }
-                VAButton(
-                    String(localized: "Schedule", comment: "Co-design schedule action"),
-                    icon: "calendar",
-                    style: .secondary,
-                    accessibilityIdentifier: "coach.plan.schedule"
-                ) {
-                    schedulePlan()
-                }
+            VAButton(
+                String(localized: "Schedule", comment: "Co-design schedule footer action"),
+                icon: "calendar",
+                style: .secondary,
+                accessibilityIdentifier: "coach.plan.schedule.footer"
+            ) {
+                schedulePlan()
             }
             VAButton(
-                String(localized: "Start now", comment: "Co-design start now action"),
+                String(localized: "Save template", comment: "Co-design save template footer action"),
+                icon: "square.and.arrow.down",
+                style: .secondary,
+                accessibilityIdentifier: "coach.plan.saveTemplate.footer"
+            ) {
+                saveTemplate()
+            }
+            VAButton(
+                String(localized: "Start now", comment: "Co-design start now footer action"),
                 icon: "arrow.right",
                 style: .primary,
-                accessibilityIdentifier: "coach.plan.startNow"
+                accessibilityIdentifier: "coach.plan.startNow.footer"
             ) {
                 startNow()
             }
         }
+        .padding(.top, VA.Space.xs)
     }
 
     private func toggleExpanded(_ exercise: CoachPlanExercise) {

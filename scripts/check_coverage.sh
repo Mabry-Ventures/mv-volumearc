@@ -25,15 +25,14 @@
 #                    (VOL-260 reconciled the stale "2%" doc value with
 #                    the CI-enforced 25%.)
 #   - VolumeArcWidgets: 5% (VOL-263 Phase A; CI gate added 2026-05-26.
-#                    `Widgets/VolumeArcWidgets.swift` is linked into
-#                    `VolumeArcAppTests` via
-#                    `add_selected_swift_sources` in
-#                    `generate_xcode_project.rb:604`, so the existing
-#                    12 `NextWorkoutWidgetSnapshotTests` exercise the
-#                    widget views during the unit-test run. Phase B
-#                    ratchets to 25 with real-baseline margin once the
-#                    first run lands; Phase B also adds
-#                    `VolumeArcWatchWidgets`.)
+#                    Xcode does not execute the widget extension binary
+#                    during VolumeArcAppTests, so this gate uses
+#                    COVERAGE_FILE_CONTAINS=Widgets/VolumeArcWidgets.swift
+#                    to measure the real widget source linked into the
+#                    test host for `NextWorkoutWidgetSnapshotTests`.
+#                    Phase B ratchets to 25 with real-baseline margin
+#                    once a dedicated widget runtime target is stable;
+#                    Phase B also adds `VolumeArcWatchWidgets`.)
 #   - VolumeArcWatchWidgets: pending VOL-263 Phase B (4 widget files,
 #                    no dedicated coverage step yet)
 # The 90%+ commitment in `docs/PLATFORM.md` is the target end-state;

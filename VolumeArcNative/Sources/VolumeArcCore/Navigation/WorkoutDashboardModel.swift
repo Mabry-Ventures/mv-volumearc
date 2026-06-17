@@ -69,6 +69,8 @@ public final class WorkoutDashboardModel: ObservableObject {
     @Published public private(set) var operationalSignals: [OperationalSignalSummary] = []
 
     @Published public var coachMessages: [CoachMessage] = []
+    /// VOL-275: saved workout templates (newest first), loaded on refresh.
+    @Published public internal(set) var savedTemplates: [SavedWorkoutTemplate] = []
     @Published public private(set) var isCoachStreaming: Bool = false
     @Published public private(set) var coachFallbackNotice: String?
     @Published public private(set) var voicePermissionStatus = VoicePermissionStatus(
@@ -131,7 +133,9 @@ public final class WorkoutDashboardModel: ObservableObject {
     private let accountSessionStore: AccountSessionStore
 
     #if canImport(SwiftData)
-    private let workoutRepository: SwiftDataWorkoutRepository?
+    // Internal (not private) so WorkoutDashboardModel+TrainingPrograms
+    // can build the VOL-284 prescription clamp context from history.
+    let workoutRepository: SwiftDataWorkoutRepository?
     // VOL-181: relaxed to internal so the extracted coach-context
     // extension can pull memory.mostRecent into the prompt block.
     let coachMemoryRepository: SwiftDataCoachMemoryRepository?
@@ -140,6 +144,7 @@ public final class WorkoutDashboardModel: ObservableObject {
     // the current weekly plan in planning prompts.
     let trainingPlanRepository: SwiftDataTrainingPlanRepository?
     let trainingProgramRepository: SwiftDataTrainingProgramRepository?
+    let workoutTemplateRepository: SwiftDataWorkoutTemplateRepository?
     private let refreshLoader: DashboardRefreshLoader?
     #endif
 
@@ -231,6 +236,7 @@ public final class WorkoutDashboardModel: ObservableObject {
             container: repository.container,
             trainingPlanRepository: trainingPlanRepository
         )
+        self.workoutTemplateRepository = SwiftDataWorkoutTemplateRepository(container: repository.container)
         self.refreshLoader = DashboardRefreshLoader(container: repository.container)
         self.syncEngine = syncEngine
         self.subscriptionStore = subscriptionStore
@@ -282,6 +288,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.userProfileRepository = nil
         self.trainingPlanRepository = nil
         self.trainingProgramRepository = nil
+        self.workoutTemplateRepository = nil
         self.refreshLoader = nil
         #endif
         self.syncEngine = syncEngine
@@ -329,6 +336,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         self.userProfileRepository = nil
         self.trainingPlanRepository = nil
         self.trainingProgramRepository = nil
+        self.workoutTemplateRepository = nil
         self.refreshLoader = nil
         #endif
         #if canImport(StoreKit)
@@ -380,8 +388,10 @@ public final class WorkoutDashboardModel: ObservableObject {
         telemetrySink: any TelemetrySink = InMemoryTelemetrySink(),
         featureFlags: (any FeatureFlagProvider)? = nil
     ) {
-        let coachProvider = LocalHeuristicAICoachProvider(
-            coachingStyle: state.athlete.coachingStyle
+        // VOL-283: even test/snapshot fixtures keep the safety wrapper
+        // outermost so no construction site models an unguarded provider.
+        let coachProvider = SafetyFilteredCoachProvider(
+            base: LocalHeuristicAICoachProvider(coachingStyle: state.athlete.coachingStyle)
         )
         self.init(
             aiProvider: coachProvider,
@@ -468,6 +478,24 @@ public final class WorkoutDashboardModel: ObservableObject {
             self.trainingPrograms = snapshot.trainingPrograms
             self.activeProgram = snapshot.activeProgram
             self.coachMemory = snapshot.coachMemory
+            // Keep the prior list when the template read fails — collapsing
+            // a persistence error into "no saved templates" hides the
+            // failure from the athlete, and a throw would abort the whole
+            // refresh for a secondary surface. Degrade to last-known-good
+            // and surface the failure through telemetry (PR #363 review).
+            do {
+                if let templates = try workoutTemplateRepository?.templates() {
+                    self.savedTemplates = templates
+                }
+            } catch {
+                telemetrySink.record(TelemetryEvent(
+                    category: "coach",
+                    name: "template_read_failed",
+                    severity: .warning,
+                    message: "Saved-template read failed during refresh; keeping last-known-good list.",
+                    metadata: ["error_type": String(describing: type(of: error))]
+                ))
+            }
 
             applyActiveWorkoutRecoverySnapshot(snapshot.activeWorkout)
 
@@ -589,10 +617,15 @@ public final class WorkoutDashboardModel: ObservableObject {
     }
 
     private func persistActiveSessionStateIfNeeded() {
-        guard let activeWorkoutID,
-              let activeSessionPlan,
-              activeSessionPlan.isEmpty == false
-        else { return }
+        guard let activeWorkoutID, let activeSessionPlan else { return }
+        // Parked: a planned session with no current exercise (the final
+        // lift was skipped). Persist it even with an empty plan so a
+        // relaunch restores the parked state — keeping the autopilot log
+        // guard armed — rather than falling back to a nil plan that would
+        // let an autopilot set land in the parked workout (PR #363,
+        // CodeRabbit). Genuinely empty, non-parked states are not saved.
+        let parked = activeSessionExercise == nil
+        guard activeSessionPlan.isEmpty == false || parked else { return }
 
         activeSessionStateStore.save(ActiveWorkoutSessionState(
             workoutID: activeWorkoutID,
@@ -602,13 +635,14 @@ public final class WorkoutDashboardModel: ObservableObject {
             loggedSetCountsByExerciseIndex: normalizedLoggedSetCounts(
                 loggedSetCountsByExerciseIndex,
                 plan: activeSessionPlan
-            )
+            ),
+            parked: parked
         ))
     }
 
     private func restoreActiveSessionStateIfPossible(for workoutID: String) {
         guard let state = activeSessionStateStore.load(workoutID: workoutID),
-              state.plan.isEmpty == false
+              state.plan.isEmpty == false || state.parked
         else {
             clearActiveSessionPlan()
             return
@@ -622,14 +656,21 @@ public final class WorkoutDashboardModel: ObservableObject {
         if loggedSetCountsByExerciseIndex.isEmpty, state.loggedSetCountForActiveExercise > 0 {
             loggedSetCountsByExerciseIndex[state.activeExerciseIndex] = state.loggedSetCountForActiveExercise
         }
-        let maxIndex = max(0, state.plan.exercises.count - 1)
-        activeSessionExerciseIndex = min(max(0, state.activeExerciseIndex), maxIndex)
-        let activeSetCount = state.plan.exercise(at: activeSessionExerciseIndex).map { max(1, $0.sets) } ?? 1
-        loggedSetCountForActiveExercise = min(
-            max(0, loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] ?? state.loggedSetCountForActiveExercise),
-            activeSetCount
-        )
-        loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] = loggedSetCountForActiveExercise
+        // Skipping the final planned lift parks the index one past the
+        // end ("no planned lifts remain"), and that state persists.
+        // Restore must keep the parked index rather than clamp it back
+        // onto the last in-range lift, or a force-quit resurrects the
+        // completed-exercise rewind the skip path just removed.
+        activeSessionExerciseIndex = min(max(0, state.activeExerciseIndex), state.plan.exercises.count)
+        if let restoredExercise = state.plan.exercise(at: activeSessionExerciseIndex) {
+            loggedSetCountForActiveExercise = min(
+                max(0, loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] ?? state.loggedSetCountForActiveExercise),
+                max(1, restoredExercise.sets)
+            )
+            loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] = loggedSetCountForActiveExercise
+        } else {
+            loggedSetCountForActiveExercise = 0
+        }
     }
 
     private func advanceActiveSessionPlanAfterLoggedSet() {
@@ -676,6 +717,23 @@ public final class WorkoutDashboardModel: ObservableObject {
             if entry.key == deferredIndex {
                 result[exerciseCount - 1] = entry.value
             } else if entry.key > deferredIndex {
+                result[entry.key - 1] = entry.value
+            } else {
+                result[entry.key] = entry.value
+            }
+        }
+    }
+
+    private func shiftLoggedSetCountsAfterRemovingExercise(
+        _ counts: [Int: Int],
+        removedIndex: Int,
+        exerciseCountAfterRemoval: Int
+    ) -> [Int: Int] {
+        counts.reduce(into: [Int: Int]()) { result, entry in
+            guard entry.key >= 0, entry.key <= exerciseCountAfterRemoval else { return }
+            if entry.key == removedIndex {
+                return
+            } else if entry.key > removedIndex {
                 result[entry.key - 1] = entry.value
             } else {
                 result[entry.key] = entry.value
@@ -734,8 +792,15 @@ public final class WorkoutDashboardModel: ObservableObject {
     }
 
     // MARK: - Dashboard actions
-    /// Start a new workout session.
-    public func startWorkoutSession(title overrideTitle: String? = nil, plan: WorkoutSessionPlan? = nil) async {
+    /// Start a new workout session. Coach-derived plans must pass
+    /// `source: .coach` so the VOL-284 clamp backstop bounds the live
+    /// session targets exactly like the scheduling path; manual builder
+    /// and library starts stay user-sovereign by signed policy.
+    public func startWorkoutSession(
+        title overrideTitle: String? = nil,
+        plan: WorkoutSessionPlan? = nil,
+        source: WorkoutPlanSource = .manual
+    ) async {
         #if canImport(SwiftData)
         guard let workoutRepository else { return }
         guard !isSessionActive else {
@@ -749,7 +814,11 @@ public final class WorkoutDashboardModel: ObservableObject {
             return
         }
         do {
-            let resolvedPlan = activeSessionPlanCandidate(from: plan)
+            var startPlan = plan
+            if source == .coach, let plan {
+                startPlan = clampedForCoachStart(plan)
+            }
+            let resolvedPlan = activeSessionPlanCandidate(from: startPlan)
             let title = workoutTitle(overrideTitle: overrideTitle, plan: resolvedPlan)
             let workout = try workoutRepository.createWorkout(title: title)
             self.activeWorkoutID = workout.identifier
@@ -861,7 +930,11 @@ public final class WorkoutDashboardModel: ObservableObject {
               index != activeSessionExerciseIndex
         else { return }
 
-        let previousExercise = activeSessionPlan.exercises[activeSessionExerciseIndex]
+        // The index can legitimately sit one past the end after the
+        // final lift was skipped (the parked "no lifts remain" state) —
+        // subscripting it unguarded crashed when the athlete then tapped
+        // an earlier exercise in the workout map.
+        let previousExercise = activeSessionPlan.exercise(at: activeSessionExerciseIndex)
         let nextExercise = activeSessionPlan.exercises[index]
         activeSessionExerciseIndex = index
         loggedSetCountForActiveExercise = min(
@@ -875,39 +948,95 @@ public final class WorkoutDashboardModel: ObservableObject {
             severity: .info,
             message: "Moved active session to another exercise.",
             metadata: [
-                "from_exercise_id": Self.exerciseIdentifier(named: previousExercise.name),
+                "from_exercise_id": previousExercise
+                    .map { Self.exerciseIdentifier(named: $0.name) } ?? "none",
                 "to_exercise_id": Self.exerciseIdentifier(named: nextExercise.name),
             ]
         ))
         publishWidgetSnapshot()
     }
 
-    public func skipActiveSessionExercise() {
+    @discardableResult
+    public func skipActiveSessionExercise() -> (skippedExercise: String, nextExercise: String?)? {
         guard let activeSessionPlan,
               activeSessionPlan.exercises.indices.contains(activeSessionExerciseIndex)
-        else { return }
+        else { return nil }
 
+        let skippedIndex = activeSessionExerciseIndex
+        var exercises = activeSessionPlan.exercises
         let skippedExercise = activeSessionPlan.exercises[activeSessionExerciseIndex]
-        if activeSessionExerciseIndex < activeSessionPlan.exercises.count - 1 {
-            loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] = max(1, skippedExercise.sets)
-            activeSessionExerciseIndex += 1
-            loggedSetCountForActiveExercise = min(
-                loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] ?? 0,
-                max(1, activeSessionPlan.exercises[activeSessionExerciseIndex].sets)
+        exercises.remove(at: skippedIndex)
+
+        loggedSetCountsByExerciseIndex = shiftLoggedSetCountsAfterRemovingExercise(
+            loggedSetCountsByExerciseIndex,
+            removedIndex: skippedIndex,
+            exerciseCountAfterRemoval: exercises.count
+        )
+
+        if exercises.isEmpty {
+            // In-memory, keep a non-nil EMPTY plan: every parked-planned
+            // state (single-lift skip here, or final-lift skip of a
+            // multi-lift plan below) is then uniformly
+            // `activeSessionPlan != nil && activeSessionExercise == nil`,
+            // which the hasActiveExercise card gate and the
+            // logRecommendedSet autopilot guard both key on. All
+            // activeSessionPlan consumers guard on isEmpty/indices.contains,
+            // so an empty plan safely no-ops them.
+            self.activeSessionPlan = WorkoutSessionPlan(
+                title: activeSessionPlan.title,
+                durationMinutes: activeSessionPlan.durationMinutes,
+                targetRPE: activeSessionPlan.targetRPE,
+                exercises: []
             )
+            activeSessionExerciseIndex = 0
+            loggedSetCountForActiveExercise = 0
+            // Persist the parked-empty state (parked sentinel): it
+            // OVERWRITES the stale pre-skip plan so a relaunch can't
+            // resurrect the skipped lift (Codex P2), and restores as
+            // `activeSessionPlan != nil && activeSessionExercise == nil`
+            // so the logRecommendedSet autopilot guard still fires instead
+            // of falling back to a nil plan (CodeRabbit). persist now
+            // accepts an empty plan when parked.
+            persistActiveSessionStateIfNeeded()
         } else {
-            loggedSetCountForActiveExercise = max(1, skippedExercise.sets)
-            loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] = loggedSetCountForActiveExercise
+            self.activeSessionPlan = WorkoutSessionPlan(
+                title: activeSessionPlan.title,
+                durationMinutes: activeSessionPlan.durationMinutes,
+                targetRPE: activeSessionPlan.targetRPE,
+                exercises: exercises
+            )
+            if skippedIndex >= exercises.count {
+                // Skipping the FINAL lift must not rewind to a completed
+                // one: parking the index one past the end makes
+                // activeSessionExercise nil, which is the "No planned
+                // lifts remain" state the skip toast already models.
+                activeSessionExerciseIndex = exercises.count
+                loggedSetCountForActiveExercise = 0
+            } else {
+                activeSessionExerciseIndex = skippedIndex
+                loggedSetCountForActiveExercise = min(
+                    loggedSetCountsByExerciseIndex[activeSessionExerciseIndex] ?? 0,
+                    max(1, exercises[activeSessionExerciseIndex].sets)
+                )
+            }
+            persistActiveSessionStateIfNeeded()
         }
-        persistActiveSessionStateIfNeeded()
+
+        let nextExercise = exercises.indices.contains(activeSessionExerciseIndex)
+            ? exercises[activeSessionExerciseIndex].name
+            : nil
         telemetrySink.record(TelemetryEvent(
             category: "workout",
             name: "exercise_skipped",
             severity: .info,
             message: "Skipped exercise during an active session.",
-            metadata: ["exercise_id": Self.exerciseIdentifier(named: skippedExercise.name)]
+            metadata: [
+                "exercise_id": Self.exerciseIdentifier(named: skippedExercise.name),
+                "next_exercise_id": nextExercise.map(Self.exerciseIdentifier(named:)) ?? "none",
+            ]
         ))
         publishWidgetSnapshot()
+        return (skippedExercise.name, nextExercise)
     }
 
     /// Discard the in-progress workout without creating a completed history row.
@@ -1131,7 +1260,7 @@ public final class WorkoutDashboardModel: ObservableObject {
             kind: .queued,
             title: String(localized: "Watch update queued", comment: "Toast title when WatchConnectivity payloads are queued"),
             message: String(
-                localized: "We'll replay ^[\(pending) update](inflect: true) when your Watch reconnects.",
+                localized: "We'll replay \(dashboardLocalizedUpdateCount(pending)) when your Watch reconnects.",
                 comment: "Toast message when WatchConnectivity payloads are queued; placeholder is pending payload count"
             ),
             severity: .warning
@@ -1143,7 +1272,7 @@ public final class WorkoutDashboardModel: ObservableObject {
             kind: .replayed,
             title: String(localized: "Watch back in sync", comment: "Toast title when queued WatchConnectivity payloads replay"),
             message: String(
-                localized: "Replayed ^[\(replayed) queued update](inflect: true).",
+                localized: "Replayed \(dashboardLocalizedQueuedUpdateCount(replayed)).",
                 comment: "Toast message when WatchConnectivity payloads replay; placeholder is replayed payload count"
             ),
             severity: .info
@@ -1365,7 +1494,7 @@ public final class WorkoutDashboardModel: ObservableObject {
             syncSummary: isSessionActive
                 ? String(localized: "Session in progress", comment: "Widget sync summary during active session")
                 : String(
-                    localized: "^[\(recentSessions.count) session](inflect: true) this week",
+                    localized: "\(dashboardLocalizedSessionCount(recentSessions.count)) this week",
                     comment: "Widget sync summary count"
                 ),
             streakDays: computeStreakDays(),
@@ -1472,6 +1601,19 @@ public extension WorkoutDashboardModel {
     ) async {
         #if canImport(SwiftData)
         guard let workoutRepository else { return }
+
+        // A parked PLANNED session (final lift skipped, plan present —
+        // possibly empty — but no current exercise) must not record a set:
+        // there is no current planned lift, and the WorkoutsView card is
+        // hidden in this state so there is no manual-log entry point, so
+        // any call here would be the autopilot fallback recording an
+        // unplanned lift. Gated on activeSessionPlan so a deliberate
+        // autopilot-only session (started with no plan) still logs its
+        // recommendation. Authoritative model-level guard.
+        // (PR #363 review, Codex P2.)
+        if activeSessionPlan != nil && activeSessionExercise == nil {
+            return
+        }
 
         if autopilot == nil && activeSessionExercise == nil {
             await refresh()
@@ -2001,5 +2143,30 @@ public struct CoachMessage: Sendable, Identifiable, Equatable {
         self.content = content
         self.timestamp = timestamp
     }
+}
+
+private func dashboardLocalizedUpdateCount(_ count: Int) -> String {
+    dashboardInflectedString(
+        "^[\(count) update](inflect: true)",
+        comment: "WatchConnectivity pending update count"
+    )
+}
+
+private func dashboardLocalizedQueuedUpdateCount(_ count: Int) -> String {
+    dashboardInflectedString(
+        "^[\(count) queued update](inflect: true)",
+        comment: "WatchConnectivity replayed queued update count"
+    )
+}
+
+private func dashboardLocalizedSessionCount(_ count: Int) -> String {
+    dashboardInflectedString(
+        "^[\(count) session](inflect: true)",
+        comment: "Widget weekly session count"
+    )
+}
+
+private func dashboardInflectedString(_ value: String.LocalizationValue, comment: StaticString) -> String {
+    String(AttributedString(localized: value, comment: comment).characters)
 }
 #endif

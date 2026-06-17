@@ -108,11 +108,35 @@ public struct RootDashboardView: View {
                 navigation.openSignals()
             }
 
-            await model.refresh()
+            let refreshSucceeded = await model.refresh()
             if shouldSeedCoachWorkoutHandoff {
                 model.coachMessages = Self.seededCoachWorkoutHandoffMessages
             }
-            navigation.showOnboarding = model.hasLoadedInitialData && !model.isOnboardingComplete
+            // PR #363 (Codex P1/P2): the launch gates derive from
+            // refresh-INDEPENDENT persisted state PLUS whether this load
+            // actually succeeded. A failed dashboard refresh must not
+            // (a) bypass the onboarding/safety gates into the unlocked UI,
+            // nor (b) re-onboard an already-onboarded athlete — which would
+            // overwrite their profile via updateProfile. Seed the persisted
+            // flag from a successful load so existing users migrate on their
+            // first launch; then LaunchGate only treats a CONFIRMED fresh
+            // install (a successful load that found no onboarded profile) as
+            // onboarding. A failed refresh on an upgrade from before
+            // OnboardingCompletionStore shipped stays a returning athlete
+            // (safety gate, never onboarding), protecting their profile. New
+            // users acknowledge safety inside onboarding, so isAccepted is
+            // already true once onboarding completes (safety gate stays off).
+            if model.isOnboardingComplete {
+                OnboardingCompletionStore.markComplete()
+            }
+            let launchGate = LaunchGate.decide(
+                refreshSucceeded: refreshSucceeded,
+                modelOnboardingComplete: model.isOnboardingComplete,
+                onboardingStoreComplete: OnboardingCompletionStore.isComplete,
+                safetyAccepted: SafetyDisclaimerAcknowledgmentStore.isAccepted
+            )
+            navigation.showOnboarding = launchGate.showOnboarding
+            navigation.showSafetyAcknowledgment = launchGate.showSafetyAcknowledgment
             // XCUITest affordance: open the Profile surface directly so
             // tests that target Profile-only rows do not depend on
             // simulator-specific TabView hit testing.
@@ -169,7 +193,10 @@ public struct RootDashboardView: View {
                 onRequestHealthAuthorization: {
                     await model.requestHealthKitAuthorization()
                 },
-                onRequestNotificationAuthorization: onRequestNotifications,
+                // Keep first-run onboarding free of the iOS notification
+                // system prompt. The Profile notifications row owns the
+                // explicit rationale + "Allow Notifications" action.
+                onRequestNotificationAuthorization: nil,
                 onConnectAppleAccount: { account in
                     await model.connectAppleAccount(
                         userID: account.userID,
@@ -181,6 +208,14 @@ public struct RootDashboardView: View {
                     model.recordOnboardingResumed(stepRaw: stepRaw)
                 }
             )
+        }
+        // PR #363 (Codex P1): root-level safety re-prompt for already-
+        // onboarded users who have not accepted the current safety version.
+        // Non-dismissible — the athlete must accept before using the app.
+        .fullScreenCover(isPresented: $navigation.showSafetyAcknowledgment) {
+            SafetyAcknowledgmentGateView {
+                navigation.showSafetyAcknowledgment = false
+            }
         }
         // VOL-93: paywall sheet attached at the root so it can be triggered
         // from launch arguments (`-ShowPaywallOnLaunch`) as well as from
@@ -199,8 +234,20 @@ public struct RootDashboardView: View {
             guard model.hasLoadedInitialData else { return }
             if isComplete {
                 OnboardingProgressStore.clear()
+                // Persist the completion so the launch gates survive a
+                // future failed refresh without re-onboarding (PR #363).
+                OnboardingCompletionStore.markComplete()
             }
-            navigation.showOnboarding = !isComplete
+            // Past the hasLoadedInitialData guard the load has succeeded,
+            // so reuse the shared launch-gate decision (PR #363, Codex P2).
+            let launchGate = LaunchGate.decide(
+                refreshSucceeded: true,
+                modelOnboardingComplete: isComplete,
+                onboardingStoreComplete: OnboardingCompletionStore.isComplete,
+                safetyAccepted: SafetyDisclaimerAcknowledgmentStore.isAccepted
+            )
+            navigation.showOnboarding = launchGate.showOnboarding
+            navigation.showSafetyAcknowledgment = launchGate.showSafetyAcknowledgment
         }
         .onChange(of: navigation.selectedTab) { _, _ in
             VAHaptics.selection()
@@ -437,6 +484,44 @@ public enum VolumeArcAppearancePreference: String, CaseIterable, Identifiable, S
         case .dark:
             return .dark
         }
+    }
+}
+
+/// PR #363 (Codex P1): root-level blocking safety-acknowledgment gate for
+/// users who completed onboarding before the disclaimer shipped (or before
+/// a `SafetyDisclaimerAcknowledgmentStore.currentVersion` bump). Reuses the
+/// onboarding disclaimer copy via `SafetyDisclaimerContent` and records
+/// acceptance without touching the athlete's profile. Non-dismissible: like
+/// first-run onboarding, the athlete must accept the current safety version
+/// to proceed.
+struct SafetyAcknowledgmentGateView: View {
+    let onAcknowledged: () -> Void
+    @State private var acknowledged = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                SafetyDisclaimerContent(
+                    acknowledged: $acknowledged,
+                    acknowledgeIdentifier: "safety.gate.acknowledge"
+                )
+                .padding(VA.Space.lg)
+            }
+
+            VAButton(
+                String(localized: "Continue", comment: "Safety acknowledgment gate continue button"),
+                style: .primary,
+                accessibilityIdentifier: "safety.gate.continue"
+            ) {
+                VAHaptics.tap()
+                SafetyDisclaimerAcknowledgmentStore.recordAccepted()
+                onAcknowledged()
+            }
+            .disabled(!acknowledged)
+            .padding(VA.Space.lg)
+        }
+        .background(VA.Colors.surfacePrimary.ignoresSafeArea())
+        .interactiveDismissDisabled(true)
     }
 }
 #endif

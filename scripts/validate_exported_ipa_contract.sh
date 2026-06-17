@@ -92,6 +92,83 @@ require_codesign() {
   LAST_TEAM_IDENTIFIER="$team_identifier"
 }
 
+extract_entitlements() {
+  local bundle="$1"
+  local label="$2"
+  local output="$3"
+  if ! /usr/bin/codesign -d --entitlements - --xml "$bundle" >"$output" 2>/dev/null || [[ ! -s "$output" ]]; then
+    echo "FAIL: $label signed entitlements missing at $bundle" >&2
+    exit 1
+  fi
+}
+
+require_entitlement_string() {
+  local entitlements="$1"
+  local key="$2"
+  local expected="$3"
+  local label="$4"
+  /usr/bin/python3 - "$entitlements" "$key" "$expected" "$label" <<'PY'
+import plistlib
+import sys
+
+path, key, expected, label = sys.argv[1:5]
+with open(path, "rb") as handle:
+    entitlements = plistlib.load(handle)
+actual = entitlements.get(key)
+if actual != expected:
+    print(f"FAIL: {label} signed entitlement {key} must be {expected!r}, got {actual!r}", file=sys.stderr)
+    sys.exit(1)
+PY
+}
+
+require_entitlement_bool_true() {
+  local entitlements="$1"
+  local key="$2"
+  local label="$3"
+  /usr/bin/python3 - "$entitlements" "$key" "$label" <<'PY'
+import plistlib
+import sys
+
+path, key, label = sys.argv[1:4]
+with open(path, "rb") as handle:
+    entitlements = plistlib.load(handle)
+actual = entitlements.get(key)
+if actual is not True:
+    print(f"FAIL: {label} signed entitlement {key} must be true, got {actual!r}", file=sys.stderr)
+    sys.exit(1)
+PY
+}
+
+require_entitlement_contains() {
+  local entitlements="$1"
+  local key="$2"
+  local expected="$3"
+  local label="$4"
+  /usr/bin/python3 - "$entitlements" "$key" "$expected" "$label" <<'PY'
+import plistlib
+import sys
+
+path, key, expected, label = sys.argv[1:5]
+with open(path, "rb") as handle:
+    entitlements = plistlib.load(handle)
+actual = entitlements.get(key)
+
+if isinstance(actual, str):
+    matches = actual == expected
+elif actual is None:
+    matches = False
+else:
+    try:
+        matches = expected in actual
+    except TypeError:
+        matches = False
+
+if not matches:
+    print(f"FAIL: {label} signed entitlement {key} missing {expected!r}; got {actual!r}", file=sys.stderr)
+    sys.exit(1)
+PY
+}
+
 require_watch_assets_car() {
   local assets_car="$1"
   if [[ ! -f "$assets_car" ]]; then
@@ -106,34 +183,43 @@ require_watch_assets_car() {
     exit 1
   fi
 
-  printf "%s" "$asset_info" |
-    /usr/bin/ruby -rjson -e '
-      begin
-        records = JSON.parse(STDIN.read)
-      rescue JSON::ParserError => error
-        warn "FAIL: unable to parse assetutil output for #{ARGV.fetch(0)}: #{error.message}"
-        exit 1
-      end
-      icons = records.select { |record| record["AssetType"] == "Icon Image" && record["Name"] == "AppIcon" }
-      required = {
-        "marketing 1024x1024" => ->(record) { record["Idiom"] == "marketing" && record["PixelWidth"] == 1024 && record["PixelHeight"] == 1024 },
-        "watch 48x48" => ->(record) { record["Idiom"] == "watch" && record["PixelWidth"] == 48 && record["PixelHeight"] == 48 },
-        "watch 55x55" => ->(record) { record["Idiom"] == "watch" && record["PixelWidth"] == 55 && record["PixelHeight"] == 55 },
-        "watch 58x58" => ->(record) { record["Idiom"] == "watch" && record["PixelWidth"] == 58 && record["PixelHeight"] == 58 },
-        "watch 80x80" => ->(record) { record["Idiom"] == "watch" && record["PixelWidth"] == 80 && record["PixelHeight"] == 80 },
-        "watch 87x87" => ->(record) { record["Idiom"] == "watch" && record["PixelWidth"] == 87 && record["PixelHeight"] == 87 },
-        "watch 88x88" => ->(record) { record["Idiom"] == "watch" && record["PixelWidth"] == 88 && record["PixelHeight"] == 88 },
-        "watch 100x100" => ->(record) { record["Idiom"] == "watch" && record["PixelWidth"] == 100 && record["PixelHeight"] == 100 },
-        "watch 172x172" => ->(record) { record["Idiom"] == "watch" && record["PixelWidth"] == 172 && record["PixelHeight"] == 172 },
-        "watch 196x196" => ->(record) { record["Idiom"] == "watch" && record["PixelWidth"] == 196 && record["PixelHeight"] == 196 },
-        "watch 216x216" => ->(record) { record["Idiom"] == "watch" && record["PixelWidth"] == 216 && record["PixelHeight"] == 216 }
-      }
-      missing = required.keys.reject { |name| icons.any? { |record| required.fetch(name).call(record) } }
-      if missing.any?
-        warn "FAIL: compiled watch Assets.car missing AppIcon renditions: #{missing.join(", ")}"
-        exit 1
-      end
-    ' "$assets_car"
+  local asset_info_path="$TMP_DIR/watch-assets.json"
+  printf "%s" "$asset_info" >"$asset_info_path"
+  /usr/bin/python3 - "$assets_car" "$asset_info_path" <<'PY'
+import json
+import sys
+
+assets_car = sys.argv[1]
+asset_info_path = sys.argv[2]
+try:
+    with open(asset_info_path, "r", encoding="utf-8") as handle:
+        records = json.load(handle)
+except json.JSONDecodeError as error:
+    print(f"FAIL: unable to parse assetutil output for {assets_car}: {error}", file=sys.stderr)
+    sys.exit(1)
+
+icons = [
+    record for record in records
+    if record.get("AssetType") == "Icon Image" and record.get("Name") == "AppIcon"
+]
+required = {
+    "marketing 1024x1024": lambda record: record.get("Idiom") == "marketing" and record.get("PixelWidth") == 1024 and record.get("PixelHeight") == 1024,
+    "watch 48x48": lambda record: record.get("Idiom") == "watch" and record.get("PixelWidth") == 48 and record.get("PixelHeight") == 48,
+    "watch 55x55": lambda record: record.get("Idiom") == "watch" and record.get("PixelWidth") == 55 and record.get("PixelHeight") == 55,
+    "watch 58x58": lambda record: record.get("Idiom") == "watch" and record.get("PixelWidth") == 58 and record.get("PixelHeight") == 58,
+    "watch 80x80": lambda record: record.get("Idiom") == "watch" and record.get("PixelWidth") == 80 and record.get("PixelHeight") == 80,
+    "watch 87x87": lambda record: record.get("Idiom") == "watch" and record.get("PixelWidth") == 87 and record.get("PixelHeight") == 87,
+    "watch 88x88": lambda record: record.get("Idiom") == "watch" and record.get("PixelWidth") == 88 and record.get("PixelHeight") == 88,
+    "watch 100x100": lambda record: record.get("Idiom") == "watch" and record.get("PixelWidth") == 100 and record.get("PixelHeight") == 100,
+    "watch 172x172": lambda record: record.get("Idiom") == "watch" and record.get("PixelWidth") == 172 and record.get("PixelHeight") == 172,
+    "watch 196x196": lambda record: record.get("Idiom") == "watch" and record.get("PixelWidth") == 196 and record.get("PixelHeight") == 196,
+    "watch 216x216": lambda record: record.get("Idiom") == "watch" and record.get("PixelWidth") == 216 and record.get("PixelHeight") == 216,
+}
+missing = [name for name, predicate in required.items() if not any(predicate(record) for record in icons)]
+if missing:
+    print(f"FAIL: compiled watch Assets.car missing AppIcon renditions: {', '.join(missing)}", file=sys.stderr)
+    sys.exit(1)
+PY
 }
 
 require_extension_entry_point() {
@@ -189,7 +275,19 @@ require_codesign "$APP_BUNDLE" "VolumeArc app" "${EXPECTED_TEAM_IDENTIFIER:-}"
 APP_TEAM_IDENTIFIER="$LAST_TEAM_IDENTIFIER"
 require_codesign "$WATCH_BUNDLE" "VolumeArc watch app" "$APP_TEAM_IDENTIFIER"
 require_codesign "$WATCH_WIDGET_BUNDLE" "VolumeArc watch widget" "$APP_TEAM_IDENTIFIER"
+
+APP_ENTITLEMENTS="$TMP_DIR/VolumeArc.entitlements.plist"
+WATCH_ENTITLEMENTS="$TMP_DIR/VolumeArcWatch.entitlements.plist"
+extract_entitlements "$APP_BUNDLE" "VolumeArc app" "$APP_ENTITLEMENTS"
+extract_entitlements "$WATCH_BUNDLE" "VolumeArc watch app" "$WATCH_ENTITLEMENTS"
+require_entitlement_string "$APP_ENTITLEMENTS" "aps-environment" "production" "VolumeArc app"
+require_entitlement_contains "$APP_ENTITLEMENTS" "com.apple.developer.icloud-container-identifiers" "iCloud.com.mabryventures.VolumeArc" "VolumeArc app"
+require_entitlement_bool_true "$APP_ENTITLEMENTS" "com.apple.developer.healthkit" "VolumeArc app"
+require_entitlement_contains "$APP_ENTITLEMENTS" "com.apple.security.application-groups" "group.com.mabryventures.volumearc" "VolumeArc app"
+require_entitlement_bool_true "$WATCH_ENTITLEMENTS" "com.apple.developer.healthkit" "VolumeArc watch app"
+require_entitlement_contains "$WATCH_ENTITLEMENTS" "com.apple.security.application-groups" "group.com.mabryventures.volumearc" "VolumeArc watch app"
+
 require_extension_entry_point "$WATCH_WIDGET_BUNDLE" "VolumeArc watch widget"
 require_watch_assets_car "$WATCH_ASSETS_CAR"
 
-echo "Exported IPA contract OK: watch app/widget embedded, relay config patched, signing valid, watch widget entry point and AppIcon renditions compiled."
+echo "Exported IPA contract OK: watch app/widget embedded, relay config patched, production entitlements signed, signing valid, watch widget entry point and AppIcon renditions compiled."

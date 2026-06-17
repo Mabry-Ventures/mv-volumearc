@@ -16,6 +16,64 @@ final class VolumeArcCoachPromptTemplateTests: XCTestCase {
 
     // MARK: - Renderer fundamentals
 
+    /// PR #363 review (Codex P2): rest/cooldown instruction lines must
+    /// not become exercises.
+    func testRestInstructionLinesProduceNoExercises() {
+        XCTAssertNil(CoachWorkoutPlanExtractor.plan(
+            from: "Rest 90 seconds between sets",
+            title: "Coach Workout"
+        ))
+        XCTAssertNil(CoachWorkoutPlanExtractor.plan(
+            from: "Rest for 120 seconds, then cool down 60 seconds",
+            title: "Coach Workout"
+        ))
+    }
+
+    func testRestPauseMovementStillParses() throws {
+        let plan = try XCTUnwrap(CoachWorkoutPlanExtractor.plan(
+            from: "Rest-Pause Bench Press: 3 sets of 8 at 185 lb",
+            title: "Coach Workout"
+        ))
+        XCTAssertEqual(plan.exercises.first?.name, "Rest-Pause Bench Press")
+    }
+
+    func testTimedMovementStillParses() throws {
+        let plan = try XCTUnwrap(CoachWorkoutPlanExtractor.plan(
+            from: "Plank: 3 sets of 30 seconds",
+            title: "Coach Workout"
+        ))
+        XCTAssertEqual(plan.exercises.first?.name, "Plank")
+    }
+
+    /// PR #363 review (Codex P2): "10 sets of 3" used to lose the captured
+    /// reps when the set count exceeded the cap — the pair was discarded,
+    /// reps defaulted to 1, and the handoff silently became 8x1.
+    func testExplicitSetCountAboveCapKeepsCapturedReps() {
+        let response = """
+        Volume day:
+        - Back Squat: 10 sets of 3
+        """
+
+        guard let plan = CoachWorkoutPlanExtractor.plan(from: response, title: "Coach Workout") else {
+            XCTFail("Expected an over-cap set count to still produce a plan")
+            return
+        }
+
+        XCTAssertEqual(plan.exercises.count, 1)
+        XCTAssertEqual(plan.exercises[0].sets, 8)
+        XCTAssertEqual(plan.exercises[0].reps, 3)
+    }
+
+    /// Bare NxM keeps the strict load-by-rep rejection: "12x3" with no
+    /// "sets" word must not parse into a clipped pair.
+    func testBareOverCapPairStillRejectedAsLoadByRep() {
+        let response = """
+        - Squat 12x315
+        """
+
+        XCTAssertNil(CoachWorkoutPlanExtractor.plan(from: response, title: "Coach Workout"))
+    }
+
     func testRenderEmbedsTemplateMarkerSystemPromptContextAndQuestion() {
         let context = makeContext()
         let rendered = CoachPromptTemplate.render(
@@ -134,6 +192,102 @@ final class VolumeArcCoachPromptTemplateTests: XCTestCase {
         XCTAssertEqual(extractedPlan.exercises[2].reps, 30)
         XCTAssertEqual(extractedPlan.exercises[3].sets, 1)
         XCTAssertEqual(extractedPlan.exercises[3].reps, 30)
+    }
+
+    func testCoachWorkoutPlanExtractorBuildsStartablePlanFromNumberedSetRepLines() {
+        let response = """
+        Keep the effort easy today.
+
+        1. Goblet Squat - 3x8
+        2. Dumbbell Row - 3 x 10
+        3. Side Plank - 2 x 30 seconds
+        """
+
+        guard let extractedPlan = CoachWorkoutPlanExtractor.plan(from: response, title: "Coach Workout") else {
+            XCTFail("Expected numbered set/rep lines to produce a startable workout plan")
+            return
+        }
+
+        XCTAssertEqual(extractedPlan.targetRPE, 6)
+        XCTAssertEqual(extractedPlan.exercises.map(\.name), [
+            "Goblet Squat",
+            "Dumbbell Row",
+            "Side Plank",
+        ])
+        XCTAssertEqual(extractedPlan.exercises[0].sets, 3)
+        XCTAssertEqual(extractedPlan.exercises[0].reps, 8)
+        XCTAssertEqual(extractedPlan.exercises[1].sets, 3)
+        XCTAssertEqual(extractedPlan.exercises[1].reps, 10)
+        XCTAssertEqual(extractedPlan.exercises[2].sets, 2)
+        XCTAssertEqual(extractedPlan.exercises[2].reps, 30)
+    }
+
+    func testCoachWorkoutPlanExtractorBuildsStartablePlanFromCompactPrescriptionLines() {
+        let response = """
+        Keep it easy today and move smoothly.
+
+        Goblet Squat 3x8
+        Dumbbell Row 3 sets of 10 reps
+        Side Plank 2 x 30 seconds
+        """
+
+        guard let extractedPlan = CoachWorkoutPlanExtractor.plan(from: response, title: "Coach Workout") else {
+            XCTFail("Expected compact coach prescription lines to produce a startable workout plan")
+            return
+        }
+
+        XCTAssertEqual(extractedPlan.targetRPE, 6)
+        XCTAssertEqual(extractedPlan.exercises.map(\.name), [
+            "Goblet Squat",
+            "Dumbbell Row",
+            "Side Plank",
+        ])
+        XCTAssertEqual(extractedPlan.exercises[0].sets, 3)
+        XCTAssertEqual(extractedPlan.exercises[0].reps, 8)
+        XCTAssertEqual(extractedPlan.exercises[1].sets, 3)
+        XCTAssertEqual(extractedPlan.exercises[1].reps, 10)
+        XCTAssertEqual(extractedPlan.exercises[2].sets, 2)
+        XCTAssertEqual(extractedPlan.exercises[2].reps, 30)
+    }
+
+    /// PR #363 review: the prescription delimiters include the Unicode
+    /// en dash and em dash that model output frequently uses in place of
+    /// the ASCII hyphen.
+    func testCoachWorkoutPlanExtractorParsesEnDashAndEmDashDelimiters() {
+        let response = """
+        1. Goblet Squat \u{2013} 3x8
+        2. Dumbbell Row \u{2014} 3x10
+        """
+
+        guard let extractedPlan = CoachWorkoutPlanExtractor.plan(from: response, title: "Coach Workout") else {
+            XCTFail("Expected en-dash/em-dash prescriptions to produce a startable workout plan")
+            return
+        }
+
+        XCTAssertEqual(extractedPlan.exercises.map(\.name), ["Goblet Squat", "Dumbbell Row"])
+        XCTAssertEqual(extractedPlan.exercises[0].sets, 3)
+        XCTAssertEqual(extractedPlan.exercises[0].reps, 8)
+        XCTAssertEqual(extractedPlan.exercises[1].sets, 3)
+        XCTAssertEqual(extractedPlan.exercises[1].reps, 10)
+    }
+
+    func testCoachWorkoutPlanExtractorDoesNotTreatLoadByRepNotationAsSetCount() {
+        let response = """
+        Keep this as clean top-set practice.
+
+        1. Bench Press - 135x5
+        2. Back Squat - 225 x 3
+        3. Goblet Squat - 3x8
+        """
+
+        guard let extractedPlan = CoachWorkoutPlanExtractor.plan(from: response, title: "Coach Workout") else {
+            XCTFail("Expected the valid set/rep line to produce a startable workout plan")
+            return
+        }
+
+        XCTAssertEqual(extractedPlan.exercises.map(\.name), ["Goblet Squat"])
+        XCTAssertEqual(extractedPlan.exercises.first?.sets, 3)
+        XCTAssertEqual(extractedPlan.exercises.first?.reps, 8)
     }
 
     func testCoachWorkoutPlanExtractorIgnoresVagueAdviceWithoutSetsAndReps() {

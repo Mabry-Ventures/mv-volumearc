@@ -281,6 +281,7 @@ struct CoachEvalFixture: Decodable, Sendable {
         let mustMentionReadinessOrRPE: Bool?
         let mustNotMention: [String]?
         let maxEnumeratedPlanDays: Int?
+        let maxPrescribedLoadLb: Int?
         let toneHint: String?
         let mustAnchorOnNextExercise: Bool?
         let mustFlagPainSignal: Bool?

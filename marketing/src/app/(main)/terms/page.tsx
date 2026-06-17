@@ -67,10 +67,10 @@ export default function TermsPage() {
               The App is free to download and use for core features (see
               Section 4). It also offers an optional &ldquo;Pro&rdquo;
               subscription billed through your Apple ID at the price displayed
-              at the point of purchase (currently $9.99 per month or $79.99
+              at the point of purchase (currently $9.99 per month or $59.99
               per year, subject to change with notice on the App Store
-              listing). The subscription unlocks the Gemini Pro coach tier and
-              live voice coaching, and no other features.
+              listing). The subscription unlocks the higher-capacity cloud
+              coach tier and live voice coaching, and no other features.
             </p>
             <p>
               <strong>Auto-renewal.</strong> Your Apple ID is charged at

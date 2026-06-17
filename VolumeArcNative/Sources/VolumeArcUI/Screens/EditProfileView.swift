@@ -283,4 +283,5 @@ public struct EditProfileView: View {
         isPresented = false
     }
 }
+
 #endif

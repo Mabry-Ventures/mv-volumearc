@@ -6,6 +6,7 @@ import VolumeArcCore
 public struct CoachView: View { // swiftlint:disable:this type_body_length
     @ObservedObject var model: WorkoutDashboardModel
     @ObservedObject var navigation: DashboardNavigationModel
+    @EnvironmentObject private var toastPresenter: VAToastPresenter
     @State private var draftMessage: String = ""
     @State private var showPlanDraft: Bool = false
     @State private var expandedExerciseID: String?
@@ -31,11 +32,22 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
         VStack(spacing: 0) {
             coachHeader
             messageList
-            fallbackNotice
-            voiceNotice
-            latestWorkoutHandoff
-            quickPromptRail
-            composer
+        }
+        // Bottom controls ride a safe-area inset, not VStack siblings, so
+        // the message list is inset by the stack's measured height: draft
+        // content can always scroll clear of the rail/composer (PR #363:
+        // as siblings, straddling rows fed center-taps to the rail chips).
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            // Opaque backdrop: scroll content slides underneath, and the
+            // notice tints are translucent washes over this surface.
+            VStack(spacing: 0) {
+                fallbackNotice
+                voiceNotice
+                latestWorkoutHandoff
+                quickPromptRail
+                composer
+            }
+            .background(VA.Colors.surfaceGrouped)
         }
         .background(VA.Colors.surfaceGrouped)
         .navigationTitle(DashboardTab.coach.title)
@@ -91,10 +103,15 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
         if model.coachMessages.isEmpty {
             ScrollView {
                 VStack(alignment: .leading, spacing: VA.Space.lg) {
-                    welcomeCard
+                    // The draft leads when present: the athlete just asked
+                    // to plan, so the actionable card belongs above the
+                    // welcome copy and its exercise rows start in-viewport
+                    // (PR #363: below the welcome card, the VOL-275 footer
+                    // buried row 0 under the composer for good).
                     if showPlanDraft {
                         planningCard
                     }
+                    welcomeCard
                 }
                 .padding(VA.Space.lg)
                 .contentShape(Rectangle())
@@ -167,36 +184,7 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
         }
     }
 
-    private var welcomeCard: some View {
-        VACard(style: .elevated) {
-            VStack(alignment: .leading, spacing: VA.Space.md) {
-                HStack(alignment: .top, spacing: VA.Space.md) {
-                    Image(systemName: "waveform.and.mic")
-                        .font(VA.Typography.title2)
-                        .foregroundStyle(VA.Colors.primary)
-                        .frame(width: 44, height: 44)
-                        .background(VA.Colors.primary.opacity(0.12), in: Circle())
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: VA.Space.xs) {
-                        Text(String(localized: "Your Coach", comment: "Coach welcome card title"))
-                            .font(VA.Typography.title2)
-                            .foregroundStyle(VA.Colors.textPrimary)
-                        Text(String(
-                            localized: """
-                                Ask anything about your training — load selection, form cues, \
-                                recovery, or tomorrow's plan. I’ll ground the answer in your \
-                                recent sessions and readiness.
-                                """,
-                            comment: "Coach welcome card description"
-                        ))
-                        .font(VA.Typography.body)
-                        .foregroundStyle(VA.Colors.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-        }
-    }
+    private var welcomeCard: some View { CoachWelcomeCard() }
 
     private var planningCard: some View {
         CoachPlanningCard(
@@ -204,7 +192,8 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
             expandedExerciseID: $expandedExerciseID,
             sendPlanFeedback: sendPlanFeedback(_:),
             schedulePlan: schedulePlanDraft,
-            startNow: startPlanNow
+            startNow: startPlanNow,
+            saveTemplate: savePlanDraftAsTemplate
         )
     }
 
@@ -542,6 +531,13 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
     }
 
     private func coachWorkoutPlan(from response: String) -> WorkoutSessionPlan? {
+        // VOL-284: pure extraction only — this runs per message per render
+        // (transcript loop + pinned handoff), so it must stay cheap. The
+        // inline preview surfaces only the move count and first lift, never
+        // load figures, and every coach-sourced schedule re-clamps at the
+        // `scheduleWorkoutPlan` backstop, so deferring the clamp to
+        // scheduling loses nothing and keeps repository work off the
+        // render path (the round-3 UI hangs came from clamping here).
         CoachWorkoutPlanExtractor.plan(
             from: response,
             title: String(localized: "Coach Workout", comment: "Title for a coach response converted into a workout")
@@ -613,7 +609,7 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
                 navigation.selectedTab = .workouts
                 return
             }
-            await model.startWorkoutSession(title: plan.title, plan: plan)
+            await model.startWorkoutSession(title: plan.title, plan: plan, source: .coach)
             navigation.selectedTab = .workouts
         }
     }
@@ -625,6 +621,12 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
     }
 
     private func schedulePlanDraft() {
+        guard requireDraftExercises(
+            message: String(
+                localized: "A scheduled session needs at least one exercise.",
+                comment: "Toast body when scheduling an empty co-designed plan"
+            )
+        ) else { return }
         let title = planDraft.name
         let exercises = planDraftWorkoutExercises
         Task {
@@ -644,12 +646,17 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
         }
     }
 
-    private func startPlanNow() {
+    /// VOL-275: persist the co-designed draft as a reusable template.
+    /// The model re-clamps coach-derived numbers before saving.
+    private func savePlanDraftAsTemplate() {
+        guard requireDraftExercises(
+            message: String(localized: "Templates need at least one exercise.", comment: "Toast body when saving an empty co-designed plan")
+        ) else { return }
         Task {
-            VAHaptics.sessionStart()
+            VAHaptics.tap()
             dismissKeyboard()
-            await model.startWorkoutSession(
-                title: planDraft.name,
+            let saved = await model.saveCoachTemplate(
+                named: planDraft.name,
                 plan: WorkoutSessionPlan(
                     title: planDraft.name,
                     durationMinutes: planDraft.durationMinutes,
@@ -657,8 +664,58 @@ public struct CoachView: View { // swiftlint:disable:this type_body_length
                     exercises: planDraftWorkoutExercises
                 )
             )
+            toastPresenter.show(VAToast(
+                kind: saved ? .success : .error,
+                title: saved
+                    ? String(localized: "Template saved", comment: "Toast title after saving a co-designed template")
+                    : String(localized: "Couldn't save template", comment: "Toast title when saving a template fails"),
+                message: saved
+                    ? String(localized: "Find it in Workouts under Templates.", comment: "Toast body after saving a co-designed template")
+                    : String(localized: "Try again in a moment.", comment: "Toast body when saving a template fails")
+            ))
+        }
+    }
+
+    private func startPlanNow() {
+        guard requireDraftExercises(
+            message: String(localized: "A session needs at least one exercise.", comment: "Toast body when starting an empty co-designed plan")
+        ) else { return }
+        // Session already live: route to it (handoff-card behavior).
+        guard !model.isSessionActive else {
+            dismissKeyboard()
+            navigation.selectedTab = .workouts
+            return
+        }
+        Task {
+            VAHaptics.sessionStart()
+            dismissKeyboard()
+            // The co-design draft can carry coach-refined numbers, so the
+            // start path re-clamps like the schedule path (VOL-284).
+            await model.startWorkoutSession(
+                title: planDraft.name,
+                plan: WorkoutSessionPlan(
+                    title: planDraft.name,
+                    durationMinutes: planDraft.durationMinutes,
+                    targetRPE: planDraft.targetRPE,
+                    exercises: planDraftWorkoutExercises
+                ),
+                source: .coach
+            )
             navigation.selectedTab = .workouts
         }
+    }
+
+    /// Every row can be removed in the editor — an empty draft must not
+    /// save, schedule, or start (PR #363 review).
+    private func requireDraftExercises(message: String) -> Bool {
+        guard planDraft.exercises.isEmpty else { return true }
+        VAHaptics.warning()
+        toastPresenter.show(VAToast(
+            kind: .error,
+            title: String(localized: "Add an exercise first", comment: "Toast title for an empty co-designed plan action"),
+            message: message
+        ))
+        return false
     }
 
     private var planDraftWorkoutExercises: [WeeklyWorkoutExercise] {
@@ -689,4 +746,5 @@ private struct SuggestedCoachPrompt: Identifiable {
     let title: String
     let systemImage: String
 }
+
 #endif

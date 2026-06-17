@@ -64,6 +64,9 @@ final class WatchWorkoutModel: ObservableObject {
         comment: "Watch default status"
     )
     @Published private(set) var activeFormCheckSessionID: String?
+    /// VOL-275: tomorrow's co-designed plan, mirrored from the phone when
+    /// the athlete schedules it. Display-only on the watch for v1.
+    @Published private(set) var scheduledPlan: WatchScheduledPlanPayload?
     @Published private(set) var isFormCheckAnalyzing = false
     @Published private(set) var formCheckResultSummary: String?
     #if DEBUG
@@ -157,6 +160,12 @@ final class WatchWorkoutModel: ObservableObject {
         }
         if let snapshot = await stateStore.load() {
             activeWorkoutID = snapshot.workoutID
+            // Nil body must CLEAR any in-memory plan — a snapshot without
+            // a plan is the truth, not an omission — and an EXPIRED plan
+            // clears the same way (PR #363 review).
+            scheduledPlan = snapshot.scheduledPlanBody
+                .flatMap { WatchScheduledPlanPayload.decode(from: $0) }
+                .flatMap { $0.isCurrent() ? $0 : nil }
             selectedAction = snapshot.selectedAction
             restEndsAt = snapshot.restEndsAt
             coachPrompt = snapshot.coachPrompt
@@ -208,6 +217,17 @@ final class WatchWorkoutModel: ObservableObject {
         case .formCheckStopped:
             guard let stopped = WatchFormCheckStoppedPayload.decode(from: payload.body) else { return }
             await applyFormCheckStopped(stopped)
+        case .scheduledPlan:
+            guard let plan = WatchScheduledPlanPayload.decode(from: payload.body),
+                  plan.isCurrent() else { return }
+            scheduledPlan = plan
+            // Date-agnostic on purpose: the chip derives Today/Tomorrow/
+            // weekday from the payload's concrete date.
+            statusMessage = String(
+                localized: "Plan synced.",
+                comment: "Watch status after the phone mirrors a scheduled co-designed plan"
+            )
+            await persistState()
         default:
             return
         }
@@ -1047,9 +1067,72 @@ final class WatchWorkoutModel: ObservableObject {
                 coachPrompt: coachPrompt,
                 sessionActive: sessionActive,
                 statusMessage: statusMessage,
-                loggedSetCount: loggedSetCountThisSession
+                loggedSetCount: loggedSetCountThisSession,
+                scheduledPlanBody: scheduledPlan.map { WatchScheduledPlanPayload.encode($0) }
             )
         )
+    }
+}
+
+/// VOL-275: glanceable mirror of tomorrow's co-designed plan. The
+/// prescription shown here is the post-clamp payload from the phone.
+private struct WatchScheduledPlanChip: View {
+    let plan: WatchScheduledPlanPayload
+
+    /// Today / Tomorrow / weekday, derived from the concrete scheduled
+    /// date — a plan scheduled for today must never read "Tomorrow".
+    private var scheduleLabel: String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(plan.scheduledFor) {
+            return String(localized: "Today", comment: "Watch scheduled plan chip label for a today plan")
+        }
+        if calendar.isDateInTomorrow(plan.scheduledFor) {
+            return String(localized: "Tomorrow", comment: "Watch scheduled plan chip label for a tomorrow plan")
+        }
+        return plan.scheduledFor.formatted(.dateTime.weekday(.wide))
+    }
+
+    var body: some View {
+        HStack(spacing: VA.Space.sm) {
+            Image(systemName: "calendar.badge.checkmark")
+                .font(VA.Typography.headline)
+                .foregroundStyle(VA.Colors.primary)
+
+            VStack(alignment: .leading, spacing: VA.Space.xxs) {
+                Text(scheduleLabel)
+                    .font(VA.Typography.caption)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                Text(plan.title)
+                    .font(VA.Typography.body)
+                    .foregroundStyle(VA.Colors.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let first = plan.exercises.first {
+                    Text(
+                        String(
+                            localized: "\(first.name) \(first.sets)x\(first.reps)",
+                            comment: """
+                                Watch scheduled plan first-lift summary; \
+                                placeholders are lift name, sets, reps
+                                """
+                        )
+                    )
+                    .font(VA.Typography.footnote)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                }
+            }
+        }
+        .padding(VA.Space.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: VA.Radius.sm, style: .continuous)
+                .fill(VA.Colors.primary.opacity(VA.Opacity.chipFill))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: VA.Radius.sm, style: .continuous)
+                .strokeBorder(VA.Colors.primary.opacity(VA.Opacity.chipBorder), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("watch.scheduledPlanChip")
     }
 }
 
@@ -1473,6 +1556,12 @@ struct WatchWorkoutView: View {
 
                     watchVitalsChip
 
+                    // Render-side expiry too: the date can roll while the
+                    // app stays resident.
+                    if let plan = model.scheduledPlan, plan.isCurrent() {
+                        WatchScheduledPlanChip(plan: plan)
+                    }
+
                     Text(
                         String(
                             localized: "Fallback: \(VolumeArcExerciseCatalog.frontSquat.name)",
@@ -1624,11 +1713,11 @@ struct WatchWorkoutView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: VA.Radius.sm, style: .continuous)
-                .fill(VA.Colors.secondary.opacity(0.14))
+                .fill(VA.Colors.secondary.opacity(VA.Opacity.chipFill))
         )
         .overlay(
             RoundedRectangle(cornerRadius: VA.Radius.sm, style: .continuous)
-                .strokeBorder(VA.Colors.secondary.opacity(0.35), lineWidth: 1)
+                .strokeBorder(VA.Colors.secondary.opacity(VA.Opacity.chipBorder), lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("watch.vitalsSayChip")

@@ -23,7 +23,7 @@ The release bar is now higher than the original positioning decision. VolumeArc 
 **What we ship that most competitors don't:**
 - Native Apple watch + phone with **parity**, not a shrunken companion
 - Live Activities + Dynamic Island for active workouts
-- CloudKit cross-device sync without user-visible account setup
+- CloudKit continuity across iPhone and Apple Watch, with Sign in with Apple available to seed profile identity
 - Readiness derived from actual HealthKit (HRV, sleep, recovery) feeding a real progression engine
 - Liquid Glass (iOS 26) design language adoption on day one
 - Private-by-default data (SwiftData + CloudKit, no third-party telemetry of training data)
@@ -33,7 +33,7 @@ The release bar is now higher than the original positioning decision. VolumeArc 
 
 ### Option A — "Deepest Apple-ecosystem strength coach" (recommended)
 
-The pitch: *"If you live inside the Apple ecosystem, VolumeArc is the only strength coach that actually uses it. Your watch leads the session. Your readiness comes from your real recovery data. Your history follows you across every Apple device."*
+The pitch: *"If you live inside the Apple ecosystem, VolumeArc is the only strength coach that actually uses it. Your watch leads the session. Your readiness comes from your real recovery data. Your history follows you across iPhone and Apple Watch."*
 
 **Why it wins:**
 - The architecture matches the promise. HealthKit, WatchConnectivity, CloudKit, widgets, Live Activities, Watch-as-primary-surface, curated programs, and readiness-aware coaching are all in the product.
@@ -100,6 +100,19 @@ The pitch: *"Real human coaches write the programs. VolumeArc runs them."*
 | [VOL-274](https://linear.app/mabry-ventures/issue/VOL-274) | Pin production AI model routing and deprecation policy. | P2 launch gate |
 | [VOL-275](https://linear.app/mabry-ventures/issue/VOL-275) | Prove co-design planning persistence/scheduling. | P2 launch gate |
 | [VOL-276](https://linear.app/mabry-ventures/issue/VOL-276) | Enforce release hygiene: no emojis, no stale project names, no unsupported launch claims. | P1 launch gate |
+
+## Product-voice rule: AI strength programming coach (2026-06-11, binding)
+
+Decided by Jared during the 2026-06-11 GA replan, after WWDC26 (Workout Buddy free and phone-less in watchOS 27; Apple's Health coach delayed to 27.1-27.4) and Google's Fitbit relaunch (Gemini Health Coach at $9.99/mo, free with Google AI Pro/Ultra, available on iOS):
+
+**VolumeArc is "the AI strength programming coach" — the prescriptive strength specialist.** Every product surface sells programming depth: progressive overload, readiness-driven set/rep/load prescriptions, autoregulation, recovery-timed deloads, and equipment-aware substitution. Premium is programming depth, never "AI access."
+
+Banned framings on product surfaces (app, watch, widgets, App Store metadata, selected marketing components) — enforced by `scripts/check_release_hygiene.sh` product-voice patterns so drift fails CI:
+
+- "AI coach" / "AI-powered strength" (pre-existing rules)
+- "fitness coach", "wellness coach", "personal trainer" (added with this rule — generic framings that collide head-on with free or bundled platform coaches)
+
+Allowed: "strength programming coach", "strength coach" qualified by prescriptive language, and technical/legal/privacy disclosures that must name AI processing factually.
 
 ## Explicit non-goals for this doc
 

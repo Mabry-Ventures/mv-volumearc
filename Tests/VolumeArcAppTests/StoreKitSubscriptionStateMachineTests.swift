@@ -120,7 +120,7 @@ final class StoreKitSubscriptionStateMachineTests: XCTestCase {
     func test_screenshotFixturePublishesSubmittedPlanDisplays() {
         let displays = [
             StoreKitSubscriptionProductDisplay(id: Self.monthly, displayPrice: "$9.99"),
-            StoreKitSubscriptionProductDisplay(id: Self.yearly, displayPrice: "$79.99"),
+            StoreKitSubscriptionProductDisplay(id: Self.yearly, displayPrice: "$59.99"),
         ]
 
         let store = StoreKitSubscriptionStore.screenshotFixture(

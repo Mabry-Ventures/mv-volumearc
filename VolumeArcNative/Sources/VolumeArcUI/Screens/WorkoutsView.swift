@@ -38,7 +38,17 @@ public struct WorkoutsView: View {
 
     public var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: VA.Space.xl) {
+            // Eager VStack on purpose. This surface hosts the 1Hz rest-timer
+            // TimelineView, and a lazy container re-runs its whole placement
+            // pass (LazySubviewPlacements → lengthThatFits over every resident
+            // card) each time any child's display list changes. At 1Hz that
+            // pegged the main thread for the full rest countdown and starved
+            // XCUITest accessibility snapshots ("Timed out while evaluating UI
+            // query" in the workout journeys). A plain VStack caches child
+            // geometry in the attribute graph, so a tick re-renders only the
+            // fixed-height timer subtree. Content here is bounded (~8 cards
+            // active, capped idle sections), so laziness buys nothing.
+            VStack(alignment: .leading, spacing: VA.Space.xl) {
                 workoutsHeader
                 if model.isSessionActive {
                     activeSessionHeader
@@ -48,8 +58,6 @@ public struct WorkoutsView: View {
                     setLogCard
                     if restActive {
                         restTimerCard
-                    } else {
-                        coachCueCard
                     }
                     upNextCard
                 } else {
@@ -203,14 +211,10 @@ public struct WorkoutsView: View {
                     Text(activeWorkoutTitle)
                         .font(VA.Typography.headline)
                         .foregroundStyle(VA.Colors.textPrimary)
-                    let loggedSets = model.loggedSetCountThisSession
-                    let setsLoggedText = String(
-                        localized: "^[\(loggedSets) set](inflect: true) logged",
-                        comment: "Active session subtitle with logged set count"
-                    )
+                    let setsLoggedText = activeSessionLoggedSetText
                     Text(setsLoggedText)
-                    .font(VA.Typography.footnote)
-                    .foregroundStyle(VA.Colors.textSecondary)
+                        .font(VA.Typography.footnote)
+                        .foregroundStyle(VA.Colors.textSecondary)
                 }
                 Spacer(minLength: VA.Space.sm)
                 ZStack {
@@ -222,7 +226,7 @@ public struct WorkoutsView: View {
                         .monospacedDigit()
                 }
                 .accessibilityLabel(String(
-                    localized: "Session progress \(currentSetCount) of ^[\(sessionTargetSetCount) set](inflect: true)",
+                    localized: "Session progress \(currentSetCount) of \(workoutsLocalizedSetCount(sessionTargetSetCount))",
                     comment: "VoiceOver label for active session set progress"
                 ))
                 Button {
@@ -267,7 +271,16 @@ public struct WorkoutsView: View {
         .padding(VA.Space.lg)
         .vaGlassBackground(in: RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous))
         .accessibilityElement(children: .contain)
+        .accessibilityValue(activeSessionLoggedSetText)
         .accessibilityIdentifier("workouts.activeSession")
+    }
+
+    private var activeSessionLoggedSetText: String {
+        let loggedSets = model.loggedSetCountThisSession
+        return String(
+            localized: "\(workoutsLocalizedSetCount(loggedSets)) logged",
+            comment: "Active session subtitle with logged set count"
+        )
     }
 
     @ViewBuilder
@@ -281,7 +294,8 @@ public struct WorkoutsView: View {
                                 ? "figure.strengthtraining.traditional"
                                 : "arrow.triangle.2.circlepath",
                             size: 88,
-                            accent: replacementExercise == nil ? VA.Colors.primary : VA.Colors.secondary
+                            accent: replacementExercise == nil ? VA.Colors.primary : VA.Colors.secondary,
+                            illustrationAssetName: currentExerciseDefinition?.illustrationAssetName
                         )
                         VStack(alignment: .leading, spacing: VA.Space.xs) {
                             Text(String(
@@ -318,6 +332,7 @@ public struct WorkoutsView: View {
                         WorkoutChip(text: restChipText, tone: .neutral)
                     }
 
+                    activeExerciseCueSection
                     liveTargetEditor
                     livePivotActions
                     activeExercisePrimaryActions
@@ -477,10 +492,7 @@ public struct WorkoutsView: View {
                         .foregroundStyle(VA.Colors.textSecondary)
                         .tracking(0.6)
                     Spacer()
-                    Text(String(
-                        localized: "^[\(activeWorkoutExerciseNames.count) move](inflect: true)",
-                        comment: "Active workout exercise list count"
-                    ))
+                    Text(workoutsLocalizedMoveCount(activeWorkoutExerciseNames.count))
                     .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.textSecondary)
                 }
@@ -569,6 +581,10 @@ public struct WorkoutsView: View {
                     .font(VA.Typography.caption)
                     .foregroundStyle(VA.Colors.textSecondary)
                     .tracking(0.6)
+                Text(activeSessionLoggedSetText)
+                    .font(VA.Typography.caption)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                    .accessibilityIdentifier("workouts.loggedSetCount")
                 Spacer()
                 Text(String(localized: "RPE", comment: "Active workout set log rpe column label"))
                     .font(VA.Typography.caption)
@@ -629,28 +645,38 @@ public struct WorkoutsView: View {
     }
 
     @ViewBuilder
-    private var coachCueCard: some View {
-        if let cue = model.autopilot?.bestCue {
-            HStack(alignment: .top, spacing: VA.Space.md) {
-                Image(systemName: "quote.opening")
-                    .font(VA.Typography.headline)
-                    .foregroundStyle(VA.Colors.primary)
-                    .frame(width: 30, height: 30)
-                    .background(VA.Colors.primary.opacity(0.12), in: Circle())
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: VA.Space.xs) {
-                    Text(String(localized: "Coach cue", comment: "Active workout coach cue label"))
-                        .font(VA.Typography.footnote)
-                        .foregroundStyle(VA.Colors.textSecondary)
-                    Text(cue)
-                        .font(VA.Typography.footnote)
-                        .foregroundStyle(VA.Colors.textPrimary)
-                        .italic()
-                        .fixedSize(horizontal: false, vertical: true)
+    private var activeExerciseCueSection: some View {
+        if !activeExerciseCues.isEmpty {
+            VStack(alignment: .leading, spacing: VA.Space.sm) {
+                Text(String(localized: "COACH CUES", comment: "Active workout inline cue section label"))
+                    .font(VA.Typography.caption)
+                    .foregroundStyle(VA.Colors.textSecondary)
+                    .tracking(0.6)
+                ForEach(activeExerciseCues, id: \.self) { cue in
+                    HStack(alignment: .top, spacing: VA.Space.sm) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(VA.Typography.caption)
+                            .foregroundStyle(VA.Colors.primary)
+                            .accessibilityHidden(true)
+                        Text(cue)
+                            .font(VA.Typography.footnote)
+                            .foregroundStyle(VA.Colors.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
-            .padding(VA.Space.lg)
-            .vaGlassBackground(in: RoundedRectangle(cornerRadius: VA.Radius.lg, style: .continuous))
+            .padding(.horizontal, VA.Space.md)
+            .padding(.vertical, VA.Space.sm)
+            .background(
+                VA.Colors.primary.opacity(0.08),
+                in: RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: VA.Radius.md, style: .continuous)
+                    .stroke(VA.Colors.primary.opacity(0.18), lineWidth: 1)
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("workouts.activeExercise.cues")
         }
     }
 
@@ -699,7 +725,13 @@ public struct WorkoutsView: View {
                     localized: "Chest · Shoulders · Triceps",
                     comment: "Featured workout focus"
                 ),
-                startWorkout: startWorkout
+                startWorkout: startWorkout,
+                savedTemplates: model.savedTemplates,
+                startSavedTemplate: { template in
+                    // Saved templates were clamped at save; coach source
+                    // keeps the start-path backstop (idempotent) anyway.
+                    startWorkout(title: template.name, plan: template.sessionPlan, source: .coach)
+                }
             )
             .accessibilityIdentifier("workouts.emptyState")
             if let tomorrowWorkout {
@@ -791,7 +823,7 @@ public struct WorkoutsView: View {
             )
         }
         return String(
-            localized: "^[\(workout.exercises.count) move](inflect: true) - \(firstExercise.name) first",
+            localized: "\(workoutsLocalizedMoveCount(workout.exercises.count)) - \(firstExercise.name) first",
             comment: "Workouts scheduled tomorrow card subtitle with co-designed exercise preview"
         )
     }
@@ -845,10 +877,10 @@ public struct WorkoutsView: View {
         startWorkout(title: nil)
     }
 
-    private func startWorkout(title: String?, plan: WorkoutSessionPlan? = nil) {
+    private func startWorkout(title: String?, plan: WorkoutSessionPlan? = nil, source: WorkoutPlanSource = .manual) {
         Task {
             VAHaptics.sessionStart()
-            await model.startWorkoutSession(title: title, plan: plan)
+            await model.startWorkoutSession(title: title, plan: plan, source: source)
         }
     }
 
@@ -875,7 +907,7 @@ public struct WorkoutsView: View {
             let scheduled = await model.scheduleWorkoutPlan(
                 draft.plan,
                 on: target.date,
-                source: "workouts_builder"
+                source: .workoutsBuilder
             )
             toastPresenter.show(VAToast(
                 kind: scheduled ? .success : .error,
@@ -914,6 +946,7 @@ public struct WorkoutsView: View {
     private func logSet() {
         Task {
             VAHaptics.setLogged()
+            let indexBeforeLog = model.activeSessionExerciseIndex
             await model.logRecommendedSet(
                 weightOverride: activeTargetWeight,
                 repsOverride: activeTargetReps,
@@ -921,6 +954,16 @@ public struct WorkoutsView: View {
                 exerciseIDOverride: currentExerciseDefinition?.id,
                 exerciseNameOverride: currentExerciseName
             )
+            // PR #363 review (Codex P1): when this set completes the
+            // current exercise the model advances the index, and the next
+            // movement must not inherit this lift's weight/reps/RPE
+            // overrides. The `.onChange(of: activeSessionExerciseIndex)`
+            // backstop covers the rendered view, but every other advance
+            // path (defer/replace/skip) also resets directly — keep this
+            // path consistent rather than relying on view lifecycle.
+            if model.activeSessionExerciseIndex != indexBeforeLog || !model.isSessionActive {
+                resetLiveWorkoutOverrides()
+            }
             startRestTimer()
             toastPresenter.show(VAToast(
                 kind: .success,
@@ -1012,13 +1055,13 @@ public struct WorkoutsView: View {
 
     private func skipCurrentExercise() {
         if model.activeSessionPlan != nil {
-            model.skipActiveSessionExercise()
+            let result = model.skipActiveSessionExercise()
             resetLiveWorkoutOverrides()
             VAHaptics.selection()
             toastPresenter.show(VAToast(
                 kind: .info,
                 title: String(localized: "Exercise skipped", comment: "Toast title after skipping exercise"),
-                message: String(localized: "Moved to the next planned lift.", comment: "Toast body after skipping exercise")
+                message: skippedExerciseToastMessage(nextExercise: result?.nextExercise)
             ))
         } else {
             chooseEquipmentBusyReplacement()
@@ -1049,6 +1092,19 @@ public struct WorkoutsView: View {
         targetRepsOverride = nil
         targetRPEOverride = nil
         replacementExercise = nil
+    }
+
+    private func skippedExerciseToastMessage(nextExercise: String?) -> String {
+        if let nextExercise {
+            return String(
+                localized: "\(nextExercise) is now loaded.",
+                comment: "Toast body after skipping one exercise and loading the next"
+            )
+        }
+        return String(
+            localized: "No planned lifts remain. Complete the session or use the builder for another move.",
+            comment: "Toast body after skipping the final planned exercise"
+        )
     }
 
     private func startRestTimer() {
@@ -1140,8 +1196,22 @@ public struct WorkoutsView: View {
         model.activeWorkoutTitle ?? String(localized: "Strength Session", comment: "Default active workout title")
     }
 
+    /// A parked PLANNED session: the plan is present (possibly emptied by
+    /// skipping the final lift) but there is no current exercise. In this
+    /// state the dashboard's standalone autopilot suggestion must not leak
+    /// into the active-session card, Form Check, the completed-session
+    /// primaryLift, or Log Set. A deliberate no-plan autopilot session
+    /// (plan nil) is unaffected. Matches the model guard in
+    /// logRecommendedSet. (PR #363 review, Codex + CodeRabbit.)
+    private var isParkedPlannedSession: Bool {
+        model.activeSessionPlan != nil && model.activeSessionExercise == nil
+    }
+
     private var hasActiveExercise: Bool {
-        model.activeSessionExercise != nil || model.autopilot != nil || replacementExercise != nil
+        if isParkedPlannedSession {
+            return replacementExercise != nil
+        }
+        return model.activeSessionExercise != nil || model.autopilot != nil || replacementExercise != nil
     }
 
     private var currentExerciseSetCount: Int {
@@ -1173,7 +1243,7 @@ public struct WorkoutsView: View {
 
     private var restStartedToastMessage: String {
         String(
-            localized: "Starting your ^[\(restDurationSeconds) second](inflect: true) rest.",
+            localized: "Starting your \(workoutsLocalizedSecondCount(restDurationSeconds)) rest.",
             comment: "Toast detail after logging a set and starting rest"
         )
     }
@@ -1187,17 +1257,33 @@ public struct WorkoutsView: View {
     }
 
     private var compactTarget: String {
-        "\(Int(activeTargetWeight)) x \(activeTargetReps)"
+        // A parked planned session has no real target; the neutral
+        // helper defaults (0/1) must not render as "0 x 1"
+        // (PR #363 review, CodeRabbit).
+        if isParkedPlannedSession {
+            return String(
+                localized: "No target",
+                comment: "Set-log target label when no planned lifts remain in the active session"
+            )
+        }
+        return "\(Int(activeTargetWeight)) x \(activeTargetReps)"
     }
 
     private var currentExerciseName: String {
-        replacementExercise?.name
+        if isParkedPlannedSession {
+            return replacementExercise?.name
+                ?? String(localized: "Current exercise", comment: "Fallback active workout current exercise name")
+        }
+        return replacementExercise?.name
             ?? model.activeSessionExercise?.name
             ?? model.autopilot?.nextExerciseName
             ?? String(localized: "Current exercise", comment: "Fallback active workout current exercise name")
     }
 
     private var currentExerciseDefinition: ExerciseDefinition? {
+        if isParkedPlannedSession {
+            return replacementExercise
+        }
         if let replacementExercise {
             return replacementExercise
         }
@@ -1209,25 +1295,49 @@ public struct WorkoutsView: View {
         return VolumeArcExerciseCatalog.exercise(withID: autopilot.nextExerciseID)
     }
 
+    private var activeExerciseCues: [String] {
+        let catalogCues = currentExerciseDefinition?.cues ?? []
+        let fallbackCue = model.autopilot?.bestCue.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        var cues = Array(catalogCues.prefix(2))
+        if cues.isEmpty, !fallbackCue.isEmpty {
+            cues.append(fallbackCue)
+        }
+        return cues
+    }
+
     private var activeTargetWeight: Double {
-        targetWeightOverride ?? model.activeSessionExercise.map { Double($0.weight) } ?? model.autopilot?.nextTarget.weight ?? 0
+        // A parked planned session has no current lift; never fall back to
+        // the autopilot target (PR #363 review, CodeRabbit).
+        if isParkedPlannedSession { return targetWeightOverride ?? 0 }
+        return targetWeightOverride ?? model.activeSessionExercise.map { Double($0.weight) } ?? model.autopilot?.nextTarget.weight ?? 0
     }
 
     private var activeTargetReps: Int {
-        targetRepsOverride ?? model.activeSessionExercise?.reps ?? model.autopilot?.nextTarget.repRange.lowerBound ?? 1
+        if isParkedPlannedSession { return targetRepsOverride ?? 1 }
+        return targetRepsOverride ?? model.activeSessionExercise?.reps ?? model.autopilot?.nextTarget.repRange.lowerBound ?? 1
     }
 
     private var activeTargetRPE: Double {
-        targetRPEOverride ?? model.activeSessionExercise.map { Double($0.targetRPE) } ?? model.autopilot?.nextTarget.targetRPE ?? 7.0
+        if isParkedPlannedSession { return targetRPEOverride ?? 7.0 }
+        return targetRPEOverride ?? model.activeSessionExercise.map { Double($0.targetRPE) } ?? model.autopilot?.nextTarget.targetRPE ?? 7.0
     }
 
     private var activeTargetUnit: String {
-        model.autopilot?.nextTarget.unit ?? String(localized: "lb", comment: "Default strength training load unit")
+        if isParkedPlannedSession {
+            return String(localized: "lb", comment: "Default strength training load unit")
+        }
+        return model.autopilot?.nextTarget.unit ?? String(localized: "lb", comment: "Default strength training load unit")
     }
 
     private var activeWorkoutExerciseNames: [String] {
         if let plan = model.activeSessionPlan, !plan.exercises.isEmpty {
             return plan.exercises.map(\.name)
+        }
+        // Parked planned session (e.g. the single-lift plan emptied by a
+        // final skip): show no rows rather than leaking autopilot /
+        // next-workout suggestions (PR #363 review, CodeRabbit).
+        if isParkedPlannedSession {
+            return []
         }
         var names: [String] = []
         if let replacementExercise {
@@ -1246,6 +1356,9 @@ public struct WorkoutsView: View {
     }
 
     private var formCheckExercise: FormCheckExercise? {
+        // A parked planned session has no real lift to form-check; do not
+        // fall back to the autopilot exercise.
+        guard !isParkedPlannedSession else { return nil }
         return FormCheckExercise.infer(
             exerciseID: currentExerciseDefinition?.id ?? model.autopilot?.nextExerciseID ?? "",
             name: currentExerciseName
@@ -1267,6 +1380,12 @@ public struct WorkoutsView: View {
     }
 
     private var nextExerciseTargetPreview: String {
+        if isParkedPlannedSession {
+            return String(
+                localized: "Complete the session or add another move.",
+                comment: "Up-next preview when no planned lifts remain in the active session"
+            )
+        }
         if let next = model.nextActiveSessionExercise {
             return "\(next.reps) reps - \(next.weight) \(activeTargetUnit)"
         }
@@ -2106,7 +2225,10 @@ private struct LiveWorkoutStepper: View {
                 } label: {
                     Image(systemName: "minus")
                         .font(VA.Typography.caption)
-                        .frame(width: 32, height: 32)
+                        .frame(
+                            width: VA.Space.xxl,
+                            height: VA.Space.xxl + VA.Space.sm
+                        )
                 }
                 .accessibilityLabel(String(localized: "Decrease \(label)", comment: "Live workout stepper decrement"))
                 .accessibilityIdentifier("\(accessibilityPrefix).decrement")
@@ -2114,7 +2236,7 @@ private struct LiveWorkoutStepper: View {
                 Text("\(value)")
                     .font(VA.Typography.monoDigit)
                     .foregroundStyle(VA.Colors.textPrimary)
-                    .frame(minWidth: 40)
+                    .frame(minWidth: VA.Space.xl)
                     .accessibilityIdentifier("\(accessibilityPrefix).value")
 
                 Button {
@@ -2122,7 +2244,10 @@ private struct LiveWorkoutStepper: View {
                 } label: {
                     Image(systemName: "plus")
                         .font(VA.Typography.caption)
-                        .frame(width: 32, height: 32)
+                        .frame(
+                            width: VA.Space.xxl,
+                            height: VA.Space.xxl + VA.Space.sm
+                        )
                 }
                 .accessibilityLabel(String(localized: "Increase \(label)", comment: "Live workout stepper increment"))
                 .accessibilityIdentifier("\(accessibilityPrefix).increment")
@@ -2130,7 +2255,7 @@ private struct LiveWorkoutStepper: View {
             .foregroundStyle(VA.Colors.textPrimary)
             .background(VA.Colors.textTertiary.opacity(0.10), in: RoundedRectangle(cornerRadius: VA.Radius.sm))
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: true, vertical: false)
     }
 }
 
@@ -2307,5 +2432,17 @@ private struct ActiveExerciseGuideView: View {
             String(localized: "Stop the set if the movement changes or symptoms show up.", comment: "Fallback active exercise guide cue"),
         ]
     }
+}
+
+private func workoutsLocalizedMoveCount(_ count: Int) -> String {
+    vaInflectedString("^[\(count) move](inflect: true)", comment: "Workout move count")
+}
+
+private func workoutsLocalizedSetCount(_ count: Int) -> String {
+    vaInflectedString("^[\(count) set](inflect: true)", comment: "Workout set count")
+}
+
+private func workoutsLocalizedSecondCount(_ count: Int) -> String {
+    vaInflectedString("^[\(count) second](inflect: true)", comment: "Workout duration in seconds")
 }
 #endif

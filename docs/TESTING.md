@@ -6,7 +6,7 @@ VolumeArc currently ships with **735+ test functions** across unit + integration
 
 - 80% line-coverage gate enforced on `VolumeArcCore` (VOL-52), targeted to rise to **90%** under [VOL-140](https://linear.app/mabry-ventures/issue/VOL-140) (sharpened by [VOL-205](https://linear.app/mabry-ventures/issue/VOL-205)). New gates: `VolumeArcUI` (≥85% target, **18%** staged floor after the VOL-135 snapshot ratchet), `VolumeArcCoreWatch` (≥85% target, **25%** Phase A floor — measured baseline 28.77% from [VOL-138](https://linear.app/mabry-ventures/issue/VOL-138) Phase A; ratchets up once `WatchWorkoutModel` pure logic is extracted), `VolumeArcWidgets` (≥75% target, **5%** Phase A floor — [VOL-263](https://linear.app/mabry-ventures/issue/VOL-263); `Widgets/VolumeArcWidgets.swift` is linked into `VolumeArcAppTests` so the existing 12 `NextWorkoutWidgetSnapshotTests` already exercise the widget views, real baseline TBM — Phase B ratchets to 25 with margin once the first green run lands; `VolumeArcWatchWidgets` line-coverage gate pending VOL-263 Phase B).
 - 6-metric performance budget (cold launch, scroll fps, scroll hitches, memory, coach P50, coach P95) tag-gated in CI (VOL-99).
-- 47-fixture coach eval matrix with hermetic template-layer assertions in CI; response-layer harness runs on nightly cron (`coach-evals-nightly.yml`) against the staging relay through the VOL-244 eval attestation broker.
+- 55-fixture coach eval matrix (each fixture runs once per enabled cloud tier — `flash-lite` + `pro`) with hermetic template-layer assertions in CI; response-layer harness runs on nightly cron (`coach-evals-nightly.yml`) against the staging relay through the VOL-244 eval attestation broker.
 - User-journey catalog at [`USER_JOURNEYS.md`](USER_JOURNEYS.md); current automated coverage **100%** (72/72) under [VOL-141](https://linear.app/mabry-ventures/issue/VOL-141) (sharpened by [VOL-200](https://linear.app/mabry-ventures/issue/VOL-200) — CI parser gate). Physical iPhone + paired Apple Watch UAT remains a separate launch gate.
 - Visual regression: SnapshotTesting is wired with bundled baselines for VAButton, the next-workout widget, core VAUI card/toast surfaces, the active-workout Live Activity lock-screen/banner, expanded Dynamic Island, and watch surfaces, coach transcript bubbles, the Premium paywall loaded-empty/failure shell, the full onboarding flow, and `DashboardSurfaceSnapshotTests` coverage for Today, Workouts idle, Workouts active, Coach planning, Signals, and Profile in light/dark/warm-brand plus light `.accessibility5` and light/dark/warm-brand reduce-transparency-off glass variants; watch/runtime parity, widgets beyond next-workout, and remaining Live Activity matrices continue under [VOL-135](https://linear.app/mabry-ventures/issue/VOL-135), [VOL-201](https://linear.app/mabry-ventures/issue/VOL-201), and [VOL-270](https://linear.app/mabry-ventures/issue/VOL-270).
 - Exploratory UAT: [`UAT_AGENT.md`](UAT_AGENT.md) documents the nightly LLM-driven XCUITest bridge from [VOL-169](https://linear.app/mabry-ventures/issue/VOL-169). It reads screenshots + accessibility trees, executes bounded safe actions, uploads transcripts, and posts a GitHub issue report.
@@ -172,6 +172,22 @@ This was the root cause behind VOL-175's "probe flakes when chaos journey is in 
 **Parser unit test:** `Tests/VolumeArcAppUITests/VolumeArcTelemetryProbeMatcherTests.swift` exercises the JSON parser in isolation so a regression in the matcher surfaces there instead of as a confusing XCUITest timeout downstream.
 
 **Phase 2 (follow-up):** wire every journey in the suite to the canonical events listed in the VOL-149 acceptance criteria — onboarding, workout start/log/complete, coach session, paywall, watch sync, HealthKit permission.
+
+### Accessibility-snapshot starvation hazard (2026-06 workout-journey hangs)
+
+`Failed to get matching snapshots: Timed out while evaluating UI query` from any XCUITest helper means the **app under test** couldn't service the accessibility snapshot — either its main thread is saturated or the AX tree mutates so often that every in-flight snapshot restarts. It is an app-behavior bug, not test flakiness; reproduce locally and `sample` the app process (`pgrep -f "Bundle/Application.*[V]olumeArc.app/VolumeArc"`, then `sample <pid> 3` — the bracket keeps pgrep from matching itself).
+
+The 2026-06 workout-journey hang cluster came from five compounding causes, each with a durable guard in code:
+
+| Cause | Guard |
+|---|---|
+| 1Hz rest-timer `TimelineView` inside the surface's `LazyVStack`: a lazy container re-runs its whole placement pass (re-measuring every resident card) whenever any child's display list changes, pegging the main thread for the full countdown | `WorkoutsView` scroll content is an eager `VStack` (see comment at the container); never host a frequently-updating view inside a Lazy container |
+| Per-tick accessibility value changes restart in-flight XCUITest snapshots | Rest timer exposes a 5s-bucketed `accessibilityValue` + `.updatesFrequently` trait (`RestTimerDisplay`) |
+| Per-event `@Published` updates on the telemetry debug probe mutate the AX overlay label continuously under bursty flows | Probe coalesces publishes every 2.5s (`App/VolumeArcTelemetryDebugProbe.swift`) |
+| `scaledToFill` asset image whose ideal size disagrees with its fixed tile frame re-invalidates lazy layout every UpdateCycle pass; 1024² source PNGs redraw per invalidation | `WorkoutIllustrationTile` memoizes a tile-sized thumbnail and isolates it via `Color.clear.overlay` |
+| `os_log` streaming makes every AX broadcast contend on dyld locks | App-under-test launches with `OS_ACTIVITY_MODE=disable` (`VolumeArcAppUITestSupport`) |
+
+Sampling gotcha: SwiftUI's internal view-list machinery (`_ViewList_Node`, `ModifiedViewList`, …) shows up as "List" symbols in samples — it does **not** mean a `List` view is involved. The signature of the lazy-placement storm specifically is `LazySubviewPlacements.placeSubviews` / `LazyHVStack.lengthAndSpacing` hot with zero app frames.
 
 ## Chaos / fault injection (VOL-168)
 

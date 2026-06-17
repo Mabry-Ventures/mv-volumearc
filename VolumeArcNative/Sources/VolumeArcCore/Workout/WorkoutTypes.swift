@@ -62,6 +62,17 @@ public struct WorkoutAutopilotState: Sendable {
     }
 }
 
+/// How a workout plan reached a persistence or session-start chokepoint.
+/// The `.coach` case gates the VOL-284 prescription-clamp backstop, so
+/// this is deliberately an enum (PR #363 review) — a string-literal typo
+/// at a call site would otherwise silently skip a safety branch. The raw
+/// value feeds telemetry metadata.
+public enum WorkoutPlanSource: String, Sendable, Equatable {
+    case manual
+    case coach
+    case workoutsBuilder = "workouts_builder"
+}
+
 public enum CoachWorkoutPlanExtractor {
     public static func plan(from response: String, title: String) -> WorkoutSessionPlan? {
         let exercises = response
@@ -84,21 +95,32 @@ public enum CoachWorkoutPlanExtractor {
         let trimmed = line
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "-* "))
-        let seconds = firstInt(matching: #"(\d+)\s*seconds?"#, in: trimmed)
+        let normalizedLine = lineWithoutListMarker(trimmed)
+        let seconds = firstInt(matching: #"(\d+)\s*seconds?"#, in: normalizedLine)
+        let setRep = setRepPair(in: normalizedLine)
         guard trimmed.range(of: "rep", options: .caseInsensitive) != nil
                 || seconds != nil
+                || setRep != nil
         else { return nil }
 
-        guard let name = exerciseName(from: trimmed),
+        guard let name = exerciseName(from: normalizedLine),
               !name.isEmpty,
-              let sets = firstInt(matching: #"(\d+)\s*sets?"#, in: trimmed) ?? (seconds == nil ? nil : 1)
+              // "Rest 90 seconds between sets" is an instruction, not a
+              // movement — a bogus "Rest" exercise must never reach a
+              // schedule or template (PR #363 review, Codex P2). Prefix
+              // match: "Rest for", "Warm-up", "Cool down" all qualify.
+              !isRestInstructionName(name),
+              let sets = firstInt(matching: #"(\d+)\s*sets?"#, in: normalizedLine)
+                ?? setRep?.sets
+                ?? (seconds == nil ? nil : 1)
         else { return nil }
 
-        let reps = firstInt(matching: #"(\d+)\s*reps?"#, in: trimmed)
+        let reps = firstInt(matching: #"(\d+)\s*reps?"#, in: normalizedLine)
+            ?? setRep?.reps
             ?? seconds
             ?? 1
         let targetRPE = conservativeResponse(response) ? 6 : 7
-        let weight = firstInt(matching: #"(\d+)\s*(?:lb|lbs|pounds?)"#, in: trimmed)
+        let weight = firstInt(matching: #"(\d+)\s*(?:lb|lbs|pounds?)"#, in: normalizedLine)
             ?? defaultWeight(for: name, response: response)
         return WeeklyWorkoutExercise(
             name: name,
@@ -110,20 +132,56 @@ public enum CoachWorkoutPlanExtractor {
         )
     }
 
+    private static func lineWithoutListMarker(_ line: String) -> String {
+        guard let regex = try? NSRegularExpression(
+            pattern: #"^\s*(?:\d+[\.)]|[A-Za-z][\.)])\s+"#,
+            options: []
+        ) else { return line }
+        let range = NSRange(line.startIndex..<line.endIndex, in: line)
+        return regex
+            .stringByReplacingMatches(in: line, range: range, withTemplate: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private static func exerciseName(from line: String) -> String? {
         let delimiterRanges = [
             line.range(of: ":"),
             line.range(of: " - "),
             line.range(of: " -- "),
+            line.range(of: " \u{2013} "),
+            line.range(of: " \u{2014} "),
         ].compactMap { $0 }
-        guard let delimiter = delimiterRanges.min(by: { $0.lowerBound < $1.lowerBound }) else {
+        let rawName: Substring
+        if let delimiter = delimiterRanges.min(by: { $0.lowerBound < $1.lowerBound }) {
+            rawName = line[..<delimiter.lowerBound]
+        } else if let prescriptionRange = firstPrescriptionRange(in: line) {
+            rawName = line[..<prescriptionRange.lowerBound]
+        } else {
             return nil
         }
-        let name = line[..<delimiter.lowerBound]
+        let name = rawName
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.localizedCaseInsensitiveContains("sample workout") else { return nil }
         guard !name.localizedCaseInsensitiveContains("workout plan") else { return nil }
         return name
+    }
+
+    private static func firstPrescriptionRange(in text: String) -> Range<String.Index>? {
+        let patterns = [
+            #"(\d+)\s*(?:x|×)\s*\d+"#,
+            #"\d+\s*sets?"#,
+            #"\d+\s*seconds?"#,
+        ]
+        return patterns
+            .compactMap { firstMatchRange(matching: $0, in: text) }
+            .min(by: { $0.lowerBound < $1.lowerBound })
+    }
+
+    private static func firstMatchRange(matching pattern: String, in text: String) -> Range<String.Index>? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return nil }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = regex.firstMatch(in: text, range: range) else { return nil }
+        return Range(match.range, in: text)
     }
 
     private static func firstInt(matching pattern: String, in text: String) -> Int? {
@@ -136,10 +194,55 @@ public enum CoachWorkoutPlanExtractor {
         return Int(text[matchRange])
     }
 
+    private static func isRestInstructionName(_ name: String) -> Bool {
+        // Instruction-shaped only: the rest word ends the name or leads
+        // into instruction phrasing. "Rest-Pause Bench Press" is a real
+        // movement and must keep parsing (PR #363 review).
+        name.range(
+            of: #"^(?:rest|cool[\s-]?down|warm[\s-]?up)(?:$|\s+(?:for|period|between|\d))"#,
+            options: [.regularExpression, .caseInsensitive]
+        ) != nil
+    }
+
+    private static func setRepPair(in text: String) -> (sets: Int, reps: Int)? {
+        // PR #363 review (Codex P2): the two forms need different
+        // out-of-range policies. A bare "3x315" is usually load-by-rep
+        // confusion, so the strict guard rejects the whole pair. But
+        // "10 sets of 3" is unambiguous — discarding it made the caller
+        // fall back to firstInt("sets") with reps defaulting to 1
+        // (8x1 instead of the intended capped 8x3), silently changing
+        // the workout volume. The worded form clamps sets and keeps the
+        // captured reps instead.
+        let patterns: [(pattern: String, clampsSets: Bool)] = [
+            (#"(\d+)\s*(?:x|×)\s*(\d+)"#, false),
+            (#"(\d+)\s*sets?\s*(?:of|x|×)?\s*(\d+)"#, true),
+        ]
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        for (pattern, clampsSets) in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+                  let match = regex.firstMatch(in: text, range: range)
+            else { continue }
+            guard match.numberOfRanges > 2,
+                  let setsRange = Range(match.range(at: 1), in: text),
+                  let repsRange = Range(match.range(at: 2), in: text),
+                  let sets = Int(text[setsRange]),
+                  let reps = Int(text[repsRange])
+            else { continue }
+            guard (1...100).contains(reps) else { continue }
+            if clampsSets {
+                guard sets >= 1 else { continue }
+                return (min(sets, 8), reps)
+            }
+            guard (1...8).contains(sets) else { continue }
+            return (sets, reps)
+        }
+        return nil
+    }
+
     private static func conservativeResponse(_ response: String) -> Bool {
         let lowered = response.lowercased()
         return lowered.contains("light")
-            || lowered.contains("take it easy")
+            || lowered.contains("easy")
             || lowered.contains("sick")
             || lowered.contains("sore")
             || lowered.contains("pain")

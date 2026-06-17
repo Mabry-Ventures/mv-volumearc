@@ -39,3 +39,5 @@ Before launch, update this file with:
 3. Replacement policy for `gemini-3.1-flash-lite` before May 7, 2027.
 4. Safety/privacy exceptions, if any.
 5. Jared approval if any non-green eval result is accepted.
+
+The committed response-eval trend also has to pass `./scripts/check_coach_eval_trend.sh`: the docs and marketing mirrors must match, the latest run must be no more than 7 days old, and the latest record must be 47/47 with no axis or fixture failures.

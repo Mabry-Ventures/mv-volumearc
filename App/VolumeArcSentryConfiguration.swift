@@ -242,15 +242,47 @@ enum VolumeArcSentryConfiguration {
     static var startupWarning: String? {
         isConfigured
             ? nil
-            : "Sentry DSN is not configured, so crash reporting is unavailable on this build."
+            : startupWarningMessage(isDebugBuild: isDebugBuild)
+    }
+
+    static var startupWarningSeverity: TelemetrySeverity {
+        startupWarningSeverity(isDebugBuild: isDebugBuild)
+    }
+
+    static func startupWarningSeverity(isDebugBuild: Bool) -> TelemetrySeverity {
+        isDebugBuild ? .info : .warning
+    }
+
+    static func startupWarningMessage(isDebugBuild: Bool) -> String {
+        if isDebugBuild {
+            return """
+            Sentry DSN is not configured for this local Debug build, so crash \
+            reporting is unavailable here. TestFlight and App Store builds \
+            must provide VOLUMEARC_SENTRY_DSN.
+            """
+        }
+        return "Sentry DSN is not configured, so crash reporting is unavailable on this Release build."
     }
 
     private static func resolveDSN() -> String? {
-        let rawDSN = (try? secureStore.load(dsnKey))
-            ?? ProcessInfo.processInfo.environment["VOLUMEARC_SENTRY_DSN"]
-            ?? Bundle.main.object(forInfoDictionaryKey: "VolumeArcSentryDSN") as? String
+        let rawDSN = resolveRawDSNCandidate(
+            secureStoreValue: try? secureStore.load(dsnKey),
+            environment: ProcessInfo.processInfo.environment,
+            bundleValue: Bundle.main.object(forInfoDictionaryKey: "VolumeArcSentryDSN") as? String
+        )
 
         return validatedDSN(from: rawDSN)
+    }
+
+    static func resolveRawDSNCandidate(
+        secureStoreValue: String?,
+        environment: [String: String],
+        bundleValue: String?
+    ) -> String? {
+        secureStoreValue
+            ?? environment["VOLUMEARC_SENTRY_DSN"]
+            ?? environment["SENTRY_DSN"]
+            ?? bundleValue
     }
 
     static func validatedDSN(from rawValue: String?) -> String? {

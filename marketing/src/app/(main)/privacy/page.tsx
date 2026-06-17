@@ -174,7 +174,7 @@ export default function PrivacyPage() {
               Cloudflare&rsquo;s edge key-value store. That key is not your name,
               email, or Apple ID, is not forwarded to Google, and the counter
               entries expire automatically. It lets us enforce rate limits
-              without an account system.
+              without a VolumeArc-owned account database.
             </p>
             <p>
               <strong>
@@ -493,9 +493,10 @@ export default function PrivacyPage() {
               to us — an in-app notice on next launch, a notice on{' '}
               <code>volumearc.app</code>, the App Store release notes, and
               email where we have one — with the nature of the incident, the
-              data involved, and the steps we are taking. Because we operate no
-              account system and do not collect your email, an in-app/website
-              notice is typically our primary channel.
+              data involved, and the steps we are taking. Because we do not
+              operate a VolumeArc-owned account database and do not collect
+              your email unless you provide it, an in-app/website notice is
+              typically our primary channel.
             </p>
 
             <h2>10. Vulnerability disclosure</h2>

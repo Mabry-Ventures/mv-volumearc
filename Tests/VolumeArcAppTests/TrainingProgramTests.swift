@@ -346,7 +346,7 @@ final class TrainingProgramTests: XCTestCase {
     }
 
     private static func makeContainer() throws -> ModelContainer {
-        let schema = Schema(VolumeArcSchemaV5.models)
+        let schema = Schema(VolumeArcSchemaLatest.models)
         let config = ModelConfiguration(
             "TrainingProgramTests-\(UUID().uuidString)",
             schema: schema,

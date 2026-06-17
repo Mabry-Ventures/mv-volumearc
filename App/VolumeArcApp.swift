@@ -221,6 +221,19 @@ struct VolumeArcApp: App {
             subscriptionStore: subscriptionStore,
             premiumGate: premiumGate
         )
+        // VOL-286: refresh the remote coach kill switch off the critical
+        // path. The fetched flag is cached and applies from the next
+        // coach turn; failures keep the last cached value. Deterministic
+        // and perf launches never touch the network.
+        if !VolumeArcRuntimeFlags.isDeterministicMode,
+           !VolumeArcRuntimeFlags.isPerformanceTestMode,
+           let killSwitchRelayConfiguration = VolumeArcAIConfiguration.relayConfiguration {
+            Task.detached(priority: .utility) {
+                await RemoteCoachKillSwitchRefresher.refresh(
+                    relayBaseURL: killSwitchRelayConfiguration.baseURL
+                )
+            }
+        }
         #if canImport(SwiftData)
         let startupSignals = Self.startupSignals(
             persistenceStatus: persistence.bootstrapStatus,

@@ -215,7 +215,7 @@ extension VolumeArcApp {
                     id: "sentry-config",
                     title: "Crash Reporting",
                     message: sentryWarning,
-                    severity: .warning
+                    severity: VolumeArcSentryConfiguration.startupWarningSeverity
                 )
             )
         }
@@ -255,7 +255,7 @@ extension VolumeArcApp {
                     id: "sentry-config",
                     title: "Crash Reporting",
                     message: sentryWarning,
-                    severity: .warning
+                    severity: VolumeArcSentryConfiguration.startupWarningSeverity
                 )
             )
         }

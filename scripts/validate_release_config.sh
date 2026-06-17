@@ -231,6 +231,24 @@ if [[ -d "$metadata_dir" ]]; then
   fi
 fi
 
+# Physical-device and TestFlight-only evidence is intentionally separate
+# from simulator journey coverage. In everyday development this remains
+# informational; in release-ready mode it becomes a hard stop so a GA
+# candidate cannot be called ready without paired iPhone/Watch UAT,
+# TestFlight, purchase, notification, widget, Live Activity, and live coach
+# safety proof on the exact build under review.
+if [[ "${VOLUMEARC_RELEASE_READY:-0}" == "1" ]]; then
+  # Bind the eval evidence to the release candidate: the latest trend
+  # record must have been produced on the exact commit under review, not
+  # merely be fresh and green on some other commit.
+  COACH_EVAL_REQUIRED_SHA="${COACH_EVAL_REQUIRED_SHA:-${VOLUMEARC_RELEASE_CANDIDATE_SHA:-}}" \
+    "$ROOT/scripts/check_coach_eval_trend.sh"
+  "$ROOT/scripts/check_release_uat_evidence.sh"
+else
+  echo "INFO: coach eval trend freshness/green-state not enforced. Set VOLUMEARC_RELEASE_READY=1 to require a current per-tier 55-fixture trend mirror."
+  echo "INFO: release UAT evidence not enforced. Set VOLUMEARC_RELEASE_READY=1 to require docs/RELEASE_UAT_EVIDENCE.md."
+fi
+
 # VOL-177: --no-build exits here. Everything above is static file/text
 # assertions that match what pre-commit can afford to run. Everything
 # below shells to xcodebuild (5-10s per call) and is CI-only.
@@ -331,7 +349,7 @@ required_build_settings=(
   "PRODUCT_BUNDLE_IDENTIFIER = com.mabryventures.VolumeArc"
   "CODE_SIGN_ENTITLEMENTS = App/VolumeArc.Release.entitlements"
   "INFOPLIST_FILE = App/Info.plist"
-  "INFOPLIST_KEY_NSHealthShareUsageDescription = VolumeArc reads your completed workouts, heart-rate variability, sleep, Workout Effort, wrist temperature, and respiratory rate from Apple Health to show your training history, calculate readiness, and let the AI coach reference your recovery trend (HRV vs baseline, sleep debt, weekly strength load, Vitals trends, and Training Load)."
+  "INFOPLIST_KEY_NSHealthShareUsageDescription = VolumeArc reads your completed workouts, heart-rate variability, sleep, Workout Effort, wrist temperature, and respiratory rate from Apple Health to show your training history, calculate readiness, and ground your coach's strength prescriptions in your recovery trend (HRV vs baseline, sleep debt, weekly strength load, Vitals trends, and Training Load)."
   "INFOPLIST_KEY_NSHealthUpdateUsageDescription = VolumeArc writes completed workouts so your training history stays in sync with Apple Health."
   "INFOPLIST_KEY_NSMicrophoneUsageDescription = VolumeArc uses the microphone for voice coaching requests and voice workout logging."
   "INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = VolumeArc uses speech recognition to understand live coaching requests and voice workout notes."

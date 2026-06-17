@@ -1,1 +1,1 @@
-strength,workout,lifting,gym,coach,AI,Apple Watch,HealthKit,powerlifting,fitness
+strength,hypertrophy,progressive overload,powerlifting,lifting,gym,workout planner,5x5,RPE,barbell

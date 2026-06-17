@@ -116,14 +116,15 @@ export function Hero() {
         <div className="lg:grid lg:grid-cols-12 lg:gap-x-8 lg:gap-y-20">
           <div className="relative z-10 mx-auto max-w-2xl lg:col-span-7 lg:max-w-none lg:pt-6 xl:col-span-6">
             <h1 className="font-display text-4xl font-semibold tracking-tight text-gray-900 sm:text-5xl lg:text-[3.5rem] lg:leading-[1.05]">
-              Your strength coach,{' '}
+              Strength programming,{' '}
               <span className="bg-sunrise-gradient bg-clip-text text-transparent">
                 built into your Apple Watch.
               </span>
             </h1>
             <p className="mt-6 text-lg text-gray-600">
-              Strength coach on your wrist. Reads your recovery from Apple
-              Health, talks back between sets, and keeps your data private —
+              Prescriptive sets, reps, and loads on your wrist. VolumeArc
+              reads your recovery from Apple Health, autoregulates each
+              session, talks back between sets, and keeps your data private —
               on-device when it matters.
             </p>
             <div className="mt-8 flex flex-wrap gap-x-6 gap-y-4">

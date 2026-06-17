@@ -16,7 +16,7 @@ const plans = [
     featured: false,
     price: { Monthly: '$0', Annually: '$0' },
     description:
-      'Track every set, every workout. Get coach-guided progression, on-device fallback, and CloudKit sync across your Apple devices.',
+      'Track every set, every workout. Get coach-guided progression, on-device fallback, and private CloudKit sync for iPhone and Apple Watch.',
     button: {
       label: 'Download for iPhone',
       // VOL-208 / VOL-198: route through the `/download` redirect rather
@@ -45,7 +45,7 @@ const plans = [
   {
     name: 'Pro',
     featured: true,
-    price: { Monthly: '$9.99', Annually: '$79.99' },
+    price: { Monthly: '$9.99', Annually: '$59.99' },
     description:
       'The full coach experience with the higher-capacity cloud tier and live voice coaching. For lifters who want the deepest prescription their data can give them.',
     button: {

@@ -41,6 +41,10 @@ final class VolumeArcMigrationTests: XCTestCase {
         XCTAssertEqual(VolumeArcSchemaV5.versionIdentifier, Schema.Version(5, 0, 0))
     }
 
+    func testSchemaV6HasCorrectVersion() {
+        XCTAssertEqual(VolumeArcSchemaV6.versionIdentifier, Schema.Version(6, 0, 0))
+    }
+
     // MARK: - Migration plan structure
 
     func testMigrationPlanIncludesV1Schema() {
@@ -56,19 +60,67 @@ final class VolumeArcMigrationTests: XCTestCase {
                       "Migration plan should include VolumeArcSchemaV4")
         XCTAssertTrue(schemas.contains(where: { $0 == VolumeArcSchemaV5.self }),
                       "Migration plan should include VolumeArcSchemaV5")
+        XCTAssertTrue(schemas.contains(where: { $0 == VolumeArcSchemaV6.self }),
+                      "Migration plan should include VolumeArcSchemaV6")
     }
 
     func testMigrationPlanContainsV1ToV2Stage() {
-        XCTAssertEqual(VolumeArcSchemaMigrationPlan.schemas.count, 5,
-                       "Migration plan should define V1 through V5 schemas")
-        XCTAssertEqual(VolumeArcSchemaMigrationPlan.stages.count, 4,
-                       "Migration plan should contain the V1 to V2, V2 to V3, V3 to V4, and V4 to V5 stages")
+        XCTAssertEqual(VolumeArcSchemaMigrationPlan.schemas.count, 6,
+                       "Migration plan should define V1 through V6 schemas")
+        XCTAssertEqual(VolumeArcSchemaMigrationPlan.stages.count, 5,
+                       "Migration plan should contain the V1-V2, V2-V3, V3-V4, V4-V5, and V5-V6 stages")
+    }
+
+    /// VOL-275: a V5 store (no template entity) must open under the V6
+    /// plan with all carried-over data intact, and the new
+    /// `WorkoutTemplateRecord` table must be usable immediately.
+    func testV5StoreMigratesToV6PreservingDataAndAddingTemplates() throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let storeURL = temporaryDirectory.appendingPathComponent("VolumeArcV5Migration.sqlite")
+        try writeV5FixtureStore(at: storeURL)
+
+        let schema = Schema(VolumeArcSchemaV6.models)
+        let config = ModelConfiguration(
+            "MigrationFixture",
+            schema: schema,
+            url: storeURL,
+            allowsSave: true,
+            cloudKitDatabase: .none
+        )
+        let container = try ModelContainer(
+            for: schema,
+            migrationPlan: VolumeArcSchemaMigrationPlan.self,
+            configurations: [config]
+        )
+        let context = ModelContext(container)
+
+        let profiles = try context.fetch(FetchDescriptor<VolumeArcSchemaV6.UserProfileRecord>())
+        XCTAssertEqual(profiles.first?.name, "V5 Athlete")
+
+        let workouts = try context.fetch(FetchDescriptor<VolumeArcSchemaV6.WorkoutRecord>())
+        XCTAssertEqual(workouts.first?.identifier, "v5-workout")
+
+        let templates = try context.fetch(FetchDescriptor<VolumeArcSchemaV6.WorkoutTemplateRecord>())
+        XCTAssertTrue(templates.isEmpty, "Fresh V6 template table starts empty")
+
+        context.insert(VolumeArcSchemaV6.WorkoutTemplateRecord(
+            identifier: "post-migration-template",
+            name: "Lower-body hypertrophy",
+            exercisesJSON: "[]"
+        ))
+        try context.save()
+        let savedTemplates = try context.fetch(FetchDescriptor<VolumeArcSchemaV6.WorkoutTemplateRecord>())
+        XCTAssertEqual(savedTemplates.first?.identifier, "post-migration-template")
     }
 
     // MARK: - In-memory container creation
 
     func testInMemoryContainerCreatesSuccessfully() throws {
-        let schema = Schema(VolumeArcSchemaV5.models)
+        let schema = Schema(VolumeArcSchemaV6.models)
         let config = ModelConfiguration(
             "MigrationTest",
             schema: schema,
@@ -638,7 +690,11 @@ final class VolumeArcMigrationTests: XCTestCase {
             TrainingProgramRecord.self,
         ])
         let queueSchema = Schema([OutboundSyncQueueRecord.self])
-        let combinedSchema = Schema(VolumeArcSchemaV5.models)
+        // V6 adds the device-local template store, so the production
+        // mirror is now three configurations: syncable + queue + local-only.
+        let localOnlySchema = Schema([WorkoutTemplateRecord.self])
+        let localOnlyURL = temporaryDirectory.appendingPathComponent("VolumeArcLocalOnly.sqlite")
+        let combinedSchema = Schema(VolumeArcSchemaLatest.models)
 
         let primaryConfig = ModelConfiguration(
             "VolumeArc",
@@ -654,11 +710,18 @@ final class VolumeArcMigrationTests: XCTestCase {
             allowsSave: true,
             cloudKitDatabase: .none
         )
+        let localOnlyConfig = ModelConfiguration(
+            "VolumeArc-LocalOnly",
+            schema: localOnlySchema,
+            url: localOnlyURL,
+            allowsSave: true,
+            cloudKitDatabase: .none
+        )
 
         let multiConfigContainer = try ModelContainer(
             for: combinedSchema,
             migrationPlan: VolumeArcSchemaMigrationPlan.self,
-            configurations: [primaryConfig, queueConfig]
+            configurations: [primaryConfig, queueConfig, localOnlyConfig]
         )
 
         // Post-bootstrap backfill: this is what production runs right
@@ -940,7 +1003,7 @@ final class VolumeArcMigrationTests: XCTestCase {
     // MARK: - Helpers
 
     private func makeInMemoryContainer() throws -> ModelContainer {
-        let schema = Schema(VolumeArcSchemaV5.models)
+        let schema = Schema(VolumeArcSchemaLatest.models)
         let config = ModelConfiguration(
             "MigrationTest-\(UUID().uuidString)",
             schema: schema,
@@ -953,6 +1016,24 @@ final class VolumeArcMigrationTests: XCTestCase {
             migrationPlan: VolumeArcSchemaMigrationPlan.self,
             configurations: [config]
         )
+    }
+
+    private func writeV5FixtureStore(at storeURL: URL) throws {
+        let schema = Schema(VolumeArcSchemaV5.models)
+        let config = ModelConfiguration(
+            "MigrationFixture",
+            schema: schema,
+            url: storeURL,
+            allowsSave: true,
+            cloudKitDatabase: .none
+        )
+        try autoreleasepool {
+            let container = try ModelContainer(for: schema, configurations: [config])
+            let context = ModelContext(container)
+            context.insert(VolumeArcSchemaV5.UserProfileRecord(name: "V5 Athlete", onboardingCompleted: true))
+            context.insert(VolumeArcSchemaV5.WorkoutRecord(identifier: "v5-workout", title: "V5 Session"))
+            try context.save()
+        }
     }
 
     private func writeV1FixtureStore(at storeURL: URL, fixtureDate: Date) throws {
@@ -1229,7 +1310,7 @@ final class VolumeArcMigrationTests: XCTestCase {
     }
 
     private func makeDiskBackedCurrentContainer(at storeURL: URL) throws -> ModelContainer {
-        let schema = Schema(VolumeArcSchemaV5.models)
+        let schema = Schema(VolumeArcSchemaLatest.models)
         let config = ModelConfiguration(
             "MigrationFixture",
             schema: schema,

@@ -17,17 +17,27 @@ import SwiftData
 // actually active, and every non-optional property must have a default.
 //
 // VOL-67 Copilot (fixup #23): the concrete `@Model` class definitions
-// for the syncable record types live inside the current versioned schema at the
-// bottom of this file. The module-scope symbols below are typealiases
-// to those frozen nested classes. This mirrors how V1/V2/V3 are
-// structured (each `VersionedSchema` enum owns its own frozen `@Model`
-// types) and lets historical schemas stay immutable while the aliases
-// always point at the current-version view.
-public typealias UserProfileRecord = VolumeArcSchemaV5.UserProfileRecord
-public typealias TrainingPlanRecord = VolumeArcSchemaV5.TrainingPlanRecord
-public typealias WorkoutRecord = VolumeArcSchemaV5.WorkoutRecord
-public typealias CoachMemoryRecord = VolumeArcSchemaV5.CoachMemoryRecord
-public typealias TrainingProgramRecord = VolumeArcSchemaV5.TrainingProgramRecord
+// for the record types live inside the current versioned schema
+// (`VolumeArcSchemaV6` in DataModelsV6.swift). The module-scope symbols
+// below are typealiases to those frozen nested classes. This mirrors how
+// V1-V5 are structured (each `VersionedSchema` enum owns its own frozen
+// `@Model` types) and lets historical schemas stay immutable while the
+// aliases always point at the current-version view.
+public typealias UserProfileRecord = VolumeArcSchemaV6.UserProfileRecord
+public typealias TrainingPlanRecord = VolumeArcSchemaV6.TrainingPlanRecord
+public typealias WorkoutRecord = VolumeArcSchemaV6.WorkoutRecord
+public typealias CoachMemoryRecord = VolumeArcSchemaV6.CoachMemoryRecord
+public typealias TrainingProgramRecord = VolumeArcSchemaV6.TrainingProgramRecord
+public typealias WorkoutTemplateRecord = VolumeArcSchemaV6.WorkoutTemplateRecord
+
+// The schema generation the app currently targets. Container builders in
+// the App layer must reference this alias, never a literal
+// `VolumeArcSchemaV*` — a literal pin silently strands the store on an old
+// generation after a migration lands (the V5/V6 skew found in PR #363:
+// the controller kept opening V5 while Core expected V6, so the new
+// template entity was never registered). Bump this alias together with
+// the typealiases above and the migration plan in the same PR.
+public typealias VolumeArcSchemaLatest = VolumeArcSchemaV6
 
 public enum VolumeArcSchemaV1: VersionedSchema {
     public static let versionIdentifier = Schema.Version(1, 0, 0)
@@ -510,11 +520,12 @@ public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
             VolumeArcSchemaV3.self,
             VolumeArcSchemaV4.self,
             VolumeArcSchemaV5.self,
+            VolumeArcSchemaV6.self,
         ]
     }
 
     public static var stages: [MigrationStage] {
-        [v1ToV2, v2ToV3, v3ToV4, v4ToV5]
+        [v1ToV2, v2ToV3, v3ToV4, v4ToV5, v5ToV6]
     }
 
     private static let v1ToV2 = MigrationStage.custom(
@@ -630,6 +641,14 @@ public enum VolumeArcSchemaMigrationPlan: SchemaMigrationPlan {
     private static let v4ToV5 = MigrationStage.lightweight(
         fromVersion: VolumeArcSchemaV4.self,
         toVersion: VolumeArcSchemaV5.self
+    )
+
+    // VOL-275: V6 only adds `WorkoutTemplateRecord` (all defaulted
+    // properties, no changes to carried-over models), so lightweight is
+    // sufficient.
+    private static let v5ToV6 = MigrationStage.lightweight(
+        fromVersion: VolumeArcSchemaV5.self,
+        toVersion: VolumeArcSchemaV6.self
     )
 }
 #endif

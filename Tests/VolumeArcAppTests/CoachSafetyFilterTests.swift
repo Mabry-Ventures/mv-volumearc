@@ -76,12 +76,661 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertFalse(lowered.contains("finish the workout"))
     }
 
+    func testEatingDisorderLanguageShortCircuitsTrainingAdvice() {
+        let response = CoachSafetyFilter.filteredResponse(
+            prompt: "I haven't eaten all day so I can cut faster. Should I add cardio after heavy squats?",
+            context: "Readiness: 45/100 - low recovery",
+            response: "Add cardio after squats and keep cutting."
+        )
+        let lowered = response.lowercased()
+
+        XCTAssertTrue(lowered.contains("stop the session"))
+        XCTAssertTrue(lowered.contains("medical care"))
+        XCTAssertFalse(lowered.contains("add cardio"))
+        XCTAssertFalse(lowered.contains("cut faster"))
+        XCTAssertFalse(lowered.contains("heavy squats"))
+    }
+
+    func testPainInChestPromptMedicalRedFlagOverridesGeneratedAdvice() {
+        let response = CoachSafetyFilter.filteredResponse(
+            prompt: "I have pain in my chest after deadlifts. Should I finish?",
+            context: "Readiness: 90/100 - peak recovery",
+            response: "Finish the workout with lighter sets."
+        )
+        let lowered = response.lowercased()
+
+        XCTAssertTrue(lowered.contains("stop the session"))
+        XCTAssertTrue(lowered.contains("medical care"))
+        XCTAssertFalse(lowered.contains("finish the workout"))
+    }
+
+    func testNegatedPromptMedicalRedFlagsDoNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I have no chest pain or dizziness. Can I train today?",
+            context: "Readiness: 86/100 - strong recovery"
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testMedicalRedFlagFromCurrentContextOverridesGeneratedAdvice() {
+        let response = CoachSafetyFilter.filteredResponse(
+            prompt: "Should I push today?",
+            context: """
+            Readiness: 92/100 - peak recovery
+            - Recent coaching notes: chest pain showed up during the top set today.
+            """,
+            response: "Readiness is high, so add weight and finish the workout."
+        )
+        let lowered = response.lowercased()
+
+        XCTAssertTrue(lowered.contains("stop the session"))
+        XCTAssertTrue(lowered.contains("medical care"))
+        XCTAssertFalse(lowered.contains("add weight"))
+        XCTAssertFalse(lowered.contains("finish the workout"))
+    }
+
+    func testNegatedContextMedicalRedFlagDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I add five pounds next week?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Check-in: no chest pain, no dizziness, and no shortness of breath.
+            """
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testSharedNegatedContextMedicalRedFlagsDoNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I add five pounds next week?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Check-in: denies chest pain and shortness of breath.
+            """
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testSharedCommaNegatedContextMedicalRedFlagsDoNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I add five pounds next week?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Check-in: denies chest pain, dizziness, and shortness of breath.
+            """
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testSharedOrNegatedContextMedicalRedFlagsDoNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I add five pounds next week?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Check-in: denies chest pain, dizziness, or shortness of breath.
+            """
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testExpandedNegatedContextMedicalRedFlagsDoNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I train today?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Check-in: not pregnant now; denies syncope; no fainting; not having chest pain or palpitations; not restricting; not purging.
+            """
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testMixedNegatedAndCurrentContextMedicalRedFlagsStillEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I train today?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Check-in: no chest pain, but passed out after squats today.
+            """
+        )
+
+        XCTAssertNotNil(response)
+        XCTAssertTrue(response?.lowercased().contains("medical care") == true)
+    }
+
+    func testCommaMixedNegatedAndCurrentContextMedicalRedFlagsStillEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I train today?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Check-in: no chest pain, passed out after squats today.
+            """
+        )
+
+        XCTAssertNotNil(response)
+        XCTAssertTrue(response?.lowercased().contains("medical care") == true)
+    }
+
+    func testAndMixedNegatedAndCurrentContextMedicalRedFlagsStillEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I train today?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Check-in: no chest pain and passed out after squats today.
+            """
+        )
+
+        XCTAssertNotNil(response)
+        XCTAssertTrue(response?.lowercased().contains("medical care") == true)
+    }
+
+    func testOrMixedNegatedAndCurrentContextMedicalRedFlagsStillEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I train today?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Check-in: no chest pain or passed out after squats today.
+            """
+        )
+
+        XCTAssertNotNil(response)
+        XCTAssertTrue(response?.lowercased().contains("medical care") == true)
+    }
+
+    func testPainInChestContextMedicalRedFlagStillEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I keep training?",
+            context: """
+            Readiness: 88/100 - strong recovery
+            - Recent coaching notes: athlete reported pain in the chest during squats today.
+            """
+        )
+
+        XCTAssertNotNil(response)
+        XCTAssertTrue(response?.lowercased().contains("medical care") == true)
+    }
+
+    func testPainInMyChestContextMedicalRedFlagStillEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I keep training?",
+            context: """
+            Readiness: 88/100 - strong recovery
+            - Recent coaching notes: athlete reported pain in my chest during squats today.
+            """
+        )
+
+        XCTAssertNotNil(response)
+        XCTAssertTrue(response?.lowercased().contains("medical care") == true)
+    }
+
+    func testStaleContextMedicalRedFlagDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I train today?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Historical note: chest pain during a workout last year, cleared by clinician.
+            """
+        )
+
+        XCTAssertNil(response)
+    }
+
+    /// PR #363 review (Codex P1, round 3): a negated clause must not
+    /// swallow a positive symptom that follows it — the clause splitter
+    /// strips the shared first-person subject, so the subject-free
+    /// fallback has to catch the surviving symptom.
+    func testNegatedClauseFollowedByPositiveSymptomEscalates() {
+        let butVariant = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I have no chest pain but dizziness when I stand up from the bench.",
+            context: ""
+        )
+        XCTAssertNotNil(butVariant)
+
+        let currentMarkerVariant = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I have no chest pain, lightheaded now though. Keep lifting?",
+            context: ""
+        )
+        XCTAssertNotNil(currentMarkerVariant)
+    }
+
+    func testFullyNegatedSymptomListStillDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I have no chest pain, no dizziness, and no shortness of breath. Cleared to train hard?",
+            context: ""
+        )
+
+        XCTAssertNil(response)
+    }
+
+    /// PR #363 review (Codex P1): "I'm 12 weeks pregnant" must match even
+    /// with words between the first-person marker and "pregnant" — the
+    /// app-side gate is the provider-agnostic boundary, so it cannot rely
+    /// on the relay's broader pattern.
+    func testGestationalAgePhrasingEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I'm 12 weeks pregnant; can I keep deadlifting heavy?",
+            context: "Readiness: 90/100 - peak recovery"
+        )
+
+        XCTAssertNotNil(response)
+        XCTAssertTrue(response?.lowercased().contains("medical care") == true)
+    }
+
+    func testWeeksPregnantWithoutFirstPersonMarkerEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "20 weeks pregnant and still squatting. Thoughts on loading?",
+            context: ""
+        )
+
+        XCTAssertNotNil(response)
+    }
+
+    func testThirdPartyPregnancyMentionDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "My wife is pregnant. Can I still train legs today?",
+            context: ""
+        )
+
+        XCTAssertNil(response)
+    }
+
+    /// PR #363 review (Codex P1 parity): the adverbial "while pregnant"
+    /// phrasing must escalate on the app-side gate, not only on the
+    /// relay's broader pattern.
+    func testWhilePregnantPhrasingEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Can I keep deadlifting heavy while pregnant?",
+            context: ""
+        )
+
+        XCTAssertNotNil(response)
+        XCTAssertTrue(response?.lowercased().contains("medical care") == true)
+    }
+
+    /// PR #363 review (Codex P2 parity): a third-party owner on the
+    /// pregnancy term — possessor before ("my wife is 4 months
+    /// pregnant") or after ("my pregnant wife") — is the asker's
+    /// routine training question, not a pregnancy red flag.
+    func testSpousePregnancyDurationDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "My wife is 4 months pregnant; should I train heavy this week?",
+            context: ""
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testPregnantSpousePossessiveDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "My pregnant wife trains with me; can I go heavy this week?",
+            context: ""
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testFirstPersonMentionOfSpousePregnancyDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I am careful since my wife is pregnant - can I train heavy?",
+            context: ""
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testWordedGestationalAgeEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I am three months pregnant - is it safe to keep squatting heavy?",
+            context: ""
+        )
+
+        XCTAssertNotNil(response)
+        XCTAssertTrue(response?.lowercased().contains("medical care") == true)
+    }
+
+    /// Single clause on purpose: the clause splitter severs "and"-joined
+    /// fragments, so proximity patterns only see within-clause text.
+    func testBarePregnancyWithTrainingProximityEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Pregnant with heavy squats programmed today - adjust my loading?",
+            context: ""
+        )
+
+        XCTAssertNotNil(response)
+    }
+
+    func testTrainingWhileSpouseIsPregnantDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Can I train hard while my wife is pregnant, or should I save energy?",
+            context: ""
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testNegatedPregnancyStillDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I'm not pregnant, cleared to train. Should I push the top set?",
+            context: ""
+        )
+
+        XCTAssertNil(response)
+    }
+
+    /// PR #363 review (CodeRabbit): the disordered-eating pattern must
+    /// require the eating verb on every branch — a bare "I haven't" is a
+    /// routine coaching opener, not a red flag.
+    func testRoutineIHaventTrainedPromptDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I haven't trained in a week. Where should I restart my squat?",
+            context: ""
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testIHaveNotSquattedLatelyDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I have not squatted lately, what loading makes sense?",
+            context: ""
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testDeniedPriorCardiacEventDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "No prior cardiac event, cleared by my doctor. Plan for today?",
+            context: "Readiness: 88/100 - strong recovery"
+        )
+
+        XCTAssertNil(response)
+    }
+
+    /// PR #363 review (Codex P1): a stale clause suppresses itself, not
+    /// what follows — the current bare symptom must still escalate.
+    func testStaleClauseFollowedByCurrentSymptomStillEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I had chest pain last year, dizziness now during squats.",
+            context: "Readiness: 84/100 - strong recovery"
+        )
+
+        XCTAssertNotNil(response)
+    }
+
+    /// PR #363 review (CodeRabbit): palpitations/arrhythmia need positive
+    /// matchers, not just negation entries.
+    /// PR #363 review (Codex P2): a pure time qualifier on the tail of a
+    /// shared-negation list must stay covered by the leading negator.
+    func testNegatedSymptomListWithTimeQualifierDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I have no chest pain or dizziness today. What should I train?",
+            context: "Readiness: 84/100 - strong recovery"
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testNegatedContextListWithTimeQualifierDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Should I add five pounds next week?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Check-in: denies chest pain, dizziness, or shortness of breath now.
+            """
+        )
+
+        XCTAssertNil(response)
+    }
+
+    /// Event markers stay escalation-worthy even inside a negated list —
+    /// "after heavy squats" reads as a fresh occurrence, so the
+    /// conservative posture keeps the escalation.
+    func testNegatedListWithEventMarkerStillEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I have no chest pain, but I felt dizziness after heavy squats.",
+            context: "Readiness: 84/100 - strong recovery"
+        )
+
+        XCTAssertNotNil(response)
+    }
+
+    /// PR #363 review (CodeRabbit, critical): the blanket "prior "
+    /// staleness match must never swallow a prior cardiac event.
+    func testPriorCardiacEventPromptStillEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I had a prior cardiac event and want to max out today. Plan?",
+            context: "Readiness: 90/100 - peak recovery"
+        )
+
+        XCTAssertNotNil(response)
+        XCTAssertTrue(response?.lowercased().contains("medical care") == true)
+    }
+
+    /// A prior safety reply persisted to memory must not poison later
+    /// benign turns via the context scan.
+    func testCoachAuthoredMemoryLineDoesNotPoisonContextScan() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "What should I lift tomorrow?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Memory: User asked: plan tomorrow
+            - Memory: Coach said: Stop the session now and seek medical care. \
+            If symptoms include chest pain or fainting, call 911.
+            """
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testAthleteAuthoredMemoryRedFlagStillEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "What should I lift tomorrow?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Memory: User asked: I got chest pain during squats today, what now?
+            """
+        )
+
+        XCTAssertNotNil(response)
+    }
+
+    /// PR #363 round 20 (CodeRabbit): the Coach-said exclusion is anchored
+    /// to the line start, so a current symptom sharing a line with a
+    /// mid-line "Coach said:" is still scanned and escalates.
+    func testMidLineCoachSaidDoesNotHideCurrentSymptom() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "What should I lift tomorrow?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Note: Coach said: rest today, but I passed out mid-set
+            """
+        )
+
+        XCTAssertNotNil(response)
+    }
+
+    /// PR #363 round 20 (Codex): third-party pregnancy in CONTEXT must
+    /// not escalate later benign turns; first-person still does.
+    func testThirdPartyPregnancyInContextStaysCoaching() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "What should I lift tomorrow?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Memory: User asked: my wife is pregnant, any tips for me?
+            """
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testFirstPersonPregnancyInContextEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "What should I lift tomorrow?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Memory: User asked: I am 20 weeks pregnant, any tips?
+            """
+        )
+
+        XCTAssertNotNil(response)
+    }
+
+    /// PR #363 round 23 (CodeRabbit): possessive third-party pregnancy
+    /// ("my wife's pregnancy") must stay coaching on both the prompt and
+    /// context paths; first-person/bare pregnancy still escalates.
+    func testPossessiveThirdPartyPregnancyStaysCoaching() {
+        XCTAssertNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Any training tweaks to support my wife's pregnancy?", context: ""
+        ))
+        XCTAssertNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "What should I lift tomorrow?",
+            context: """
+            Readiness: 86/100 - strong recovery
+            - Memory: User asked: my partner's pregnancy has us busy, tips for me?
+            """
+        ))
+        XCTAssertNotNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "Tips for my own pregnancy training?", context: ""
+        ))
+    }
+
+    /// PR #363 round 27 (Codex P2): a third-party pregnancy with an
+    /// intervening qualifier before the gestational age ("my wife is
+    /// currently 4 months pregnant") stays coaching; first-person with the
+    /// same qualifier still escalates.
+    func testQualifiedThirdPartyPregnancyStaysCoaching() {
+        XCTAssertNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "My wife is currently 4 months pregnant; should I train heavy this week?",
+            context: ""
+        ))
+        // Smart-quote `she’s` path (relay round 26c mirror): the curly
+        // apostrophe variant must stay coaching just like the relation
+        // branch above (PR #363, CodeRabbit).
+        XCTAssertNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "She’s currently 4 months pregnant; should I train heavy this week?",
+            context: ""
+        ))
+        XCTAssertNotNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I am currently 4 months pregnant — can I keep training heavy?",
+            context: ""
+        ))
+    }
+
+    /// PR #363 round 15: "I am <symptom>" spelled out must escalate
+    /// exactly like "I'm <symptom>".
+    func testSpelledOutFirstPersonSymptomsEscalate() {
+        XCTAssertNotNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I am dizzy during squats", context: ""
+        ))
+        XCTAssertNotNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I am lightheaded after deadlifts", context: ""
+        ))
+    }
+
+    func testTroubleBreathingWordingsEscalate() {
+        XCTAssertNotNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I am having trouble breathing after squats", context: ""
+        ))
+        XCTAssertNotNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I have breathing trouble mid-set", context: ""
+        ))
+    }
+
+    func testNegatedTroubleBreathingStaysCoaching() {
+        XCTAssertNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "No trouble breathing today — ready to push the pace?", context: ""
+        ))
+    }
+
+    func testThirdPartyModalPregnancyStaysCoaching() {
+        XCTAssertNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "My wife might be pregnant; should I train heavy this week?", context: ""
+        ))
+    }
+
+    func testFirstPersonModalPregnancyStillEscalates() {
+        XCTAssertNotNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I might be pregnant — keep training heavy?", context: ""
+        ))
+    }
+
+    /// PR #363 round 15: a negated recovery check-in must not arm
+    /// conservative buffering (and through it the clamp's 60% symptom
+    /// ceiling); a real symptom report still does.
+    func testNegatedRecoveryCheckInDoesNotBuffer() {
+        XCTAssertFalse(CoachSafetyFilter.shouldBufferResponse(
+            prompt: "No pain today, can we add five pounds?", context: ""
+        ))
+        XCTAssertTrue(CoachSafetyFilter.shouldBufferResponse(
+            prompt: "Sharp knee pain during squats today", context: ""
+        ))
+    }
+
+    func testPalpitationsPromptEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I have palpitations during squats. Should I keep going?",
+            context: ""
+        )
+
+        XCTAssertNotNil(response)
+        XCTAssertTrue(response?.lowercased().contains("medical care") == true)
+    }
+
+    func testNegatedPalpitationsDoesNotEscalate() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "No palpitations, cleared by my cardiologist. Plan for today?",
+            context: ""
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testHaventEatenPromptStillEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I haven't eaten since yesterday but want to hit a heavy single.",
+            context: ""
+        )
+
+        XCTAssertNotNil(response)
+    }
+
+    func testDidntEatToCutWeightStillEscalates() {
+        let response = CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "I didn't eat all day to cut weight before training.",
+            context: ""
+        )
+
+        XCTAssertNotNil(response)
+    }
+
     func testMedicalRedFlagsShortCircuitNonStreamingProvider() async throws {
         let provider = SafetyFilteredCoachProvider(base: FailingIfCalledProvider())
 
         let response = try await provider.coachResponse(
             for: "I feel lightheaded and blacked out after squats. Can I keep going?",
             context: "Readiness: 90/100 - peak recovery"
+        )
+        let lowered = response.lowercased()
+
+        XCTAssertTrue(lowered.contains("stop the session"))
+        XCTAssertTrue(lowered.contains("medical care"))
+    }
+
+    func testContextMedicalRedFlagsShortCircuitNonStreamingProvider() async throws {
+        let provider = SafetyFilteredCoachProvider(base: FailingIfCalledProvider())
+
+        let response = try await provider.coachResponse(
+            for: "Readiness looks high. Should I train?",
+            context: """
+            Readiness: 94/100 - peak recovery
+            - Recent coaching notes: athlete got dizzy under load today.
+            """
         )
         let lowered = response.lowercased()
 
@@ -96,6 +745,25 @@ final class CoachSafetyFilterTests: XCTestCase {
         for try await chunk in provider.streamCoachResponse(
             for: "I can't breathe after a set. What should I do?",
             context: "Readiness: 90/100 - peak recovery"
+        ) {
+            collected += chunk
+        }
+        let lowered = collected.lowercased()
+
+        XCTAssertTrue(lowered.contains("stop the session"))
+        XCTAssertTrue(lowered.contains("medical care"))
+    }
+
+    func testContextMedicalRedFlagsShortCircuitStreamingProvider() async throws {
+        let provider = SafetyFilteredCoachProvider(base: FailingIfCalledProvider())
+
+        var collected = ""
+        for try await chunk in provider.streamCoachResponse(
+            for: "Should I finish the session?",
+            context: """
+            Readiness: 88/100 - strong recovery
+            - Recent coaching notes: severe shortness of breath after the last set.
+            """
         ) {
             collected += chunk
         }
