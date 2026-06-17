@@ -609,6 +609,13 @@ final class CoachSafetyFilterTests: XCTestCase {
             prompt: "My wife is currently 4 months pregnant; should I train heavy this week?",
             context: ""
         ))
+        // Smart-quote `she’s` path (relay round 26c mirror): the curly
+        // apostrophe variant must stay coaching just like the relation
+        // branch above (PR #363, CodeRabbit).
+        XCTAssertNil(CoachSafetyFilter.medicalRedFlagResponse(
+            prompt: "She’s currently 4 months pregnant; should I train heavy this week?",
+            context: ""
+        ))
         XCTAssertNotNil(CoachSafetyFilter.medicalRedFlagResponse(
             prompt: "I am currently 4 months pregnant — can I keep training heavy?",
             context: ""
