@@ -292,7 +292,15 @@ public enum CoachPrescriptionClamp {
     /// `CoachWorkoutPlanExtractor.defaultWeight(for:response:)`.
     public static func noHistoryCap(for name: String, symptomContext: Bool) -> Int {
         let lowered = name.lowercased()
-        if lowered.contains("dumbbell") {
+        // The catalog declares dumbbell variants with a "DB" alias prefix
+        // ("DB Bench", "DB RDL") and the extractor keeps the raw plan name,
+        // so an aliased plan must still resolve to the dumbbell cap rather
+        // than falling through to the heavier barbell `bench`/`deadlift`
+        // branch and overshooting the signed dumbbell ceiling (PR #363,
+        // Codex P2). Match "db"/"dbs" as whole tokens so a word like
+        // "deadbug" can't trip the dumbbell class.
+        let tokens = Set(normalizedExerciseKey(name).split(separator: "-").map(String.init))
+        if lowered.contains("dumbbell") || tokens.contains("db") || tokens.contains("dbs") {
             return symptomContext ? symptomNoHistoryDumbbellCap : noHistoryDumbbellCap
         }
         if lowered.contains("barbell")

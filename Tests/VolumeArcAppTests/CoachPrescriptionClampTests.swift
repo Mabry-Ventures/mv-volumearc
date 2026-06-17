@@ -142,6 +142,21 @@ final class CoachPrescriptionClampTests: XCTestCase {
         XCTAssertEqual(CoachPrescriptionClamp.noHistoryCap(for: "Dumbbell Press", symptomContext: true), 20)
     }
 
+    /// PR #363 (Codex P2): the catalog's "DB" dumbbell aliases must map to
+    /// the dumbbell cap, not fall through to the heavier barbell `bench`/
+    /// `deadlift` branch (which would let a no-history `DB Bench @ 100lb`
+    /// exceed the 50 lb dumbbell ceiling). "deadbug" must NOT be treated as
+    /// a dumbbell — `db` is matched as a whole token, not a substring.
+    func testNoHistoryDumbbellAliasesResolveToDumbbellCap() {
+        XCTAssertEqual(CoachPrescriptionClamp.noHistoryCap(for: "DB Bench", symptomContext: false), 50)
+        XCTAssertEqual(CoachPrescriptionClamp.noHistoryCap(for: "DB RDL", symptomContext: false), 50)
+        XCTAssertEqual(CoachPrescriptionClamp.noHistoryCap(for: "DB Bench Press", symptomContext: true), 20)
+        // Barbell bench (no DB alias) keeps the heavier cap.
+        XCTAssertEqual(CoachPrescriptionClamp.noHistoryCap(for: "Bench Press", symptomContext: false), 135)
+        // "deadbug" contains the substring "db" but is not a dumbbell lift.
+        XCTAssertEqual(CoachPrescriptionClamp.noHistoryCap(for: "Deadbug", symptomContext: false), 75)
+    }
+
     // MARK: - Symptom context
 
     func testSymptomContextFreezesLoadAndRPE() {
