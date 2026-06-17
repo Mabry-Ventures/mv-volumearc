@@ -58,3 +58,49 @@ public enum OnboardingCompletionStore {
         UserDefaults.standard.removeObject(forKey: completedKey)
     }
 }
+
+/// PR #363 (Codex P2): pure decision for the root launch gates, so the
+/// `.task` and the `onChange` mirror in `RootDashboardView` stay provably
+/// consistent and the migration-safety invariant is unit-testable.
+///
+/// The hazard: an athlete who onboarded on a build BEFORE
+/// `OnboardingCompletionStore` shipped has the store empty until a
+/// successful refresh reads `model.isOnboardingComplete` and seeds it. If
+/// that first post-upgrade refresh FAILS, `isOnboardingComplete` stays at
+/// its default `false`. Treating that as a fresh install re-presents
+/// onboarding, and completing it writes default fields through
+/// `updateProfile`, overwriting the existing profile. So onboarding is
+/// shown ONLY for a CONFIRMED fresh install — a successful load that found
+/// no onboarded profile. A failed/again-pending refresh is treated as a
+/// returning athlete (safety gate, never onboarding) to protect their data.
+public enum LaunchGate {
+    public struct Decision: Equatable, Sendable {
+        public let showOnboarding: Bool
+        public let showSafetyAcknowledgment: Bool
+
+        public init(showOnboarding: Bool, showSafetyAcknowledgment: Bool) {
+            self.showOnboarding = showOnboarding
+            self.showSafetyAcknowledgment = showSafetyAcknowledgment
+        }
+    }
+
+    /// - Parameters:
+    ///   - refreshSucceeded: whether the initial dashboard load completed
+    ///     (i.e. `model.isOnboardingComplete` reflects persisted truth).
+    ///   - modelOnboardingComplete: the freshly loaded onboarding flag.
+    ///   - onboardingStoreComplete: the refresh-independent persisted flag.
+    ///   - safetyAccepted: whether the current safety disclaimer is accepted.
+    public static func decide(
+        refreshSucceeded: Bool,
+        modelOnboardingComplete: Bool,
+        onboardingStoreComplete: Bool,
+        safetyAccepted: Bool
+    ) -> Decision {
+        let isOnboarded = onboardingStoreComplete || modelOnboardingComplete
+        let confirmedFreshInstall = refreshSucceeded && !isOnboarded
+        return Decision(
+            showOnboarding: confirmedFreshInstall,
+            showSafetyAcknowledgment: !confirmedFreshInstall && !safetyAccepted
+        )
+    }
+}

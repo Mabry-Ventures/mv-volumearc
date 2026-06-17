@@ -201,6 +201,59 @@ final class CoachSafetyChainTests: XCTestCase {
         )
     }
 
+    /// PR #363 (Codex P2): the launch gate must not re-onboard an athlete
+    /// whose first post-upgrade refresh fails. Onboarding shows ONLY for a
+    /// CONFIRMED fresh install (successful load, no onboarded profile);
+    /// every refresh-failed/ambiguous state stays a returning athlete so
+    /// `updateProfile` can never overwrite an existing profile.
+    func testLaunchGateOnlyOnboardsConfirmedFreshInstall() {
+        // Confirmed fresh install — successful load, nothing onboarded.
+        XCTAssertEqual(
+            LaunchGate.decide(
+                refreshSucceeded: true, modelOnboardingComplete: false,
+                onboardingStoreComplete: false, safetyAccepted: false
+            ),
+            LaunchGate.Decision(showOnboarding: true, showSafetyAcknowledgment: false)
+        )
+
+        // THE HAZARD: upgraded from before OnboardingCompletionStore (store
+        // empty) and the first refresh FAILED. Must NOT show onboarding.
+        XCTAssertEqual(
+            LaunchGate.decide(
+                refreshSucceeded: false, modelOnboardingComplete: false,
+                onboardingStoreComplete: false, safetyAccepted: false
+            ),
+            LaunchGate.Decision(showOnboarding: false, showSafetyAcknowledgment: true)
+        )
+
+        // Upgraded athlete, refresh succeeded and loaded the profile.
+        XCTAssertEqual(
+            LaunchGate.decide(
+                refreshSucceeded: true, modelOnboardingComplete: true,
+                onboardingStoreComplete: false, safetyAccepted: false
+            ),
+            LaunchGate.Decision(showOnboarding: false, showSafetyAcknowledgment: true)
+        )
+
+        // Already migrated (store seeded), refresh failed — stays returning.
+        XCTAssertEqual(
+            LaunchGate.decide(
+                refreshSucceeded: false, modelOnboardingComplete: false,
+                onboardingStoreComplete: true, safetyAccepted: false
+            ),
+            LaunchGate.Decision(showOnboarding: false, showSafetyAcknowledgment: true)
+        )
+
+        // Onboarded AND safety already accepted — straight to the dashboard.
+        XCTAssertEqual(
+            LaunchGate.decide(
+                refreshSucceeded: true, modelOnboardingComplete: true,
+                onboardingStoreComplete: true, safetyAccepted: true
+            ),
+            LaunchGate.Decision(showOnboarding: false, showSafetyAcknowledgment: false)
+        )
+    }
+
     // MARK: - Privacy redaction interaction
 
     func testStrictRedactionPreservesMedicalRedFlagDetection() {

@@ -108,28 +108,35 @@ public struct RootDashboardView: View {
                 navigation.openSignals()
             }
 
-            await model.refresh()
+            let refreshSucceeded = await model.refresh()
             if shouldSeedCoachWorkoutHandoff {
                 model.coachMessages = Self.seededCoachWorkoutHandoffMessages
             }
-            // PR #363 (Codex P1): the launch gates derive from
-            // refresh-INDEPENDENT persisted state, not
-            // model.hasLoadedInitialData. A failed dashboard refresh must
-            // not (a) bypass the onboarding/safety gates into the unlocked
-            // UI, nor (b) re-onboard an already-onboarded athlete — which
-            // would overwrite their profile via updateProfile. The model's
-            // isOnboardingComplete seeds the persisted flag so existing
-            // users migrate on their first launch after this ships. New
+            // PR #363 (Codex P1/P2): the launch gates derive from
+            // refresh-INDEPENDENT persisted state PLUS whether this load
+            // actually succeeded. A failed dashboard refresh must not
+            // (a) bypass the onboarding/safety gates into the unlocked UI,
+            // nor (b) re-onboard an already-onboarded athlete — which would
+            // overwrite their profile via updateProfile. Seed the persisted
+            // flag from a successful load so existing users migrate on their
+            // first launch; then LaunchGate only treats a CONFIRMED fresh
+            // install (a successful load that found no onboarded profile) as
+            // onboarding. A failed refresh on an upgrade from before
+            // OnboardingCompletionStore shipped stays a returning athlete
+            // (safety gate, never onboarding), protecting their profile. New
             // users acknowledge safety inside onboarding, so isAccepted is
-            // already true once onboarding completes (safety gate stays
-            // off). See OnboardingCompletionStore.
+            // already true once onboarding completes (safety gate stays off).
             if model.isOnboardingComplete {
                 OnboardingCompletionStore.markComplete()
             }
-            let isOnboarded = OnboardingCompletionStore.isComplete || model.isOnboardingComplete
-            navigation.showOnboarding = !isOnboarded
-            navigation.showSafetyAcknowledgment = isOnboarded
-                && !SafetyDisclaimerAcknowledgmentStore.isAccepted
+            let launchGate = LaunchGate.decide(
+                refreshSucceeded: refreshSucceeded,
+                modelOnboardingComplete: model.isOnboardingComplete,
+                onboardingStoreComplete: OnboardingCompletionStore.isComplete,
+                safetyAccepted: SafetyDisclaimerAcknowledgmentStore.isAccepted
+            )
+            navigation.showOnboarding = launchGate.showOnboarding
+            navigation.showSafetyAcknowledgment = launchGate.showSafetyAcknowledgment
             // XCUITest affordance: open the Profile surface directly so
             // tests that target Profile-only rows do not depend on
             // simulator-specific TabView hit testing.
@@ -231,10 +238,16 @@ public struct RootDashboardView: View {
                 // future failed refresh without re-onboarding (PR #363).
                 OnboardingCompletionStore.markComplete()
             }
-            let isOnboarded = OnboardingCompletionStore.isComplete || isComplete
-            navigation.showOnboarding = !isOnboarded
-            navigation.showSafetyAcknowledgment = isOnboarded
-                && !SafetyDisclaimerAcknowledgmentStore.isAccepted
+            // Past the hasLoadedInitialData guard the load has succeeded,
+            // so reuse the shared launch-gate decision (PR #363, Codex P2).
+            let launchGate = LaunchGate.decide(
+                refreshSucceeded: true,
+                modelOnboardingComplete: isComplete,
+                onboardingStoreComplete: OnboardingCompletionStore.isComplete,
+                safetyAccepted: SafetyDisclaimerAcknowledgmentStore.isAccepted
+            )
+            navigation.showOnboarding = launchGate.showOnboarding
+            navigation.showSafetyAcknowledgment = launchGate.showSafetyAcknowledgment
         }
         .onChange(of: navigation.selectedTab) { _, _ in
             VAHaptics.selection()
