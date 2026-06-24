@@ -70,7 +70,7 @@ jobs:
       # scan check that cannot prove it scanned the PR SHA is not an
       # enforceable gate, regardless of host-level recovery.
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # Full history on push events so the scan sees every commit.
           # PR events default to a shallow clone covering the diff; we

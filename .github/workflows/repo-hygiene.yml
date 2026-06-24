@@ -136,7 +136,7 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Prepare Ruby toolchain
         # Same bootstrap as `ci.yml`: ensure Homebrew Ruby + the pinned

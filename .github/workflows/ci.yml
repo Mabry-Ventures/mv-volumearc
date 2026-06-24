@@ -103,7 +103,7 @@ jobs:
       # tests against a stale tree and reporting green.
       - name: Checkout
         continue-on-error: true
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Verify checkout SHA matches GITHUB_SHA (VOL-194)
         # If `actions/checkout` failed because of the `_actions/` cache
@@ -786,7 +786,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Prepare Ruby toolchain
         run: bash ./.github/scripts/prepare_ruby_toolchain.sh xcodeproj
@@ -828,7 +828,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
