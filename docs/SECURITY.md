@@ -101,7 +101,7 @@ Coordinated disclosure preferred. We commit to **not** pursuing legal action aga
 
 ## Vulnerability surface monitored continuously
 
-- **CodeQL** — _intentionally not running._ GitHub Code Scanning requires GitHub Advanced Security (GHAS) on private repos; the cost/benefit doesn't pencil out for this codebase right now. SAST coverage is provided by CodeRabbit Pro + Codex on every PR (the AI Review Gate), plus the Trufflehog secret-leak scan. If GHAS is enabled later, restore `.github/workflows/codeql.yml` from git history (it existed through commit `bcdf079`).
+- **CodeQL** — not configured in this repository. Semgrep and TruffleHog provide configured scan coverage; Codex Code Review is a separate PR review signal.
 - **TruffleHog** (`.github/workflows/trufflehog.yml`) — secret-leak scan on every PR diff + full-history on main push.
 - **Dependabot** — Swift / GitHub Actions / Bundler updates open as explicit PRs; minor + patch grouped per ecosystem; major lands as individual PRs we explicitly review.
 - **Sentry release health** — `VolumeArcSentryConfiguration` and `docs/INCIDENTS.md` alert routing.

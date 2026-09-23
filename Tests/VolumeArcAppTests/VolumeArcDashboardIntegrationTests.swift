@@ -1020,7 +1020,7 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         )
     }
 
-    /// PR #363 round 26 (Codex P2 + CodeRabbit): skipping the only lift
+    /// PR #363 round 26 (Codex P2 + PR review): skipping the only lift
     /// must persist a PARKED SENTINEL — an empty plan flagged `parked` —
     /// rather than the stale pre-skip plan (which would resurrect the
     /// skipped lift on relaunch) or nothing (which would restore a nil
@@ -1508,7 +1508,7 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(weight, 65)
     }
 
-    /// PR #363 review (CodeRabbit): the session-volume guard must read
+    /// PR #363 review (PR review): the session-volume guard must read
     /// PERSISTED history — before the first refresh the published
     /// `recentSessions` snapshot is empty, and a nil max volume silently
     /// skipped the cap on the start/schedule/template backstops.
@@ -1712,7 +1712,7 @@ final class VolumeArcDashboardIntegrationTests: XCTestCase {
             $0.category == "coach" && $0.name == "template_saved"
         })
 
-        // PR #363 review (CodeRabbit): assert against a REHYDRATED model
+        // PR #363 review (PR review): assert against a REHYDRATED model
         // over the same store, not the publisher the save path just
         // mutated — this is what proves the V6 row actually persisted.
         let rehydrated = makeDashboardModel()

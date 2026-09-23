@@ -94,11 +94,11 @@ final class CoachPrescriptionClampTests: XCTestCase {
                        "Unqualified history is barbell-class; a dumbbell plan must keep its first-exposure cap")
     }
 
-    /// PR #363 review (CodeRabbit): the subset gate admits sparse custom
+    /// PR #363 review (PR review): the subset gate admits sparse custom
     /// keys ("press" ⊂ "barbell-bench-press"), so the catalog-ID bridge
     /// must demand an implement-only delta — unrelated history can never
     /// widen a qualified plan's cap.
-    /// PR #363 review (CodeRabbit): only the BARBELL alias inherits
+    /// PR #363 review (PR review): only the BARBELL alias inherits
     /// unqualified history — machine/smith implements load differently.
     func testMachinePlanDoesNotInheritUnqualifiedHistory() {
         let table = ["bench-press": 315.0]
@@ -242,7 +242,7 @@ final class CoachPrescriptionClampTests: XCTestCase {
         )
     }
 
-    // PR #363 review (Codex P2 + CodeRabbit Major): history must not
+    // PR #363 review (Codex P2 + PR review Major): history must not
     // transfer across implements or lift variants.
 
     func testDumbbellVariantDoesNotInheritHeavierHistory() {

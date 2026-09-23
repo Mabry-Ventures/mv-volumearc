@@ -155,7 +155,7 @@ final class CoachSafetyChainTests: XCTestCase {
         // Snapshot + restore: the store writes through UserDefaults.standard,
         // so leaving it mutated would make a later test that seeds an
         // accepted disclaimer start from isAccepted == false, making the
-        // suite order-dependent (PR #363 review, CodeRabbit).
+        // suite order-dependent (PR #363 review, PR review).
         let wasAccepted = SafetyDisclaimerAcknowledgmentStore.isAccepted
         defer {
             if wasAccepted {

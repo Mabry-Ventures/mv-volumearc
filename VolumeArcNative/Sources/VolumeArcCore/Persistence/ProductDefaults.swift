@@ -164,7 +164,7 @@ public struct ActiveWorkoutSessionState: Codable, Equatable, Sendable {
     public let activeExerciseIndex: Int
     public let loggedSetCountForActiveExercise: Int
     public let loggedSetCountsByExerciseIndex: [Int: Int]
-    /// PR #363 (CodeRabbit): true when the session is parked with no
+    /// PR #363 (PR review): true when the session is parked with no
     /// current exercise (the final planned lift was skipped). A parked
     /// state is recoverable even when the plan is empty, so a relaunch
     /// restores `activeSessionPlan != nil && activeSessionExercise == nil`
@@ -243,7 +243,7 @@ public final class UserDefaultsActiveSessionStateStore: ActiveWorkoutSessionStat
 
     public func save(_ state: ActiveWorkoutSessionState) {
         // A parked state is persisted even with an empty plan so a relaunch
-        // can restore it as parked (PR #363, CodeRabbit). Genuinely empty,
+        // can restore it as parked (PR #363, PR review). Genuinely empty,
         // non-parked states are still dropped.
         guard state.plan.isEmpty == false || state.parked else {
             clear(workoutID: state.workoutID)
@@ -278,7 +278,7 @@ public final class InMemoryActiveWorkoutSessionStateStore: ActiveWorkoutSessionS
         lock.lock()
         defer { lock.unlock() }
         // A parked state is persisted even with an empty plan so a relaunch
-        // can restore it as parked (PR #363, CodeRabbit). Genuinely empty,
+        // can restore it as parked (PR #363, PR review). Genuinely empty,
         // non-parked states are still dropped.
         guard state.plan.isEmpty == false || state.parked else {
             states.removeValue(forKey: state.workoutID)

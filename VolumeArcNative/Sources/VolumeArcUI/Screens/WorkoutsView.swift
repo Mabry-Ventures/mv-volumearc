@@ -1202,7 +1202,7 @@ public struct WorkoutsView: View {
     /// into the active-session card, Form Check, the completed-session
     /// primaryLift, or Log Set. A deliberate no-plan autopilot session
     /// (plan nil) is unaffected. Matches the model guard in
-    /// logRecommendedSet. (PR #363 review, Codex + CodeRabbit.)
+    /// logRecommendedSet. (PR #363 review, Codex + PR review.)
     private var isParkedPlannedSession: Bool {
         model.activeSessionPlan != nil && model.activeSessionExercise == nil
     }
@@ -1259,7 +1259,7 @@ public struct WorkoutsView: View {
     private var compactTarget: String {
         // A parked planned session has no real target; the neutral
         // helper defaults (0/1) must not render as "0 x 1"
-        // (PR #363 review, CodeRabbit).
+        // (PR #363 review, PR review).
         if isParkedPlannedSession {
             return String(
                 localized: "No target",
@@ -1307,7 +1307,7 @@ public struct WorkoutsView: View {
 
     private var activeTargetWeight: Double {
         // A parked planned session has no current lift; never fall back to
-        // the autopilot target (PR #363 review, CodeRabbit).
+        // the autopilot target (PR #363 review, PR review).
         if isParkedPlannedSession { return targetWeightOverride ?? 0 }
         return targetWeightOverride ?? model.activeSessionExercise.map { Double($0.weight) } ?? model.autopilot?.nextTarget.weight ?? 0
     }
@@ -1335,7 +1335,7 @@ public struct WorkoutsView: View {
         }
         // Parked planned session (e.g. the single-lift plan emptied by a
         // final skip): show no rows rather than leaking autopilot /
-        // next-workout suggestions (PR #363 review, CodeRabbit).
+        // next-workout suggestions (PR #363 review, PR review).
         if isParkedPlannedSession {
             return []
         }

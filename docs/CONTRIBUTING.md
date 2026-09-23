@@ -120,7 +120,7 @@ Practical consequences:
 4. Open a PR with a clear title and description
 5. CI must pass (build, test, lint, validate)
 6. At least one code review required
-7. AI Review Gate runs automatically: CodeRabbit Pro (primary reviewer) and Codex Code Review (secondary reviewer) are both requested by the `Request AI Reviews` workflow step. Both must post a review signal on the current head SHA within their wait window or the gate fails.
+7. The AI review workflow requests Codex Code Review on the current head. Gemini Code Assist can provide an independent advisory review; address actionable threads before merge.
 8. Merge via squash when all checks pass
 
 ### Branch cleanup after merge
@@ -161,11 +161,11 @@ done < /tmp/to-delete.txt
 
 The `Require AI Code Reviews` ruleset on `main` requires the following checks to pass before merge — there is no "advisory" mode:
 
-- `Build & Test` — full iOS/watchOS pipeline on the `mv-volumearc-runner` self-hosted runner
-- `CodeRabbit Code Review` — wait-for-signal job (20-minute window) in `ai-review-gate.yml`
-- `Codex Code Review` — wait-for-signal job (15-minute window) in `ai-review-gate.yml`
+- `Agentic Review Quorum` — aggregate review check
+- `Repo Hygiene` — repository policy checks
+- `VolumeArc | VolumeArc PR` — Xcode Cloud PR check
 
-The AI review gate only accepts substantive review signals on the current PR head: pull request reviews, review comments, issue comments that are not known bot acknowledgements, or a bot `+1` reaction on the current-head review request comment. It deliberately ignores non-review bot messages such as Codex rate-limit notices, CodeRabbit review-limit notices, CodeRabbit `Review triggered.` acknowledgements, and CodeRabbit `Actions performed`-only comments. If only a non-review message arrives before the wait window expires, the gate fails with an explicit skipped-review reason instead of producing a false green check.
+The in-repository review workflow accepts a current-head Codex review signal. Bot acknowledgements and rate-limit notices do not count as reviews.
 
 `strict_required_status_checks_policy: true` is set, meaning the PR branch must be up-to-date with `main` before merge. Stale PRs need a rebase or merge from main to retrigger CI.
 
@@ -182,7 +182,7 @@ Every bypass should be documented in `docs/incident-log.md` with the reason and 
 
 The `mv-volumearc-runner` self-hosted CI runner is privileged (Apple Developer signing identity, Keychain, decoded SSH key, persistent DerivedData) so PRs from external forks **do not run CI** (VOL-132). The `Build & Test`, `Performance budgets`, and `Deploy to TestFlight` jobs all carry an `if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository` guard that skips them on fork PRs.
 
-The AI review gate (`.github/workflows/ai-review-gate.yml`) carries the same fork guard (VOL-251) on both the `request-ai-reviews` job (which would otherwise spend billed Codex + CodeRabbit minutes on fork PRs) and the `pull_request_target` branch of the `ai-review` job. Comment-event branches (`issue_comment`, `pull_request_review`, `pull_request_review_comment`) remain unguarded so the gate can still observe bot responses to upstream-only review requests.
+The AI review workflow guards its review-request job against fork PRs. Comment events remain available so current-head Codex responses can be observed.
 
 **New workflow files MUST replicate the same guard** on any job that runs on the self-hosted runner or consumes billed resources. Use ci.yml:57 as the canonical pattern. The check is one of the things the AI review gate looks for on new workflow files.
 
@@ -364,7 +364,7 @@ Security workflows run on the self-hosted runner because they inspect repository
 
 **Semgrep is a blocking release gate.** The VOL-253 observation window is over, the release branch removed the prior false positives, and `.github/workflows/semgrep.yml` now runs with `--error` and no `continue-on-error`. Add `Semgrep scan` to the repository ruleset's required-status-checks list before treating the release branch as merge-ready.
 
-CodeQL static analysis is **not** wired into the repo: GitHub Code Scanning requires GitHub Advanced Security (GHAS) on private repos (~$49/active-user/month) and the cost/benefit doesn't pencil out for this codebase right now. Semgrep covers the same OWASP / CWE pattern surface via the public rulesets above. The AI Review Gate (CodeRabbit Pro + Codex on every PR) provides a third layer of SAST-style coverage. If GHAS pricing changes or the repo goes public, revisit and restore `.github/workflows/codeql.yml` from git history (it existed through commit `bcdf079`).
+CodeQL is not configured in this repository. Semgrep covers the configured SAST rules, TruffleHog scans for secrets, and Codex Code Review supplies independent PR feedback.
 
 Findings surface through Trufflehog's workflow log and Semgrep's uploaded SARIF artifact. PR-time Trufflehog failures should block merge because credentials in a PR diff are a near-certain leak even if the commit is private. Semgrep findings also block until fixed or explicitly accepted with PR-level justification.
 

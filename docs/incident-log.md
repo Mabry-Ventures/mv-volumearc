@@ -55,14 +55,14 @@ The `fastlane ios rollback` lane (VOL-178) automatically appends an entry for ev
 - **Resolution**: Manual cleanup on the runner; verified post-cleanup with retriggered CI on all three PRs (all then passed Build & Test).
 - **Follow-ups**: explicit motivation for the disk-space watchdog cron noted in `docs/CONTRIBUTING.md` "Runner maintenance." A daily `launchd` job flagging <50 GB free would warn us before Pre-flight trips.
 
-## 2026-05-14 13:22 UTC — Admin-merge bypass for VOL-142 (CodeRabbit + Codex bot unavailability) (SEV3)
+## 2026-05-14 13:22 UTC — Admin-merge bypass for VOL-142 (the former reviewer + Codex bot unavailability) (SEV3)
 
-- **Trigger**: After PR #158 (VOL-142) was rebased four times through the Sprint 3 fixup cycle, both `coderabbitai[bot]` and `chatgpt-codex-connector[bot]` stopped posting review signals despite the AI Review Gate's `Request AI Reviews` step firing successfully. Three empty-commit retriggers + an explicit `@coderabbitai review` / `@chatgpt-codex-connector review` PR comment all silent for ~8 hours. The most recent bot review was on the 5th of 6 fixup SHAs (`8624812260`, 05:32 UTC); the current head + three empties received no response.
+- **Trigger**: After PR #158 (VOL-142) was rebased four times through the Sprint 3 fixup cycle, both `former review bot` and `chatgpt-codex-connector[bot]` stopped posting review signals despite the AI Review Gate's `Request AI Reviews` step firing successfully. Three empty-commit retriggers + an explicit `/gemini review` / `@chatgpt-codex-connector review` PR comment all silent for ~8 hours. The most recent bot review was on the 5th of 6 fixup SHAs (`8624812260`, 05:32 UTC); the current head + three empties received no response.
 - **Detection**: Three consecutive `Wait for ${AI} review signal` job timeouts on the AI Review Gate workflow over a 90-minute window after the underlying Build & Test, Trufflehog, and code review (on prior SHAs) all passed cleanly.
-- **Impact**: PR #158 sat behind a CodeRabbit / Codex unresponsiveness window despite the underlying VOL-142 production fix (StoreKit revocation) being verified by:
+- **Impact**: PR #158 sat behind a the former reviewer / Codex unresponsiveness window despite the underlying VOL-142 production fix (StoreKit revocation) being verified by:
   - Build & Test green on **four consecutive SHAs** (the latest empty-commit triggers added no source changes vs the SHA Codex commented on earlier in the cycle)
   - Trufflehog green on the same set
-  - Earlier-SHA reviews from both bots (Codex on `fd7159f8c2`, CodeRabbit on `8014cd6085`) — the substantive code changes were vetted before the bot outage began
+  - Earlier-SHA reviews from both bots (Codex on `fd7159f8c2`, the former reviewer on `8014cd6085`) — the substantive code changes were vetted before the bot outage began
 - **Resolution**: Owner-approved `gh pr merge 158 --squash --admin` bypass at 13:22 UTC after explicit confirmation. The merge commit (`4ea5f508ba`) is on main; CI on main confirms the change is green there too.
 - **Follow-ups**:
   - **[VOL-172](https://linear.app/mabry-ventures/issue/VOL-172)** (AI review gate: distinguish "rate-limit notice" from a real review signal) is the long-term fix; the current gate has no way to detect "bot is rate-limited" and treats silence as failure.
@@ -85,7 +85,7 @@ The `fastlane ios rollback` lane (VOL-178) automatically appends an entry for ev
 - **Follow-ups**:
   - PR #244 (VOL-227 round 3) — `simctl bootstatus -b` wallclock prevents the sim-wedge from burning 18 min per run going forward. Already on main.
   - PR #241 (VOL-227 round 2) — channel-disconnect retry on unit tests. Pending merge (was blocked on the runner being down).
-  - PR #246 (VOL-227 round 4) — Codex-only AI review gate while CodeRabbit usage credits are restored. Pending merge.
+  - PR #246 (VOL-227 round 4) — Codex-only AI review gate while the former reviewer usage credits are restored. Pending merge.
   - **[VOL-243](https://linear.app/mabry-ventures/issue/VOL-243)** — daily runner-host disk-pressure watchdog. The follow-up flagged in the 2026-05-14 04:30 UTC postmortem went un-actioned for 6 days, which is what allowed this cascade. Filed as a dedicated tracker; once landed, a 50 GB free-disk floor will warn before the 10 GB Pre-flight hard floor trips.
 
 ---

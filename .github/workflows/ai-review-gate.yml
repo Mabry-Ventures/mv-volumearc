@@ -29,7 +29,7 @@ concurrency:
 jobs:
   request-ai-reviews:
     name: Request AI Reviews
-    # VOL-251: fork-PR guard. This job auto-requests Codex + CodeRabbit reviews,
+    # VOL-251: fork-PR guard. This job auto-requests Codex reviews,
     # which spend billed AI-reviewer minutes. Fork PRs must not be able to
     # consume those credits, and the job runs on the self-hosted runner with
     # `pull-requests: write` / `issues: write` token scopes — same surface
@@ -69,10 +69,6 @@ jobs:
               `<!-- codex-review-request:${sha} -->`,
               `<!-- codex-review-request:${sha} -->\n@codex review`
             );
-            await ensureComment(
-              `<!-- coderabbit-review-request:${sha} -->`,
-              `<!-- coderabbit-review-request:${sha} -->\n@coderabbitai review`
-            );
 
   ai-review:
     name: ${{ matrix.ai_name }} Code Review
@@ -101,10 +97,6 @@ jobs:
             ai_logins: '["codex","chatgpt-codex-connector[bot]"]'
             request_marker: codex-review-request
             wait_minutes: '15'
-          - ai_name: CodeRabbit
-            ai_logins: '["coderabbitai[bot]","coderabbitai"]'
-            request_marker: coderabbit-review-request
-            wait_minutes: '20'
     steps:
       - name: Wait for ${{ matrix.ai_name }} review signal
         uses: actions/github-script@v9
@@ -157,7 +149,6 @@ jobs:
               if (
                 /Codex usage limits have been reached/i.test(text) ||
                 /Review limit reached/i.test(text) ||
-                /rate limited by coderabbit\.ai/i.test(text) ||
                 /couldn't start this review/i.test(text) ||
                 /organization has run out of usage credits/i.test(text) ||
                 /used your available PR reviews/i.test(text)
