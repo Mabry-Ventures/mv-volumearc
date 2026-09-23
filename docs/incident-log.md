@@ -57,9 +57,9 @@ The `fastlane ios rollback` lane (VOL-178) automatically appends an entry for ev
 
 ## 2026-05-14 13:22 UTC — Admin-merge bypass for VOL-142 (the former reviewer + Codex bot unavailability) (SEV3)
 
-- **Trigger**: After PR #158 (VOL-142) was rebased four times through the Sprint 3 fixup cycle, both `former review bot` and `chatgpt-codex-connector[bot]` stopped posting review signals despite the AI Review Gate's `Request AI Reviews` step firing successfully. Three empty-commit retriggers + an explicit `/gemini review` / `@chatgpt-codex-connector review` PR comment all silent for ~8 hours. The most recent bot review was on the 5th of 6 fixup SHAs (`8624812260`, 05:32 UTC); the current head + three empties received no response.
+- **Trigger**: After PR #158 (VOL-142) was rebased four times through the Sprint 3 fixup cycle, both the former review bot and `chatgpt-codex-connector[bot]` stopped posting review signals despite the AI Review Gate's `Request AI Reviews` step firing successfully. Three empty-commit retriggers and explicit review requests to both bots drew no response for ~8 hours. The most recent bot review was on the 5th of 6 fixup SHAs (`8624812260`, 05:32 UTC); the current head and three empty commits received no response.
 - **Detection**: Three consecutive `Wait for ${AI} review signal` job timeouts on the AI Review Gate workflow over a 90-minute window after the underlying Build & Test, Trufflehog, and code review (on prior SHAs) all passed cleanly.
-- **Impact**: PR #158 sat behind a the former reviewer / Codex unresponsiveness window despite the underlying VOL-142 production fix (StoreKit revocation) being verified by:
+- **Impact**: PR #158 sat behind a former-reviewer and Codex unresponsiveness window despite the underlying VOL-142 production fix (StoreKit revocation) being verified by:
   - Build & Test green on **four consecutive SHAs** (the latest empty-commit triggers added no source changes vs the SHA Codex commented on earlier in the cycle)
   - Trufflehog green on the same set
   - Earlier-SHA reviews from both bots (Codex on `fd7159f8c2`, the former reviewer on `8014cd6085`) — the substantive code changes were vetted before the bot outage began
