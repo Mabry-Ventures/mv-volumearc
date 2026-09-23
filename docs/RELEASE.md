@@ -279,7 +279,7 @@ Before cutting or submitting a build from a new main SHA, wait for both authorit
 - `VolumeArc | VolumeArc Main | VOL-Main - iOS`
 - `VolumeArc | Internal Testing - Archive - iOS`
 
-The self-hosted GitHub Actions `Build & Test` job is still useful diagnostic signal, but it is not a required merge check while the self-hosted simulator runner is unstable. Simulator/XCTRunner infrastructure flakes are classified through [`docs/TESTING.md`](TESTING.md#ci-runner-flake-taxonomy-vol-227-cluster). Xcode Cloud remains the release gate of record; the branch ruleset requires CodeRabbit, Codex, Repo Hygiene, and the Xcode Cloud PR context.
+The self-hosted GitHub Actions `Build & Test` job remains diagnostic while Xcode Cloud is the release gate of record. The active ruleset requires `Agentic Review Quorum`, `Repo Hygiene`, and `VolumeArc | VolumeArc PR`.
 
 ## Rollback
 

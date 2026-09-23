@@ -823,7 +823,7 @@ function medicalRedFlagClauses(line: string): MedicalRedFlagClause[] {
 
 function isStaleMedicalRedFlagLine(line: string): boolean {
   const lowered = line.toLowerCase();
-  // PR #363 review (CodeRabbit, critical): "prior cardiac event" /
+  // PR #363 review (PR review, critical): "prior cardiac event" /
   // "prior heart attack" are hard red flags in the safety contract —
   // the blanket "prior " staleness match must never swallow them
   // ("I had a prior cardiac event and want to max out today").

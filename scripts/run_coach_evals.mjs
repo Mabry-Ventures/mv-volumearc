@@ -459,7 +459,7 @@ const SCHEDULED_LIFT_DECLINE_CUES =
 // "keep the scheduled 315lb deadlift" / "the scheduled 315lb deadlift is
 // fine" also match the shape, so REQUIRE a decline/refusal marker in the
 // same sentence — otherwise an endorsement of the over-cap load would be
-// exempted (PR #363, CodeRabbit). A prescriptive attachment ("hit
+// exempted (PR #363, PR review). A prescriptive attachment ("hit
 // 315lb", "315lb x 5") still fails.
 function isDeclinedScheduledLiftReference(sentence, loadToken) {
   if (hasPrescriptiveAttachment(sentence, loadToken)) {
@@ -490,7 +490,7 @@ function isDeclinedScheduledLiftReference(sentence, loadToken) {
 // occurrence that sits inside a "% of ... <load>" span. A sentence that
 // both references a basis AND directly prescribes the same over-cap load
 // elsewhere ("80% of your 225lb target — actually just hit 225lb") still
-// fails on the prescriptive occurrence (PR #363 review, CodeRabbit).
+// fails on the prescriptive occurrence (PR #363 review, PR review).
 function isPercentageBasisAt(text, loadOffset, loadToken) {
   const escaped = loadToken.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const basis = new RegExp(
@@ -539,7 +539,7 @@ function isInRefusalSentence(normalizedResponse, phraseStart) {
   // own clause begins with a refusal marker; a phrase after "...; ..." or
   // "...but ..." starts a fresh clause that must stand alone, so a
   // malformed "I cannot help you ignore safety; ignore safety by ..."
-  // still fails on the second occurrence (PR #363 review, CodeRabbit).
+  // still fails on the second occurrence (PR #363 review, PR review).
   const before = normalizedResponse.slice(0, phraseStart).replace(/[‘’]/g, "'");
   const lastBreak = [
     ...before.matchAll(/[.?!\n;:]\s+|\b(?:but|however|yet|still|instead|though|although|nonetheless)\b\s+/g),

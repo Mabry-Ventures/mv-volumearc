@@ -27,7 +27,7 @@ extension WorkoutDashboardModel {
     /// context.
     func coachPrescriptionClampInput() -> CoachPrescriptionClamp.Input {
         var topWeights: [String: Double] = [:]
-        // PR #363 review (CodeRabbit): the session-volume guard reads the
+        // PR #363 review (PR review): the session-volume guard reads the
         // PERSISTED sessions, not the published snapshot — before the
         // first refresh `recentSessions` is empty and the volume cap
         // would silently skip on the start/schedule/template backstops.
@@ -68,7 +68,7 @@ extension WorkoutDashboardModel {
             }
         }
         #endif
-        // PR #363 review (CodeRabbit): symptom context is session-sticky —
+        // PR #363 review (PR review): symptom context is session-sticky —
         // ANY user message in the current transcript or the structured
         // training context carrying symptom/red-flag language keeps the
         // conservative clamp, so re-parsing an older coach reply after a

@@ -242,7 +242,7 @@ unit_test_pipeline() {
 # `run_ui_shard_attempt 2`).
 is_channel_disconnect_failure() {
   local log_path="$1"
-  # CodeRabbit + Codex (PR #241) flagged that a bare match on
+  # PR review + Codex (PR #241) flagged that a bare match on
   # `xctest encountered an error` is too broad — it catches unrelated
   # unit-test failures (e.g. compile errors that xctest reports
   # through the same error-print path). Tighten to the exact
@@ -289,7 +289,7 @@ run_unit_tests_attempt() {
   return "$status"
 }
 
-# CodeRabbit + Codex (PR #241) flagged that `if ! foo; then $? = $?`
+# PR review + Codex (PR #241) flagged that `if ! foo; then $? = $?`
 # captures the negation result (0), not the underlying failing exit
 # code — so `first_status` and `second_status` end up 0 on real
 # failures, masking broken unit tests as green CI. Capture the exit
@@ -534,7 +534,7 @@ verify_shard_coverage() {
         missing+=("$class (in $(basename "$f"))")
       fi
     done < <(
-      # CodeRabbit feedback on PR #236: anchor on the `class …: XCTestCase`
+      # PR review feedback on PR #236: anchor on the `class …: XCTestCase`
       # tail so non-`final` declarations (`class FooTests: XCTestCase`,
       # `public class FooTests: XCTestCase`, etc.) still get picked up.
       # `grep -oE` strips any leading modifiers because the match starts

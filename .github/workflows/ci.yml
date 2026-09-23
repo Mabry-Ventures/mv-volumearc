@@ -637,7 +637,7 @@ jobs:
 
           metrics_dir="$(mktemp -d)"
 
-          # CodeRabbit review (PR #144): persistent self-hosted runners
+          # PR #144 review: persistent self-hosted runners
           # accumulate `.git/worktrees/` orphans without an explicit cleanup.
           # `git worktree remove --force` is idempotent against missing or
           # already-pruned worktrees, so the trap is safe on both happy and

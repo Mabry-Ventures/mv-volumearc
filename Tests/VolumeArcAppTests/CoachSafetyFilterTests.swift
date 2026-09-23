@@ -422,7 +422,7 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertNil(response)
     }
 
-    /// PR #363 review (CodeRabbit): the disordered-eating pattern must
+    /// PR #363 review (PR review): the disordered-eating pattern must
     /// require the eating verb on every branch — a bare "I haven't" is a
     /// routine coaching opener, not a red flag.
     func testRoutineIHaventTrainedPromptDoesNotEscalate() {
@@ -463,7 +463,7 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertNotNil(response)
     }
 
-    /// PR #363 review (CodeRabbit): palpitations/arrhythmia need positive
+    /// PR #363 review (PR review): palpitations/arrhythmia need positive
     /// matchers, not just negation entries.
     /// PR #363 review (Codex P2): a pure time qualifier on the tail of a
     /// shared-negation list must stay covered by the leading negator.
@@ -500,7 +500,7 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertNotNil(response)
     }
 
-    /// PR #363 review (CodeRabbit, critical): the blanket "prior "
+    /// PR #363 review (PR review, critical): the blanket "prior "
     /// staleness match must never swallow a prior cardiac event.
     func testPriorCardiacEventPromptStillEscalates() {
         let response = CoachSafetyFilter.medicalRedFlagResponse(
@@ -540,7 +540,7 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertNotNil(response)
     }
 
-    /// PR #363 round 20 (CodeRabbit): the Coach-said exclusion is anchored
+    /// PR #363 round 20 (PR review): the Coach-said exclusion is anchored
     /// to the line start, so a current symptom sharing a line with a
     /// mid-line "Coach said:" is still scanned and escalates.
     func testMidLineCoachSaidDoesNotHideCurrentSymptom() {
@@ -581,7 +581,7 @@ final class CoachSafetyFilterTests: XCTestCase {
         XCTAssertNotNil(response)
     }
 
-    /// PR #363 round 23 (CodeRabbit): possessive third-party pregnancy
+    /// PR #363 round 23 (PR review): possessive third-party pregnancy
     /// ("my wife's pregnancy") must stay coaching on both the prompt and
     /// context paths; first-person/bare pregnancy still escalates.
     func testPossessiveThirdPartyPregnancyStaysCoaching() {
@@ -611,7 +611,7 @@ final class CoachSafetyFilterTests: XCTestCase {
         ))
         // Smart-quote `she’s` path (relay round 26c mirror): the curly
         // apostrophe variant must stay coaching just like the relation
-        // branch above (PR #363, CodeRabbit).
+        // branch above (PR #363, PR review).
         XCTAssertNil(CoachSafetyFilter.medicalRedFlagResponse(
             prompt: "She’s currently 4 months pregnant; should I train heavy this week?",
             context: ""

@@ -623,7 +623,7 @@ public final class WorkoutDashboardModel: ObservableObject {
         // relaunch restores the parked state — keeping the autopilot log
         // guard armed — rather than falling back to a nil plan that would
         // let an autopilot set land in the parked workout (PR #363,
-        // CodeRabbit). Genuinely empty, non-parked states are not saved.
+        // PR review). Genuinely empty, non-parked states are not saved.
         let parked = activeSessionExercise == nil
         guard activeSessionPlan.isEmpty == false || parked else { return }
 
@@ -995,7 +995,7 @@ public final class WorkoutDashboardModel: ObservableObject {
             // resurrect the skipped lift (Codex P2), and restores as
             // `activeSessionPlan != nil && activeSessionExercise == nil`
             // so the logRecommendedSet autopilot guard still fires instead
-            // of falling back to a nil plan (CodeRabbit). persist now
+            // of falling back to a nil plan (PR review). persist now
             // accepts an empty plan when parked.
             persistActiveSessionStateIfNeeded()
         } else {
