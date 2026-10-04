@@ -58,7 +58,7 @@ jobs:
     # leak the GITHUB_TOKEN scope to fork PRs. Skip on forks; same-repo
     # PRs and main pushes run as normal.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, mv-volumearc-runner]
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:
@@ -95,20 +95,21 @@ jobs:
           echo "Workspace SHA matches GITHUB_SHA (${expected_sha})"
         shell: bash
 
-      - name: Verify trufflehog binary
-        # The Homebrew formula `trufflehog` should be pre-installed on
-        # the mv-volumearc-runner per the runbook in
-        # docs/CONTRIBUTING.md "Runner maintenance". This step fails
-        # fast with a clear remediation if it isn't, instead of letting
-        # the scan step error out with a generic "command not found".
+      - name: Install checksum-pinned TruffleHog
         run: |
           set -euo pipefail
-          if ! command -v trufflehog >/dev/null; then
-            echo "::error::trufflehog binary not on PATH. Run \`brew install trufflehog\` on the self-hosted runner. See docs/CONTRIBUTING.md."
-            exit 1
-          fi
-          version=$(trufflehog --version 2>&1 | head -1)
-          echo "Using $version"
+          version=3.97.0
+          archive="$RUNNER_TEMP/trufflehog_${version}_linux_amd64.tar.gz"
+          install_dir="$RUNNER_TEMP/trufflehog-${version}"
+          url="https://github.com/trufflesecurity/trufflehog/releases/download/v${version}/trufflehog_${version}_linux_amd64.tar.gz"
+          curl --proto '=https' --tlsv1.2 -fsSLo "$archive" "$url"
+          printf '%s  %s\n' \
+            '62224de2f9dd7cd418800feb953760a302ed2f82a7c547fe1146a4874fb179e4' \
+            "$archive" | sha256sum --check
+          mkdir -p "$install_dir"
+          tar -xzf "$archive" -C "$install_dir" trufflehog
+          "$install_dir/trufflehog" --version | grep -F "$version"
+          echo "$install_dir" >> "$GITHUB_PATH"
 
       - name: Scan
         env:

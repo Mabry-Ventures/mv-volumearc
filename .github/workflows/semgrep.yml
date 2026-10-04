@@ -34,7 +34,6 @@ concurrency:
 
 permissions:
   contents: read
-  security-events: write
   pull-requests: read
   actions: read
 
@@ -43,34 +42,18 @@ jobs:
     name: Semgrep scan
     # VOL-132 fork guard pattern; mirrors ci.yml:57 + ai-review-gate.yml.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, mv-volumearc-runner]
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Resolve Semgrep binary
-        id: resolve_semgrep
-        # The self-hosted runner has Homebrew on $PATH (see ci.yml's PATH
-        # env block). Install / upgrade via brew so the version tracks with
-        # the same channel `brew upgrade trufflehog` uses for the secret
-        # scanner. If brew isn't available for any reason, fall back to a
-        # pinned pipx install. Either way the binary is on $PATH for the
-        # next step.
+      - name: Install pinned Semgrep
         run: |
-          set -euo pipefail
-          if command -v semgrep >/dev/null 2>&1; then
-            echo "Semgrep already installed: $(semgrep --version)"
-          else
-            if command -v brew >/dev/null 2>&1; then
-              brew install semgrep || brew upgrade semgrep
-            else
-              python3 -m pip install --user --upgrade semgrep
-              echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-            fi
-          fi
-          semgrep --version
+          python3 -m venv "$RUNNER_TEMP/semgrep"
+          "$RUNNER_TEMP/semgrep/bin/pip" install 'semgrep==1.173.0'
+          echo "$RUNNER_TEMP/semgrep/bin" >> "$GITHUB_PATH"
 
       - name: Run Semgrep
         # VolumeArc Release: Semgrep is now a hard launch gate. The

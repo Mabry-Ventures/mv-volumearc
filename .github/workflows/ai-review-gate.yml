@@ -12,8 +12,8 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
-  issues: write
+  pull-requests: read
+  issues: read
 
 # VOL-184/VOL-192: workflow-specific concurrency group. See ci.yml's
 # concurrency block for the full rationale — sharing the group across
@@ -27,53 +27,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  request-ai-reviews:
-    name: Request AI Reviews
-    # VOL-251: fork-PR guard. This job auto-requests Codex + CodeRabbit reviews,
-    # which spend billed AI-reviewer minutes. Fork PRs must not be able to
-    # consume those credits, and the job runs on the self-hosted runner with
-    # `pull-requests: write` / `issues: write` token scopes — same surface
-    # ci.yml:57 already gates. Same-repo check mirrors that pattern.
-    if: >-
-      github.event_name == 'pull_request_target' &&
-      !github.event.pull_request.draft &&
-      github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    steps:
-      - name: Request AI reviews for current head SHA
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const issue_number = context.payload.pull_request.number;
-            const sha = context.payload.pull_request.head.sha;
-
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner,
-              repo,
-              issue_number,
-              per_page: 100,
-            });
-
-            const ensureComment = async (marker, body) => {
-              const exists = comments.some((comment) =>
-                typeof comment.body === 'string' && comment.body.includes(marker)
-              );
-              if (!exists) {
-                await github.rest.issues.createComment({ owner, repo, issue_number, body });
-              }
-            };
-
-            await ensureComment(
-              `<!-- codex-review-request:${sha} -->`,
-              `<!-- codex-review-request:${sha} -->\n@codex review`
-            );
-            await ensureComment(
-              `<!-- coderabbit-review-request:${sha} -->`,
-              `<!-- coderabbit-review-request:${sha} -->\n@coderabbitai review`
-            );
-
   ai-review:
     name: ${{ matrix.ai_name }} Code Review
     # VOL-251: fork-PR guard. For `pull_request_target` events we know the
@@ -93,6 +46,7 @@ jobs:
       github.event_name == 'pull_request_review' ||
       github.event_name == 'pull_request_review_comment'
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     strategy:
       fail-fast: false
       matrix:
@@ -100,19 +54,16 @@ jobs:
           - ai_name: Codex
             ai_logins: '["codex","chatgpt-codex-connector[bot]"]'
             request_marker: codex-review-request
-            wait_minutes: '15'
           - ai_name: CodeRabbit
             ai_logins: '["coderabbitai[bot]","coderabbitai"]'
             request_marker: coderabbit-review-request
-            wait_minutes: '20'
     steps:
-      - name: Wait for ${{ matrix.ai_name }} review signal
+      - name: Evaluate ${{ matrix.ai_name }} review signal
         uses: actions/github-script@v9
         env:
           AI_LOGINS: ${{ matrix.ai_logins }}
           AI_NAME: ${{ matrix.ai_name }}
           REQUEST_MARKER: ${{ matrix.request_marker }}
-          WAIT_MINUTES: ${{ matrix.wait_minutes }}
         with:
           script: |
             const owner = context.repo.owner;
@@ -120,13 +71,7 @@ jobs:
             const botLogins = JSON.parse(process.env.AI_LOGINS);
             const aiName = process.env.AI_NAME || 'AI';
             const requestMarker = process.env.REQUEST_MARKER || '';
-            const waitMinutes = Number(process.env.WAIT_MINUTES || '15');
-            const delayMs = 30000;
-            const deadline = Date.now() + waitMinutes * 60 * 1000;
 
-            async function sleep(ms) {
-              await new Promise((resolve) => setTimeout(resolve, ms));
-            }
 
             async function getPullNumber() {
               if (context.payload.pull_request?.number) return context.payload.pull_request.number;
@@ -310,16 +255,6 @@ jobs:
             const prNumber = await getPullNumber();
             if (!prNumber) return;
 
-            let lastReason = `No ${aiName} signal observed yet.`;
-            while (Date.now() < deadline) {
-              const result = await hasSignal(prNumber);
-              if (result.ok) {
-                core.info(result.reason);
-                return;
-              }
-              lastReason = result.reason;
-              core.info(lastReason);
-              await sleep(delayMs);
-            }
-
-            core.setFailed(`${lastReason}. Timed out waiting for ${aiName} review.`);
+            const result = await hasSignal(prNumber);
+            if (result.ok) { core.info(result.reason); return; }
+            core.setFailed(`${result.reason}. Review remains blocking; a later review event or explicit rerun reevaluates this head without polling.`);
