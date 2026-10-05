@@ -42,8 +42,12 @@ replacement check may stand in for native Build & Test or generator proof.
 Run scripts/local-apple-preflight.sh on the committed candidate, followed by
 VOL-PR and VOL-Main local test plans and relevant real-device journeys. These
 checks are required before manually starting the matching Xcode Cloud workflow.
-VolumeArc PR and VolumeArc Main now use manual admission and Xcode 27 (27A266a),
-aligned with the archive lane; the former Xcode 26.5 image is no longer selectable.
+VolumeArc PR and VolumeArc Main use manual admission and Xcode 26.6 (17F113).
+The former Xcode 26.5 image is no longer selectable; Xcode 27 rejects the current
+legacy WatchKit extension, so validation stays on the supported 26.6 image.
+Locally, set `DEVELOPER_DIR=/Applications/Xcode-26.6.app/Contents/Developer`
+and `WATCHOS_TEST_OS=26.5` when newer simulator runtimes are also installed.
+The separate archive lane is unchanged; its qualification remains a release gate.
 The native UAT and coach-eval reference recipes remain separate qualification
 work, not a passing hosted gate or an automatic nightly charge.
 
