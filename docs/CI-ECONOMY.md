@@ -38,6 +38,10 @@ The absent self-hosted fleet recipes are preserved as non-executable references
 under docs/retired-ci. GitHub Actions was disabled at the audit and must remain
 disabled until the portable workflows and branch checks are qualified. No green
 replacement check may stand in for native Build & Test or generator proof.
+The portable Repo Hygiene workflow retains both generator checks on a bounded
+Ubuntu job with Ruby 4.0 and xcodeproj 1.27.0. Its hosted execution remains
+unqualified while repository Actions is disabled. The review workflow now
+evaluates only Codex; the obsolete CodeRabbit matrix is removed.
 
 Run scripts/local-apple-preflight.sh on the committed candidate, followed by
 VOL-PR and VOL-Main local test plans and relevant real-device journeys. These

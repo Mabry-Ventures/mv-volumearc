@@ -1,6 +1,16 @@
 name: AI Review Gate
 
+# One read-only evaluation per event. Missing review evidence fails closed;
+# review events and explicit reruns reconcile it without polling or bot nudges.
+# Hosted providers own PR-open admission; request final-head rereviews once.
+
 on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Exact-head PR to evaluate once using this reviewed branch
+        required: true
+        type: string
   pull_request_target:
     types: [opened, reopened, synchronize, ready_for_review]
   issue_comment:
@@ -15,65 +25,72 @@ permissions:
   pull-requests: read
   issues: read
 
-# VOL-184/VOL-192: workflow-specific concurrency group. See ci.yml's
-# concurrency block for the full rationale — sharing the group across
-# ci/trufflehog/ai-review-gate caused gate-cascade cancellations of
-# in-flight CI runs (VOL-192). The gate is the workflow most prone to
-# bot-event cascades, so keeping its group separate stops it from
-# tail-pulling CI/Trufflehog. `cancel-in-progress: false` lets the
-# bots' rapid events queue rather than cancel mid-flight.
 concurrency:
-  group: ai-review-gate-${{ github.ref }}
+  group: ai-review-gate-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
   cancel-in-progress: false
 
 jobs:
-  ai-review:
-    name: ${{ matrix.ai_name }} Code Review
-    # VOL-251: fork-PR guard. For `pull_request_target` events we know the
-    # PR head repo and can refuse to run on fork PRs (matches the
-    # `request-ai-reviews` guard above and the ci.yml:57 pattern). Comment
-    # events (`issue_comment`, `pull_request_review`,
-    # `pull_request_review_comment`) carry the comment in the base repo
-    # regardless of PR origin, and we need them to run so the gate can
-    # observe bot responses — leave those event branches unchanged. The
-    # main risk surface (billed AI reviewer minutes) is already covered
-    # because triggers only fire on comments the upstream-gated
-    # `request-ai-reviews` job posts.
-    if: >-
-      (github.event_name == 'pull_request_target' &&
-        github.event.pull_request.head.repo.full_name == github.repository) ||
-      github.event_name == 'issue_comment' ||
-      github.event_name == 'pull_request_review' ||
-      github.event_name == 'pull_request_review_comment'
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - ai_name: Codex
-            ai_logins: '["codex","chatgpt-codex-connector[bot]"]'
-            request_marker: codex-review-request
-          - ai_name: CodeRabbit
-            ai_logins: '["coderabbitai[bot]","coderabbitai"]'
-            request_marker: coderabbit-review-request
+  # Gate any write-scoped step on the PR being from the repo itself, not a fork.
+  # `pull_request_target` runs against the base branch with write access; without
+  # this guard a fork PR could spoof review signals by posting comments with the
+  # expected markers.
+  check-trusted:
+    name: Check PR Provenance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      is_trusted: ${{ steps.trust.outputs.is_trusted }}
     steps:
-      - name: Evaluate ${{ matrix.ai_name }} review signal
+      - name: Determine fork vs repo PR
+        id: trust
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const event = context.eventName;
+            if (event !== 'pull_request_target') {
+              core.setOutput('is_trusted', 'true');
+              return;
+            }
+            const headRepo = context.payload.pull_request?.head?.repo?.full_name;
+            const baseRepo = context.payload.repository?.full_name;
+            const trusted = headRepo === baseRepo;
+            core.info(`head=${headRepo} base=${baseRepo} trusted=${trusted}`);
+            core.setOutput('is_trusted', trusted ? 'true' : 'false');
+
+
+  codex-review:
+    name: Codex Code Review
+    needs: check-trusted
+    if: |
+      needs.check-trusted.outputs.is_trusted == 'true' &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event_name == 'pull_request_target' ||
+       github.event_name == 'issue_comment' ||
+       github.event_name == 'pull_request_review' ||
+       github.event_name == 'pull_request_review_comment')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Evaluate Codex review signal
         uses: actions/github-script@v9
         env:
-          AI_LOGINS: ${{ matrix.ai_logins }}
-          AI_NAME: ${{ matrix.ai_name }}
-          REQUEST_MARKER: ${{ matrix.request_marker }}
+          AI_LOGINS: '["codex","chatgpt-codex-connector[bot]"]'
+          AI_NAME: Codex
         with:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const botLogins = JSON.parse(process.env.AI_LOGINS);
             const aiName = process.env.AI_NAME || 'AI';
-            const requestMarker = process.env.REQUEST_MARKER || '';
 
 
-            async function getPullNumber() {
+            const getPullNumber = () => {
+              if (context.eventName === 'workflow_dispatch') {
+                const n = Number(context.payload.inputs?.pr_number);
+                if (Number.isSafeInteger(n) && n > 0) return n;
+                core.setFailed('A positive PR number is required.');
+                return null;
+              }
               if (context.payload.pull_request?.number) return context.payload.pull_request.number;
               if (context.payload.issue?.pull_request) return context.payload.issue.number;
               if (context.payload.review?.pull_request_url) {
@@ -84,177 +101,68 @@ jobs:
               }
               core.setFailed(`Unable to determine pull request number for ${aiName} review gate.`);
               return null;
-            }
+            };
 
-            function bodyText(value) {
-              return String(value || '')
-                .replace(/<!--[\s\S]*?-->/g, '')
-                .replace(/<[^>]+>/g, '\n')
-                .replace(/\r\n/g, '\n')
-                .replace(/&nbsp;/g, ' ')
-                .trim();
-            }
-
-            function nonReviewReason(candidate) {
-              const text = bodyText(candidate.body);
-              const compact = text.replace(/\s+/g, ' ').trim();
-
-              if (
-                /Codex usage limits have been reached/i.test(text) ||
-                /Review limit reached/i.test(text) ||
-                /rate limited by coderabbit\.ai/i.test(text) ||
-                /couldn't start this review/i.test(text) ||
-                /organization has run out of usage credits/i.test(text) ||
-                /used your available PR reviews/i.test(text)
-              ) {
-                return `${aiName} skipped review: rate-limit notice is not a review signal`;
-              }
-
-              if (
-                /Review triggered\./i.test(text) &&
-                !/\b(review findings|finding|issue|suggestion|nitpick|walkthrough|summary)\b/i.test(text.replace(/Review triggered\./ig, ''))
-              ) {
-                return `${aiName} skipped review: trigger acknowledgement is not a review signal`;
-              }
-
-              if (
-                /(^|\n)\s*(?:\u2705\s*)?#{0,6}\s*Actions performed\b/i.test(text) &&
-                !/(^|\n)\s*#{1,6}\s+(?!Actions performed\b)/im.test(text.replace(/(^|\n)\s*(?:\u2705\s*)?#{0,6}\s*Actions performed\b[^\n]*/i, '\n'))
-              ) {
-                return `${aiName} skipped review: actions-only automation comment is not a review signal`;
-              }
-
-              return null;
-            }
-
-            function candidateTime(candidate) {
-              return new Date(candidate.createdAt).getTime();
-            }
-
-            function candidateLabel(candidate) {
-              return `${candidate.kind} from ${candidate.login} at ${candidate.createdAt}`;
-            }
-
-            async function hasSignal(prNumber) {
+            const unavailable = (body) => /^(?:You have reached your Codex usage limits(?: for code reviews)?[.!]|Codex usage limits have been reached for code reviews[.!]|Code review (?:quota|credits) (?:has been |have been )?exhausted[.!]|Review was not performed because (?:the )?(?:quota|rate limit) (?:was |has been )?exceeded[.!])/i.test(body || '');
+            const hasSignal = async (prNumber) => {
               const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
-              if (pr.draft) return { ok: true, reason: 'Draft PR, skipping until ready for review.' };
+              if (context.eventName === 'workflow_dispatch' &&
+                  (pr.head.sha !== context.sha || pr.head.repo.full_name !== `${owner}/${repo}`)) {
+                return { ok: false, reason: 'Manual admission must run the exact same-repository PR head.' };
+              }
+              if (pr.draft) return { ok: true, reason: 'Draft PR; skipping until ready for review.' };
 
               const headSha = pr.head.sha;
               const { data: commit } = await github.rest.repos.getCommit({ owner, repo, ref: headSha });
               const baseline = new Date(
-                commit.commit.committer?.date ||
-                commit.commit.author?.date ||
-                pr.updated_at
+                commit.commit.committer?.date || commit.commit.author?.date || pr.updated_at
               );
+              const normalized = (login) => String(login || '').toLowerCase().replace(/\[bot\]$/, '');
+              const matches = (login) => botLogins.some((trusted) => normalized(trusted) === normalized(login));
+              const isFresh = (v) => v && new Date(v) >= baseline;
 
-              const reviews = await github.paginate(github.rest.pulls.listReviews, {
-                owner,
-                repo,
-                pull_number: prNumber,
-                per_page: 100,
-              });
+              const [reviews, issueComments, reviewComments] = await Promise.all([
+                github.paginate(github.rest.pulls.listReviews, { owner, repo, pull_number: prNumber, per_page: 100 }),
+                github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: prNumber, per_page: 100 }),
+                github.paginate(github.rest.pulls.listReviewComments, { owner, repo, pull_number: prNumber, per_page: 100 }),
+              ]);
 
-              const issueComments = await github.paginate(github.rest.issues.listComments, {
-                owner,
-                repo,
-                issue_number: prNumber,
-                per_page: 100,
-              });
-
-              const reviewComments = await github.paginate(github.rest.pulls.listReviewComments, {
-                owner,
-                repo,
-                pull_number: prNumber,
-                per_page: 100,
-              });
-
-              const matches = (login) => botLogins.includes(login || '');
-              const isFresh = (value) => value && new Date(value) >= baseline;
-
-              const candidates = [];
-
-              for (const item of reviews) {
-                if (matches(item.user?.login) && (item.commit_id === headSha || isFresh(item.submitted_at))) {
-                  candidates.push({
-                    kind: 'review',
-                    login: item.user.login,
-                    createdAt: item.submitted_at,
-                    body: item.body,
-                  });
+              const current = reviews.filter((x) => x.user?.type === 'Bot' && matches(x.user?.login) && x.commit_id === headSha)
+                .sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
+              const latest = current[0];
+              if (latest && (!Number.isFinite(new Date(latest.submitted_at).getTime()) ||
+                  !['APPROVED', 'COMMENTED'].includes(latest.state) || unavailable(latest.body) ||
+                  (latest.state === 'COMMENTED' && !headSha.startsWith(String(latest.body || '').match(/Reviewed commit:\*{0,2}\s*`?([0-9a-f]{7,40})/i)?.[1]?.toLowerCase() || 'no-reviewed-commit')))) {
+                return { ok: false, reason: 'Latest exact-head primary review is blocking or unavailable.' };
+              }
+              if (latest) {
+                let after = null;
+                for (let page = 0; page < 20; page++) {
+                  const data = await github.graphql(`query($owner:String!,$repo:String!,$number:Int!,$after:String){
+                    repository(owner:$owner,name:$repo){pullRequest(number:$number){headRefOid
+                      reviewThreads(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{isResolved comments(first:1){nodes{author{__typename login}}}}}
+                    }}}`, { owner, repo, number: prNumber, after });
+                  const live = data.repository?.pullRequest;
+                  const threads = live?.reviewThreads;
+                  if (live?.headRefOid !== headSha || !Array.isArray(threads?.nodes) || typeof threads.pageInfo?.hasNextPage !== 'boolean' ||
+                      threads.nodes.some((t) => !t.isResolved && t.comments.nodes.some((c) => c.author?.__typename === 'Bot' && matches(c.author?.login)))) {
+                    return { ok: false, reason: 'Primary review conversations are unresolved, incomplete, or stale.' };
+                  }
+                  if (!threads.pageInfo.hasNextPage) break;
+                  if (page === 19 || !threads.pageInfo.endCursor || threads.pageInfo.endCursor === after) {
+                    return { ok: false, reason: 'Review conversation pagination exceeded its bounded limit or returned an invalid cursor.' };
+                  }
+                  after = threads.pageInfo.endCursor;
                 }
+                return { ok: true, reason: `Current primary review from ${latest.user.login} has no unresolved primary conversations.` };
               }
 
-              for (const item of issueComments) {
-                if (matches(item.user?.login) && isFresh(item.created_at)) {
-                  candidates.push({
-                    kind: 'issue comment',
-                    login: item.user.login,
-                    createdAt: item.created_at,
-                    body: item.body,
-                  });
-                }
-              }
+              return { ok: false, reason: `No fresh ${aiName} signal for head ${headSha.slice(0, 7)} after ${baseline.toISOString()}` };
+            };
 
-              for (const item of reviewComments) {
-                if (matches(item.user?.login) && (item.commit_id === headSha || isFresh(item.created_at))) {
-                  candidates.push({
-                    kind: 'review comment',
-                    login: item.user.login,
-                    createdAt: item.created_at,
-                    body: item.body,
-                  });
-                }
-              }
-
-              const marker = `<!-- ${requestMarker}:${headSha} -->`;
-              const requestComments = issueComments.filter((item) =>
-                requestMarker && typeof item.body === 'string' && item.body.includes(marker)
-              );
-              for (const item of requestComments) {
-                const reactions = await github.paginate(github.rest.reactions.listForIssueComment, {
-                  owner,
-                  repo,
-                  comment_id: item.id,
-                  per_page: 100,
-                });
-                const reaction = reactions.find((entry) =>
-                  entry.content === '+1' && matches(entry.user?.login) && isFresh(entry.created_at)
-                );
-                if (reaction) {
-                  candidates.push({
-                    kind: '+1 reaction',
-                    login: reaction.user.login,
-                    createdAt: reaction.created_at,
-                    body: '+1',
-                  });
-                }
-              }
-
-              candidates.sort((left, right) => candidateTime(right) - candidateTime(left));
-
-              const accepted = candidates.find((candidate) => !nonReviewReason(candidate));
-              if (accepted) {
-                return { ok: true, reason: candidateLabel(accepted) };
-              }
-
-              if (candidates.length > 0) {
-                const latest = candidates[0];
-                const reason = nonReviewReason(latest) || `${aiName} bot activity was not accepted as a review signal`;
-                return {
-                  ok: false,
-                  reason: `${reason}; latest bot activity was ${candidateLabel(latest)} for head ${headSha.slice(0, 7)}`,
-                };
-              }
-
-              return {
-                ok: false,
-                reason: `No fresh ${aiName} review signal yet for head ${headSha.slice(0, 7)} after ${baseline.toISOString()}`,
-              };
-            }
-
-            const prNumber = await getPullNumber();
+            const prNumber = getPullNumber();
             if (!prNumber) return;
 
             const result = await hasSignal(prNumber);
             if (result.ok) { core.info(result.reason); return; }
-            core.setFailed(`${result.reason}. Review remains blocking; a later review event or explicit rerun reevaluates this head without polling.`);
+            core.setFailed(`${result.reason}. Review is pending or unavailable. A review event or explicit rerun reevaluates this head without occupying a runner while waiting.`);
