@@ -20,6 +20,12 @@ class RunnerPolicy(unittest.TestCase):
  def test_local(self):self.assertEqual(self.evaluate('jobs:\n  test:\n    uses: ./.github/workflows/shared.yml\n',{'shared.yml':'jobs:\n  test:\n    runs-on: ubuntu-latest\n    timeout-minutes: 5\n'}),[])
  def test_hidden_reusable(self):self.assertTrue(self.evaluate('jobs:\n  test:\n    uses: ./.github/workflows/shared.txt\n',{'shared.txt':'jobs:\n  test:\n    runs-on: macos-latest\n'}))
  def test_reusable_mac(self):self.assertTrue(self.evaluate('jobs:\n  test:\n    uses: ./.github/workflows/shared.yml\n',{'shared.yml':'jobs:\n  test:\n    runs-on: macos-latest\n    timeout-minutes: 5\n'}))
+ def test_nested_reusable_is_rejected(self):
+  with tempfile.TemporaryDirectory() as d:
+   root=pathlib.Path(d);w=root/'.github/workflows';(w/'nested').mkdir(parents=True)
+   (w/'ci.yml').write_text('jobs:\n  call:\n    uses: ./.github/workflows/nested/mac.yml\n')
+   (w/'nested/mac.yml').write_text('jobs:\n  test:\n    runs-on: macos-latest\n')
+   self.assertTrue(policy.inspect(root))
  def test_missing_reusable(self):self.assertTrue(self.evaluate('jobs:\n  test:\n    uses: ./.github/workflows/missing.yml\n'))
  def test_malformed(self):self.assertTrue(self.evaluate('jobs: broken'))
  def test_symlink(self):

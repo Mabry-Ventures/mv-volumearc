@@ -47,7 +47,7 @@ def inspect(root):
                 where = f"{path.name}:{name}"
                 if "uses" in job:
                     ref = job["uses"]
-                    if not isinstance(ref, str) or not ref.startswith("./.github/workflows/") or ".." in ref[2:] or "${{" in ref or Path(ref).suffix not in {".yml", ".yaml"}:
+                    if not isinstance(ref, str) or not ref.startswith("./.github/workflows/") or ".." in ref[2:] or "${{" in ref or Path(ref).suffix not in {".yml", ".yaml"} or Path(ref[2:]).parent != Path(".github/workflows"):
                         errors.append(f"{where}: external or dynamic reusable workflow needs explicit owner review")
                     elif not (root / ref[2:]).is_file():
                         errors.append(f"{where}: local reusable workflow does not exist")
