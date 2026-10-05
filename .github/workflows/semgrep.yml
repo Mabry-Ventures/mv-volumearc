@@ -11,10 +11,7 @@ name: Semgrep SAST
 # runs in GH Actions on private repos, and ships public rulesets for
 # OWASP Top 10, Swift, and secrets that cover the same risk surface.
 #
-# Runner: self-hosted per the runner policy in docs/CONTRIBUTING.md. Semgrep
-# itself is platform-independent Python; no Xcode requirement on this
-# job, but keeping security gates on the trusted runner fleet preserves the
-# same repository-history and secret-scanning boundary as Trufflehog.
+# Portable analysis runs on included Ubuntu runners; no Xcode is required.
 
 on:
   push:
@@ -47,7 +44,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Install pinned Semgrep
         run: |
@@ -104,7 +101,7 @@ jobs:
 
       - name: Archive Semgrep SARIF artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: semgrep-sarif-${{ github.run_id }}
           path: semgrep.sarif

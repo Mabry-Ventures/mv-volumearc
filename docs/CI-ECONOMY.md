@@ -65,3 +65,8 @@ PR lane. Both are path-scoped; no candidate program runs in pull_request_target.
 New trusted workflow definitions become active only after integration.
 
 COMMENTED reviews must use the observed provider boilerplate; additional body findings or unknown response formats stay blocking. The matching commit marker establishes scope, not cleanliness. Primary inline conversations must also be resolved. A provider format change requires a reviewed parser update.
+
+Portable security workflows pin third-party actions to verified commit SHAs.
+Dependabot version-update groups use a seven-day cooldown to reduce churn.
+Two narrowly scoped Semgrep annotations document protected-base checkout and
+candidate YAML inspection as data; neither step executes candidate code.

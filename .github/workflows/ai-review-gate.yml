@@ -43,7 +43,7 @@ jobs:
     steps:
       - name: Determine fork vs repo PR
         id: trust
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             const event = context.eventName;
@@ -72,7 +72,7 @@ jobs:
     timeout-minutes: 3
     steps:
       - name: Evaluate Codex review signal
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           AI_LOGINS: '["codex","chatgpt-codex-connector[bot]"]'
           AI_NAME: Codex

@@ -4,6 +4,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       swift-minor-and-patch:
@@ -15,6 +17,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       github-actions-minor-and-patch:
@@ -26,6 +30,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       bundler-minor-and-patch:
@@ -42,6 +48,8 @@ updates:
     directory: "/marketing"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       marketing-npm-minor-and-patch:
@@ -57,6 +65,8 @@ updates:
     directory: "/relay"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       relay-npm-minor-and-patch:

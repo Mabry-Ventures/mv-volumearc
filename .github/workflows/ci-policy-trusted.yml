@@ -15,12 +15,16 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     steps:
+      # Protected base code only; this checkout never selects candidate source.
+      # nosemgrep: yaml.github-actions.security.pull-request-target-code-checkout.pull-request-target-code-checkout
       - name: Checkout trusted base controls
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.base.sha || github.sha }}
           persist-credentials: false
       - run: python3 -m pip install --disable-pip-version-check 'PyYAML==6.0.3'
+      # Candidate YAML is read as data by the protected checker; no candidate code executes.
+      # nosemgrep: yaml.github-actions.security.pull-request-target-code-checkout.pull-request-target-code-checkout
       - name: Checkout candidate as data only
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
