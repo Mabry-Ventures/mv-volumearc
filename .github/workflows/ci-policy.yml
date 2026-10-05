@@ -2,7 +2,7 @@ name: CI Policy
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    paths: ['.github/**', 'scripts/check-ci-policy.py']
+    paths: ['.github/**', 'scripts/check-ci-policy.py', 'scripts/__tests__/ci_policy_test.py']
   workflow_dispatch:
 permissions:
   contents: read
@@ -20,3 +20,4 @@ jobs:
           persist-credentials: false
       - run: python3 -m pip install --disable-pip-version-check 'PyYAML==6.0.3'
       - run: python3 scripts/check-ci-policy.py
+      - run: python3 scripts/__tests__/ci_policy_test.py

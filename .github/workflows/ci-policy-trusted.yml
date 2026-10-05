@@ -1,0 +1,31 @@
+name: Trusted CI Policy
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths: ['.github/**', 'scripts/check-ci-policy.py', 'scripts/__tests__/ci_policy_test.py']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: trusted-ci-policy-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  trusted-policy:
+    if: github.event_name != 'pull_request_target' || !github.event.pull_request.draft
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Checkout trusted base controls
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          persist-credentials: false
+      - run: python3 -m pip install --disable-pip-version-check 'PyYAML==6.0.3'
+      - name: Checkout candidate as data only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: .ci-candidate
+          persist-credentials: false
+      - name: Validate candidate YAML with trusted base checker
+        run: python3 scripts/check-ci-policy.py .ci-candidate

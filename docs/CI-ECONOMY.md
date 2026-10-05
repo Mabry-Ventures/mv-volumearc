@@ -46,3 +46,8 @@ VolumeArc PR and VolumeArc Main now use manual admission and Xcode 27 (27A266a),
 aligned with the archive lane; the former Xcode 26.5 image is no longer selectable.
 The native UAT and coach-eval reference recipes remain separate qualification
 work, not a passing hosted gate or an automatic nightly charge.
+
+The trusted policy workflow checks candidate YAML as data using only the base
+revision checker. Candidate checker/tests execute separately in the unprivileged
+PR lane. Both are path-scoped; no candidate program runs in pull_request_target.
+New trusted workflow definitions become active only after integration.

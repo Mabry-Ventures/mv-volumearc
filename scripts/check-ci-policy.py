@@ -23,13 +23,27 @@ UniqueLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, map
 
 def inspect(root):
     errors = []
-    paths = sorted((root / ".github/workflows").glob("*.y*ml"))
+    directory = root / ".github/workflows"
+    if (root / ".github").is_symlink() or directory.is_symlink():
+        return ["workflow directory symlinks are not allowed"]
+    if not directory.is_dir():
+        return ["workflow directory is missing"]
+    paths = sorted(p for p in directory.iterdir() if p.suffix in {".yml", ".yaml"})
+    if not paths:
+        return ["no executable workflows found"]
     for path in paths:
         try:
             if path.is_symlink():
                 raise ValueError("workflow symlinks are not allowed")
-            workflow = yaml.load(path.read_text(), Loader=UniqueLoader)
-            for name, job in workflow.get("jobs", {}).items():
+            workflow = yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueLoader)
+            if not isinstance(workflow, dict):
+                raise ValueError("workflow must be a mapping")
+            jobs = workflow.get("jobs")
+            if not isinstance(jobs, dict) or not jobs:
+                raise ValueError("jobs must be a nonempty mapping")
+            for name, job in jobs.items():
+                if not isinstance(job, dict):
+                    raise ValueError(f"job {name} must be a mapping")
                 where = f"{path.name}:{name}"
                 if "uses" in job:
                     ref = job["uses"]
@@ -44,7 +58,7 @@ def inspect(root):
                 timeout = job.get("timeout-minutes")
                 if type(timeout) is not int or not 1 <= timeout <= 180:
                     errors.append(f"{where}: set an explicit integer timeout between 1 and 180 minutes")
-        except (ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
+        except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
             errors.append(f"{path.name}: cannot validate workflow: {exc}")
     return errors
 
