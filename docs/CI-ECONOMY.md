@@ -70,3 +70,5 @@ Portable security workflows pin third-party actions to verified commit SHAs.
 Dependabot version-update groups use a seven-day cooldown to reduce churn.
 Two narrowly scoped Semgrep annotations document protected-base checkout and
 candidate YAML inspection as data; neither step executes candidate code.
+
+Cloud setup pins portable SwiftLint 0.65.1, matching the qualified local linter. Build 589 exposed the old 0.63.2 pin: it rejected constant URL literals that the current linter correctly accepts. No lint rules or application code were weakened.
