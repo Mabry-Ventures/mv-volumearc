@@ -25,7 +25,7 @@ struct VolumeArcApp: App {
     // placeholder. Lifecycle is owned by the App so it survives
     // navigation churn — XCUITests need a stable reader across the
     // whole journey.
-    @StateObject private var telemetryDebugProbe = VolumeArcTelemetryDebugProbe()
+    @StateObject private var telemetryDebugProbe: VolumeArcTelemetryDebugProbe
     private let dashboardModel: WorkoutDashboardModel
     /// VOL-204: the telemetry sink used by `VolumeArcBackgroundTasks`
     /// for BGTaskScheduler.submit success/failure reporting. Set in
@@ -63,7 +63,7 @@ struct VolumeArcApp: App {
     // initializer further.
     // swiftlint:disable:next function_body_length
     init() {
-        VolumeArcRuntimeFlags.isDeterministicMode = VolumeArcLaunchArguments.isUITestMode
+        _telemetryDebugProbe = Self.makeStartupTelemetryProbe()
         // VOL-99: mirror `-PerfTestMode` onto the runtime flag so
         // `VolumeArcCore` and `VolumeArcUI` can adapt fetch limits and
         // list caps without taking a new dependency on the launch

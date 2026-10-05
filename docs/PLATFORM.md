@@ -190,6 +190,8 @@ The AI relay URL is bootstrapped into Keychain at launch. If neither source prov
 
 Sentry (`sentry-cocoa`) is integrated via `VolumeArcSentryConfiguration`. It follows the same pattern as the AI relay — DSN loaded from Keychain, environment variable, or Info.plist. A `SentryTelemetrySink` is added to the telemetry fanout when configured, forwarding telemetry events as Sentry breadcrumbs and capturing `.error` severity events as Sentry messages. If unconfigured, the app runs without crash reporting and surfaces a startup warning.
 
+The deterministic UI-test telemetry probe is constructed before dashboard model startup, so its observer captures the initial refresh as well as later events. `testDashboardRefreshTelemetryReachesTheProbe` covers that startup ordering.
+
 ### Entitlements
 
 **iOS App:** HealthKit, CloudKit, iCloud Containers (`iCloud.com.mabryventures.VolumeArc`), App Groups (`group.com.mabryventures.volumearc`), Push Notifications (`aps-environment`), App Attest (`com.apple.developer.devicecheck.appattest-environment`)
