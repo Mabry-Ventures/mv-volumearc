@@ -44,7 +44,11 @@ unqualified while repository Actions is disabled. The review workflow now
 evaluates only Codex; the obsolete CodeRabbit matrix is removed.
 
 Run scripts/local-apple-preflight.sh on the committed candidate, followed by
-VOL-PR and VOL-Main local test plans and relevant real-device journeys. These
+`scripts/build_all_targets.sh`, `scripts/test_apple_targets.sh`, and
+`scripts/local-apple-coverage.sh`, plus relevant real-device journeys. The local
+coverage gate retains Core 80%, UI 18%, Watch 25%, widget source 5%, and journey
+56% floors from the retired native workflow. Cloud PR is a bounded smoke
+qualification; its measurement-only floor does not replace these local gates. These
 checks are required before manually starting the matching Xcode Cloud workflow.
 VolumeArc PR and VolumeArc Main use manual admission and Xcode 26.6 (17F113).
 The former Xcode 26.5 image is no longer selectable; Xcode 27 rejects the current

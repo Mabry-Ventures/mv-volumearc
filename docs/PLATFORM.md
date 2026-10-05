@@ -305,3 +305,5 @@ export DEVELOPMENT_TEAM=A886EMZZW6
 - **Localized strings:** All user-facing strings use `String(localized:comment:)` for future translation support. Plural-bearing strings use `^[count thing](inflect: true)`. Enum labels live in `LocalizedLabels.swift`.
 - **Accessibility:** All interactive and data-display elements in Watch and Widget views have VoiceOver labels, hints, and values. Design system components carry built-in accessibility so screens that use them inherit it.
 - **Codable payloads:** Watch-to-phone payloads use `Codable` structs encoded via `SyncPayloadCodec` rather than ad-hoc string formatting.
+
+Local Apple qualification retains the retired native workflow coverage ratchets through `scripts/local-apple-coverage.sh`: Core 80%, UI 18%, Watch 25%, widget source 5%, and journey 56%, after `scripts/test_apple_targets.sh`. Cloud smoke validation does not substitute for these gates.
