@@ -370,7 +370,7 @@ run_watch_tests() {
   xcodebuild \
     -project "VolumeArcApple.xcodeproj" \
     -scheme "VolumeArcWatchTests" \
-    -destination "platform=watchOS Simulator,name=$WATCHOS_TEST_DEVICE_NAME" \
+    -destination "platform=watchOS Simulator,name=$WATCHOS_TEST_DEVICE_NAME,OS=${WATCHOS_TEST_OS:-latest}" \
     -derivedDataPath "$DERIVED_DATA_PATH" \
     -clonedSourcePackagesDirPath "$DERIVED_DATA_PATH/SourcePackages" \
     -enableCodeCoverage YES \
