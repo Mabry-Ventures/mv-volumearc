@@ -104,6 +104,10 @@ jobs:
             };
 
             const unavailable = (body) => /^(?:You have reached your Codex usage limits(?: for code reviews)?[.!]|Codex usage limits have been reached for code reviews[.!]|Code review (?:quota|credits) (?:has been |have been )?exhausted[.!]|Review was not performed because (?:the )?(?:quota|rate limit) (?:was |has been )?exceeded[.!])/i.test(body || '');
+            const knownCommentedBody = "### \ud83d\udca1 Codex Review Here are some automated review suggestions for this pull request. **Reviewed commit:** `<commit>` <details> <summary>\u2139\ufe0f About Codex in GitHub</summary> <br/> [Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you - Open a pull request for review - Mark a draft as ready - Comment \"@codex review\". If Codex has suggestions, it will comment; otherwise it will react with \ud83d\udc4d. Codex can also answer questions or update the PR. Try commenting \"@codex address that feedback\". </details>";
+            const standardCommentedReview = (body) => String(body || '')
+              .replace(/(\*\*Reviewed commit:\*\*\s*`)[0-9a-f]{7,40}(`)/gi, '$1<commit>$2')
+              .replace(/\s+/g, ' ').trim() === knownCommentedBody;
             const hasSignal = async (prNumber) => {
               const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
               if (context.eventName === 'workflow_dispatch' &&
@@ -132,6 +136,7 @@ jobs:
               const latest = current[0];
               if (latest && (!Number.isFinite(new Date(latest.submitted_at).getTime()) ||
                   !['APPROVED', 'COMMENTED'].includes(latest.state) || unavailable(latest.body) ||
+                  (latest.state === 'COMMENTED' && !standardCommentedReview(latest.body)) ||
                   (latest.state === 'COMMENTED' && !headSha.startsWith(String(latest.body || '').match(/Reviewed commit:\*{0,2}\s*`?([0-9a-f]{7,40})/i)?.[1]?.toLowerCase() || 'no-reviewed-commit')))) {
                 return { ok: false, reason: 'Latest exact-head primary review is blocking or unavailable.' };
               }
