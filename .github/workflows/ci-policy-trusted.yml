@@ -26,6 +26,8 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           path: .ci-candidate
+          # Fork content is data only; the base checker never imports or executes it.
+          allow-unsafe-pr-checkout: true
           persist-credentials: false
       - name: Validate candidate YAML with trusted base checker
         run: python3 scripts/check-ci-policy.py .ci-candidate
