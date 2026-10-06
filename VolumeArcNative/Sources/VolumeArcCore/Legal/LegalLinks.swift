@@ -16,7 +16,6 @@ import Foundation
 /// disclosure: frames stay on-device even when the Watch starts/stops capture;
 /// only derived form metrics can enter coach context.
 public enum LegalLinks {
-    // swiftlint:disable force_unwrapping
     // The URL literals below are static, valid https:// strings that cannot
     // fail at runtime; force-unwrapping is idiomatic for this pattern.
 
@@ -25,5 +24,4 @@ public enum LegalLinks {
 
     /// Privacy Policy landing page.
     public static let privacyPolicy = URL(string: "https://volumearc.app/privacy")!
-    // swiftlint:enable force_unwrapping
 }

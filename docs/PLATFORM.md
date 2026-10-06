@@ -1,6 +1,6 @@
 # VolumeArc Platform — Canonical Reference
 
-[![CI](https://github.com/Mabry-Ventures/mv-volumearc/actions/workflows/ci.yml/badge.svg)](https://github.com/Mabry-Ventures/mv-volumearc/actions/workflows/ci.yml)
+CI routing and current qualification: see [CI / CD](#ci--cd).
 [![coverage trend](https://img.shields.io/badge/coverage-trend%20on%20metrics-blue)](TESTING.md#coverage-artifacts)
 
 This is the canonical source of truth for the VolumeArc Apple platform. AI-powered strength training coach for iOS and watchOS. Tracks workouts, provides real-time coaching via voice and text, syncs across devices with CloudKit, and surfaces training signals through widgets and Live Activities.
@@ -190,6 +190,8 @@ The AI relay URL is bootstrapped into Keychain at launch. If neither source prov
 
 Sentry (`sentry-cocoa`) is integrated via `VolumeArcSentryConfiguration`. It follows the same pattern as the AI relay — DSN loaded from Keychain, environment variable, or Info.plist. A `SentryTelemetrySink` is added to the telemetry fanout when configured, forwarding telemetry events as Sentry breadcrumbs and capturing `.error` severity events as Sentry messages. If unconfigured, the app runs without crash reporting and surfaces a startup warning.
 
+The deterministic UI-test telemetry probe is constructed before dashboard model startup, so its observer captures the initial refresh as well as later events. `testDashboardRefreshTelemetryReachesTheProbe` covers that startup ordering.
+
 ### Entitlements
 
 **iOS App:** HealthKit, CloudKit, iCloud Containers (`iCloud.com.mabryventures.VolumeArc`), App Groups (`group.com.mabryventures.volumearc`), Push Notifications (`aps-environment`), App Attest (`com.apple.developer.devicecheck.appattest-environment`)
@@ -237,9 +239,24 @@ All build scripts call `generate_xcode_project.rb` first, so the project is alwa
 
 ### CI / CD
 
-GitHub Actions CI runs on the dedicated Apple Silicon self-hosted runner registered with the `mv-volumearc-runner` label (`runs-on: [self-hosted, mv-volumearc-runner]`; the `mv-shared` label was retired 2026-06-11). The workflow (`.github/workflows/ci.yml`) triggers on pushes to `main`, pull requests, and version tags (`v*`).
+As of October 4, 2026, repository Actions remain disabled. Legacy self-hosted
+Apple workflows are retained only as non-executable history in `docs/retired-ci/`.
+The portable policy workflows permit included Ubuntu runners only; enabling them
+does not authorize GitHub Mac or self-hosted runners.
 
-**CI pipeline:** Checkout → Pre-flight (Xcode / Ruby / xcodeproj / SwiftLint / disk headroom) → Generate Xcode project → Xcode project determinism gate (regenerate twice, diff SHA256 — VOL-95) → Xcode project no-op regen gate (regenerate over committed state, fail on any drift — VOL-106) → Seed SPM lockfile → Clear stale DerivedData → Build all targets (Debug) → Run unit + integration tests → XCUITest smoke suite → Coverage gate (VolumeArcCore ≥ 80% — VOL-52) → Upload xcresult + coverage-summary artifacts → Sticky PR coverage comment → Trend-append on main push → SwiftLint hard-fail → Validate release config. The AI review gate runs in a separate workflow (`.github/workflows/ai-review-gate.yml`). **As of VOL-172, CodeRabbit Pro and Codex Code Review are both active again**: the gate posts current-head `@coderabbitai review` and `@codex review` requests, waits for both bots to signal on the current head SHA, and filters known non-review bot messages (Codex/CodeRabbit rate-limit notices, trigger acknowledgements, actions-only comments) so they cannot satisfy a required check.
+Apple validation starts with `scripts/local-apple-preflight.sh`, then affected
+build, unit/integration/UI, coverage and device checks on the exact clean candidate.
+The Xcode Cloud PR and Main validation workflows are manual. Admit a candidate
+only after local evidence passes. Cloud validation, archive/distribution and
+installed-device proof remain separate; this routing change does not certify
+native coverage or replace the required `Repo Hygiene`, `Codex Code Review` and
+`VolumeArc | VolumeArc PR` evidence. Replacement check producers and complete
+cloud coverage must be verified before protected integration.
+
+Ordinary and security automatic Codex reviews remain disabled for this repository.
+Use one deliberate final-head review request when review is required; quota or
+credit refusals are unavailable evidence, never approval. No polling workflow or
+automatic credit spending is authorized. See [CI economy](CI-ECONOMY.md).
 
 **TestFlight deploy:** Current live TestFlight delivery is Xcode Cloud's `Internal Testing` workflow, manually started from `main` after release-ready validation passes. App Store Connect has no live tag-triggered TestFlight workflow today. `fastlane ios beta` remains a local archive/upload fallback and requires `DEVELOPMENT_TEAM`, `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, and `APP_STORE_CONNECT_API_KEY_PATH`. The key path points to the raw `.p8`; Fastlane builds the API key object in memory and refuses group/world-readable key files.
 
@@ -288,3 +305,5 @@ export DEVELOPMENT_TEAM=A886EMZZW6
 - **Localized strings:** All user-facing strings use `String(localized:comment:)` for future translation support. Plural-bearing strings use `^[count thing](inflect: true)`. Enum labels live in `LocalizedLabels.swift`.
 - **Accessibility:** All interactive and data-display elements in Watch and Widget views have VoiceOver labels, hints, and values. Design system components carry built-in accessibility so screens that use them inherit it.
 - **Codable payloads:** Watch-to-phone payloads use `Codable` structs encoded via `SyncPayloadCodec` rather than ad-hoc string formatting.
+
+Local Apple qualification retains the retired native workflow coverage ratchets through `scripts/local-apple-coverage.sh`: Core 80%, UI 18%, Watch 25%, widget source 5%, and journey 56%, after `scripts/test_apple_targets.sh`. Cloud smoke validation does not substitute for these gates.

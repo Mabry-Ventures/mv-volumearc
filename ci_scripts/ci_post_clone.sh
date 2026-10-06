@@ -128,7 +128,7 @@ RUBY
 }
 
 install_portable_swiftlint() {
-  local version="${SWIFTLINT_VERSION:-0.63.2}"
+  local version="${SWIFTLINT_VERSION:-0.65.1}"
   local install_dir="$REPO_ROOT/.build/tools/swiftlint-$version"
   local archive="$install_dir/portable_swiftlint.zip"
 
@@ -197,10 +197,8 @@ ensure_swiftlint() {
 # `validate_release_config.sh --no-build`. The four generator-shape /
 # watch gates that need the `xcodeproj` gem and/or a project regen
 # (test_xcode_project_determinism, test_xcode_project_regen_idempotent,
-# test_watch_app_embedding, validate_watch_app_icon_asset) still run in
-# the self-hosted `ci.yml` "Build & Test" job. They MUST be rehomed
-# before that job is disabled at cutover — see the cutover checklist on
-# the migration PR (the "rehome project-shape gates" blocker).
+# test_watch_app_embedding, validate_watch_app_icon_asset) run in local
+# preflight and the portable Ubuntu Repo Hygiene workflow.
 # `SKIP_HYGIENE_GATE=1` is a fail-CLOSED escape hatch: the gate runs by
 # default (unset/0) and is skipped ONLY when explicitly set to 1. The
 # sole intended caller is `scripts/test_ci_post_clone_config_patch.sh`,
@@ -216,7 +214,7 @@ if [[ "${SKIP_HYGIENE_GATE:-0}" != "1" ]]; then
   swiftlint_version="$(swiftlint version 2>/dev/null | head -n1 | awk '{print $NF}')"
   swiftlint_major="$(printf '%s\n' "$swiftlint_version" | cut -d. -f1)"
   swiftlint_minor="$(printf '%s\n' "$swiftlint_version" | cut -d. -f2)"
-  # Match the >= 0.62 floor the self-hosted `ci.yml` enforces — the repo's
+  # Match the >= 0.62 floor the local preflight enforces — the repo's
   # `.swiftlint.yml` rule config is tuned against that minor.
   if [[ "$swiftlint_major" -eq 0 && "$swiftlint_minor" -lt 62 ]]; then
     echo "::error::SwiftLint $swiftlint_version is below the 0.62 floor (rule config tuned against >= 0.62)"
@@ -230,8 +228,7 @@ if [[ "${SKIP_HYGIENE_GATE:-0}" != "1" ]]; then
   # project regen + SPM resolve + xcodebuild, so it's workspace-safe and
   # needs neither the `xcodeproj` gem nor a build — just `plutil`, which
   # is present on the Xcode Cloud macOS image. The four regen-dependent
-  # project-shape gates stay in the self-hosted `ci.yml` until rehomed
-  # at cutover (see the migration PR's cutover checklist).
+  # project-shape gates run locally and in Ubuntu Repo Hygiene.
   echo "VOL-246: running validate_release_config.sh --no-build"
   ( cd "$REPO_ROOT" && ./scripts/validate_release_config.sh --no-build )
   echo "VOL-246: hygiene gate passed"

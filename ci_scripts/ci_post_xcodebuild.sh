@@ -63,14 +63,19 @@ case "${CI_XCODEBUILD_ACTION:-}" in
     fi
     echo "VOL-246: REPO_ROOT=$REPO_ROOT"
 
-    if [[ -z "${CI_RESULT_BUNDLE_PATH:-}" || ! -d "${CI_RESULT_BUNDLE_PATH}" ]]; then
-      echo "VOL-246: no result bundle at CI_RESULT_BUNDLE_PATH=${CI_RESULT_BUNDLE_PATH:-<unset>}; nothing to gate"
-      exit 0
-    fi
     if [[ -n "${CI_XCODEBUILD_EXIT_CODE:-}" && "${CI_XCODEBUILD_EXIT_CODE}" != "0" ]]; then
-      echo "VOL-246: test action already failed (exit=${CI_XCODEBUILD_EXIT_CODE}); the RED test result is the signal — skipping coverage gate"
+      echo "Test action already failed; retaining its failure."
       exit 0
     fi
+    if [[ -z "${CI_RESULT_BUNDLE_PATH:-}" || ! -d "${CI_RESULT_BUNDLE_PATH}" ]]; then
+      echo "::error::Successful test action has no coverage result bundle."
+      exit 1
+    fi
+    case "${CI_WORKFLOW:-}" in
+      "VOL Main"|"VolumeArc Main") FULL_COVERAGE_GATE=true ;;
+      "VOL PR"|"VolumeArc PR") FULL_COVERAGE_GATE=false ;;
+      *) echo "::error::Unknown test workflow; refusing to silently skip coverage."; exit 1 ;;
+    esac
 
     # Prefer the ci_scripts/-local copy (guaranteed on the Xcode Cloud test
     # machine). Fall back to scripts/ for self-hosted / local runs.
@@ -86,6 +91,7 @@ case "${CI_XCODEBUILD_ACTION:-}" in
     echo "VOL-246: using $CHECK_COVERAGE"
 
     COVERAGE_TMP="$(mktemp -d)"
+    trap 'rm -rf "$COVERAGE_TMP"' EXIT
     export XCRESULT="${CI_RESULT_BUNDLE_PATH}"
 
     # VolumeArcCore: enforced (80%) on VOL-Main. On VOL-PR, Xcode Cloud
@@ -95,7 +101,7 @@ case "${CI_XCODEBUILD_ACTION:-}" in
     # measured line coverage by ~5–8 percentage points, so the 80% floor is
     # not reliably achievable in the PR workflow. Measuring without gating on
     # VOL-PR keeps the signal visible while the hard gate lives on VOL-Main.
-    if [[ "${CI_WORKFLOW:-}" == "VOL Main" ]]; then
+    if [[ "$FULL_COVERAGE_GATE" == true ]]; then
       echo "VOL-246: enforcing VolumeArcCore >= 80% coverage from $XCRESULT"
       COVERAGE_TARGET="VolumeArcCore" COVERAGE_THRESHOLD="80" \
         COVERAGE_SUMMARY_JSON="$COVERAGE_TMP/volumearccore.json" \
@@ -111,8 +117,8 @@ case "${CI_XCODEBUILD_ACTION:-}" in
     # the floor is only meaningful against the full suite. Enforce it on
     # the VOL-Main workflow; measure-only on the VOL-PR smoke subset.
     # Gated on CI_WORKFLOW (the workflow's display name in App Store
-    # Connect) — the workflows MUST be named exactly "VOL PR" / "VOL Main".
-    if [[ "${CI_WORKFLOW:-}" == "VOL Main" ]]; then
+    # Connect); both historical VOL and current VolumeArc names are recognized.
+    if [[ "$FULL_COVERAGE_GATE" == true ]]; then
       echo "VOL-246: enforcing VolumeArcUI >= 2% coverage (full suite)"
       COVERAGE_TARGET="VolumeArcUI" COVERAGE_THRESHOLD="2" \
         COVERAGE_SUMMARY_JSON="$COVERAGE_TMP/volumearcui.json" \

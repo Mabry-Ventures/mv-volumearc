@@ -18,6 +18,13 @@ import VolumeArcUI
 // `internal` (the default) so they cross the file boundary. They're
 // still on the same module-private struct, so no API surface change.
 extension VolumeArcApp {
+    static func makeStartupTelemetryProbe() -> StateObject<VolumeArcTelemetryDebugProbe> {
+        VolumeArcRuntimeFlags.isDeterministicMode = VolumeArcLaunchArguments.isUITestMode
+        // Register before model startup; StateObject otherwise constructs lazily.
+        let probe = VolumeArcTelemetryDebugProbe()
+        return StateObject(wrappedValue: probe)
+    }
+
     static func makeHealthStore() -> HealthStore {
         // VOL-168 Phase 1: wrap the real (or unavailable) store with
         // `ChaosHealthStore` when a matching `-CHAOS_HEALTH_*` launch
